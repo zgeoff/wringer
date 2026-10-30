@@ -63,6 +63,7 @@ test('it packs a package that is new to npm, publishes the tarball, and prints t
 
   expect(result.stdout.toString()).toContain('repository:           wringer\n');
   expect(result.stdout.toString()).toContain('3. Turn on "Allow npm publish" for the publisher.');
+  expect(result.stdout.toString()).toContain('4. Release the package from CI within 2 days');
 });
 
 test('it refuses a package that npm already holds and publishes nothing', async () => {

@@ -59,6 +59,10 @@ A package's first version goes out from a maintainer's machine, and CI publishes
 4. Turn on "Allow npm publish" for the publisher. A publisher created after 3 September 2026 allows
    only `npm stage publish` without it, and the `main` workflow runs `npm publish`, so its publish
    fails with `ENEEDAUTH`. Expect the access page to show the publisher with npm publish allowed.
+5. Release the package from CI within 2 days, through
+   [Merge a release pull request](#merge-a-release-pull-request). npm expires a trusted publisher
+   that no publish uses within 2 days of its creation, and an expired one can no longer be used or
+   edited.
 
 ## Merge a release pull request
 

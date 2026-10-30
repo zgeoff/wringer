@@ -49,4 +49,6 @@ Now enable trusted publishing so CI can release future versions:
        environment:          (leave empty)
   3. Turn on "Allow npm publish" for the publisher. Without it, the publisher
      allows only npm stage publish, and the CI publish fails with ENEEDAUTH.
+  4. Release the package from CI within 2 days: npm expires a trusted
+     publisher that no publish uses in that time.
 EOS
