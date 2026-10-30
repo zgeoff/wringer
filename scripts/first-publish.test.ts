@@ -6,45 +6,47 @@ import type { StubNPMAnswer } from '../test-utils/create-stub-npm.ts';
 import { createStubNPM } from '../test-utils/create-stub-npm.ts';
 import { writeTreeFiles } from '../test-utils/write-tree-files.ts';
 
-async function setupTest(npmAnswers: Readonly<Record<string, StubNPMAnswer>>) {
+async function setupTest() {
   const directory = await mkdtemp(join(import.meta.dir, '.test-first-publish-'));
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   const repo = join(directory, 'repo');
+  const bin = join(directory, 'bin');
   const npmLog = join(directory, 'npm.log');
 
-  await writeTreeFiles(repo, {
-    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
-    'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
-    'packages/kettle-tools/package.json': JSON.stringify({
-      name: '@acme/kettle-tools',
-      version: '0.0.0',
-      private: true,
-    }),
-  });
+  await mkdir(repo);
+  await mkdir(bin);
+  await writeFile(npmLog, '');
 
   // npm stands in for the registry and the account; bun packs for real.
-  await mkdir(join(directory, 'bin'));
-  await writeFile(npmLog, '');
-  await createStubNPM(join(directory, 'bin'), npmLog, npmAnswers);
+  const createNPM = (answers: Readonly<Record<string, StubNPMAnswer>>) =>
+    createStubNPM(bin, npmLog, answers);
 
   const scriptPath = join(import.meta.dir, 'first-publish.sh');
 
   const runFirstPublish = (packageFolder: string) =>
     $`bash ${scriptPath} ${packageFolder}`
       .cwd(repo)
-      .env({ ...process.env, PATH: `${join(directory, 'bin')}:${process.env['PATH']}` })
+      .env({ ...process.env, PATH: `${bin}:${process.env['PATH']}` })
       .nothrow()
       .quiet();
 
   const readNPMCalls = () => readFile(npmLog, 'utf8');
 
-  return { runFirstPublish, readNPMCalls };
+  return { repo, createNPM, runFirstPublish, readNPMCalls };
 }
 
 test('it packs a package that is new to npm, publishes the tarball, and prints the trusted publisher', async () => {
-  const ctx = await setupTest({ view: { exitCode: 1 } });
+  const ctx = await setupTest();
+
+  await ctx.createNPM({ view: { exitCode: 1 } });
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+    'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
+  });
+
   const result = await ctx.runFirstPublish('kettle');
   const calls = await ctx.readNPMCalls();
 
@@ -65,7 +67,15 @@ test('it packs a package that is new to npm, publishes the tarball, and prints t
 });
 
 test('it refuses a package that npm already holds and publishes nothing', async () => {
-  const ctx = await setupTest({ view: { exitCode: 0 } });
+  const ctx = await setupTest();
+
+  await ctx.createNPM({ view: { exitCode: 0 } });
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+    'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
+  });
+
   const result = await ctx.runFirstPublish('kettle');
   const calls = await ctx.readNPMCalls();
 
@@ -79,7 +89,14 @@ test('it refuses a package that npm already holds and publishes nothing', async 
 });
 
 test('it refuses a folder that holds no package and runs no npm command', async () => {
-  const ctx = await setupTest({ view: { exitCode: 1 } });
+  const ctx = await setupTest();
+
+  await ctx.createNPM({});
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+  });
+
   const result = await ctx.runFirstPublish('teapot');
   const calls = await ctx.readNPMCalls();
 
@@ -89,7 +106,19 @@ test('it refuses a folder that holds no package and runs no npm command', async 
 });
 
 test('it refuses a private package and runs no npm command', async () => {
-  const ctx = await setupTest({ view: { exitCode: 1 } });
+  const ctx = await setupTest();
+
+  await ctx.createNPM({});
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+    'packages/kettle-tools/package.json': JSON.stringify({
+      name: '@acme/kettle-tools',
+      version: '0.0.0',
+      private: true,
+    }),
+  });
+
   const result = await ctx.runFirstPublish('kettle-tools');
   const calls = await ctx.readNPMCalls();
 
@@ -103,7 +132,15 @@ test('it refuses a private package and runs no npm command', async () => {
 });
 
 test('it refuses to publish when npm has no signed-in account', async () => {
-  const ctx = await setupTest({ whoami: { exitCode: 1 }, view: { exitCode: 1 } });
+  const ctx = await setupTest();
+
+  await ctx.createNPM({ whoami: { exitCode: 1 } });
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+    'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
+  });
+
   const result = await ctx.runFirstPublish('kettle');
   const calls = await ctx.readNPMCalls();
 

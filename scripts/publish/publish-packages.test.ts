@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createStubCommand } from '../../test-utils/create-stub-command.ts';
+import type { StubNPMAnswer } from '../../test-utils/create-stub-npm.ts';
 import { createStubNPM } from '../../test-utils/create-stub-npm.ts';
 import { writeTreeFiles } from '../../test-utils/write-tree-files.ts';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
@@ -21,8 +21,10 @@ async function setupTest() {
   await mkdir(repo);
   await writeFile(npmLog, '');
 
-  // npm stands in for the registry, and prints the given answer to npm view; bun packs for real.
-  const createNPM = (viewOutput: string) => createStubCommand(bin, 'npm', npmLog, viewOutput);
+  // npm stands in for the registry and answers each subcommand as the test says; bun packs for real.
+  const createNPM = (answers: Readonly<Record<string, StubNPMAnswer>>) =>
+    createStubNPM(bin, npmLog, answers);
+
   const output: string[] = [];
   const errors: string[] = [];
   const loggedCalls: string[][] = [];
@@ -51,16 +53,12 @@ async function setupTest() {
 
   const readNPMCalls = () => readFile(npmLog, 'utf8');
 
-  // npm stands in for a registry that refuses every publish.
-  const createRefusingNPM = () => createStubNPM(bin, npmLog, { publish: { exitCode: 1 } });
-
   return {
     repo,
     output,
     errors,
     loggedCalls,
     createNPM,
-    createRefusingNPM,
     runPublish,
     readNPMCalls,
   };
@@ -69,7 +67,7 @@ async function setupTest() {
 test('it packs and publishes each released package with provenance', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -93,7 +91,7 @@ test('it packs and publishes each released package with provenance', async () =>
 test('it publishes the given paths in a republish by hand, which names no released versions', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -116,7 +114,7 @@ test('it publishes the given paths in a republish by hand, which names no releas
 test('it skips a private root with no version and publishes the rest of a republish batch', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
@@ -142,7 +140,7 @@ test('it skips a private root with no version and publishes the rest of a republ
 test('it refuses to publish any package when one holds a version the release did not tag', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -171,7 +169,7 @@ test('it refuses to publish any package when one holds a version the release did
 test('it rehearses a prerelease of each version with a dry-run publish and no provenance, even one the registry holds', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('0.4.0\n');
+  await ctx.createNPM({ view: { output: '0.4.0\n' } });
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -191,7 +189,7 @@ test('it rehearses a prerelease of each version with a dry-run publish and no pr
 test('it puts the package manifest back as it was after a rehearsal', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   const manifestText = JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' });
 
@@ -207,7 +205,7 @@ test('it puts the package manifest back as it was after a rehearsal', async () =
 test('it removes the tarball after the publish, so a second run in the same tree packs one tarball', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -224,7 +222,7 @@ test('it removes the tarball after the publish, so a second run in the same tree
 test('it removes the tarball when npm refuses the publish', async () => {
   const ctx = await setupTest();
 
-  await ctx.createRefusingNPM();
+  await ctx.createNPM({ publish: { exitCode: 1 } });
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -247,7 +245,7 @@ test('it removes the tarball when npm refuses the publish', async () => {
 test('it puts the package manifest back when the rehearsal pack fails', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   const manifestText = JSON.stringify({
     name: '@zgeoff/std',
@@ -272,7 +270,7 @@ test('it puts the package manifest back when the rehearsal pack fails', async ()
 test('it rehearses every folder under packages when the rehearsal lists no paths', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -296,7 +294,7 @@ test('it rehearses every folder under packages when the rehearsal lists no paths
 test('it refuses a publish mode other than publish or rehearse and runs no npm command', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -313,7 +311,7 @@ test('it refuses a publish mode other than publish or rehearse and runs no npm c
 test('it skips a private package without asking the registry', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/kettle/package.json': JSON.stringify({
@@ -334,7 +332,7 @@ test('it skips a private package without asking the registry', async () => {
 test('it skips a package whose version the registry already holds', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('0.4.0\n');
+  await ctx.createNPM({ view: { output: '0.4.0\n' } });
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
@@ -351,7 +349,7 @@ test('it skips a package whose version the registry already holds', async () => 
 test('it builds a package that defines a build script before it packs it', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({
@@ -372,7 +370,7 @@ test('it builds a package that defines a build script before it packs it', async
 test('it runs the build, pack and publish through the runner that streams their output to the log', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({
@@ -423,7 +421,7 @@ test('it refuses a paths list that is not a JSON array and publishes nothing', a
 test('it refuses a released versions value that is not a JSON object and publishes nothing', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   const exitCode = await ctx.runPublish(['packages/std'], '["0.4.0"]');
   const calls = await ctx.readNPMCalls();
@@ -440,7 +438,7 @@ test('it refuses a released versions value that is not a JSON object and publish
 test('it refuses a package.json that holds no JSON object and runs no npm command', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, { 'packages/std/package.json': 'null' });
 
@@ -459,7 +457,7 @@ test('it refuses a package.json that holds no JSON object and runs no npm comman
 test('it refuses a package.json with no version and runs no npm command', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std' }),
@@ -480,7 +478,7 @@ test('it refuses a package.json with no version and runs no npm command', async 
 test('it refuses to publish when the pack leaves more than one tarball', async () => {
   const ctx = await setupTest();
 
-  await ctx.createNPM('');
+  await ctx.createNPM({});
 
   await writeTreeFiles(ctx.repo, {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
