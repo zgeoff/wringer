@@ -34,7 +34,10 @@ only for a package that exists on the registry.
 
 A package's first version goes out from a maintainer's machine, and CI publishes every later one.
 
-1. Sign in to npm as an account that can publish under the `@wringer` scope:
+1. In `release-please-config.json`, copy the `packages/core` entry for `packages/<folder>`, with
+   `@wringer/<folder>` as its `component`, and merge that change to `main`. release-please opens a
+   release pull request only for a package that the config lists.
+2. Sign in to npm as an account that can publish under the `@wringer` scope:
 
    ```bash
    npm login
@@ -43,7 +46,7 @@ A package's first version goes out from a maintainer's machine, and CI publishes
 
    Expect `npm whoami` to print your npm username.
 
-2. From the repo root, on an up-to-date `main`, run the first publish with the package's folder name
+3. From the repo root, on an up-to-date `main`, run the first publish with the package's folder name
    under `packages/`:
 
    ```bash
@@ -55,13 +58,13 @@ A package's first version goes out from a maintainer's machine, and CI publishes
    for several minutes after a new package's first publish, so wait that long before you check the
    package or run the script again.
 
-3. Open `https://www.npmjs.com/package/@wringer/<folder>/access` and add a trusted publisher for
+4. Open `https://www.npmjs.com/package/@wringer/<folder>/access` and add a trusted publisher for
    GitHub Actions with the settings the script printed. Expect the publisher listed on the access
    page.
-4. Turn on "Allow npm publish" for the publisher. A publisher created after 3 September 2026 allows
+5. Turn on "Allow npm publish" for the publisher. A publisher created after 3 September 2026 allows
    only `npm stage publish` without it, and the `main` workflow runs `npm publish`, so its publish
    fails with `ENEEDAUTH`. Expect the access page to show the publisher with npm publish allowed.
-5. Release the package from CI within 2 days, through
+6. Release the package from CI within 2 days, through
    [Merge a release pull request](#merge-a-release-pull-request). npm expires a trusted publisher
    that no publish uses within 2 days of its creation, and an expired one can no longer be used or
    edited.
