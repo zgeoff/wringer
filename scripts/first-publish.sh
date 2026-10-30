@@ -47,4 +47,6 @@ Now enable trusted publishing so CI can release future versions:
        repository:           wringer
        workflow filename:    main.yml
        environment:          (leave empty)
+  3. Turn on "Allow npm publish" for the publisher. Without it, the publisher
+     allows only npm stage publish, and the CI publish fails with ENEEDAUTH.
 EOS

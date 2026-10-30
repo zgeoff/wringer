@@ -56,6 +56,9 @@ A package's first version goes out from a maintainer's machine, and CI publishes
 3. Open `https://www.npmjs.com/package/@wringer/<folder>/access` and add a trusted publisher for
    GitHub Actions with the settings the script printed. Expect the publisher listed on the access
    page.
+4. Turn on "Allow npm publish" for the publisher. A publisher created after 3 September 2026 allows
+   only `npm stage publish` without it, and the `main` workflow runs `npm publish`, so its publish
+   fails with `ENEEDAUTH`. Expect the access page to show the publisher with npm publish allowed.
 
 ## Merge a release pull request
 
