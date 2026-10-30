@@ -11,15 +11,19 @@ export type PackageManifest =
       readonly releasedVersion: string | undefined;
     };
 
+export type ManifestParse =
+  | PackageManifest
+  | { readonly kind: 'invalid'; readonly message: string };
+
 export function parsePackageManifest(
   text: string,
   folder: string,
   releasedVersion: string | undefined,
-): PackageManifest {
-  const manifest: unknown = JSON.parse(text);
+): ManifestParse {
+  const manifest = parseJSON(text);
 
   if (typeof manifest !== 'object' || manifest === null) {
-    throw new Error(`${folder}/package.json holds no JSON object`);
+    return { kind: 'invalid', message: `${folder}/package.json holds no JSON object` };
   }
 
   const name = 'name' in manifest ? manifest.name : undefined;
@@ -31,7 +35,7 @@ export function parsePackageManifest(
   const version = 'version' in manifest ? manifest.version : undefined;
 
   if (typeof name !== 'string' || typeof version !== 'string') {
-    throw new TypeError(`${folder}/package.json names no package and version`);
+    return { kind: 'invalid', message: `${folder}/package.json names no package and version` };
   }
 
   const scripts = 'scripts' in manifest ? manifest.scripts : undefined;
@@ -44,4 +48,14 @@ export function parsePackageManifest(
     hasBuild: typeof scripts === 'object' && scripts !== null && 'build' in scripts,
     releasedVersion,
   };
+}
+
+function parseJSON(text: string): unknown {
+  try {
+    const parsed: unknown = JSON.parse(text);
+
+    return parsed;
+  } catch {
+    return undefined;
+  }
 }

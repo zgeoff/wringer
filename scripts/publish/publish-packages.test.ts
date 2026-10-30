@@ -383,11 +383,14 @@ test('it refuses a package.json that holds no JSON object and runs no npm comman
 
   await writeTreeFiles(ctx.repo, { 'packages/std/package.json': 'null' });
 
-  expect(ctx.runPublish(['packages/std'], '')).rejects.toThrow(
-    `${join(ctx.repo, 'packages/std')}/package.json holds no JSON object`,
-  );
-
+  const exitCode = await ctx.runPublish(['packages/std'], '');
   const calls = await ctx.readNPMCalls();
+
+  expect(exitCode).toBe(1);
+
+  expect(ctx.errors).toStrictEqual([
+    `::error::${join(ctx.repo, 'packages/std')}/package.json holds no JSON object\n`,
+  ]);
 
   expect(calls).toBe('');
 });
@@ -401,11 +404,14 @@ test('it refuses a package.json with no version and runs no npm command', async 
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std' }),
   });
 
-  expect(ctx.runPublish(['packages/std'], '')).rejects.toThrow(
-    `${join(ctx.repo, 'packages/std')}/package.json names no package and version`,
-  );
-
+  const exitCode = await ctx.runPublish(['packages/std'], '');
   const calls = await ctx.readNPMCalls();
+
+  expect(exitCode).toBe(1);
+
+  expect(ctx.errors).toStrictEqual([
+    `::error::${join(ctx.repo, 'packages/std')}/package.json names no package and version\n`,
+  ]);
 
   expect(calls).toBe('');
 });

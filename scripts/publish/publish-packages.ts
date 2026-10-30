@@ -7,7 +7,7 @@ import type { CommandResult, RunCommand } from '../ci/run-command.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { parseTextList } from '../release/parse-text-list.ts';
 import { parseTextRecord } from '../release/parse-text-record.ts';
-import type { PackageManifest } from './parse-package-manifest.ts';
+import type { ManifestParse, PackageManifest } from './parse-package-manifest.ts';
 import { parsePackageManifest } from './parse-package-manifest.ts';
 
 export interface PackagesPublishOptions {
@@ -64,8 +64,8 @@ export async function publishPackages(options: PackagesPublishOptions): Promise<
       ? await readWorkspacePackagePaths(options)
       : listedPaths;
 
-  const manifests = await Promise.all(
-    paths.map(async (path) => {
+  const parses = await Promise.all(
+    paths.map(async (path): Promise<ManifestParse> => {
       const folder = join(options.cwd, path);
 
       const text = await options.fileSystem.readText(join(folder, 'package.json'));
@@ -74,13 +74,18 @@ export async function publishPackages(options: PackagesPublishOptions): Promise<
     }),
   );
 
+  const manifests = parses.filter((parse): parse is PackageManifest => parse.kind !== 'invalid');
+
   // A tag whose version the checkout does not hold fails the run before anything publishes, which
   // the already-published skip would otherwise hide.
-  const mismatches = manifests.flatMap((manifest) => collectVersionMismatches(manifest));
+  const faults = [
+    ...parses.flatMap((parse) => (parse.kind === 'invalid' ? [parse.message] : [])),
+    ...manifests.flatMap((manifest) => collectVersionMismatches(manifest)),
+  ];
 
-  if (mismatches.length > 0) {
-    for (const mismatch of mismatches) {
-      options.writeError(`::error::${mismatch}\n`);
+  if (faults.length > 0) {
+    for (const fault of faults) {
+      options.writeError(`::error::${fault}\n`);
     }
 
     return 1;

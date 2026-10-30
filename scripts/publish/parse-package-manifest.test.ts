@@ -52,17 +52,32 @@ test('it names a private package with no name by its folder', () => {
 });
 
 test('it refuses a public package with no version', () => {
-  expect(() =>
-    parsePackageManifest(
-      JSON.stringify({ name: '@acme/kettle' }),
-      '/repo/packages/kettle',
-      undefined,
-    ),
-  ).toThrow('/repo/packages/kettle/package.json names no package and version');
+  const manifest = parsePackageManifest(
+    JSON.stringify({ name: '@acme/kettle' }),
+    '/repo/packages/kettle',
+    undefined,
+  );
+
+  expect(manifest).toStrictEqual({
+    kind: 'invalid',
+    message: '/repo/packages/kettle/package.json names no package and version',
+  });
 });
 
 test('it refuses a package.json that holds no JSON object', () => {
-  expect(() => parsePackageManifest('"kettle"', '/repo/packages/kettle', undefined)).toThrow(
-    '/repo/packages/kettle/package.json holds no JSON object',
-  );
+  const manifest = parsePackageManifest('"kettle"', '/repo/packages/kettle', undefined);
+
+  expect(manifest).toStrictEqual({
+    kind: 'invalid',
+    message: '/repo/packages/kettle/package.json holds no JSON object',
+  });
+});
+
+test('it refuses a package.json that is not JSON', () => {
+  const manifest = parsePackageManifest('{ "name": ', '/repo/packages/kettle', undefined);
+
+  expect(manifest).toStrictEqual({
+    kind: 'invalid',
+    message: '/repo/packages/kettle/package.json holds no JSON object',
+  });
 });
