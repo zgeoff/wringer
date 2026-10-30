@@ -2,43 +2,27 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildStubOutputSink } from '../../test-utils/build-stub-output-sink.ts';
+import { createCommandStarter } from '../../test-utils/create-command-starter.ts';
 import { makeLoggedCommandRunner } from './make-logged-command-runner.ts';
-import type { CommandResult } from './run-command.ts';
 
 async function setupTest() {
   const directory = await mkdtemp(join(import.meta.dir, '.test-make-logged-command-runner-'));
 
-  const stopping = new AbortController();
+  const stdout = buildStubOutputSink();
+  const stderr = buildStubOutputSink();
 
-  const commands: Promise<CommandResult>[] = [];
+  const starter = createCommandStarter(makeLoggedCommandRunner({ stdout, stderr }), {
+    cwd: directory,
+    env: { PATH: process.env['PATH'] },
+  });
 
-  // Stops every command the test started and waits for each to exit, and only then removes the
-  // folder the commands run in.
   onTestFinished(async () => {
-    stopping.abort();
-
-    await Promise.allSettled(commands);
+    await starter.stopCommands();
 
     await rm(directory, { recursive: true, force: true });
   });
 
-  const stdout = buildStubOutputSink();
-  const stderr = buildStubOutputSink();
-  const runLoggedCommand = makeLoggedCommandRunner({ stdout, stderr });
-
-  const startCommand = (argv: readonly string[], signal?: AbortSignal) => {
-    const running = runLoggedCommand(argv, {
-      cwd: directory,
-      env: { PATH: process.env['PATH'] },
-      signal: signal === undefined ? stopping.signal : AbortSignal.any([stopping.signal, signal]),
-    });
-
-    commands.push(running);
-
-    return running;
-  };
-
-  return { directory, stdout, stderr, startCommand };
+  return { directory, stdout, stderr, startCommand: starter.startCommand };
 }
 
 test('it copies the output while the command still runs', async () => {
