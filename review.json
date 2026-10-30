@@ -1,0 +1,16 @@
+{
+  "extends": "github:zgeoff/noslop-config",
+  "synced": [
+    ".github/workflows/pr.yml",
+    ".lefthook/pre-push-baseline.yml",
+    "scripts/*.ts",
+    "scripts/dependency-gates/**",
+    "scripts/run-memory-capped.sh",
+    ".claude/skills/testing/**",
+    ".claude/skills/code-style/**",
+    ".claude/skills/docs-writing/**",
+    ".claude/skills/skill-writing/**",
+    ".claude/skills/ci-design/**",
+    ".claude/hooks/skill-gate/**"
+  ]
+}

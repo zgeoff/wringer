@@ -1,0 +1,35 @@
+{
+  "name": "@wringer/core",
+  "version": "0.0.0",
+  "description": "The core of wringer: the JSON envelope that every wringer command writes",
+  "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/core#readme",
+  "bugs": "https://github.com/zgeoff/wringer/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgeoff/wringer.git",
+    "directory": "packages/core"
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsrs -p tsconfig.build.json",
+    "typecheck": "tsrs --noEmit"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  }
+}
