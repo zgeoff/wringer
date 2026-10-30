@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import { createStubNPM } from '../test-utils/create-stub-npm.ts';
 import { writeTreeFiles } from '../test-utils/write-tree-files.ts';
 
 async function setupTest(registryHolds: boolean) {
@@ -17,19 +18,14 @@ async function setupTest(registryHolds: boolean) {
     'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
   });
 
-  // npm stands in for the registry: npm view succeeds only when the registry holds the package,
-  // and every call appends its arguments to the log. bun packs for real.
-  await writeTreeFiles(directory, {
-    'bin/npm': [
-      '#!/bin/sh',
-      `echo "npm $*" >> '${npmLog}'`,
-      `if [ "$1" = view ]; then exit ${registryHolds ? 0 : 1}; fi`,
-      '',
-    ].join('\n'),
-  });
-
-  await chmod(join(directory, 'bin/npm'), 0o755);
+  // npm stands in for the registry, whose view succeeds only when it holds the package; bun packs
+  // for real.
+  await mkdir(join(directory, 'bin'));
   await writeFile(npmLog, '');
+
+  await createStubNPM(join(directory, 'bin'), npmLog, {
+    view: { exitCode: registryHolds ? 0 : 1 },
+  });
 
   const scriptPath = join(import.meta.dir, 'first-publish.sh');
 
