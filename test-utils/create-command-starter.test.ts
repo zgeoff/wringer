@@ -37,9 +37,10 @@ test('it stops every started command and settles once each has exited', async ()
 
   await ctx.starter.stopCommands();
 
-  const results = await Promise.all([first, second]);
+  const [firstResult, secondResult] = await Promise.all([first, second]);
 
-  expect(results.map((result) => result.exitCode)).toStrictEqual([143, 143]);
+  expect(firstResult.exitCode).toBe(143);
+  expect(secondResult.exitCode).toBe(143);
 });
 
 test('it stops only the command whose own signal aborts', async () => {

@@ -215,7 +215,8 @@ test('it removes the tarball after the publish, so a second run in the same tree
   const secondExitCode = await ctx.runPublish(['packages/std'], '', 'rehearse');
   const files = await readdir(join(ctx.repo, 'packages/std'));
 
-  expect([firstExitCode, secondExitCode]).toStrictEqual([0, 0]);
+  expect(firstExitCode).toBe(0);
+  expect(secondExitCode).toBe(0);
   expect(files).toStrictEqual(['package.json']);
 });
 
