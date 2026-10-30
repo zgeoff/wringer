@@ -155,7 +155,7 @@ test('it refuses to publish any package when one holds a version the release did
   expect(calls).toBe('');
 });
 
-test('it rehearses each package with a dry-run publish and no provenance, even one the registry holds', async () => {
+test('it rehearses a prerelease of each version with a dry-run publish and no provenance, even one the registry holds', async () => {
   const ctx = await setupTest();
 
   await ctx.createNPM('0.4.0\n');
@@ -169,7 +169,23 @@ test('it rehearses each package with a dry-run publish and no provenance, even o
 
   expect(exitCode).toBe(0);
   expect(ctx.output).toStrictEqual([]);
-  expect(calls).toBe('npm publish ./zgeoff-std-0.4.0.tgz --dry-run --access public\n');
+  expect(calls).toBe('npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --access public\n');
+});
+
+test('it puts the package manifest back as it was after a rehearsal', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNPM('');
+
+  const manifestText = JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' });
+
+  await writeTreeFiles(ctx.repo, { 'packages/std/package.json': manifestText });
+
+  const exitCode = await ctx.runPublish(['packages/std'], '', 'rehearse');
+  const restored = await readFile(join(ctx.repo, 'packages/std/package.json'), 'utf8');
+
+  expect(exitCode).toBe(0);
+  expect(restored).toBe(manifestText);
 });
 
 test('it rehearses every folder under packages when the rehearsal lists no paths', async () => {
@@ -189,8 +205,8 @@ test('it rehearses every folder under packages when the rehearsal lists no paths
 
   expect(calls).toBe(
     [
-      'npm publish ./acme-kettle-2.0.0.tgz --dry-run --access public',
-      'npm publish ./zgeoff-std-0.4.0.tgz --dry-run --access public',
+      'npm publish ./acme-kettle-2.0.0-rehearsal.tgz --dry-run --access public',
+      'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --access public',
       '',
     ].join('\n'),
   );

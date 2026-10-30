@@ -3,7 +3,7 @@ import type { FileSystem } from '../ci/file-system.ts';
 import { makeLoggedCommandRunner } from '../ci/make-logged-command-runner.ts';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
 import { runCheckedCommand } from '../ci/run-checked-command.ts';
-import type { RunCommand } from '../ci/run-command.ts';
+import type { CommandResult, RunCommand } from '../ci/run-command.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { parseTextList } from '../release/parse-text-list.ts';
 import { parseTextRecord } from '../release/parse-text-record.ts';
@@ -21,7 +21,7 @@ export interface PackagesPublishOptions {
 
   readonly releasedVersionsText: string;
 
-  readonly fileSystem: Pick<FileSystem, 'readDirectory' | 'readText'>;
+  readonly fileSystem: Pick<FileSystem, 'readDirectory' | 'readText' | 'writeText'>;
 
   // Runs the registry check, whose answer the publish reads.
   readonly runCommand: RunCommand;
@@ -170,6 +170,12 @@ function publishManifest<Kind extends PackageManifest['kind']>(
   return publish(manifest, mode, options);
 }
 
+type Packer = (
+  entry: ManifestOf<'public'>,
+  run: (argv: readonly string[]) => Promise<CommandResult>,
+  options: PackagesPublishOptions,
+) => Promise<void>;
+
 // The registry check makes a rerun after a partial publish skip the packages already on npm.
 async function publishPackage(
   entry: ManifestOf<'public'>,
@@ -198,7 +204,7 @@ async function publishPackage(
     await run(['bun', 'run', 'build']);
   }
 
-  await run(['bun', 'pm', 'pack']);
+  await packers[mode](entry, run, options);
 
   const files = await options.fileSystem.readDirectory(entry.folder);
 
@@ -210,6 +216,40 @@ async function publishPackage(
   }
 
   await run(['npm', 'publish', `./${tarball}`, publishFlags[mode], '--access', 'public']);
+}
+
+// npm's dry run refuses a version the registry holds, so a rehearsal packs a prerelease of the
+// version that no release publishes, and puts the manifest back after the pack.
+const packers: Readonly<Record<PublishMode, Packer>> = {
+  publish: async (_, run) => {
+    await run(['bun', 'pm', 'pack']);
+  },
+  rehearse: async (entry, run, options) => {
+    const manifestPath = join(entry.folder, 'package.json');
+
+    const manifestText = await options.fileSystem.readText(manifestPath);
+
+    await options.fileSystem.writeText(
+      manifestPath,
+      buildRehearsalManifestText(manifestText, entry.version),
+    );
+
+    try {
+      await run(['bun', 'pm', 'pack']);
+    } finally {
+      await options.fileSystem.writeText(manifestPath, manifestText);
+    }
+  },
+};
+
+function buildRehearsalManifestText(manifestText: string, version: string): string {
+  const manifest: unknown = JSON.parse(manifestText);
+
+  if (typeof manifest !== 'object' || manifest === null) {
+    throw new Error('package.json holds no JSON object');
+  }
+
+  return `${JSON.stringify({ ...manifest, version: `${version}-rehearsal` }, null, 2)}\n`;
 }
 
 const publishFlags: Readonly<Record<PublishMode, string>> = {
