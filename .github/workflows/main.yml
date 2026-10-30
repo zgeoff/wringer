@@ -30,12 +30,13 @@ permissions:
   contents: read
 
 jobs:
-  # A newer push makes an older run's checks moot. A publish run dispatched at
-  # a release tag has a ref of its own, so a push never cancels its checks.
+  # A newer push makes an older run's checks moot. A dispatched publish run
+  # gates its publish on these checks, and two dispatches can share a tag, so
+  # each dispatch's checks get a group of their own and never cancel.
   checks:
     concurrency:
-      group: checks-${{ github.ref }}
-      cancel-in-progress: true
+      group: checks-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'push' }}
     # GitHub checks the called workflow's job permissions even for its skipped
     # gitleaks job, which asks for pull-requests: write
     permissions:
