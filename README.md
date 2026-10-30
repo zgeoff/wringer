@@ -33,8 +33,8 @@ bun install
 bun run check
 ```
 
-CI runs the same checks on each pull request, scans its commits for secrets, and rehearses the npm
-publish of each package.
+CI runs the same checks on each pull request and scans its commits for secrets. A pull request that
+changes a package or the publish path also gets a rehearsal of the npm publish of each package.
 
 ## Layout
 
