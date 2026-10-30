@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { CommandResult } from '../scripts/ci/run-command.ts';
 import { runCommand } from '../scripts/ci/run-command.ts';
 import { createCommandStarter } from './create-command-starter.ts';
 
@@ -57,4 +58,37 @@ test('it stops only the command whose own signal aborts', async () => {
 
   expect(stoppedResult.exitCode).toBe(143);
   expect([finishedResult.exitCode, finishedResult.stdout]).toStrictEqual([0, 'boiled\n']);
+});
+
+test('it settles the stop only once a stopped command has settled', async () => {
+  const command = Promise.withResolvers<CommandResult>();
+  const signals: (AbortSignal | undefined)[] = [];
+
+  const starter = createCommandStarter(
+    (_argv, options) => {
+      signals.push(options.signal);
+
+      return command.promise;
+    },
+    { cwd: '/repo', env: {} },
+  );
+
+  const running = starter.startCommand(['sleep', '30']);
+  const stopping = starter.stopCommands();
+
+  // A race against a settled promise answers whether the stop has settled by now, with no delay.
+  const pending = Symbol('pending');
+
+  const beforeSettle = await Promise.race([stopping, Promise.resolve(pending)]);
+
+  expect(signals[0]?.aborted).toBeTrue();
+  expect(beforeSettle).toBe(pending);
+
+  command.resolve({ exitCode: 143, stdout: '', stderr: '' });
+
+  await stopping;
+
+  const result = await running;
+
+  expect(result.exitCode).toBe(143);
 });
