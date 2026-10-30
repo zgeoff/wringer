@@ -26,11 +26,11 @@ async function setupTest() {
   const stderr = buildStubOutputSink();
   const runLoggedCommand = makeLoggedCommandRunner({ stdout, stderr });
 
-  const startCommand = (argv: readonly string[]) => {
+  const startCommand = (argv: readonly string[], signal?: AbortSignal) => {
     const running = runLoggedCommand(argv, {
       cwd: directory,
       env: { PATH: process.env['PATH'] },
-      signal: stopping.signal,
+      signal: signal === undefined ? stopping.signal : AbortSignal.any([stopping.signal, signal]),
     });
 
     commands.push(running);
@@ -38,7 +38,7 @@ async function setupTest() {
     return running;
   };
 
-  return { directory, stdout, stderr, runLoggedCommand, startCommand };
+  return { directory, stdout, stderr, startCommand };
 }
 
 test('it copies the output while the command still runs', async () => {
@@ -84,11 +84,7 @@ test('it stops the command when its signal aborts, and returns the exit code of 
 
   const stopping = new AbortController();
 
-  const running = ctx.runLoggedCommand(['sh', '-c', 'echo boiling; exec sleep 30'], {
-    cwd: ctx.directory,
-    env: { PATH: process.env['PATH'] },
-    signal: stopping.signal,
-  });
+  const running = ctx.startCommand(['sh', '-c', 'echo boiling; exec sleep 30'], stopping.signal);
 
   await ctx.stdout.firstWrite;
 
