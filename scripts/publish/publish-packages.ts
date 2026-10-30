@@ -6,10 +6,11 @@ import { nodeFileSystem } from '../ci/node-file-system.ts';
 import { runCheckedCommand } from '../ci/run-checked-command.ts';
 import type { CommandResult, RunCommand } from '../ci/run-command.ts';
 import { runCommand } from '../ci/run-command.ts';
-import { parseTextList } from '../release/parse-text-list.ts';
-import { parseTextRecord } from '../release/parse-text-record.ts';
+import { buildPublishPlan } from './build-publish-plan.ts';
 import type { ManifestParse, PackageManifest } from './parse-package-manifest.ts';
 import { parsePackageManifest } from './parse-package-manifest.ts';
+import type { PublishMode, PublishRequest } from './parse-publish-request.ts';
+import { parsePublishRequest } from './parse-publish-request.ts';
 
 export interface PackagesPublishOptions {
   readonly modeText: string;
@@ -38,32 +39,25 @@ export interface PackagesPublishOptions {
 // npm publishes, not bun: trusted publishing (OIDC) needs npm 11.5.1 or newer, and bun publish has
 // no OIDC support (oven-sh/bun#15601). bun packs, because it turns catalog: and workspace:
 // versions into exact ones, which npm pack ships unchanged.
-export async function publishPackages(options: PackagesPublishOptions): Promise<number> {
-  const mode = parsePublishMode(options.modeText);
+export function publishPackages(options: PackagesPublishOptions): Promise<number> {
+  return match(parsePublishRequest(options))
+    .with({ kind: 'refused' }, (refused) => {
+      options.writeError(`::error::${refused.message}\n`);
 
-  if (mode === undefined) {
-    options.writeError('::error::PUBLISH_MODE holds neither publish nor rehearse\n');
+      return Promise.resolve(1);
+    })
+    .with({ kind: 'parsed' }, (request) => publishRequest(request, options))
+    .exhaustive();
+}
 
-    return 1;
-  }
-
-  const pathsText = options.pathsText === '' ? '[]' : options.pathsText;
-  const versionsText = options.releasedVersionsText === '' ? '{}' : options.releasedVersionsText;
-  const listedPaths = parseTextList(pathsText);
-  const releasedVersions = parseTextRecord(versionsText);
-
-  if (listedPaths === null || releasedVersions === null) {
-    options.writeError(
-      '::error::PATHS_RELEASED holds no JSON array of paths, or RELEASED_VERSIONS no JSON object of versions\n',
-    );
-
-    return 1;
-  }
-
-  const paths =
-    mode === 'rehearse' && listedPaths.length === 0
-      ? await readWorkspacePackagePaths(options)
-      : listedPaths;
+async function publishRequest(
+  request: Extract<PublishRequest, { readonly kind: 'parsed' }>,
+  options: PackagesPublishOptions,
+): Promise<number> {
+  const paths = await match(request.paths)
+    .with({ kind: 'listed' }, (listed) => Promise.resolve(listed.paths))
+    .with({ kind: 'workspace' }, () => readWorkspacePackagePaths(options))
+    .exhaustive();
 
   const parses = await Promise.all(
     paths.map(async (path): Promise<ManifestParse> => {
@@ -71,65 +65,32 @@ export async function publishPackages(options: PackagesPublishOptions): Promise<
 
       const text = await options.fileSystem.readText(join(folder, 'package.json'));
 
-      return parsePackageManifest(text, folder, releasedVersions[path]);
+      return parsePackageManifest(text, folder, request.releasedVersions[path]);
     }),
   );
 
-  const manifests = parses.filter((parse): parse is PackageManifest => parse.kind !== 'invalid');
+  return match(buildPublishPlan(parses))
+    .with({ kind: 'refused' }, (refused) => {
+      for (const fault of refused.faults) {
+        options.writeError(`::error::${fault}\n`);
+      }
 
-  // A tag whose version the checkout does not hold fails the run before anything publishes, which
-  // the already-published skip would otherwise hide.
-  const faults = [
-    ...parses.flatMap((parse) => (parse.kind === 'invalid' ? [parse.message] : [])),
-    ...manifests.flatMap((manifest) => collectVersionMismatches(manifest)),
-  ];
+      return Promise.resolve(1);
+    })
+    .with({ kind: 'ready' }, async (plan) => {
+      for (const manifest of plan.manifests) {
+        await publishManifest(manifest, request.mode, options);
+      }
 
-  if (faults.length > 0) {
-    for (const fault of faults) {
-      options.writeError(`::error::${fault}\n`);
-    }
-
-    return 1;
-  }
-
-  for (const manifest of manifests) {
-    await publishManifest(manifest, mode, options);
-  }
-
-  return 0;
+      return 0;
+    })
+    .exhaustive();
 }
 
-// A rehearsal packs every package and runs npm's publish as a dry run, so a pull request proves
-// the publish path without the OIDC token that provenance needs.
-type PublishMode = 'publish' | 'rehearse';
-
-function parsePublishMode(text: string): PublishMode | undefined {
-  if (text === '' || text === 'publish') {
-    return 'publish';
-  }
-
-  return text === 'rehearse' ? 'rehearse' : undefined;
-}
-
-// A rehearsal of an empty list covers every workspace package, so a new package joins it unlisted.
 async function readWorkspacePackagePaths(options: PackagesPublishOptions): Promise<string[]> {
   const folders = await options.fileSystem.readDirectory(join(options.cwd, 'packages'));
 
   return folders.toSorted().map((folder) => `packages/${folder}`);
-}
-
-// A private package never publishes, so the release's version check covers public ones only.
-function collectVersionMismatches(manifest: PackageManifest): string[] {
-  return match(manifest)
-    .with({ kind: 'private' }, () => [])
-    .with({ kind: 'public' }, (entry) =>
-      entry.releasedVersion === undefined || entry.releasedVersion === entry.version
-        ? []
-        : [
-            `${entry.name}: the release tagged ${entry.releasedVersion} but ${join(entry.folder, 'package.json')} holds ${entry.version}`,
-          ],
-    )
-    .exhaustive();
 }
 
 function publishManifest(
