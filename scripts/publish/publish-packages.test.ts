@@ -230,7 +230,7 @@ test('it removes the tarball when npm refuses the publish', async () => {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
   });
 
-  await expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow(
+  expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow(
     'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz',
   );
 
@@ -252,7 +252,7 @@ test('it puts the package manifest back when the rehearsal pack fails', async ()
 
   await writeTreeFiles(ctx.repo, { 'packages/std/package.json': manifestText });
 
-  await expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow('bun pm pack');
+  expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow('bun pm pack');
 
   const restored = await readFile(join(ctx.repo, 'packages/std/package.json'), 'utf8');
 
