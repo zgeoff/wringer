@@ -1,0 +1,152 @@
+# Runs the shared Bun checks on every push to main, with the script list that
+# the BUN_CHECK_SCRIPTS repo variable sets for pull requests, then releases the
+# @wringer/* packages through the shared release-please job and publishes each
+# released package to npm.
+name: Main
+
+on:
+  push:
+    branches: [main]
+  # The publish run, which a push run dispatches at the release tag, and the
+  # recovery path for a release that tagged but failed to publish: it skips
+  # the release job and publishes the given package dirs after the checks
+  # pass. A version npm holds already is skipped, so listing extra paths is
+  # safe.
+  workflow_dispatch:
+    inputs:
+      republish_paths:
+        description: 'JSON array of package dirs to republish, e.g. ["packages/core"]'
+        required: true
+        type: string
+      released_versions:
+        description:
+          'JSON object of the version the release tagged for each dir, e.g.
+          {"packages/core":"0.2.0"}; empty skips the check'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  # A newer push makes an older run's checks moot. A publish run dispatched at
+  # a release tag has a ref of its own, so a push never cancels its checks.
+  checks:
+    concurrency:
+      group: checks-${{ github.ref }}
+      cancel-in-progress: true
+    # GitHub checks the called workflow's job permissions even for its skipped
+    # gitleaks job, which asks for pull-requests: write
+    permissions:
+      contents: read
+      pull-requests: write
+    uses: zgeoff/tools/.github/workflows/bun-checks.yml@sync-v33
+    with:
+      scripts: ${{ vars.BUN_CHECK_SCRIPTS }}
+      # the pull request that landed the commits already scanned them
+      gitleaks: false
+
+  # A release takes two runs:
+  # - Run 1, after a releasable commit lands on main: the shared release-please
+  #   job opens or updates the release PR (version bumps and changelogs), and
+  #   its sync command repairs the PR's lockfile and formatting. A maintainer
+  #   merges the PR by hand, so merge stays off, and the run of that merge's
+  #   push tags the release. The dispatch-publish job then starts run 2.
+  # - Run 2, dispatched at the tag: the publish job ships each released
+  #   package to npm through OIDC, after the checks of the tagged commit pass.
+  #
+  # The release job waits for no checks: the release PR passed its own, and
+  # the tag must land while the merge commit is still main's head, as the
+  # release App's token cannot tag a commit behind a workflow change. The
+  # release waits for its one-time setup, which the RELEASE_ENABLED repo
+  # variable marks done. Its queue keeps every waiting run; the default
+  # replaces a waiting run, which would skip its release.
+  release:
+    if: github.event_name == 'push' && vars.RELEASE_ENABLED == 'true'
+    concurrency:
+      group: release
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: write
+      pull-requests: write
+    uses: zgeoff/tools/.github/workflows/release-please.yml@sync-v33
+    with:
+      app-id: ${{ vars.RELEASE_APP_ID }}
+      merge: false
+    secrets:
+      app-private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+  # npm provenance names GITHUB_SHA as the source commit, and the signing
+  # certificate binds the run's own commit, so a push run never publishes:
+  # release-please can tag a merge that the run's commit does not hold. A
+  # GITHUB_TOKEN workflow_dispatch starts a run, unlike its pushes, and the
+  # run at the tag has the tagged commit as its github.sha.
+  dispatch-publish:
+    name: Dispatch the release publish
+    needs: release
+    if: needs.release.outputs.releases_created == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # queue: max keeps every waiting dispatch; the default replaces a waiting
+    # one, whose tagged release would then never publish.
+    concurrency:
+      group: dispatch-publish
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      - name: Dispatch publish at the release tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_OUTPUTS: ${{ needs.release.outputs.release-outputs }}
+        run: bun run --silent ci:dispatch-publish
+
+  # queue: max keeps every waiting run; the default replaces a waiting run,
+  # which would cancel a pending publish dispatch. A cancelled run could stop
+  # a publish halfway, so publish runs never cancel.
+  publish:
+    name: Publish the release
+    needs: checks
+    if: github.event_name == 'workflow_dispatch' && vars.RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: publish
+      cancel-in-progress: false
+      queue: max
+    permissions:
+      contents: read
+      # npm's trusted publishing takes the job's OIDC token, so no npm token
+      # exists anywhere in this repository
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+      # npm does the publishing, not bun: trusted publishing (OIDC) needs
+      # npm >= 11.5.1 — node 24 bundles at least 11.16 — and bun publish has
+      # no OIDC support (oven-sh/bun#15601). Never upgrade the bundled npm in
+      # place: a cross-major overlay prunes transitive deps that
+      # libnpmpublish needs at publish time (sigstore).
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: bun install --frozen-lockfile
+      - name: Publish released packages
+        env:
+          PATHS_RELEASED: ${{ inputs.republish_paths }}
+          RELEASED_VERSIONS: ${{ inputs.released_versions }}
+        run: bun run --silent ci:publish-packages

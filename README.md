@@ -4,6 +4,10 @@
   <p>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
   </p>
+
+  <p>
+    <a href="./docs/README.md">Documentation</a>
+  </p>
 </div>
 
 A verification framework that each repo wraps in its own CLI.
@@ -29,10 +33,16 @@ bun install
 bun run check
 ```
 
-CI runs the same checks on each pull request, and scans each pull request's commits for secrets.
+CI runs the same checks on each pull request, scans its commits for secrets, and rehearses the npm
+publish of each package.
 
 ## Layout
 
 - `packages/`: the `@wringer/*` packages, one folder each.
-- `scripts/`: the scripts the git hooks and CI run.
+- `docs/`: the runbooks.
+- `scripts/`: the scripts the git hooks, CI and the release run.
 - `.claude/`: the shared agent skills and the skill-gate hook.
+
+## Documentation
+
+The [docs index](./docs/README.md) lists the runbooks.

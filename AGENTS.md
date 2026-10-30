@@ -69,6 +69,8 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
   type-aware rules through tsrslint (`@maschwenk/tsrslint`), a Rust port of tsgolint, in tsgolint's
   place, because stock tsgolint runs out of memory under 2 GiB. `lint:full` runs in CI and in
   `bun run check`, never in a git hook.
+- release-please and the `main` workflow release and publish each package.
+  [Releasing](docs/runbooks/releasing.md) holds the steps they do not do.
 - lefthook runs oxlint, oxfmt, format-codemod and gitleaks before a commit, and commitlint on the
   message. Before a push it runs the prose check, then the shared pre-push baseline: the format
   check and typecheck over the whole tree, and lint and the tests over what the branch changes.
