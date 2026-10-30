@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createStubCommand } from '../../test-utils/create-stub-command.ts';
+import { createStubNPM } from '../../test-utils/create-stub-npm.ts';
 import { writeTreeFiles } from '../../test-utils/write-tree-files.ts';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
 import { runCommand } from '../ci/run-command.ts';
@@ -50,7 +51,19 @@ async function setupTest() {
 
   const readNPMCalls = () => readFile(npmLog, 'utf8');
 
-  return { repo, output, errors, loggedCalls, createNPM, runPublish, readNPMCalls };
+  // npm stands in for a registry that refuses every publish.
+  const createRefusingNPM = () => createStubNPM(bin, npmLog, { publish: { exitCode: 1 } });
+
+  return {
+    repo,
+    output,
+    errors,
+    loggedCalls,
+    createNPM,
+    createRefusingNPM,
+    runPublish,
+    readNPMCalls,
+  };
 }
 
 test('it packs and publishes each released package with provenance', async () => {
@@ -205,6 +218,24 @@ test('it removes the tarball after the publish, so a second run in the same tree
   const files = await readdir(join(ctx.repo, 'packages/std'));
 
   expect([firstExitCode, secondExitCode]).toStrictEqual([0, 0]);
+  expect(files).toStrictEqual(['package.json']);
+});
+
+test('it removes the tarball when npm refuses the publish', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createRefusingNPM();
+
+  await writeTreeFiles(ctx.repo, {
+    'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
+  });
+
+  await expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow(
+    'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz',
+  );
+
+  const files = await readdir(join(ctx.repo, 'packages/std'));
+
   expect(files).toStrictEqual(['package.json']);
 });
 
