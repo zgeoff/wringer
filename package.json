@@ -24,7 +24,7 @@
     "lint:full": "tsgolint=$(tsrslint-path) && OXLINT_TSGOLINT_PATH=$tsgolint oxlint --type-aware --report-unused-disable-directives-severity error",
     "prepare": "command -v git > /dev/null 2>&1 && lefthook install --force || true",
     "prose": "bash .claude/skills/docs-writing/scripts/check-length.sh && bash .claude/skills/docs-writing/scripts/check-prose.sh AGENTS.md",
-    "test": "bun test --randomize --pass-with-no-tests",
+    "test": "bun test --randomize --pass-with-no-tests ./ ./.claude/hooks",
     "typecheck": "tsrs --noEmit && bun run --filter '*' typecheck",
     "files:branch": "bun scripts/read-branch-files.ts",
     "lint:files": "oxlint --no-error-on-unmatched-pattern",

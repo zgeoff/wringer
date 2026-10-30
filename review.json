@@ -34,7 +34,7 @@
     ".claude/skills/docs-writing/**",
     ".claude/skills/skill-writing/**",
     ".claude/skills/ci-design/**",
-    ".claude/hooks/skill-gate/**",
+    ".claude/hooks/skill-gate/skill-gate.ts",
     "scripts/dependency-gates/**"
   ]
 }

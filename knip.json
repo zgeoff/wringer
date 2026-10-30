@@ -7,6 +7,11 @@
   "ignoreDependencies": ["@stylistic/eslint-plugin", "@zgeoff/skill-gate"],
   // repo-sync delivers these scripts from zgeoff/tools and overwrites a local edit, and they export
   // types that only their own file uses
+  // the test script names its roots, so knip reads no package's tests from it
+  "workspaces": {
+    ".": {},
+    "packages/*": { "entry": ["src/**/*.test.ts"] }
+  },
   "ignoreIssues": {
     "scripts/parse-shell-words.ts": ["types"],
     "scripts/shell-escape-parsers.ts": ["types"]

@@ -94,8 +94,9 @@ interface Edit {
   readonly filePaths: readonly string[];
 }
 
-// Claude Code's Edit, Write and MultiEdit calls carry `file_path`. Codex's apply_patch call carries
-// a patch whose header lines name each path it changes.
+// Claude Code's Edit, Write and MultiEdit calls carry `file_path`, and its Bash call carries a
+// command whose words can name a path it writes. Codex's apply_patch call carries a patch whose
+// header lines name each path it changes.
 function parseEdit(payload: unknown, projectDir: string | undefined, edited: Harness): Edit | null {
   if (!isRecord(payload) || !isRecord(payload['tool_input'])) {
     return null;
@@ -110,12 +111,29 @@ function parseEdit(payload: unknown, projectDir: string | undefined, edited: Har
   const paths =
     edited === 'codex'
       ? parsePatchPaths(payload['tool_name'], payload['tool_input']['command'])
-      : [payload['tool_input']['file_path']].filter((entry) => typeof entry === 'string');
+      : [
+          payload['tool_input']['file_path'],
+          ...parseCommandPaths(payload['tool_name'], payload['tool_input']['command']),
+        ].filter((entry) => typeof entry === 'string');
 
   return {
     projectDir: projectDir ?? cwd,
     filePaths: paths.map((entry) => path.resolve(cwd, entry)),
   };
+}
+
+// Without the gate, the fallback cannot tell a write from a read, so it takes every word of a Bash
+// command that is not an option as a path the command may change. A command that names no gated
+// path, such as `bun install`, still runs.
+function parseCommandPaths(toolName: unknown, command: unknown): readonly string[] {
+  if (toolName !== 'Bash' || typeof command !== 'string') {
+    return [];
+  }
+
+  return command
+    .split(/[\s;&|<>()`]+/u)
+    .map((word) => word.replaceAll(/["']/gu, ''))
+    .filter((word) => word !== '' && !word.startsWith('-'));
 }
 
 function parsePatchPaths(toolName: unknown, patch: unknown): readonly string[] {
