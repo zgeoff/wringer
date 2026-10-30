@@ -51,7 +51,9 @@ A package's first version goes out from a maintainer's machine, and CI publishes
    ```
 
    Expect `published @wringer/<folder>@<version>`, followed by the trusted publisher settings. The
-   script stops with `already exists on npm` when the package is on npm.
+   script stops with `already exists on npm` when the package is on npm. `npm view` can answer 404
+   for several minutes after a new package's first publish, so wait that long before you check the
+   package or run the script again.
 
 3. Open `https://www.npmjs.com/package/@wringer/<folder>/access` and add a trusted publisher for
    GitHub Actions with the settings the script printed. Expect the publisher listed on the access
@@ -81,7 +83,8 @@ Nothing merges a release pull request on its own, so each release waits for a ma
    npm view @wringer/<folder> version
    ```
 
-   Expect the version you released.
+   Expect the version you released. `npm view` can answer 404 for several minutes after a package's
+   first publish, so run it again until it answers.
 
 ## Recover a release blocked by a workflow change
 
@@ -116,7 +119,9 @@ scope:
 
 ## Republish a release that failed to publish
 
-A release can tag and then fail in its publish step, such as on an npm outage. Dispatch the `main`
+A release can tag and then fail in its publish step, such as on an npm outage. The publish step
+skips a version that `npm view` reports, and `npm view` can answer 404 for several minutes after a
+package's first publish, so wait that long after a publish before you republish. Dispatch the `main`
 workflow at the tag, with the folder of each package to publish:
 
 1. Dispatch the run:
