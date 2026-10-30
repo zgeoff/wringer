@@ -2,10 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { $ } from 'bun';
+import type { StubNPMAnswer } from '../test-utils/create-stub-npm.ts';
 import { createStubNPM } from '../test-utils/create-stub-npm.ts';
 import { writeTreeFiles } from '../test-utils/write-tree-files.ts';
 
-async function setupTest(registryHolds: boolean) {
+async function setupTest(npmAnswers: Readonly<Record<string, StubNPMAnswer>>) {
   const directory = await mkdtemp(join(import.meta.dir, '.test-first-publish-'));
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
@@ -16,16 +17,17 @@ async function setupTest(registryHolds: boolean) {
   await writeTreeFiles(repo, {
     'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
     'packages/kettle/package.json': JSON.stringify({ name: '@acme/kettle', version: '0.0.0' }),
+    'packages/kettle-tools/package.json': JSON.stringify({
+      name: '@acme/kettle-tools',
+      version: '0.0.0',
+      private: true,
+    }),
   });
 
-  // npm stands in for the registry, whose view succeeds only when it holds the package; bun packs
-  // for real.
+  // npm stands in for the registry and the account; bun packs for real.
   await mkdir(join(directory, 'bin'));
   await writeFile(npmLog, '');
-
-  await createStubNPM(join(directory, 'bin'), npmLog, {
-    view: { exitCode: registryHolds ? 0 : 1 },
-  });
+  await createStubNPM(join(directory, 'bin'), npmLog, npmAnswers);
 
   const scriptPath = join(import.meta.dir, 'first-publish.sh');
 
@@ -42,7 +44,7 @@ async function setupTest(registryHolds: boolean) {
 }
 
 test('it packs a package that is new to npm, publishes the tarball, and prints the trusted publisher', async () => {
-  const ctx = await setupTest(false);
+  const ctx = await setupTest({ view: { exitCode: 1 } });
   const result = await ctx.runFirstPublish('kettle');
   const calls = await ctx.readNPMCalls();
 
@@ -63,7 +65,7 @@ test('it packs a package that is new to npm, publishes the tarball, and prints t
 });
 
 test('it refuses a package that npm already holds and publishes nothing', async () => {
-  const ctx = await setupTest(true);
+  const ctx = await setupTest({ view: { exitCode: 0 } });
   const result = await ctx.runFirstPublish('kettle');
   const calls = await ctx.readNPMCalls();
 
@@ -77,11 +79,35 @@ test('it refuses a package that npm already holds and publishes nothing', async 
 });
 
 test('it refuses a folder that holds no package and runs no npm command', async () => {
-  const ctx = await setupTest(false);
+  const ctx = await setupTest({ view: { exitCode: 1 } });
   const result = await ctx.runFirstPublish('teapot');
   const calls = await ctx.readNPMCalls();
 
   expect(result.exitCode).toBe(1);
   expect(result.stderr.toString()).toBe('not a package: packages/teapot\n');
   expect(calls).toBe('');
+});
+
+test('it refuses a private package and runs no npm command', async () => {
+  const ctx = await setupTest({ view: { exitCode: 1 } });
+  const result = await ctx.runFirstPublish('kettle-tools');
+  const calls = await ctx.readNPMCalls();
+
+  expect(result.exitCode).toBe(1);
+
+  expect(result.stderr.toString()).toBe(
+    '@acme/kettle-tools is "private": true — make it publishable first\n',
+  );
+
+  expect(calls).toBe('');
+});
+
+test('it refuses to publish when npm has no signed-in account', async () => {
+  const ctx = await setupTest({ whoami: { exitCode: 1 }, view: { exitCode: 1 } });
+  const result = await ctx.runFirstPublish('kettle');
+  const calls = await ctx.readNPMCalls();
+
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toBe('not logged in to npm — run: npm login\n');
+  expect(calls).toBe('npm whoami\n');
 });
