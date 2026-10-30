@@ -1,4 +1,5 @@
 import { join } from 'node:path';
+import { match } from 'ts-pattern';
 import type { FileSystem } from '../ci/file-system.ts';
 import { makeLoggedCommandRunner } from '../ci/make-logged-command-runner.ts';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
@@ -117,99 +118,65 @@ async function readWorkspacePackagePaths(options: PackagesPublishOptions): Promi
   return folders.toSorted().map((folder) => `packages/${folder}`);
 }
 
-type ManifestOf<Kind extends PackageManifest['kind']> = Extract<
-  PackageManifest,
-  { readonly kind: Kind }
->;
-
-type VersionMismatchCollector<Kind extends PackageManifest['kind']> = (
-  manifest: ManifestOf<Kind>,
-) => string[];
-
 // A private package never publishes, so the release's version check covers public ones only.
-const versionMismatchCollectors: {
-  readonly [Kind in PackageManifest['kind']]: VersionMismatchCollector<Kind>;
-} = {
-  private: () => [],
-  public: (manifest) =>
-    manifest.releasedVersion === undefined || manifest.releasedVersion === manifest.version
-      ? []
-      : [
-          `${manifest.name}: the release tagged ${manifest.releasedVersion} but ${join(manifest.folder, 'package.json')} holds ${manifest.version}`,
-        ],
-};
-
-function collectVersionMismatches<Kind extends PackageManifest['kind']>(
-  manifest: ManifestOf<Kind>,
-): string[] {
-  const collectMismatches: VersionMismatchCollector<Kind> =
-    versionMismatchCollectors[manifest.kind];
-
-  return collectMismatches(manifest);
+function collectVersionMismatches(manifest: PackageManifest): string[] {
+  return match(manifest)
+    .with({ kind: 'private' }, () => [])
+    .with({ kind: 'public' }, (entry) =>
+      entry.releasedVersion === undefined || entry.releasedVersion === entry.version
+        ? []
+        : [
+            `${entry.name}: the release tagged ${entry.releasedVersion} but ${join(entry.folder, 'package.json')} holds ${entry.version}`,
+          ],
+    )
+    .exhaustive();
 }
 
-type ManifestPublisher<Kind extends PackageManifest['kind']> = (
-  manifest: ManifestOf<Kind>,
-  mode: PublishMode,
-  options: PackagesPublishOptions,
-) => Promise<void>;
-
-// A table typed over every manifest kind, so a new kind fails the type check until it has a publish.
-const manifestPublishers: { readonly [Kind in PackageManifest['kind']]: ManifestPublisher<Kind> } =
-  {
-    private: (manifest, _, options) => {
-      options.writeOutput(`skipping ${manifest.name}: private\n`);
-
-      return Promise.resolve();
-    },
-    public: (manifest, mode, options) => publishPackage(manifest, mode, options),
-  };
-
-function publishManifest<Kind extends PackageManifest['kind']>(
-  manifest: ManifestOf<Kind>,
+function publishManifest(
+  manifest: PackageManifest,
   mode: PublishMode,
   options: PackagesPublishOptions,
 ): Promise<void> {
-  const publish: ManifestPublisher<Kind> = manifestPublishers[manifest.kind];
+  return match(manifest)
+    .with({ kind: 'private' }, (entry) => {
+      options.writeOutput(`skipping ${entry.name}: private\n`);
 
-  return publish(manifest, mode, options);
+      return Promise.resolve();
+    })
+    .with({ kind: 'public' }, (entry) => publishPackage(entry, mode, options))
+    .exhaustive();
 }
 
-type Packer = (
-  entry: ManifestOf<'public'>,
-  run: (argv: readonly string[]) => Promise<CommandResult>,
-  options: PackagesPublishOptions,
-) => Promise<void>;
+type PublicManifest = Extract<PackageManifest, { readonly kind: 'public' }>;
 
-// The registry check makes a rerun after a partial publish skip the packages already on npm.
+type RunChecked = (argv: readonly string[]) => Promise<CommandResult>;
+
 async function publishPackage(
-  entry: ManifestOf<'public'>,
+  entry: PublicManifest,
   mode: PublishMode,
   options: PackagesPublishOptions,
 ): Promise<void> {
   const commandOptions = { cwd: entry.folder, env: options.env };
 
-  const run = (argv: readonly string[]) =>
+  const run: RunChecked = (argv) =>
     runCheckedCommand(options.runLoggedCommand, argv, commandOptions);
 
-  if (mode === 'publish') {
-    const published = await options.runCommand(
-      ['npm', 'view', `${entry.name}@${entry.version}`, 'version'],
-      commandOptions,
-    );
+  const isPublished = await match(mode)
+    .with('publish', () => probePublishedVersion(entry, options))
+    .with('rehearse', () => Promise.resolve(false))
+    .exhaustive();
 
-    if (published.stdout.trim() === entry.version) {
-      options.writeOutput(`skipping ${entry.name}@${entry.version}: already published\n`);
+  if (isPublished) {
+    options.writeOutput(`skipping ${entry.name}@${entry.version}: already published\n`);
 
-      return;
-    }
+    return;
   }
 
   if (entry.hasBuild) {
     await run(['bun', 'run', 'build']);
   }
 
-  await packers[mode](entry, run, options);
+  await packTarball(entry, mode, run, options);
 
   const files = await options.fileSystem.readDirectory(entry.folder);
 
@@ -220,36 +187,60 @@ async function publishPackage(
     throw new Error(`bun pm pack left ${tarballs.length} tarballs in ${entry.folder}`);
   }
 
+  // npm refuses to publish a prerelease without a dist-tag, even in a dry run.
+  const flags = match(mode)
+    .with('publish', () => ['--provenance'])
+    .with('rehearse', () => ['--dry-run', '--tag', 'rehearsal'])
+    .exhaustive();
+
   try {
-    await run(['npm', 'publish', `./${tarball}`, ...publishFlags[mode], '--access', 'public']);
+    await run(['npm', 'publish', `./${tarball}`, ...flags, '--access', 'public']);
   } finally {
     await options.fileSystem.removePath(join(entry.folder, tarball));
   }
 }
 
+// The registry check makes a rerun after a partial publish skip the packages already on npm.
+async function probePublishedVersion(
+  entry: PublicManifest,
+  options: PackagesPublishOptions,
+): Promise<boolean> {
+  const published = await options.runCommand(
+    ['npm', 'view', `${entry.name}@${entry.version}`, 'version'],
+    { cwd: entry.folder, env: options.env },
+  );
+
+  return published.stdout.trim() === entry.version;
+}
+
 // npm's dry run refuses a version the registry holds, so a rehearsal packs a prerelease of the
 // version that no release publishes, and puts the manifest back after the pack.
-const packers: Readonly<Record<PublishMode, Packer>> = {
-  publish: async (_, run) => {
-    await run(['bun', 'pm', 'pack']);
-  },
-  rehearse: async (entry, run, options) => {
-    const manifestPath = join(entry.folder, 'package.json');
+async function packTarball(
+  entry: PublicManifest,
+  mode: PublishMode,
+  run: RunChecked,
+  options: PackagesPublishOptions,
+): Promise<void> {
+  await match(mode)
+    .with('publish', () => run(['bun', 'pm', 'pack']))
+    .with('rehearse', async () => {
+      const manifestPath = join(entry.folder, 'package.json');
 
-    const manifestText = await options.fileSystem.readText(manifestPath);
+      const manifestText = await options.fileSystem.readText(manifestPath);
 
-    await options.fileSystem.writeText(
-      manifestPath,
-      buildRehearsalManifestText(manifestText, entry.version),
-    );
+      await options.fileSystem.writeText(
+        manifestPath,
+        buildRehearsalManifestText(manifestText, entry.version),
+      );
 
-    try {
-      await run(['bun', 'pm', 'pack']);
-    } finally {
-      await options.fileSystem.writeText(manifestPath, manifestText);
-    }
-  },
-};
+      try {
+        await run(['bun', 'pm', 'pack']);
+      } finally {
+        await options.fileSystem.writeText(manifestPath, manifestText);
+      }
+    })
+    .exhaustive();
+}
 
 function buildRehearsalManifestText(manifestText: string, version: string): string {
   const manifest: unknown = JSON.parse(manifestText);
@@ -260,12 +251,6 @@ function buildRehearsalManifestText(manifestText: string, version: string): stri
 
   return `${JSON.stringify({ ...manifest, version: `${version}-rehearsal` }, null, 2)}\n`;
 }
-
-// npm refuses to publish a prerelease without a dist-tag, even in a dry run.
-const publishFlags: Readonly<Record<PublishMode, readonly string[]>> = {
-  publish: ['--provenance'],
-  rehearse: ['--dry-run', '--tag', 'rehearsal'],
-};
 
 if (import.meta.main) {
   process.exitCode = await publishPackages({
