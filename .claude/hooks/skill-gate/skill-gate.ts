@@ -100,14 +100,15 @@ function isAllowedCommand(command: unknown): boolean {
     return true;
   }
 
-  if (program === 'git' && subcommand === 'status') {
-    return true;
-  }
-
-  // git reads a prefix of a long option as the option, so `--out` is `--output`, which writes a file,
-  // and `--ext` is `--ext-diff`, which runs a configured program.
+  // git diff runs the diff program and the textconv drivers that git config names unless both flags
+  // turn them off, and git reads a prefix of a long option as the option, so `--out` is `--output`,
+  // which writes a file, and `--ext` or `--textc` turns a program back on.
   if (program === 'git' && subcommand === 'diff') {
-    return rest.every((word) => !word.startsWith('--o') && !word.startsWith('--ext'));
+    return (
+      rest.includes('--no-ext-diff') &&
+      rest.includes('--no-textconv') &&
+      rest.every((word) => !['--o', '--ext', '--textc'].some((prefix) => word.startsWith(prefix)))
+    );
   }
 
   return (
