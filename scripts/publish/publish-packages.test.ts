@@ -239,6 +239,26 @@ test('it removes the tarball when npm refuses the publish', async () => {
   expect(files).toStrictEqual(['package.json']);
 });
 
+test('it puts the package manifest back when the rehearsal pack fails', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNPM('');
+
+  const manifestText = JSON.stringify({
+    name: '@zgeoff/std',
+    version: '0.4.0',
+    scripts: { prepack: 'exit 1' },
+  });
+
+  await writeTreeFiles(ctx.repo, { 'packages/std/package.json': manifestText });
+
+  await expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow('bun pm pack');
+
+  const restored = await readFile(join(ctx.repo, 'packages/std/package.json'), 'utf8');
+
+  expect(restored).toBe(manifestText);
+});
+
 test('it rehearses every folder under packages when the rehearsal lists no paths', async () => {
   const ctx = await setupTest();
 
