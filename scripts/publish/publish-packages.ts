@@ -215,7 +215,7 @@ async function publishPackage(
     throw new Error(`bun pm pack left ${tarballs.length} tarballs in ${entry.folder}`);
   }
 
-  await run(['npm', 'publish', `./${tarball}`, publishFlags[mode], '--access', 'public']);
+  await run(['npm', 'publish', `./${tarball}`, ...publishFlags[mode], '--access', 'public']);
 }
 
 // npm's dry run refuses a version the registry holds, so a rehearsal packs a prerelease of the
@@ -252,9 +252,10 @@ function buildRehearsalManifestText(manifestText: string, version: string): stri
   return `${JSON.stringify({ ...manifest, version: `${version}-rehearsal` }, null, 2)}\n`;
 }
 
-const publishFlags: Readonly<Record<PublishMode, string>> = {
-  publish: '--provenance',
-  rehearse: '--dry-run',
+// npm refuses to publish a prerelease without a dist-tag, even in a dry run.
+const publishFlags: Readonly<Record<PublishMode, readonly string[]>> = {
+  publish: ['--provenance'],
+  rehearse: ['--dry-run', '--tag', 'rehearsal'],
 };
 
 if (import.meta.main) {

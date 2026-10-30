@@ -169,7 +169,10 @@ test('it rehearses a prerelease of each version with a dry-run publish and no pr
 
   expect(exitCode).toBe(0);
   expect(ctx.output).toStrictEqual([]);
-  expect(calls).toBe('npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --access public\n');
+
+  expect(calls).toBe(
+    'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --tag rehearsal --access public\n',
+  );
 });
 
 test('it puts the package manifest back as it was after a rehearsal', async () => {
@@ -205,8 +208,8 @@ test('it rehearses every folder under packages when the rehearsal lists no paths
 
   expect(calls).toBe(
     [
-      'npm publish ./acme-kettle-2.0.0-rehearsal.tgz --dry-run --access public',
-      'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --access public',
+      'npm publish ./acme-kettle-2.0.0-rehearsal.tgz --dry-run --tag rehearsal --access public',
+      'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz --dry-run --tag rehearsal --access public',
       '',
     ].join('\n'),
   );
