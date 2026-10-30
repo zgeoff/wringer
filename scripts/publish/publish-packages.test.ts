@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createStubCommand } from '../../test-utils/create-stub-command.ts';
 import { writeTreeFiles } from '../../test-utils/write-tree-files.ts';
@@ -189,6 +189,23 @@ test('it puts the package manifest back as it was after a rehearsal', async () =
 
   expect(exitCode).toBe(0);
   expect(restored).toBe(manifestText);
+});
+
+test('it removes the tarball after the publish, so a second run in the same tree packs one tarball', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNPM('');
+
+  await writeTreeFiles(ctx.repo, {
+    'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
+  });
+
+  const firstExitCode = await ctx.runPublish(['packages/std'], '', 'rehearse');
+  const secondExitCode = await ctx.runPublish(['packages/std'], '', 'rehearse');
+  const files = await readdir(join(ctx.repo, 'packages/std'));
+
+  expect([firstExitCode, secondExitCode]).toStrictEqual([0, 0]);
+  expect(files).toStrictEqual(['package.json']);
 });
 
 test('it rehearses every folder under packages when the rehearsal lists no paths', async () => {

@@ -21,7 +21,7 @@ export interface PackagesPublishOptions {
 
   readonly releasedVersionsText: string;
 
-  readonly fileSystem: Pick<FileSystem, 'readDirectory' | 'readText' | 'writeText'>;
+  readonly fileSystem: Pick<FileSystem, 'readDirectory' | 'readText' | 'writeText' | 'removePath'>;
 
   // Runs the registry check, whose answer the publish reads.
   readonly runCommand: RunCommand;
@@ -215,7 +215,11 @@ async function publishPackage(
     throw new Error(`bun pm pack left ${tarballs.length} tarballs in ${entry.folder}`);
   }
 
-  await run(['npm', 'publish', `./${tarball}`, ...publishFlags[mode], '--access', 'public']);
+  try {
+    await run(['npm', 'publish', `./${tarball}`, ...publishFlags[mode], '--access', 'public']);
+  } finally {
+    await options.fileSystem.removePath(join(entry.folder, tarball));
+  }
 }
 
 // npm's dry run refuses a version the registry holds, so a rehearsal packs a prerelease of the
