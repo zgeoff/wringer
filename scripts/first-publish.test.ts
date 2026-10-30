@@ -66,6 +66,29 @@ test('it packs a package that is new to npm, publishes the tarball, and prints t
   expect(result.stdout.toString()).toContain('4. Release the package from CI within 2 days');
 });
 
+test('it builds a package that has a build script and publishes the built output', async () => {
+  const ctx = await setupTest();
+
+  const listPath = join(ctx.repo, 'tarball-files');
+
+  await ctx.createNPM({ view: { exitCode: 1 }, publish: { tarballListPath: listPath } });
+
+  await writeTreeFiles(ctx.repo, {
+    'package.json': JSON.stringify({ name: 'kettle-workspace', private: true }),
+    'packages/kettle/package.json': JSON.stringify({
+      name: '@acme/kettle',
+      version: '0.0.0',
+      scripts: { build: "mkdir -p dist && echo 'export {};' > dist/index.js" },
+    }),
+  });
+
+  const result = await ctx.runFirstPublish('kettle');
+  const files = await readFile(listPath, 'utf8');
+
+  expect(result.exitCode).toBe(0);
+  expect(files.split('\n')).toContain('package/dist/index.js');
+});
+
 test('it refuses a package that npm already holds and publishes nothing', async () => {
   const ctx = await setupTest();
 

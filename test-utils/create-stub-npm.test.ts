@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { createStubNPM } from './create-stub-npm.ts';
@@ -41,4 +41,26 @@ test('it answers a subcommand with its given output and exit code, and leaves th
   expect([view.exitCode, view.stdout.toString()]).toStrictEqual([0, '1.0.0\n']);
   expect([publish.exitCode, publish.stdout.toString()]).toStrictEqual([1, "it's refused\n"]);
   expect([whoami.exitCode, whoami.stdout.toString()]).toStrictEqual([0, '']);
+});
+
+test('it writes the file list of the tarball a subcommand receives when the answer names a list file', async () => {
+  const ctx = await setupTest();
+
+  const listPath = join(ctx.directory, 'tarball-files');
+
+  await mkdir(join(ctx.directory, 'package/dist'), { recursive: true });
+  await writeFile(join(ctx.directory, 'package/dist/index.js'), 'export {};\n');
+
+  await $`tar -czf ${join(ctx.directory, 'kettle.tgz')} -C ${ctx.directory} package`.quiet();
+
+  await createStubNPM(ctx.directory, ctx.log, { publish: { tarballListPath: listPath } });
+
+  const publish = await $`${ctx.npmPath} publish ${join(ctx.directory, 'kettle.tgz')}`
+    .nothrow()
+    .quiet();
+
+  const files = await readFile(listPath, 'utf8');
+
+  expect(publish.exitCode).toBe(0);
+  expect(files.split('\n')).toContain('package/dist/index.js');
 });

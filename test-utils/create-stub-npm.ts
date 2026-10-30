@@ -5,6 +5,9 @@ export interface StubNPMAnswer {
   readonly output?: string;
 
   readonly exitCode?: number;
+
+  // A file the subcommand writes the file list of the tarball its first argument names to.
+  readonly tarballListPath?: string;
 }
 
 // Writes a stand-in for npm that appends each call's arguments to the log, one call per line, and
@@ -21,7 +24,10 @@ export async function createStubNPM(
 
       await writeFile(outputPath, answer.output ?? '');
 
-      return `  ${subcommand}) cat '${outputPath}'; exit ${answer.exitCode ?? 0} ;;`;
+      const listing =
+        answer.tarballListPath === undefined ? '' : `tar -tzf "$2" > '${answer.tarballListPath}'; `;
+
+      return `  ${subcommand}) ${listing}cat '${outputPath}'; exit ${answer.exitCode ?? 0} ;;`;
     }),
   );
 
