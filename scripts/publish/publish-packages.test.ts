@@ -230,9 +230,14 @@ test('it removes the tarball when npm refuses the publish', async () => {
     'packages/std/package.json': JSON.stringify({ name: '@zgeoff/std', version: '0.4.0' }),
   });
 
-  expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow(
-    'npm publish ./zgeoff-std-0.4.0-rehearsal.tgz',
+  const failure = await ctx.runPublish(['packages/std'], '', 'rehearse').then(
+    () => null,
+    (error: unknown) => error,
   );
+
+  expect(failure).toMatchObject({
+    message: expect.stringContaining('npm publish ./zgeoff-std-0.4.0-rehearsal.tgz'),
+  });
 
   const files = await readdir(join(ctx.repo, 'packages/std'));
 
@@ -252,7 +257,12 @@ test('it puts the package manifest back when the rehearsal pack fails', async ()
 
   await writeTreeFiles(ctx.repo, { 'packages/std/package.json': manifestText });
 
-  expect(ctx.runPublish(['packages/std'], '', 'rehearse')).rejects.toThrow('bun pm pack');
+  const failure = await ctx.runPublish(['packages/std'], '', 'rehearse').then(
+    () => null,
+    (error: unknown) => error,
+  );
+
+  expect(failure).toMatchObject({ message: expect.stringContaining('bun pm pack') });
 
   const restored = await readFile(join(ctx.repo, 'packages/std/package.json'), 'utf8');
 
@@ -477,9 +487,16 @@ test('it refuses to publish when the pack leaves more than one tarball', async (
     'packages/std/zgeoff-std-0.3.9.tgz': 'an older pack',
   });
 
-  expect(ctx.runPublish(['packages/std'], '')).rejects.toThrow(
-    `bun pm pack left 2 tarballs in ${join(ctx.repo, 'packages/std')}`,
+  const failure = await ctx.runPublish(['packages/std'], '').then(
+    () => null,
+    (error: unknown) => error,
   );
+
+  expect(failure).toMatchObject({
+    message: expect.stringContaining(
+      `bun pm pack left 2 tarballs in ${join(ctx.repo, 'packages/std')}`,
+    ),
+  });
 
   const calls = await ctx.readNPMCalls();
 
