@@ -1,6 +1,6 @@
 {
   "name": "@wringer/core",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "The core of wringer: the JSON envelope that every wringer command writes",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/core#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
