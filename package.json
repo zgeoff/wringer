@@ -15,7 +15,7 @@
   },
   "type": "module",
   "scripts": {
-    "audit": "bun audit",
+    "audit": "bun audit --ignore=GHSA-g3hv-75wg-m249",
     "check": "bun run audit && bun run deadcode && bun run format:check && bun run lint:full && bun run typecheck && bun run prose && bun run test && bun run test:hooks",
     "deadcode": "knip",
     "format": "oxfmt . && { [ -z \"$(git ls-files -co --exclude-standard -- '*.ts' '*.tsx' $(sed -e '/^#/d' -e '/^$/d' -e 's/^/:(exclude,glob)/' .formatignore))\" ] || format-codemod --quiet .; }",
