@@ -26,3 +26,8 @@ Thumbs.db
 
 # packed tarballs
 *.tgz
+
+# test temp trees
+scripts/*/.test-*
+test-utils/.test-*
+scripts/.test-*

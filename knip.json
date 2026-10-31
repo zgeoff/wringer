@@ -9,7 +9,7 @@
   // types that only their own file uses
   // the test script names its roots, so knip reads no package's tests from it
   "workspaces": {
-    ".": {},
+    ".": { "entry": ["scripts/**/*.test.ts", "test-utils/**/*.test.ts"] },
     "packages/*": { "entry": ["src/**/*.test.ts"] }
   },
   "ignoreIssues": {
