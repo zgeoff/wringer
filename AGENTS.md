@@ -60,9 +60,8 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
   check that CI runs.
 - CI runs the shared Bun pull-request workflow from zgeoff/tools on each pull request. The
   `BUN_CHECK_SCRIPTS` repo variable holds its script list:
-  `audit deadcode format:check lint:full typecheck prose test test:hooks`. A change to that list
-  changes `bun run check` in the same commit. `test:hooks` runs the hook tests under `.claude/`,
-  which `bun test` skips as a hidden folder.
+  `audit deadcode format:check lint:full typecheck prose test`. A change to that list changes
+  `bun run check` in the same commit.
 - `bun run typecheck` runs `tsrs` over the root and each package. A package's `build` script emits
   its declarations with `tsrs`.
 - `lint:full` adds the type-aware rules and fails on an unused disable directive. oxlint runs the
