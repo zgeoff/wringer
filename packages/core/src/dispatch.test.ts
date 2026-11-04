@@ -175,6 +175,21 @@ test('it keeps the evidence of a drive that failed in its envelope', async () =>
   ]);
 });
 
+test('it answers with an internal error when the envelope is too large for the log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'hoard']);
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    evidence: result.envelope.evidence.length,
+  }).toStrictEqual({ exitCode: 4, code: 'internal', evidence: 400 });
+});
+
 test("it writes an internal error's stack to the run's log", async () => {
   const ctx = await setupTest();
 

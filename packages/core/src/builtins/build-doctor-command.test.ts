@@ -9,6 +9,7 @@ import { createWringer } from '../create-wringer.ts';
 import { defineDriver } from '../define-driver.ts';
 import { dispatch } from '../dispatch.ts';
 import { local } from '../local.ts';
+import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'doctor');
@@ -41,11 +42,25 @@ async function setupTest() {
       host: local(),
       drivers: { clock: () => ({}) },
     })
+    .check({
+      name: 'note',
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 1000,
+      run: async (_input, ctx) => {
+        await ctx.evidence.writeFile('note', 'cart.txt', 'the cart was empty');
+
+        throw new WringerError('check-failed', { message: 'The cart was empty.' });
+      },
+    })
     .build();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
+    readRun: (runID: string) => shop.state.readRun(runID),
+    runWithin: (path: readonly string[], timeoutMs: number) =>
+      dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
     readPID: async () => {
       const text = await readFile(pidPath, 'utf8');
 
@@ -75,4 +90,36 @@ test('it stops the work of a check that ran past its own deadline', async () => 
   });
 
   expect({ exitCode: result.exitCode, stopped }).toStrictEqual({ exitCode: 1, stopped: true });
+});
+
+test('it lists the evidence a failed check kept in the doctor envelope', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['attach']);
+
+  const result = await ctx.run(['doctor']);
+
+  expect(result.envelope.evidence).toStrictEqual([
+    { kind: 'note', path: expect.stringMatching(/cart\.txt$/u), sha256: expect.any(String) },
+  ]);
+});
+
+test('it starts no check once the doctor ran past its own deadline', async () => {
+  const ctx = await setupTest();
+  const attached = await ctx.run(['attach']);
+
+  const runID = attached.envelope.instance ?? '';
+
+  await ctx.runWithin(['doctor'], 50);
+
+  const view = await waitFor(async () => {
+    const read = await ctx.readRun(runID);
+
+    return read?.doctor === 'failed' ? read : null;
+  });
+
+  expect(view.doctorResults.map((check) => [check.name, check.code])).toStrictEqual([
+    ['clock.hang', 'timeout'],
+    ['note', 'timeout'],
+  ]);
 });

@@ -18,6 +18,7 @@ test('it registers the shop actions under `action`', () => {
     'action local-only',
     'action hang',
     'action crash',
+    'action hoard',
     'action flood',
     'action pause',
   ]);
