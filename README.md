@@ -21,6 +21,8 @@ workspace publishes to npm.
 - [`@wringer/core`](./packages/core/README.md): the typed registry, the JSON envelope, the error
   codes, read-only targets, the run supervisor, the run state and the fingerprint.
 - [`@wringer/gunshi`](./packages/gunshi/README.md): turns a registry into the repo's verify CLI.
+- [`@wringer/http`](./packages/http/README.md): requests to the target's app.
+- [`@wringer/db`](./packages/db/README.md): SQL on the target's SQLite or Postgres database.
 
 ## Quick start
 

@@ -39,6 +39,19 @@
         "tiny-invariant": "catalog:",
       },
     },
+    "packages/db": {
+      "name": "@wringer/db",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@wringer/core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@wringer/core": "workspace:*",
+      },
+    },
     "packages/gunshi": {
       "name": "@wringer/gunshi",
       "version": "0.0.0",
@@ -50,6 +63,19 @@
         "@wringer/core": "workspace:*",
         "@zgeoff/testing": "catalog:",
         "tiny-invariant": "catalog:",
+      },
+      "peerDependencies": {
+        "@wringer/core": "workspace:*",
+      },
+    },
+    "packages/http": {
+      "name": "@wringer/http",
+      "version": "0.0.0",
+      "dependencies": {
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@wringer/core": "workspace:*",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
@@ -396,7 +422,11 @@
 
     "@wringer/core": ["@wringer/core@workspace:packages/core"],
 
+    "@wringer/db": ["@wringer/db@workspace:packages/db"],
+
     "@wringer/gunshi": ["@wringer/gunshi@workspace:packages/gunshi"],
+
+    "@wringer/http": ["@wringer/http@workspace:packages/http"],
 
     "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.6", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-Ex99nLNCeeVG6GkbjJYKCpepr8VRESSB9SJaA7mRwt6Ls9ndtB+Qps4BbYg5oKueiYZoT3lvNZWzv/Mygv8x5A=="],
 
