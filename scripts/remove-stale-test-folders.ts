@@ -1,49 +1,58 @@
-import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { probeProcess } from '../packages/core/src/probe-process.ts';
+import type { FileSystem } from './ci/file-system.ts';
+import { nodeFileSystem } from './ci/node-file-system.ts';
 
 export interface StaleTestFoldersRequest {
   readonly root: string;
+  readonly fileSystem: Pick<FileSystem, 'readFolderNames' | 'removePath'>;
   readonly probeProcess: (pid: number) => boolean;
 }
 
-// A test run that the runner kills skips its cleanup and leaves its temp folders behind. A folder
-// named after a process that still runs belongs to a run in progress, so the sweep keeps it.
+// A test run that the runner kills skips its cleanup and leaves its temp folders behind.
 export async function removeStaleTestFolders(
   request: StaleTestFoldersRequest,
 ): Promise<readonly string[]> {
-  const folders = await readTestFolders(request.root);
+  const folders = await readTestFolders(request.fileSystem, request.root);
 
-  const stale = folders.filter((folder) => {
+  const owners = folders.flatMap((folder) => {
     const pid = parseTestFolderPID(folder.name);
 
-    return pid !== null && !request.probeProcess(pid);
+    return pid === null ? [] : [pid];
   });
 
-  await Promise.all(stale.map((folder) => rm(folder.path, { recursive: true, force: true })));
+  const livePIDs = new Set(owners.filter((pid) => request.probeProcess(pid)));
 
-  return stale.map((folder) => folder.path);
+  const stale = pickStaleTestFolders(folders, livePIDs);
+
+  await Promise.all(stale.map((path) => request.fileSystem.removePath(path)));
+
+  return stale;
 }
 
-interface TestFolder {
+export interface TestFolder {
   readonly name: string;
   readonly path: string;
 }
 
 const skippedFolderNames = new Set(['.git', '.worktrees', 'node_modules', 'dist']);
 
-async function readTestFolders(directory: string): Promise<readonly TestFolder[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
+async function readTestFolders(
+  fileSystem: Pick<FileSystem, 'readFolderNames'>,
+  directory: string,
+): Promise<readonly TestFolder[]> {
+  const names = await fileSystem.readFolderNames(directory);
 
-  const folders = entries
-    .filter((entry) => entry.isDirectory() && !skippedFolderNames.has(entry.name))
-    .map((entry) => ({ name: entry.name, path: join(directory, entry.name) }));
+  const folders = names
+    .filter((name) => !skippedFolderNames.has(name))
+    .map((name) => ({ name, path: join(directory, name) }));
 
   const found = folders.filter((folder) => folder.name.startsWith('.test-'));
 
   const nested = await Promise.all(
     folders
       .filter((folder) => !folder.name.startsWith('.test-'))
-      .map((folder) => readTestFolders(folder.path)),
+      .map((folder) => readTestFolders(fileSystem, folder.path)),
   );
 
   return [...found, ...nested.flat()];
@@ -57,19 +66,25 @@ function parseTestFolderPID(name: string): number | null {
   return pid === undefined ? null : Number(pid);
 }
 
-// Signal 0 checks that the process exists and sends nothing. EPERM means it runs as another user.
-export function probeProcess(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
+// A folder named after a process that still runs belongs to a run in progress, and a folder with
+// no process in its name is not this sweep's to judge, so both stay.
+export function pickStaleTestFolders(
+  folders: readonly TestFolder[],
+  livePIDs: ReadonlySet<number>,
+): readonly string[] {
+  return folders.flatMap((folder) => {
+    const pid = parseTestFolderPID(folder.name);
 
-    return true;
-  } catch (error) {
-    return !(error instanceof Error && 'code' in error && error.code === 'ESRCH');
-  }
+    return pid === null || livePIDs.has(pid) ? [] : [folder.path];
+  });
 }
 
 if (import.meta.main) {
-  const removed = await removeStaleTestFolders({ root: join(import.meta.dir, '..'), probeProcess });
+  const removed = await removeStaleTestFolders({
+    root: join(import.meta.dir, '..'),
+    fileSystem: nodeFileSystem,
+    probeProcess,
+  });
 
   if (removed.length > 0) {
     process.stdout.write(`Removed ${removed.length} test folders that a killed run left.\n`);

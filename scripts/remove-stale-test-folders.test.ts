@@ -2,7 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
-import { probeProcess, removeStaleTestFolders } from './remove-stale-test-folders.ts';
+import { nodeFileSystem } from './ci/node-file-system.ts';
+import { pickStaleTestFolders, removeStaleTestFolders } from './remove-stale-test-folders.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'remove-stale-test-folders');
@@ -12,12 +13,43 @@ async function setupTest() {
   return {
     root,
     removeStale: (livePIDs: readonly number[]) =>
-      removeStaleTestFolders({ root, probeProcess: (pid) => livePIDs.includes(pid) }),
+      removeStaleTestFolders({
+        root,
+        fileSystem: nodeFileSystem,
+        probeProcess: (pid) => livePIDs.includes(pid),
+      }),
     readNames: (folder: string) => readdir(join(root, folder)),
   };
 }
 
-test('it removes a test folder whose process no longer runs', async () => {
+test('#pickStaleTestFolders picks a folder whose process no longer runs', () => {
+  const stale = pickStaleTestFolders(
+    [{ name: '.test-p4100-beds-a1b2c3', path: '/repo/src/.test-p4100-beds-a1b2c3' }],
+    new Set(),
+  );
+
+  expect(stale).toStrictEqual(['/repo/src/.test-p4100-beds-a1b2c3']);
+});
+
+test('#pickStaleTestFolders keeps a folder whose process still runs', () => {
+  const stale = pickStaleTestFolders(
+    [{ name: '.test-p4100-beds-a1b2c3', path: '/repo/src/.test-p4100-beds-a1b2c3' }],
+    new Set([4100]),
+  );
+
+  expect(stale).toStrictEqual([]);
+});
+
+test('#pickStaleTestFolders keeps a folder with no process in its name', () => {
+  const stale = pickStaleTestFolders(
+    [{ name: '.test-beds-a1b2c3', path: '/repo/src/.test-beds-a1b2c3' }],
+    new Set(),
+  );
+
+  expect(stale).toStrictEqual([]);
+});
+
+test('it removes a nested test folder whose process no longer runs', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'packages/garden/src/.test-p4100-beds-a1b2c3'), { recursive: true });
@@ -27,7 +59,7 @@ test('it removes a test folder whose process no longer runs', async () => {
   expect(removed).toStrictEqual([join(ctx.root, 'packages/garden/src/.test-p4100-beds-a1b2c3')]);
 });
 
-test('it keeps a test folder whose process still runs', async () => {
+test('it keeps a test folder whose process still runs on disk', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'src/.test-p4100-beds-a1b2c3'), { recursive: true });
@@ -37,18 +69,6 @@ test('it keeps a test folder whose process still runs', async () => {
   const names = await ctx.readNames('src');
 
   expect(names).toStrictEqual(['.test-p4100-beds-a1b2c3']);
-});
-
-test('it keeps a test folder with no process in its name', async () => {
-  const ctx = await setupTest();
-
-  await mkdir(join(ctx.root, 'src/.test-beds-a1b2c3'), { recursive: true });
-
-  await ctx.removeStale([]);
-
-  const names = await ctx.readNames('src');
-
-  expect(names).toStrictEqual(['.test-beds-a1b2c3']);
 });
 
 test('it leaves the dependency folders unread', async () => {
@@ -61,16 +81,4 @@ test('it leaves the dependency folders unread', async () => {
   const names = await ctx.readNames('node_modules');
 
   expect(names).toStrictEqual(['.test-p4100-beds-a1b2c3']);
-});
-
-test('#probeProcess answers true for a process that runs', () => {
-  expect(probeProcess(process.pid)).toBeTrue();
-});
-
-test('#probeProcess answers false for a process that exited', async () => {
-  const child = Bun.spawn(['true']);
-
-  await child.exited;
-
-  expect(probeProcess(child.pid)).toBeFalse();
 });

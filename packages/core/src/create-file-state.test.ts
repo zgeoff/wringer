@@ -1,19 +1,30 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
+import { withFileLock } from './with-file-lock.ts';
 
 async function setupTest() {
   const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
 
   onTestFinished(() => rm(stateDir, { recursive: true, force: true }));
 
+  const state = createFileState({
+    stateDir,
+    lockTimeoutMs: 2000,
+    fs: createNodeStateFileSystem(),
+    lock: withFileLock,
+  });
+
   return {
     stateDir,
-    state: createFileState({ stateDir, lockTimeoutMs: 2000, fs: createNodeStateFileSystem() }),
+    state,
+    holdRunLock: (runID: string, work: () => Promise<void>) =>
+      withFileLock({ path: join(state.paths.locks, `run-${runID}.lock`), timeoutMs: 2000 }, work),
     readLog: (runID: string) =>
       readFile(buildRunPaths(stateDir, runIDSchema.parse(runID)).log, 'utf8'),
     readManifest: (runID: string) =>
@@ -231,6 +242,37 @@ test('it writes a manifest of the run from its log', async () => {
     startedAt: '2026-11-04T10:00:00.000Z',
     endedAt: null,
   });
+});
+
+test('it reads the log for a manifest only once the run lock is free', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'f00d',
+  });
+
+  let written: Promise<void> | undefined;
+
+  await ctx.holdRunLock('mf3k2a-7q1z', async () => {
+    written = ctx.state.writeManifest(runID);
+
+    await appendFile(
+      buildRunPaths(ctx.stateDir, runID).log,
+      '{"type":"run-ended","at":"2026-11-04T10:00:05.000Z"}\n',
+    );
+  });
+
+  await written;
+
+  const manifest = await ctx.readManifest('mf3k2a-7q1z');
+
+  expect(JSON.parse(manifest)).toHaveProperty('status', 'ended');
 });
 
 test('it lists the runs that have a log folder', async () => {

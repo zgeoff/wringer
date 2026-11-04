@@ -25,6 +25,12 @@ test('it finds a relative command in the folder it runs in', async () => {
   expect(result).toStrictEqual({ exitCode: 0, stdout: 'hello\n', stderr: '' });
 });
 
+test('it fails with an environment error when the folder to run in does not exist', () => {
+  expect(
+    runProcess({ argv: ['true'], cwd: join(import.meta.dir, 'no-such-folder') }),
+  ).rejects.toMatchObject({ code: 'environment' });
+});
+
 test('it fails with an environment error for a command that is not on the PATH', () => {
   expect(runProcess({ argv: ['wringer-no-such-command'] })).rejects.toMatchObject({
     code: 'environment',

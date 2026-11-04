@@ -1,5 +1,7 @@
-import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { createDirectory } from '../../packages/core/src/create-directory.ts';
+import { isErrorCode } from '../../packages/core/src/is-error-code.ts';
 import type { FileSystem } from './file-system.ts';
 
 export const nodeFileSystem: FileSystem = {
@@ -10,22 +12,29 @@ export const nodeFileSystem: FileSystem = {
     return new Uint8Array(buffer);
   },
   readDirectory: (path) => readdir(path),
+  readFolderNames: async (path) => {
+    const entries = await readdir(path, { withFileTypes: true });
+
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+  },
   writeText: async (path, text) => {
-    await mkdir(dirname(path), { recursive: true });
+    await createDirectory(dirname(path));
     await writeFile(path, text);
   },
   appendText: (path, text) => appendFile(path, text),
-  createDirectory: async (path) => {
-    await mkdir(path, { recursive: true });
-  },
+  createDirectory,
   removePath: (path) => rm(path, { recursive: true, force: true }),
   probePath: async (path) => {
     try {
       await stat(path);
 
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      if (isErrorCode(error, 'ENOENT')) {
+        return false;
+      }
+
+      throw error;
     }
   },
 };

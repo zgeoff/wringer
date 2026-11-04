@@ -8,7 +8,7 @@ import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
 import type { RunEvent, RunID } from './run-events.ts';
 import { appendRunEvent, parseRunLog } from './run-log.ts';
-import { withFileLock } from './with-file-lock.ts';
+import type { FileLock } from './with-file-lock.ts';
 import { WringerError } from './wringer-error.ts';
 
 export const pointersSchema = z.strictObject({
@@ -37,6 +37,7 @@ export interface FileStateOptions {
   readonly stateDir: string;
   readonly lockTimeoutMs: number;
   readonly fs: StateFileSystem;
+  readonly lock: FileLock;
 }
 
 export const eventSizeCapBytes = 64 * 1024;
@@ -44,6 +45,9 @@ export const eventSizeCapBytes = 64 * 1024;
 export function createFileState(options: FileStateOptions): StatePort {
   const paths = buildStatePaths(options.stateDir);
   const fs = options.fs;
+
+  const withLock = <T>(name: string, work: () => Promise<T>): Promise<T> =>
+    options.lock({ path: join(paths.locks, name), timeoutMs: options.lockTimeoutMs }, work);
 
   const readPointers = async (): Promise<Pointers> => {
     const text = await fs.readText(paths.state);
@@ -72,24 +76,17 @@ export function createFileState(options: FileStateOptions): StatePort {
   return {
     paths,
     readPointers,
-    withTargetLock: (target, work) =>
-      withFileLock(
-        { path: join(paths.locks, `target-${target}.lock`), timeoutMs: options.lockTimeoutMs },
-        work,
-      ),
+    withTargetLock: (target, work) => withLock(`target-${target}.lock`, work),
     writePointers: (change) =>
-      withFileLock(
-        { path: join(paths.locks, 'state.lock'), timeoutMs: options.lockTimeoutMs },
-        async () => {
-          const current = await readPointers();
+      withLock('state.lock', async () => {
+        const current = await readPointers();
 
-          const next = pointersSchema.parse(change(current));
+        const next = pointersSchema.parse(change(current));
 
-          await fs.writeTextAtomic(paths.state, `${JSON.stringify(next, null, 2)}\n`);
+        await fs.writeTextAtomic(paths.state, `${JSON.stringify(next, null, 2)}\n`);
 
-          return next;
-        },
-      ),
+        return next;
+      }),
     appendEvent: async (runID, event) => {
       const parsed = runEventSchema.parse(event);
       const line = `${JSON.stringify(parsed)}\n`;
@@ -107,6 +104,7 @@ export function createFileState(options: FileStateOptions): StatePort {
 
       await appendRunEvent({
         fs,
+        lock: options.lock,
         logPath: runPaths.log,
         lockPath: join(paths.locks, `run-${runID}.lock`),
         lockTimeoutMs: options.lockTimeoutMs,
@@ -125,28 +123,33 @@ export function createFileState(options: FileStateOptions): StatePort {
         return parsed.success ? [parsed.data] : [];
       });
     },
-    writeManifest: async (runID) => {
-      const view = await readRun(runID);
 
-      if (view === undefined) {
-        return;
-      }
+    // Under the run's lock, so a manifest built from an older read never replaces a newer one.
+    writeManifest: (runID) =>
+      withLock(`run-${runID}.lock`, async () => {
+        const view = await readRun(runID);
 
-      const manifest = {
-        target: view.target,
-        instance: view.runID,
-        mode: view.mode,
-        fingerprint: view.fingerprint,
-        status: view.status,
-        doctor: { state: view.doctor, results: view.doctorResults },
-        startedAt: view.startedAt,
-        endedAt: view.endedAt,
-      };
+        if (view === undefined) {
+          return;
+        }
 
-      await fs.writeTextAtomic(
-        buildRunPaths(options.stateDir, runID).manifest,
-        `${JSON.stringify(manifest, null, 2)}\n`,
-      );
-    },
+        await fs.writeTextAtomic(
+          buildRunPaths(options.stateDir, runID).manifest,
+          `${JSON.stringify(buildManifest(view), null, 2)}\n`,
+        );
+      }),
+  };
+}
+
+function buildManifest(view: RunView): Readonly<Record<string, unknown>> {
+  return {
+    target: view.target,
+    instance: view.runID,
+    mode: view.mode,
+    fingerprint: view.fingerprint,
+    status: view.status,
+    doctor: { state: view.doctor, results: view.doctorResults },
+    startedAt: view.startedAt,
+    endedAt: view.endedAt,
   };
 }

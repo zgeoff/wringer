@@ -46,6 +46,27 @@ test('it lists a folder it created and probes a path before and after its remova
   expect(after).toBeFalse();
 });
 
+test('it lists only the folders in a folder', async () => {
+  const ctx = await setupTest();
+
+  await nodeFileSystem.createDirectory(join(ctx.directory, 'cups'));
+  await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
+
+  const names = await nodeFileSystem.readFolderNames(ctx.directory);
+
+  expect(names).toStrictEqual(['cups']);
+});
+
+test('it rejects a probe of a path below a file', async () => {
+  const ctx = await setupTest();
+
+  await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
+
+  expect(nodeFileSystem.probePath(join(ctx.directory, 'tea.txt/leaf'))).rejects.toMatchObject({
+    code: 'ENOTDIR',
+  });
+});
+
 test('it removes a missing path with no error', async () => {
   const ctx = await setupTest();
 

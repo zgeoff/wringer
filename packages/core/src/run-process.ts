@@ -1,3 +1,4 @@
+import { buildSpawnError } from './build-spawn-error.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { WringerError } from './wringer-error.ts';
 
@@ -31,16 +32,7 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
     throw plan;
   }
 
-  // The command runs in a process group of its own, so the deadline also stops a child it started,
-  // which would otherwise hold the output pipes open past the deadline.
-  const child = Bun.spawn([...plan.argv], {
-    cwd,
-    env,
-    stdin: request.stdin === undefined ? 'ignore' : Buffer.from(request.stdin),
-    stdout: 'pipe',
-    stderr: 'pipe',
-    detached: true,
-  });
+  const child = startProcess(plan, { cwd, env, stdin: request.stdin });
 
   const killGroup = (): void => {
     killProcessGroup(child.pid);
@@ -121,6 +113,29 @@ function pickProcessPlan(input: ProcessPlanInput): ProcessPlan | WringerError {
 
 function hasAborted(signal: AbortSignal | undefined): boolean {
   return signal?.aborted === true;
+}
+
+interface StartOptions {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
+  readonly stdin?: string | undefined;
+}
+
+// The command runs in a process group of its own, so the deadline also stops a child it started,
+// which would otherwise hold the output pipes open past the deadline.
+function startProcess(plan: ProcessPlan, options: StartOptions) {
+  try {
+    return Bun.spawn([...plan.argv], {
+      cwd: options.cwd,
+      env: { ...options.env },
+      stdin: options.stdin === undefined ? 'ignore' : Buffer.from(options.stdin),
+      stdout: 'pipe',
+      stderr: 'pipe',
+      detached: true,
+    });
+  } catch (error) {
+    throw buildSpawnError(plan.command, error);
+  }
 }
 
 interface ProcessOutcomeInput {

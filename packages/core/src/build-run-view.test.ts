@@ -71,7 +71,10 @@ test('it ignores a launch-ready event that lands after the run ended', () => {
     ],
   });
 
-  expect(view).toMatchObject({ status: 'ended', endpoints: {} });
+  expect({ status: view?.status, endpoints: view?.endpoints }).toStrictEqual({
+    status: 'ended',
+    endpoints: {},
+  });
 });
 
 test('it keeps the reason of a crash', () => {
@@ -89,7 +92,10 @@ test('it keeps the reason of a crash', () => {
     ],
   });
 
-  expect(view).toMatchObject({ status: 'crashed', crashReason: 'the app exited with code 1' });
+  expect({ status: view?.status, crashReason: view?.crashReason }).toStrictEqual({
+    status: 'crashed',
+    crashReason: 'the app exited with code 1',
+  });
 });
 
 test('it counts only the drive envelopes logged after the last doctor pass', () => {
@@ -180,5 +186,46 @@ test('it forgets the drives of an earlier doctor pass once the doctor fails', ()
     ],
   });
 
-  expect(view).toMatchObject({ doctor: 'failed', drivesAfterDoctor: [] });
+  expect({ doctor: view?.doctor, drives: view?.drivesAfterDoctor }).toStrictEqual({
+    doctor: 'failed',
+    drives: [],
+  });
+});
+
+test('it forgets the drives of an earlier doctor pass once the doctor passes again', () => {
+  const view = buildRunView({
+    runID: runIDSchema.parse('mf3k2a-7q1z'),
+    events: [
+      {
+        type: 'run-started',
+        at: '2026-11-04T10:00:00.000Z',
+        target: 'local',
+        mode: 'launch',
+        fingerprint: 'f00d',
+      },
+      { type: 'doctor-passed', at: '2026-11-04T10:00:01.000Z', results: [] },
+      {
+        type: 'envelope',
+        at: '2026-11-04T10:00:02.000Z',
+        drive: true,
+        envelope: {
+          wringer: 1,
+          ok: true,
+          command: 'http.get',
+          target: 'local',
+          instance: 'mf3k2a-7q1z',
+          feature: 'checkout',
+          sha: null,
+          durationMs: 5,
+          data: {},
+          evidence: [],
+          cursors: {},
+          error: null,
+        },
+      },
+      { type: 'doctor-passed', at: '2026-11-04T10:00:03.000Z', results: [] },
+    ],
+  });
+
+  expect(view?.drivesAfterDoctor).toStrictEqual([]);
 });

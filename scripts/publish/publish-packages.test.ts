@@ -235,9 +235,10 @@ test('it removes the tarball when npm refuses the publish', async () => {
     (error: unknown) => error,
   );
 
-  expect(failure).toMatchObject({
-    message: expect.stringContaining('npm publish ./zgeoff-std-0.4.0-rehearsal.tgz'),
-  });
+  expect(failure).toHaveProperty(
+    'message',
+    expect.stringContaining('npm publish ./zgeoff-std-0.4.0-rehearsal.tgz'),
+  );
 
   const files = await readdir(join(ctx.repo, 'packages/std'));
 
@@ -262,7 +263,7 @@ test('it puts the package manifest back when the rehearsal pack fails', async ()
     (error: unknown) => error,
   );
 
-  expect(failure).toMatchObject({ message: expect.stringContaining('bun pm pack') });
+  expect(failure).toHaveProperty('message', expect.stringContaining('bun pm pack'));
 
   const restored = await readFile(join(ctx.repo, 'packages/std/package.json'), 'utf8');
 
@@ -492,11 +493,10 @@ test('it refuses to publish when the pack leaves more than one tarball', async (
     (error: unknown) => error,
   );
 
-  expect(failure).toMatchObject({
-    message: expect.stringContaining(
-      `bun pm pack left 2 tarballs in ${join(ctx.repo, 'packages/std')}`,
-    ),
-  });
+  expect(failure).toHaveProperty(
+    'message',
+    expect.stringContaining(`bun pm pack left 2 tarballs in ${join(ctx.repo, 'packages/std')}`),
+  );
 
   const calls = await ctx.readNPMCalls();
 

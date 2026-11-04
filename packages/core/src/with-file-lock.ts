@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import type { Stats } from 'node:fs';
-import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { isErrorCode } from './is-error-code.ts';
+import { probeProcess } from './probe-process.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface FileLockOptions {
   readonly path: string;
   readonly timeoutMs: number;
 }
+
+export type FileLock = <T>(options: FileLockOptions, work: () => Promise<T>) => Promise<T>;
 
 const lockRetryMs = 20;
 
@@ -62,7 +64,7 @@ async function createLockFile(path: string, content: string): Promise<boolean> {
 
   const stale = await readLockContent(path);
 
-  if (stale !== null && !isProcessAlive(parseOwnerPID(stale))) {
+  if (stale !== null && !probeProcess(parseOwnerPID(stale))) {
     await removeStaleLock(path, stale);
   }
 
@@ -81,20 +83,6 @@ async function readLockContent(path: string): Promise<string | null> {
   }
 }
 
-function isProcessAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) {
-    return false;
-  }
-
-  try {
-    process.kill(pid, 0);
-
-    return true;
-  } catch (error) {
-    return isErrorCode(error, 'EPERM');
-  }
-}
-
 function parseOwnerPID(content: string): number {
   const [pid = ''] = content.split(' ');
 
@@ -102,59 +90,24 @@ function parseOwnerPID(content: string): number {
 }
 
 // Two callers can read the same stale content. Each must first take the claim file named after that
-// content, which `link` creates for one of them only, and check through it that the lock still
-// holds that content; so the other never removes a lock a new owner has taken since.
+// content, which only one of them creates, then check that the lock still holds that content; so
+// the other never removes a lock a new owner has taken since. Only the claimant removes the lock.
 async function removeStaleLock(path: string, stale: string): Promise<void> {
   const claim = `${path}.${Bun.hash(stale).toString(36)}.claim`;
+  const claimant = `${process.pid} ${randomUUID()}`;
 
-  try {
-    await link(path, claim);
-  } catch (error) {
-    if (isErrorCode(error, 'EEXIST')) {
-      await removeAbandonedClaim(claim);
-
-      return;
-    }
-
-    if (isErrorCode(error, 'ENOENT')) {
-      return;
-    }
-
-    throw error;
+  if (!(await createLockFile(claim, claimant))) {
+    return;
   }
 
   try {
-    const claimed = await readLockContent(claim);
+    const current = await readLockContent(path);
 
-    if (claimed === stale) {
+    if (current === stale) {
       await rm(path, { force: true });
     }
   } finally {
-    await rm(claim, { force: true });
-  }
-}
-
-const claimStaleMs = 10_000;
-
-// A caller that dies while it holds a claim leaves the claim behind; one older than any removal takes
-// is abandoned.
-async function removeAbandonedClaim(claim: string): Promise<void> {
-  const info = await readClaimInfo(claim);
-
-  if (info !== null && Date.now() - info.ctimeMs > claimStaleMs) {
-    await rm(claim, { force: true });
-  }
-}
-
-async function readClaimInfo(claim: string): Promise<Stats | null> {
-  try {
-    return await stat(claim);
-  } catch (error) {
-    if (isErrorCode(error, 'ENOENT')) {
-      return null;
-    }
-
-    throw error;
+    await removeOwnLock(claim, claimant);
   }
 }
 

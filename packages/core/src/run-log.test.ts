@@ -4,7 +4,14 @@ import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import type { RunEvent } from './run-events.ts';
-import { appendRunEvent, canMoveRunStatus, findRunStatusMove, parseRunLog } from './run-log.ts';
+import {
+  appendRunEvent,
+  canMoveRunStatus,
+  findRunStatusMove,
+  parseRunLog,
+  pickLogAppend,
+} from './run-log.ts';
+import { withFileLock } from './with-file-lock.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-log');
@@ -18,6 +25,7 @@ async function setupTest() {
     append: (event: RunEvent) =>
       appendRunEvent({
         fs: createNodeStateFileSystem(),
+        lock: withFileLock,
         logPath,
         lockPath: join(directory, 'run.lock'),
         lockTimeoutMs: 2000,
@@ -80,6 +88,30 @@ test('#appendRunEvent refuses a move that the status table does not allow', asyn
     wrote: false,
     types: ['run-started', 'run-ended'],
   });
+});
+
+test('#pickLogAppend cuts a torn last line to the bytes of the whole lines', () => {
+  const plan = pickLogAppend('{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"cr', {
+    type: 'run-ended',
+    at: '2026-11-04T10:00:05.000Z',
+  });
+
+  expect(plan).toStrictEqual({ truncateBytes: 53, append: true });
+});
+
+test('#pickLogAppend leaves a log that ends on a whole line uncut', () => {
+  const plan = pickLogAppend('', { type: 'run-ended', at: '2026-11-04T10:00:05.000Z' });
+
+  expect(plan).toStrictEqual({ truncateBytes: null, append: true });
+});
+
+test('#pickLogAppend drops a crash that arrives after the run ended', () => {
+  const plan = pickLogAppend(
+    '{"type":"run-started","at":"2026-11-04T10:00:00.000Z","target":"local","mode":"launch","fingerprint":"f00d"}\n{"type":"run-ended","at":"2026-11-04T10:00:01.000Z"}\n',
+    { type: 'crashed', at: '2026-11-04T10:00:02.000Z', reason: 'the launch exited' },
+  );
+
+  expect(plan).toStrictEqual({ truncateBytes: null, append: false });
 });
 
 test('#parseRunLog skips a torn last line', () => {

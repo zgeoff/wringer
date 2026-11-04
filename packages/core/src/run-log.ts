@@ -2,7 +2,7 @@ import { match } from 'ts-pattern';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema } from './run-events.ts';
 import type { RunEvent, RunEventType } from './run-events.ts';
-import { withFileLock } from './with-file-lock.ts';
+import type { FileLock } from './with-file-lock.ts';
 
 export type RunStatus = 'starting' | 'running' | 'crashed' | 'ended';
 
@@ -38,6 +38,7 @@ export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
 
 export interface AppendRunEventRequest {
   readonly fs: StateFileSystem;
+  readonly lock: FileLock;
   readonly logPath: string;
   readonly lockPath: string;
   readonly lockTimeoutMs: number;
@@ -45,31 +46,43 @@ export interface AppendRunEventRequest {
   readonly event: RunEvent;
 }
 
-// The only writer of a run's log. Under the run's lock it cuts a torn last line that a killed
-// writer left, so the new event starts a line of its own, and it drops an event whose status move
-// the table does not allow, such as a late `crashed` after `run-ended`. Resolves whether it wrote.
+// The only writer of a run's log, under the run's lock. Resolves whether it wrote.
 export function appendRunEvent(request: AppendRunEventRequest): Promise<boolean> {
-  return withFileLock({ path: request.lockPath, timeoutMs: request.lockTimeoutMs }, async () => {
+  return request.lock({ path: request.lockPath, timeoutMs: request.lockTimeoutMs }, async () => {
     const read = await request.fs.readText(request.logPath);
 
-    const text = read ?? '';
-    const whole = text.slice(0, text.lastIndexOf('\n') + 1);
+    const plan = pickLogAppend(read ?? '', request.event);
 
-    if (whole.length < text.length) {
-      await request.fs.truncateFile(request.logPath, Buffer.byteLength(whole));
+    if (plan.truncateBytes !== null) {
+      await request.fs.truncateFile(request.logPath, plan.truncateBytes);
     }
 
-    const status = foldRunStatus(parseRunLog(whole));
-    const move = findRunStatusMove(request.event.type);
-
-    if (status !== null && move !== null && !canMoveRunStatus(status, move)) {
-      return false;
+    if (plan.append) {
+      await request.fs.appendText(request.logPath, request.line);
     }
 
-    await request.fs.appendText(request.logPath, request.line);
-
-    return true;
+    return plan.append;
   });
+}
+
+export interface LogAppendPlan {
+  readonly truncateBytes: number | null;
+  readonly append: boolean;
+}
+
+// A writer killed mid-line leaves a torn last line, which is cut so the new event starts a line of
+// its own. An event whose status move the table refuses, such as a late `crashed` after
+// `run-ended`, is dropped.
+export function pickLogAppend(text: string, event: RunEvent): LogAppendPlan {
+  const whole = text.slice(0, text.lastIndexOf('\n') + 1);
+  const truncateBytes = whole.length < text.length ? Buffer.byteLength(whole) : null;
+  const status = foldRunStatus(parseRunLog(whole));
+  const move = findRunStatusMove(event.type);
+
+  return {
+    truncateBytes,
+    append: status === null || move === null || canMoveRunStatus(status, move),
+  };
 }
 
 // Null for a log that has not started yet.

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { mkdir, open, readFile, readdir, rename, truncate, writeFile } from 'node:fs/promises';
+import { open, readFile, readdir, rename, truncate, writeFile } from 'node:fs/promises';
+import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
 
 // The file operations the run state needs. A missing file or folder reads as null or as no names;
@@ -37,9 +38,7 @@ export function createNodeStateFileSystem(): StateFileSystem {
         throw error;
       }
     },
-    createDirectory: async (path) => {
-      await mkdir(path, { recursive: true });
-    },
+    createDirectory,
 
     // One write of the whole text to a file opened with O_APPEND, so lines from processes that
     // append at once never interleave.
