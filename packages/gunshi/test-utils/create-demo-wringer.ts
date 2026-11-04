@@ -18,9 +18,14 @@ const labelArgsSchema = z.strictObject({
   finish: z.enum(['', 'matte', 'gloss']).default('matte'),
 });
 
-// A repo's verify CLI for the adapter's tests: a launch target `local` whose app is a shell that
-// prints one ready line, a read-only attach target `prod`, a read action with every flag type, a
-// repo command with two positionals, and a doctor check that passes.
+const addressSchema = z.strictObject({ street: z.string(), town: z.string() });
+const postSchema = z.strictObject({ mode: z.literal('post'), address: addressSchema });
+const pickupSchema = z.strictObject({ mode: z.literal('pickup'), counter: z.string().min(1) });
+const shipArgsSchema = z.discriminatedUnion('mode', [postSchema, pickupSchema]);
+
+// A repo's verify CLI for the adapter's tests: an app target `local`, a read-only target `prod`, a
+// read action with every flag type, a command with two positionals, a command whose arguments are a
+// union, and a doctor check that passes.
 export function createDemoWringer(): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -59,6 +64,16 @@ export function createDemoWringer(): Wringer {
       args: labelArgsSchema,
       positionals: ['shelf', 'item'],
       data: labelArgsSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve(args),
+    })
+    .command({
+      path: ['ship'],
+      summary: 'Ship an order by post or for pickup',
+      args: shipArgsSchema,
+      data: shipArgsSchema,
       effect: 'read',
       needsRun: false,
       needsDoctor: false,

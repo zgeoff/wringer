@@ -151,6 +151,16 @@ test.each([
     ['label', 'shelf-a', 'apple', '--finish', 'satin'],
     'finish',
   ],
+  [
+    'a string flag with no value',
+    ['label', 'shelf-a', 'apple', '--label'],
+    'Give a value after --label.',
+  ],
+  [
+    'a union field from the other branch',
+    ['ship', '--mode', 'post', '--counter', 'east'],
+    'counter',
+  ],
 ])('it answers %s with a usage envelope and exit code 2', async (_name, argv, message) => {
   const ctx = await setupTest();
   const result = await ctx.run(argv);
@@ -167,6 +177,42 @@ test.each([
     ok: false,
     code: 'usage',
     message: expect.stringContaining(message),
+  });
+});
+
+test('it answers malformed JSON in an object flag with one usage envelope and exit code 2', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['ship', '--mode', 'post', '--address', '{']);
+
+  const lines = result.stdout.trimEnd().split('\n');
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({
+    exitCode: result.exitCode,
+    lines: lines.length,
+    command: envelope.command,
+    code: envelope.error?.code,
+  }).toStrictEqual({ exitCode: 2, lines: 1, command: 'ship', code: 'usage' });
+});
+
+test.each([
+  {
+    argv: ['ship', '--mode', 'post', '--address', '{"street":"Elm Row","town":"Hollin"}'],
+    data: { mode: 'post', address: { street: 'Elm Row', town: 'Hollin' } },
+  },
+  {
+    argv: ['ship', '--mode', 'pickup', '--counter', 'east'],
+    data: { mode: 'pickup', counter: 'east' },
+  },
+])('it passes the flags of the union branch in $argv to the command', async (row) => {
+  const ctx = await setupTest();
+  const result = await ctx.run(row.argv);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: row.data,
   });
 });
 

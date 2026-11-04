@@ -6,6 +6,7 @@ import { buildGunshiArgs } from './build-gunshi-args.ts';
 import type { GunshiArgs } from './build-gunshi-args.ts';
 import { buildPositionals } from './build-positionals.ts';
 import { buildRawArgs } from './build-raw-args.ts';
+import { collectFlagsWithoutValue } from './collect-flags-without-value.ts';
 import { keepFlagText } from './keep-flag-text.ts';
 
 interface GlobalFlags {
@@ -106,6 +107,15 @@ function toGunshiCommand(
     toKebab: true,
     ...(node.children.size === 0 ? {} : { subCommands }),
     run: (ctx: CommandContext) => {
+      const bareFlags = collectFlagsWithoutValue(ctx.tokens, args);
+
+      if (bareFlags.length > 0) {
+        throw new WringerError('usage', {
+          message: `Give a value after ${bareFlags.join(', ')}.`,
+          hint: "Write `''` after a flag to pass an empty value.",
+        });
+      }
+
       // gunshi's positionals start with the words of the command's path.
       const words = [...ctx.positionals.slice(path.length), ...ctx.rest];
 
