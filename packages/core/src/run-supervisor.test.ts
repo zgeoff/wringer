@@ -18,10 +18,21 @@ import { WringerError } from './wringer-error.ts';
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-supervisor');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
   const stopGate = Promise.withResolvers<undefined>();
   const stopCalls: string[] = [];
+  const supervisors: Promise<void>[] = [];
+
+  const teardown = new AbortController();
+
+  // One cleanup stops every supervisor the test started, then removes the folder they write into.
+  onTestFinished(async () => {
+    stopGate.resolve(undefined);
+    teardown.abort();
+
+    await Promise.allSettled(supervisors);
+
+    await rm(directory, { recursive: true, force: true });
+  });
 
   const leaky = defineDriver({
     name: 'leaky',
@@ -83,8 +94,8 @@ async function setupTest() {
         mode: 'attach',
         fingerprint: 'empty',
       }),
-    runSupervisor: (runID: string) =>
-      runSupervisor({
+    runSupervisor: (runID: string, signal: AbortSignal = teardown.signal) => {
+      const supervising = runSupervisor({
         wringer,
         launchHost: readLaunchHost(),
         state,
@@ -92,7 +103,13 @@ async function setupTest() {
         target: 'box',
         readyTimeoutMs: 5000,
         now: () => new Date(),
-      }),
+        signal: AbortSignal.any([signal, teardown.signal]),
+      });
+
+      supervisors.push(supervising);
+
+      return supervising;
+    },
   };
 }
 
@@ -196,6 +213,20 @@ test('#runSupervisor ends and closes its socket when its first log write fails',
   await mkdir(join(ctx.runFolder('shelf-run'), 'log.ndjson', 'blocked'), { recursive: true });
 
   expect(ctx.runSupervisor('shelf-run')).resolves.toBeUndefined();
+});
+
+test('#runSupervisor starts nothing and ends the run when its stop signal fired already', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+  await ctx.runSupervisor('shelf-run', AbortSignal.abort());
+
+  const view = await ctx.readRun('shelf-run');
+
+  expect({ reason: view?.crashReason, stopCalls: ctx.stopCalls }).toStrictEqual({
+    reason: 'the supervisor was signalled to stop',
+    stopCalls: [],
+  });
 });
 
 test('#runSupervisor records a service that failed to stop in the crash reason', async () => {
