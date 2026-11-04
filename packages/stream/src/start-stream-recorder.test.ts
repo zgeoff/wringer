@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { local } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
+import { appendWholeText } from './append-whole-text.ts';
 import { canMoveSource, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 
@@ -31,6 +32,7 @@ async function setupTest() {
         localHost: local(),
         access: 'read-only',
         now: () => new Date('2026-03-01T09:30:00.000Z'),
+        appendText: appendWholeText,
         pendingLimit,
       });
 

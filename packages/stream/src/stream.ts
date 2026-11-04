@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { WringerError, defineDriver, local } from '@wringer/core';
 import type { RunHandle } from '@wringer/core';
 import { z } from 'zod';
+import { appendWholeText } from './append-whole-text.ts';
 import { readStreamSlice, streamRecordSchema } from './read-stream-slice.ts';
 import {
   sourceStatusSchema,
@@ -68,6 +69,7 @@ export const stream = defineDriver({
           localHost: local(),
           access: ctx.access,
           now: () => new Date(),
+          appendText: appendWholeText,
           pendingLimit: 10_000,
         });
 
