@@ -24,6 +24,32 @@ test.each([
     write: false,
   },
   { dialect: 'postgres', via: 'exec', sql: 'delete from orders', write: true },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "COPY (select 1) TO PROGRAM 'touch /srv/flag'",
+    write: true,
+  },
+  { dialect: 'postgres', via: 'exec', sql: "copy orders to '/srv/orders.csv'", write: true },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "select lo_export(16384, '/srv/blob')",
+    write: true,
+  },
+  { dialect: 'postgres', via: 'sql', sql: "select 'copy' as label", write: false },
+  {
+    dialect: 'postgres',
+    via: 'exec',
+    sql: 'with open as (select 1) delete from orders',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'exec',
+    sql: "with open as (select 'delete' as word) select * from open",
+    write: false,
+  },
   { dialect: 'postgres', via: 'exec', sql: '/* tidy */ insert into notes values (1)', write: true },
 ] as const)('it reads `$sql` on $dialect over $via as a write: $write', (row) => {
   expect(isUndeclaredWrite(row.dialect, row.via, row.sql)).toBe(row.write);
