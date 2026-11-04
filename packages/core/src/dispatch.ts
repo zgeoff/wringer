@@ -16,6 +16,8 @@ import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
+import { pickDriveKind } from './pick-drive-kind.ts';
+import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
@@ -245,7 +247,14 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   }
 
   const hint = context.target.refusalHint ?? defaultRefusalHint;
-  const drive = openCommandDrive(request, { needsRun, hint });
+
+  const driveKind = pickDriveKind({
+    runStatus: context.run?.status ?? null,
+    needsRun,
+    isRepoCommand: request.command.kind === 'repo',
+  });
+
+  const drive = openCommandDrive(request, driveKind, hint);
   const prepared = prepareCommand(request, drive, hint);
 
   const accessRefusal = pickAccessRefusal({
@@ -267,7 +276,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   }
 
   request.trace.drive = needsRun && needsDoctor;
-  request.trace.ranOnRun = needsRun;
+  request.trace.ranOnRun = driveKind === 'run';
 
   const data = await prepared.run();
 
@@ -305,27 +314,19 @@ async function probeFingerprintChanged(
   return fingerprint !== run.fingerprint;
 }
 
-interface CommandDriveOptions {
-  readonly needsRun: boolean;
-  readonly hint: string;
-}
-
-// A command that needs a run drives it; a repo command that needs none gets a drive with no run;
-// a built-in or driver command that needs none reaches no drive.
 function openCommandDrive(
   request: CommandRequest,
-  options: CommandDriveOptions,
+  kind: DriveKind,
+  hint: string,
 ): Drive | undefined {
   const run = request.context.run;
   const access = request.context.target.access;
-  const repo = request.command.kind === 'repo';
 
-  // A repo command that needs no run still reaches the run's services while one is running.
-  if (run !== undefined && (options.needsRun || (repo && run.status === 'running'))) {
-    return openRunDrive(request, { run, access, hint: options.hint });
+  if (kind === 'run' && run !== undefined) {
+    return openRunDrive(request, { run, access, hint });
   }
 
-  if (!options.needsRun && repo) {
+  if (kind === 'runless') {
     return openRunlessDrive({
       wringer: request.wringer,
       root: request.session.root,
@@ -333,7 +334,7 @@ function openCommandDrive(
       targetName: request.context.targetName,
       target: request.context.target,
       access,
-      hint: options.hint,
+      hint,
       feature: request.context.feature,
       signal: request.deadline,
       now: request.now,
