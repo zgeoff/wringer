@@ -29,8 +29,19 @@ test('it maps each scalar, list and enum field to the gunshi flag of its type', 
     dryRun: { type: 'boolean', negatable: true },
     tags: { type: 'string', parse: expect.any(Function), multiple: true },
     sizes: { type: 'number', multiple: true },
-    colour: { type: 'enum', choices: ['red', 'blue'] },
+    colour: { type: 'enum', choices: ['red', 'blue'], parse: expect.any(Function) },
   });
+});
+
+test('it keeps an empty string enum flag as an empty string', () => {
+  const args = buildGunshiArgs({
+    path: ['sort'],
+    summary: 'Sort the shelf',
+    args: z.strictObject({ order: z.enum(['', 'price']).default('price') }),
+    data: z.strictObject({}),
+  });
+
+  expect(args['order']?.parse?.('')).toBe('');
 });
 
 test('it leaves the positionals out of the flags', () => {

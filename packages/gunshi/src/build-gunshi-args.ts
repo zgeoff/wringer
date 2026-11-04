@@ -19,15 +19,15 @@ export function buildGunshiArgs(info: CommandInfo): GunshiArgs {
   );
 }
 
-// A flag whose value is not one scalar, such as an object, takes JSON text, which gunshi parses
-// before the command's schema checks it. A boolean flag also takes `--no-<flag>`, so a flag whose
-// default is true can still be turned off.
+// A non-scalar flag takes JSON text, which gunshi parses before the command's schema checks it. A
+// boolean flag also takes `--no-<flag>`. An enum flag keeps its text, empty included, as a string
+// flag does, and the command's schema checks the choice.
 function pickArgSchema(property: ArgProperty): ArgSchema {
   const described = property.description === undefined ? {} : { description: property.description };
   const choices = property.enum?.filter((choice) => typeof choice === 'string') ?? [];
 
   if (choices.length > 0 && choices.length === property.enum?.length) {
-    return { type: 'enum', choices, ...described };
+    return { type: 'enum', choices, parse: keepFlagText, ...described };
   }
 
   const parsedType = scalarTypeSchema.safeParse(property.type);

@@ -4,6 +4,7 @@ import { envelopeSchema } from '@wringer/core';
 import { z } from 'zod';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { parsePublishedEvent } from '../../../test-utils/parse-published-event.ts';
+import { killProcessGroup } from '../../core/src/kill-process-group.ts';
 import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
 
 // These tests start the demo repo's verify script as a process, so `up` and `attach` start the real
@@ -15,12 +16,22 @@ async function setupTest() {
   const script = join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts');
   const eventLineSchema = z.object({ event: z.string() });
 
-  const run = async (...argv: readonly string[]) => {
-    const child = Bun.spawn([process.execPath, script, ...argv], {
+  // The CLI runs in a process group of its own, so the cleanup stops it and anything it started
+  // in that group when it hangs past the test.
+  const startCLI = (argv: readonly string[]) =>
+    Bun.spawn([process.execPath, script, ...argv], {
       cwd: repo.root,
+      detached: true,
       stdin: 'ignore',
       stdout: 'pipe',
       stderr: 'pipe',
+    });
+
+  const run = async (...argv: readonly string[]) => {
+    const child = startCLI(argv);
+
+    onTestFinished(() => {
+      killProcessGroup(child.pid);
     });
 
     const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited]);
@@ -43,9 +54,23 @@ async function setupTest() {
     };
   };
 
+  // The stops run inside the cleanup, where no further cleanup can be registered, so each one has a
+  // deadline that kills its group instead.
+  const stopCLI = async (argv: readonly string[]) => {
+    const child = startCLI(argv);
+
+    const deadline = setTimeout(() => {
+      killProcessGroup(child.pid);
+    }, 10_000);
+
+    await child.exited;
+
+    clearTimeout(deadline);
+  };
+
   onTestFinished(async () => {
-    await run('down', '--target', 'local');
-    await run('detach', '--target', 'prod');
+    await stopCLI(['down', '--target', 'local']);
+    await stopCLI(['detach', '--target', 'prod']);
 
     await repo.remove();
   });

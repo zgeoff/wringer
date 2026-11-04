@@ -1,4 +1,4 @@
-import { createRepoState, makeProcessSupervisorStarter } from '@wringer/core';
+import { createRepoState, makeProcessSupervisorStarter, runSupervisorProcess } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { getAgentProfile } from 'gunshi/agent';
 import { readRepoRoot } from './read-repo-root.ts';
@@ -24,5 +24,6 @@ export async function runVerify(wringer: Wringer): Promise<void> {
       state: createRepoState(root, wringer.stateDir),
       supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
     }),
+    runSupervisor: runSupervisorProcess,
   });
 }

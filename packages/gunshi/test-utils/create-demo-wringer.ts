@@ -15,6 +15,7 @@ const labelArgsSchema = z.strictObject({
   shelf: z.string().min(1),
   item: z.string().min(1),
   label: z.string().default('sample'),
+  finish: z.enum(['', 'matte', 'gloss']).default('matte'),
 });
 
 // A repo's verify CLI for the adapter's tests: a launch target `local` whose app is a shell that

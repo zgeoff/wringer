@@ -1,16 +1,11 @@
-import {
-  WringerError,
-  buildEnvelope,
-  dispatch,
-  exitCodeFor,
-  runSupervisorProcess,
-  supervisorCommandName,
-} from '@wringer/core';
+import { WringerError, dispatch, exitCodeFor, supervisorCommandName } from '@wringer/core';
 import type { Envelope, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
 import { cli } from 'gunshi';
+import { buildFailureEnvelope } from './build-failure-envelope.ts';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
 import { pickCommandName } from './pick-command-name.ts';
+import { pickDispatchPlan } from './pick-dispatch-plan.ts';
 import { pickOutputMode } from './pick-output-mode.ts';
 import type { OutputMode } from './pick-output-mode.ts';
 import { renderHumanEnvelope } from './render-human-envelope.ts';
@@ -29,6 +24,7 @@ export interface CLIPorts {
   readonly writeStdout: (text: string) => void;
   readonly readRepoRoot: (cwd: string) => Promise<string | WringerError>;
   readonly openRepo: (root: string) => RepoPorts;
+  readonly runSupervisor: (wringer: Wringer, argv: readonly string[]) => Promise<void>;
 }
 
 // Every invocation ends in one envelope and an exit code, whatever failed: gunshi's parse, the
@@ -37,7 +33,7 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
   const [first, ...rest] = ports.argv;
 
   if (first === supervisorCommandName) {
-    await runSupervisorProcess(wringer, rest);
+    await ports.runSupervisor(wringer, rest);
 
     return 0;
   }
@@ -67,15 +63,15 @@ type ParsedInvocation =
   | { readonly kind: 'failed'; readonly command: string; readonly error: WringerError };
 
 // gunshi only records the invocation; the command runs after `cli` returns, so a gunshi parse error
-// and a command error never mix.
+// and a command error never mix. gunshi resolves the command path before it checks the flags, so a
+// flag error still names the command.
 async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<ParsedInvocation> {
   let invocation: Invocation | null = null;
+  let commandPath: readonly string[] = [];
 
   const subCommands = buildGunshiCommands(wringer, (invoked) => {
     invocation = invoked;
   });
-
-  const command = pickCommandName(wringer, ports.argv);
 
   try {
     const printed = await cli(
@@ -96,6 +92,9 @@ async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<Parsed
         usageSilent: true,
         renderHeader: null,
         renderValidationErrors: null,
+        onBeforeCommand: (ctx) => {
+          commandPath = ctx.commandPath;
+        },
       },
     );
 
@@ -105,7 +104,11 @@ async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<Parsed
 
     return { kind: 'printed', text: `${printed ?? ''}\n` };
   } catch (error) {
-    return { kind: 'failed', command, error: toUsageError(error) };
+    return {
+      kind: 'failed',
+      command: pickCommandName(commandPath, ports.argv),
+      error: toUsageError(error),
+    };
   }
 }
 
@@ -129,22 +132,6 @@ function writeEnvelope(ports: CLIPorts, mode: OutputMode, envelope: Envelope): v
   ports.writeStdout(text);
 }
 
-function buildFailureEnvelope(command: string, error: WringerError): Envelope {
-  return buildEnvelope({
-    command,
-    target: null,
-    instance: null,
-    feature: null,
-    sha: null,
-    durationMs: 0,
-    data: null,
-    evidence: [],
-    cursors: {},
-    truncatedPath: null,
-    error,
-  });
-}
-
 async function dispatchInvocation(
   wringer: Wringer,
   ports: CLIPorts,
@@ -153,16 +140,18 @@ async function dispatchInvocation(
 ): Promise<number> {
   const root = await ports.readRepoRoot(ports.cwd);
 
-  if (root instanceof WringerError) {
-    writeEnvelope(ports, mode, buildFailureEnvelope(invocation.path.join('.'), root));
+  const plan = pickDispatchPlan(invocation, root);
 
-    return exitCodeFor[root.code];
+  if (plan.kind === 'refuse') {
+    writeEnvelope(ports, mode, plan.envelope);
+
+    return plan.exitCode;
   }
 
-  const repo = ports.openRepo(root);
+  const repo = ports.openRepo(plan.root);
 
   const result = await dispatch(wringer, invocation.path, invocation.raw, {
-    root,
+    root: plan.root,
     state: repo.state,
     supervisor: repo.supervisor,
     target: invocation.globals.target,

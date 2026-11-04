@@ -1,6 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { createRepoState, envelopeSchema, makeProcessSupervisorStarter } from '@wringer/core';
+import {
+  createRepoState,
+  envelopeSchema,
+  makeProcessSupervisorStarter,
+  supervisorCommandName,
+} from '@wringer/core';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
 import { createDemoWringer } from '../test-utils/create-demo-wringer.ts';
@@ -14,6 +19,7 @@ async function setupTest() {
 
   const wringer = createDemoWringer();
   const written: string[] = [];
+  const supervised: (readonly string[])[] = [];
   const selfCommand = [process.execPath, join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts')];
 
   const run = async (argv: readonly string[], cwd = repo.root) => {
@@ -30,6 +36,11 @@ async function setupTest() {
         state: createRepoState(root, wringer.stateDir),
         supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
+      runSupervisor: (_wringer, supervisorArgv) => {
+        supervised.push(supervisorArgv);
+
+        return Promise.resolve();
+      },
     });
 
     return { exitCode, stdout: written.splice(0).join('') };
@@ -37,6 +48,7 @@ async function setupTest() {
 
   return {
     root: repo.root,
+    supervised,
     run,
     parseEnvelope: (text: string) => envelopeSchema.parse(JSON.parse(text)),
   };
@@ -71,7 +83,7 @@ test('it assigns the words after the command to its positionals in order', async
 
   expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
     exitCode: 0,
-    data: { shelf: 'shelf-a', item: 'apple', label: 'ripe' },
+    data: { shelf: 'shelf-a', item: 'apple', label: 'ripe', finish: 'matte' },
   });
 });
 
@@ -81,7 +93,26 @@ test('it passes an empty string flag to the command as an empty string', async (
 
   const envelope = ctx.parseEnvelope(result.stdout);
 
-  expect(envelope.data).toStrictEqual({ shelf: 'shelf-a', item: 'apple', label: '' });
+  expect(envelope.data).toStrictEqual({
+    shelf: 'shelf-a',
+    item: 'apple',
+    label: '',
+    finish: 'matte',
+  });
+});
+
+test('it passes an empty string enum flag to the command as an empty string', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['label', 'shelf-a', 'apple', '--finish', '']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect(envelope.data).toStrictEqual({
+    shelf: 'shelf-a',
+    item: 'apple',
+    label: 'sample',
+    finish: '',
+  });
 });
 
 test('it names only the command in a failure envelope, never its argument values', async () => {
@@ -96,6 +127,13 @@ test('it names only the command in a failure envelope, never its argument values
   });
 });
 
+test('it names the nested command gunshi resolved in a flag error envelope', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['action', 'greet', '--name', 'Ines', '--times', 'two']);
+
+  expect(ctx.parseEnvelope(result.stdout).command).toBe('action.greet');
+});
+
 test.each([
   ['an unknown flag', ['status', '--colour', 'red'], 'Unknown option: --colour'],
   ['an unknown command', ['teleport'], 'Command not found: teleport'],
@@ -108,6 +146,11 @@ test.each([
   ['a word the command takes no argument for', ['down', 'prod'], 'takes no argument `prod`'],
   ['an empty --target', ['down', '--target', ''], 'at target'],
   ['an empty --feature', ['status', '--feature', ''], 'at feature'],
+  [
+    'an enum flag outside its choices',
+    ['label', 'shelf-a', 'apple', '--finish', 'satin'],
+    'finish',
+  ],
 ])('it answers %s with a usage envelope and exit code 2', async (_name, argv, message) => {
   const ctx = await setupTest();
   const result = await ctx.run(argv);
@@ -176,6 +219,16 @@ test('it runs a command against the target --target names', async () => {
   expect({ target: envelope.target, data: envelope.data }).toStrictEqual({
     target: 'prod',
     data: expect.objectContaining({ access: 'read-only' }),
+  });
+});
+
+test('it hands the hidden supervisor command to the supervisor runner and prints nothing', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run([supervisorCommandName, 'shelf-run', 'local', ctx.root]);
+
+  expect({ result, supervised: ctx.supervised }).toStrictEqual({
+    result: { exitCode: 0, stdout: '' },
+    supervised: [['shelf-run', 'local', ctx.root]],
   });
 });
 
