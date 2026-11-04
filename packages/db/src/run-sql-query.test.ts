@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SQL } from 'bun';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 import type { SqliteMode } from './run-sql-query.ts';
@@ -22,7 +23,8 @@ async function setupTest() {
 
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
-    openPostgres: (url: string) => new SQL(url),
+    openPostgres: (url: string, sessionName: string) =>
+      new SQL(url, { connection: { application_name: sessionName } }),
   };
 
   return {
@@ -31,7 +33,7 @@ async function setupTest() {
     postgresStatements: postgres.statements,
     runPostgresQuery: (
       sql: string,
-      options: { params?: readonly unknown[]; write?: boolean } = {},
+      options: { params?: readonly unknown[]; write?: boolean; signal?: AbortSignal } = {},
     ) =>
       runSQLQuery(
         {
@@ -40,7 +42,7 @@ async function setupTest() {
           sql,
           params: options.params ?? [],
           write: options.write ?? false,
-          signal: new AbortController().signal,
+          signal: options.signal ?? new AbortController().signal,
         },
         clients,
       ),
@@ -113,6 +115,30 @@ test('it sends a Postgres write with no parameters as one extended-protocol stat
   expect(ctx.postgresStatements).toStrictEqual([
     { protocol: 'extended', sql: 'DELETE FROM notes; DROP TABLE notes' },
   ]);
+});
+
+test.each([
+  { write: true, kind: 'write' },
+  { write: false, kind: 'read' },
+])('it cancels a running Postgres $kind in the database when its signal aborts', async (row) => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const running = ctx.runPostgresQuery('select pg_sleep(60)', {
+    write: row.write,
+    signal: controller.signal,
+  });
+
+  await waitFor(() =>
+    ctx.postgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)')
+      ? true
+      : null,
+  );
+
+  controller.abort();
+
+  expect(running).rejects.toMatchObject({ errno: '57014' });
 });
 
 test('it reads rows with bound parameters, their columns and their count', async () => {

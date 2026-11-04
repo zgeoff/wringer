@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { SQL } from 'bun';
+import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createFakePostgres } from './create-fake-postgres.ts';
 
 function setupTest() {
@@ -24,6 +25,23 @@ test('it records a statement with parameters as an extended-protocol statement',
   expect(ctx.postgres.statements).toStrictEqual([
     { protocol: 'extended', sql: 'select text from notes where id = $1' },
   ]);
+});
+
+test('it runs a pg_sleep statement until pg_cancel_backend names its application_name', async () => {
+  const ctx = setupTest();
+
+  const sleeper = new SQL(ctx.postgres.url, { connection: { application_name: 'shop-sleeper' } });
+
+  onTestFinished(() => sleeper.close());
+
+  const sleeping = sleeper.unsafe('select pg_sleep(60)', [1]).execute();
+
+  await waitFor(() => (ctx.postgres.statements.length > 0 ? true : null));
+
+  await ctx.client.unsafe('select pg_cancel_backend(pid) where name = $1', ['shop-other']);
+  await ctx.client.unsafe('select pg_cancel_backend(pid) where name = $1', ['shop-sleeper']);
+
+  expect(sleeping).rejects.toMatchObject({ errno: '57014' });
 });
 
 test('it records a simple query as a simple-protocol statement', async () => {

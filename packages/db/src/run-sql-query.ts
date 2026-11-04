@@ -1,4 +1,5 @@
 import type { Database, SQLQueryBindings } from 'bun:sqlite';
+import { randomUUID } from 'node:crypto';
 import { WringerError } from '@wringer/core';
 import type { SQL } from 'bun';
 import { z } from 'zod';
@@ -10,7 +11,7 @@ export type SqliteMode = 'readonly' | 'readwrite';
 
 export interface SQLClients {
   readonly openSqlite: (file: string, mode: SqliteMode) => Database;
-  readonly openPostgres: (url: string) => SQL;
+  readonly openPostgres: (url: string, sessionName: string) => SQL;
 }
 
 export interface SQLQueryInput {
@@ -90,29 +91,26 @@ function readChanges(database: Database): number {
   return changesSchema.parse(database.query('select changes() as count').get()).count;
 }
 
+interface QueryProgress {
+  settled: boolean;
+}
+
 // A Postgres query the deadline cuts off is cancelled in the database, so a write that timed out
 // can never commit after the caller has moved on. Bun.SQL reports no column names for an empty
 // result, so the columns come from the first row.
 async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Promise<DbResult> {
-  const client = clients.openPostgres(input.url);
-  const started: SQL.Query<unknown>[] = [];
+  const sessionName = `wringer-${randomUUID()}`;
+  const client = clients.openPostgres(input.url, sessionName);
+  const progress: QueryProgress = { settled: false };
 
   const cancel = (): void => {
-    for (const query of started) {
-      void query.cancel();
-    }
+    void runCancelLoop(clients, input.url, sessionName, progress);
   };
 
   input.signal.addEventListener('abort', cancel, { once: true });
 
   try {
-    const result: unknown = await runPostgresStatement(client, input, (query) => {
-      started.push(query);
-
-      if (input.signal.aborted) {
-        void query.cancel();
-      }
-    });
+    const result: unknown = await runPostgresStatement(client, input);
 
     const rows = rowsSchema.parse(result);
     const count = readAffectedCount(result);
@@ -123,30 +121,48 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
       rowCount: input.write && count !== null ? count : rows.length,
     };
   } finally {
+    progress.settled = true;
+
     input.signal.removeEventListener('abort', cancel);
 
     await client.close();
   }
 }
 
-function runPostgresStatement(
-  client: SQL,
-  input: SQLQueryInput,
-  onStart: (query: SQL.Query<unknown>) => void,
-): Promise<unknown> {
+const cancelSQL = 'select pg_cancel_backend(pid) from pg_stat_activity where application_name = $1';
+const cancelRetryMs = 100;
+
+// Bun.SQL's own `cancel()` never reaches a query the server is running, so a second session cancels
+// it by its `application_name`. A cancel that lands before the statement starts stops nothing, so
+// it repeats until the statement settles. A failed cancel ends the loop; the statement then runs on.
+async function runCancelLoop(
+  clients: SQLClients,
+  url: string,
+  sessionName: string,
+  progress: Readonly<QueryProgress>,
+): Promise<void> {
+  const canceller = clients.openPostgres(url, `${sessionName}-cancel`);
+
+  try {
+    while (!progress.settled) {
+      await canceller.unsafe(cancelSQL, [sessionName]);
+      await Bun.sleep(cancelRetryMs);
+    }
+  } catch {
+    // The statement's own result still reaches the caller; this loop has no caller to tell.
+  } finally {
+    await canceller.close();
+  }
+}
+
+function runPostgresStatement(client: SQL, input: SQLQueryInput): Promise<unknown> {
   // Bun.SQL sends `unsafe` with no parameters as a simple query, which runs every statement in the
   // text, so `COMMIT; DELETE …` would end the read-only transaction. A tagged query always takes the
   // extended protocol, where Postgres refuses a second statement.
-  const start = (sql: SQL): SQL.Query<unknown> => {
-    const query =
-      input.params.length === 0
-        ? sql<unknown>(Object.assign([input.sql], { raw: [input.sql] }))
-        : sql.unsafe<unknown>(input.sql, [...input.params]);
-
-    onStart(query);
-
-    return query;
-  };
+  const start = (sql: SQL): SQL.Query<unknown> =>
+    input.params.length === 0
+      ? sql<unknown>(Object.assign([input.sql], { raw: [input.sql] }))
+      : sql.unsafe<unknown>(input.sql, [...input.params]);
 
   if (input.write) {
     return start(client);
