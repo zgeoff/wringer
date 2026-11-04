@@ -26,7 +26,7 @@
   "type": "module",
   "scripts": {
     "audit": "bun audit --ignore=GHSA-g3hv-75wg-m249",
-    "check": "bun run audit && bun run deadcode && bun run format:check && bun run lint:full && bun run typecheck && bun run prose && bun run test",
+    "check": "bun run audit && bun run deadcode && bun run format:check && bun run lint:full && bun run typecheck && bun run prose && bun run test && bun run test:docker",
     "deadcode": "knip",
     "format": "oxfmt . && { [ -z \"$(git ls-files -co --exclude-standard -- '*.ts' '*.tsx' $(sed -e '/^#/d' -e '/^$/d' -e 's/^/:(exclude,glob)/' .formatignore))\" ] || format-codemod --quiet .; }",
     "format:check": "oxfmt --check . && { [ -z \"$(git ls-files -co --exclude-standard -- '*.ts' '*.tsx' $(sed -e '/^#/d' -e '/^$/d' -e 's/^/:(exclude,glob)/' .formatignore))\" ] || format-codemod --check --quiet .; }",
@@ -34,7 +34,8 @@
     "lint:full": "tsgolint=$(tsrslint-path) && OXLINT_TSGOLINT_PATH=$tsgolint oxlint --type-aware --report-unused-disable-directives-severity error",
     "prepare": "command -v git > /dev/null 2>&1 && lefthook install --force || true",
     "prose": "bash .claude/skills/docs-writing/scripts/check-length.sh && bash .claude/skills/docs-writing/scripts/check-prose.sh AGENTS.md",
-    "test": "bun scripts/remove-stale-test-folders.ts && bun test --randomize --pass-with-no-tests",
+    "test": "bun scripts/remove-stale-test-folders.ts && bun test --randomize --pass-with-no-tests --path-ignore-patterns='**/*.docker.test.ts'",
+    "test:docker": "bun test --timeout 15000 .docker.test.ts",
     "typecheck": "tsrs --noEmit && bun run --filter '*' typecheck",
     "files:branch": "bun scripts/read-branch-files.ts",
     "lint:files": "oxlint --no-error-on-unmatched-pattern",
