@@ -35,6 +35,20 @@ test('it returns the result the supervisor answers', async () => {
   expect(result).toStrictEqual({ notes: 2 });
 });
 
+test('it answers a result JSON cannot hold with an internal error', async () => {
+  const ctx = await setupTest();
+
+  ctx.handle.mockImplementationOnce(() => Promise.resolve({ notes: 2n }));
+
+  const calling = callSupervisor({
+    socket: ctx.socket,
+    request: { service: 'store', method: 'count', args: {} },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  expect(calling).rejects.toMatchObject({ code: 'internal' });
+});
+
 test('it refuses a call whose signal aborted before the call, and sends no request', async () => {
   const ctx = await setupTest();
 
