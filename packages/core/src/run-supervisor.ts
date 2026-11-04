@@ -123,9 +123,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     { once: true },
   );
 
-  await append({ type: 'supervisor-ready', at: at(), pid: process.pid, socket });
-
+  // A failed first write stops the run like any startup failure, so the socket still closes.
   try {
+    await append({ type: 'supervisor-ready', at: at(), pid: process.pid, socket });
+
     launch = await startTarget(target, {
       launchHost: options.launchHost,
       runDirectory: run.paths.directory,
