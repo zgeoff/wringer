@@ -1,7 +1,7 @@
 {
   "name": "@wringer/core",
   "version": "0.1.0",
-  "description": "The core of wringer: the JSON envelope that every wringer command writes",
+  "description": "The core of wringer: the envelope, the registry, the fence, the run state and the evidence",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/core#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
   "license": "MIT",
@@ -13,21 +13,28 @@
   "files": [
     "src",
     "!src/**/*.test.ts",
-    "dist"
+    "dist",
+    "envelope.schema.json"
   ],
   "type": "module",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
-    }
+    },
+    "./envelope.schema.json": "./envelope.schema.json"
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
     "build": "rm -rf dist && tsrs -p tsconfig.build.json",
-    "typecheck": "tsrs --noEmit"
+    "typecheck": "tsrs --noEmit",
+    "schema": "bun scripts/write-envelope-schema.ts"
+  },
+  "dependencies": {
+    "ts-pattern": "catalog:",
+    "zod": "catalog:"
   },
   "engines": {
     "bun": ">=1.3"

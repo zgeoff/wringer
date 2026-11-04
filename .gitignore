@@ -31,3 +31,7 @@ Thumbs.db
 scripts/*/.test-*
 test-utils/.test-*
 scripts/.test-*
+
+# test temp trees in the packages
+packages/*/src/.test-*
+packages/*/test-utils/.test-*

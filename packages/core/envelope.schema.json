@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unpkg.com/@wringer/core/envelope.schema.json",
+  "title": "wringer envelope",
+  "$defs": {
+    "envelope": {
+      "type": "object",
+      "properties": {
+        "wringer": {
+          "type": "number",
+          "const": 1
+        },
+        "ok": {
+          "type": "boolean"
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "type": ["string", "null"]
+        },
+        "instance": {
+          "type": ["string", "null"]
+        },
+        "feature": {
+          "type": ["string", "null"]
+        },
+        "sha": {
+          "type": ["string", "null"]
+        },
+        "durationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "data": {},
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              }
+            },
+            "required": ["kind", "path", "sha256"],
+            "additionalProperties": false
+          }
+        },
+        "cursors": {
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "truncated": {
+          "type": "boolean",
+          "const": true
+        },
+        "truncatedPath": {
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "check-failed",
+                    "usage",
+                    "read-only",
+                    "doctor-required",
+                    "not-running",
+                    "target-not-allowed",
+                    "environment",
+                    "internal",
+                    "timeout"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                },
+                "hint": {
+                  "type": ["string", "null"]
+                }
+              },
+              "required": ["code", "message", "hint"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "wringer",
+        "ok",
+        "command",
+        "target",
+        "instance",
+        "feature",
+        "sha",
+        "durationMs",
+        "data",
+        "evidence",
+        "cursors",
+        "error"
+      ],
+      "additionalProperties": false
+    },
+    "streamEvent": {
+      "type": "object",
+      "properties": {
+        "wringer": {
+          "type": "number",
+          "const": 1
+        },
+        "event": {
+          "type": "string",
+          "minLength": 1
+        },
+        "data": {}
+      },
+      "required": ["wringer", "event", "data"],
+      "additionalProperties": false
+    }
+  },
+  "$ref": "#/$defs/envelope"
+}
