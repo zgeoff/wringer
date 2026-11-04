@@ -1,9 +1,8 @@
-import { appendFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
 import { createDirectory } from './create-directory.ts';
 import { killProcessGroup } from './kill-process-group.ts';
-import type { LaunchHost } from './read-launch-host.ts';
+import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
 import { runProcess } from './run-process.ts';
@@ -39,7 +38,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     throw new WringerError('environment', { message: 'The run stopped before the app was ready.' });
   }
 
-  const child = spawnApp([...request.host.guard, ...request.plan.command], {
+  const child = spawnApp(request.host, [...request.host.guard, ...request.plan.command], {
     cwd,
     env: { ...request.host.env, ...request.plan.env },
   });
@@ -79,7 +78,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     onLine: (line: string) => void,
   ): Promise<void> => {
     try {
-      await pipeLines(stream, request.logPath, onLine);
+      await pipeLines(request.host, stream, request.logPath, onLine);
     } catch (error) {
       crash(`The app's output could not be logged: ${toWringerError(error).message}`);
     }
@@ -151,33 +150,22 @@ async function createLogFolder(logPath: string): Promise<void> {
   }
 }
 
-interface SpawnOptions {
-  readonly cwd: string;
-  readonly env: Readonly<Record<string, string | undefined>>;
-}
-
-function spawnApp(argv: readonly string[], options: SpawnOptions) {
+function spawnApp(host: LaunchHost, argv: readonly string[], options: AppSpawnOptions): AppProcess {
   try {
-    return Bun.spawn([...argv], {
-      cwd: options.cwd,
-      env: { ...options.env },
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-      detached: true,
-    });
+    return host.spawnApp(argv, options);
   } catch (error) {
     throw buildSpawnError(argv.join(' '), error);
   }
 }
 
 async function pipeLines(
+  host: LaunchHost,
   stream: ReadableStream<Uint8Array>,
   logPath: string,
   onLine: (line: string) => void,
 ): Promise<void> {
   for await (const line of readStreamLines(stream)) {
-    await appendFile(logPath, `${line}\n`);
+    await host.appendLog(logPath, `${line}\n`);
 
     onLine(line);
   }

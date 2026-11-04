@@ -169,7 +169,12 @@ test('it starts the app in the host folder with the host environment and the pla
   const ctx = await setupTest();
 
   const launch = await startLaunch({
-    host: { guard: [], cwd: ctx.directory, env: { PATH: process.env['PATH'], SHELF: 'herbs' } },
+    host: {
+      ...readLaunchHost(),
+      guard: [],
+      cwd: ctx.directory,
+      env: { PATH: process.env['PATH'], SHELF: 'herbs' },
+    },
     plan: {
       command: [
         'sh',
