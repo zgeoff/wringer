@@ -120,6 +120,14 @@ test('#parseRunLog skips a torn last line', () => {
   ).toStrictEqual([{ type: 'run-ended', at: '2026-11-04T10:00:00.000Z' }]);
 });
 
+test('#parseRunLog skips a whole last event that has no newline yet', () => {
+  expect(
+    parseRunLog(
+      '{"type":"launch-ready","at":"2026-11-04T10:00:00.000Z","endpoints":{}}\n{"type":"run-ended","at":"2026-11-04T10:01:00.000Z"}',
+    ),
+  ).toStrictEqual([{ type: 'launch-ready', at: '2026-11-04T10:00:00.000Z', endpoints: {} }]);
+});
+
 test.each([
   ['starting', 'running', true],
   ['starting', 'crashed', true],

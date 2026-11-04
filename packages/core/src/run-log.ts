@@ -100,13 +100,16 @@ function foldRunStatus(events: readonly RunEvent[]): RunStatus | null {
   }, 'starting');
 }
 
+// An event counts once its line ends: the next append cuts a last line with no newline, even one
+// that parses, so a reader skips it too.
 export function parseRunLog(text: string): readonly RunEvent[] {
-  return text.split('\n').flatMap((line) => {
+  const whole = text.slice(0, text.lastIndexOf('\n') + 1);
+
+  return whole.split('\n').flatMap((line) => {
     if (line === '') {
       return [];
     }
 
-    // A writer killed mid-line leaves a torn last line; the events before it still hold.
     const parsed = runEventSchema.safeParse(parseJSONLine(line));
 
     return parsed.success ? [parsed.data] : [];
