@@ -49,6 +49,16 @@ test('it stops a child the command started when the signal fires', async () => {
   expect(performance.now() - startedMs).toBeLessThan(5000);
 });
 
+test('it stops a command that closed its stdout and runs on when the signal fires', () => {
+  const followed = followProcess({
+    argv: ['sh', '-c', 'exec 1>&-; exec sleep 60'],
+    signal: AbortSignal.timeout(200),
+    onLine: mock<(line: string) => void>(),
+  });
+
+  expect(followed).resolves.toBeNumber();
+});
+
 test('it rejects a command that is not on the PATH', () => {
   expect(
     followProcess({

@@ -42,13 +42,16 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
 
   request.signal.addEventListener('abort', killGroup, { once: true });
 
-  for await (const line of readStreamLines(child.stdout)) {
-    request.onLine(line);
+  // A command can close stdout and run on, so the abort stays wired until the command exits.
+  try {
+    for await (const line of readStreamLines(child.stdout)) {
+      request.onLine(line);
+    }
+
+    return await child.exited;
+  } finally {
+    request.signal.removeEventListener('abort', killGroup);
   }
-
-  request.signal.removeEventListener('abort', killGroup);
-
-  return child.exited;
 }
 
 function resolveExecutable(command: string | undefined): string | null {

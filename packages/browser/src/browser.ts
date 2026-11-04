@@ -1,6 +1,7 @@
 import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
 import { z } from 'zod';
+import { buildAppURL } from './build-app-url.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
 import { pickBrowserEffect } from './pick-browser-effect.ts';
 import { pageStateSchema, snapshotSchema, startBrowserPage } from './start-browser-page.ts';
@@ -146,7 +147,11 @@ export const browser = defineDriver({
         effect: () => 'read',
         describe: (request: GotoRequest) => `browser goto ${request.path}`,
         run: async (request) => {
-          const url = new URL(request.path, getBaseURL(session)).href;
+          const url = buildAppURL(request.path, getBaseURL(session));
+
+          if (url instanceof WringerError) {
+            throw url;
+          }
 
           const answer = await page.call('goto', { url });
 
