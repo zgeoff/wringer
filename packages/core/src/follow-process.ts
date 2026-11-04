@@ -1,3 +1,4 @@
+import { buildSpawnError } from './build-spawn-error.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import { WringerError } from './wringer-error.ts';
@@ -29,12 +30,7 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
     return 0;
   }
 
-  const child = Bun.spawn([...plan.argv], {
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'ignore',
-    detached: true,
-  });
+  const child = spawnFollowed(plan.argv);
 
   const killGroup = (): void => {
     killProcessGroup(child.pid);
@@ -42,13 +38,20 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
 
   request.signal.addEventListener('abort', killGroup, { once: true });
 
-  // A command can close stdout and run on, so the abort stays wired until the command exits.
+  // A command can close stdout and run on, so the abort stays wired until the command exits. A
+  // reader or callback that throws stops the group too, so nothing runs on unread.
   try {
     for await (const line of readStreamLines(child.stdout)) {
       request.onLine(line);
     }
 
     return await child.exited;
+  } catch (error) {
+    killGroup();
+
+    await child.exited;
+
+    throw error;
   } finally {
     request.signal.removeEventListener('abort', killGroup);
   }
@@ -91,4 +94,17 @@ function pickFollowPlan(input: FollowPlanInput): FollowPlan | WringerError {
   }
 
   return { start: true, argv: [input.executable, ...args] };
+}
+
+function spawnFollowed(argv: readonly string[]) {
+  try {
+    return Bun.spawn([...argv], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'ignore',
+      detached: true,
+    });
+  } catch (error) {
+    throw buildSpawnError(argv.join(' '), error);
+  }
 }

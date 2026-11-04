@@ -207,7 +207,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     return closed.context.failure;
   };
 
-  const answerRequest = (request: SupervisorRequest): Promise<unknown> =>
+  const answerRequest = (request: SupervisorRequest, signal: AbortSignal): Promise<unknown> =>
     match(pickSupervisorOperation(request, services))
       .with({ kind: 'stop' }, async () => {
         const failure = await stop(null);
@@ -219,7 +219,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
         return { pid: process.pid };
       })
       .with({ kind: 'status' }, () => Promise.resolve({ pid: process.pid }))
-      .with({ kind: 'call' }, (operation) => operation.call())
+      .with({ kind: 'call' }, (operation) => operation.call(signal))
       .with({ kind: 'refuse' }, (operation) => Promise.reject(operation.error))
       .exhaustive();
 

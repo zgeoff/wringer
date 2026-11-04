@@ -1,21 +1,28 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { local } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
-import { recordLineCap, startStreamRecorder } from './start-stream-recorder.ts';
+import { canMoveSource, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 
+// The recorder writes into the test folder until it stops, so the stack stops every recorder
+// before it removes the folder.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'stream-recorder');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const streams = join(directory, 'streams');
 
   return {
     directory,
+    streamPath: (name: string) => join(streams, `${name}.ndjson`),
     start: async (sources: Readonly<Record<string, StreamSource>>, pendingLimit = 10_000) => {
       const recorder = await startStreamRecorder({
         sources,
@@ -27,7 +34,11 @@ async function setupTest() {
         pendingLimit,
       });
 
-      onTestFinished(() => recorder.stop());
+      stack.defer(async () => {
+        await recorder.stop().catch(() => {
+          // A test that stops the recorder itself asserts how the stop went.
+        });
+      });
 
       return recorder;
     },
@@ -78,7 +89,7 @@ test('it records the lines appended to a file source', async () => {
   );
 });
 
-test('it caps a long line', async () => {
+test('it caps a long line at 4096 characters', async () => {
   const ctx = await setupTest();
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
 
@@ -89,7 +100,7 @@ test('it caps a long line', async () => {
   const recorded = await ctx.readStream('app');
 
   expect(recorded).toBe(
-    `${JSON.stringify({ at: '2026-03-01T09:30:00.000Z', line: `${'x'.repeat(recordLineCap)}...` })}\n`,
+    `${JSON.stringify({ at: '2026-03-01T09:30:00.000Z', line: `${'x'.repeat(4096)}...` })}\n`,
   );
 });
 
@@ -136,4 +147,44 @@ test('it reports a running source, an exited source and a failed source', async 
       detail: expect.stringContaining('wringer-no-such-command'),
     },
   ]);
+});
+
+test('it fails its stop with an environment error when records never reach the disk', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(ctx.streamPath('app'), { recursive: true });
+
+  const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted'] } });
+
+  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+
+  expect(recorder.stop()).rejects.toMatchObject({ code: 'environment' });
+});
+
+test('it keeps a batch that failed to write and writes it once the disk recovers', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(ctx.streamPath('app'), { recursive: true });
+
+  const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted'] } });
+
+  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+  await rm(ctx.streamPath('app'), { recursive: true });
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe('{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n');
+});
+
+test.each([
+  { from: 'running', to: 'exited', allowed: true },
+  { from: 'running', to: 'failed', allowed: true },
+  { from: 'exited', to: 'failed', allowed: true },
+  { from: 'exited', to: 'running', allowed: false },
+  { from: 'failed', to: 'exited', allowed: false },
+  { from: 'failed', to: 'running', allowed: false },
+] as const)('#canMoveSource answers $allowed for $from to $to', (row) => {
+  expect(canMoveSource(row.from, row.to)).toBe(row.allowed);
 });
