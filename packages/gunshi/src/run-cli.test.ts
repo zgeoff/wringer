@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { envelopeSchema } from '@wringer/core';
+import { createRepoState, envelopeSchema, makeProcessSupervisorStarter } from '@wringer/core';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
 import { createDemoWringer } from '../test-utils/create-demo-wringer.ts';
+import { readRepoRoot } from './read-repo-root.ts';
 import { runCLI } from './run-cli.ts';
 
 async function setupTest() {
@@ -13,6 +14,7 @@ async function setupTest() {
 
   const wringer = createDemoWringer();
   const written: string[] = [];
+  const selfCommand = [process.execPath, join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts')];
 
   const run = async (argv: readonly string[], cwd = repo.root) => {
     const exitCode = await runCLI(wringer, {
@@ -20,10 +22,14 @@ async function setupTest() {
       cwd,
       isTTY: false,
       isAgent: false,
-      selfCommand: [process.execPath, join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts')],
       writeStdout: (text) => {
         written.push(text);
       },
+      readRepoRoot,
+      openRepo: (root) => ({
+        state: createRepoState(root, wringer.stateDir),
+        supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
+      }),
     });
 
     return { exitCode, stdout: written.splice(0).join('') };
@@ -49,9 +55,44 @@ test('it passes the flags a command declares to the command', async () => {
   const ctx = await setupTest();
   const result = await ctx.run(['use', '--feature', 'greeting']);
 
-  expect({ exitCode: result.exitCode, envelope: ctx.parseEnvelope(result.stdout) }).toMatchObject({
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, feature: envelope.data }).toStrictEqual({
     exitCode: 0,
-    envelope: { ok: true, data: { feature: 'greeting' } },
+    feature: { target: null, feature: 'greeting', cursors: {} },
+  });
+});
+
+test('it assigns the words after the command to its positionals in order', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['label', 'shelf-a', 'apple', '--label', 'ripe']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { shelf: 'shelf-a', item: 'apple', label: 'ripe' },
+  });
+});
+
+test('it passes an empty string flag to the command as an empty string', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['label', 'shelf-a', 'apple', '--label', '']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect(envelope.data).toStrictEqual({ shelf: 'shelf-a', item: 'apple', label: '' });
+});
+
+test('it names only the command in a failure envelope, never its argument values', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['label', 'shelf-a', 'secret-item', '--colour', 'red']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ command: envelope.command, code: envelope.error?.code }).toStrictEqual({
+    command: 'label',
+    code: 'usage',
   });
 });
 
@@ -112,9 +153,11 @@ test('it runs a command against the target --target names', async () => {
   const ctx = await setupTest();
   const result = await ctx.run(['status', '--target', 'prod']);
 
-  expect(ctx.parseEnvelope(result.stdout)).toMatchObject({
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ target: envelope.target, data: envelope.data }).toStrictEqual({
     target: 'prod',
-    data: { access: 'read-only' },
+    data: expect.objectContaining({ access: 'read-only' }),
   });
 });
 

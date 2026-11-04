@@ -3,27 +3,32 @@ import {
   buildEnvelope,
   dispatch,
   exitCodeFor,
-  makeProcessSupervisorStarter,
   runSupervisorProcess,
   supervisorCommandName,
 } from '@wringer/core';
-import type { Envelope, Wringer } from '@wringer/core';
+import type { Envelope, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
 import { cli } from 'gunshi';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
+import { pickCommandName } from './pick-command-name.ts';
 import { pickOutputMode } from './pick-output-mode.ts';
 import type { OutputMode } from './pick-output-mode.ts';
-import { readRepoRoot } from './read-repo-root.ts';
 import { renderHumanEnvelope } from './render-human-envelope.ts';
 import { renderHumanEvent } from './render-human-event.ts';
+
+interface RepoPorts {
+  readonly state: StatePort;
+  readonly supervisor: SupervisorStarter;
+}
 
 export interface CLIPorts {
   readonly argv: readonly string[];
   readonly cwd: string;
   readonly isTTY: boolean;
   readonly isAgent: boolean;
-  readonly selfCommand: readonly string[];
   readonly writeStdout: (text: string) => void;
+  readonly readRepoRoot: (cwd: string) => Promise<string | WringerError>;
+  readonly openRepo: (root: string) => RepoPorts;
 }
 
 // Every invocation ends in one envelope and an exit code, whatever failed: gunshi's parse, the
@@ -70,7 +75,7 @@ async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<Parsed
     invocation = invoked;
   });
 
-  const command = buildCommandName(ports.argv);
+  const command = pickCommandName(wringer, ports.argv);
 
   try {
     const printed = await cli(
@@ -102,12 +107,6 @@ async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<Parsed
   } catch (error) {
     return { kind: 'failed', command, error: toUsageError(error) };
   }
-}
-
-function buildCommandName(argv: readonly string[]): string {
-  const words = argv.filter((word) => !word.startsWith('-'));
-
-  return words.length === 0 ? 'help' : words.join('.');
 }
 
 // gunshi throws an AggregateError for a parse failure, with one error per problem.
@@ -152,7 +151,7 @@ async function dispatchInvocation(
   mode: OutputMode,
   invocation: Invocation,
 ): Promise<number> {
-  const root = await readRepoRoot(ports.cwd);
+  const root = await ports.readRepoRoot(ports.cwd);
 
   if (root instanceof WringerError) {
     writeEnvelope(ports, mode, buildFailureEnvelope(invocation.path.join('.'), root));
@@ -160,8 +159,12 @@ async function dispatchInvocation(
     return exitCodeFor[root.code];
   }
 
+  const repo = ports.openRepo(root);
+
   const result = await dispatch(wringer, invocation.path, invocation.raw, {
     root,
+    state: repo.state,
+    supervisor: repo.supervisor,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
     timeoutMs: invocation.globals.timeoutMs,
@@ -172,11 +175,6 @@ async function dispatchInvocation(
         ports.writeStdout(text);
       },
     },
-    supervisor: makeProcessSupervisorStarter({
-      selfCommand: ports.selfCommand,
-      root,
-      stateDir: wringer.stateDir,
-    }),
   });
 
   writeEnvelope(ports, mode, result.envelope);

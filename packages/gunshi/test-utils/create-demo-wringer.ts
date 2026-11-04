@@ -11,8 +11,15 @@ const greetInputSchema = z.strictObject({
 
 const greetDataSchema = z.strictObject({ greeting: z.string(), tags: z.array(z.string()) });
 
+const labelArgsSchema = z.strictObject({
+  shelf: z.string().min(1),
+  item: z.string().min(1),
+  label: z.string().default('sample'),
+});
+
 // A repo's verify CLI for the adapter's tests: a launch target `local` whose app is a shell that
-// prints one ready line, a read-only attach target `prod`, and a read action with every flag type.
+// prints one ready line, a read-only attach target `prod`, a read action with every flag type, a
+// repo command with two positionals, and a doctor check that passes.
 export function createDemoWringer(): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -44,6 +51,24 @@ export function createDemoWringer(): Wringer {
           tags: input.tags,
         });
       },
+    })
+    .command({
+      path: ['label'],
+      summary: 'Label an item on a shelf',
+      args: labelArgsSchema,
+      positionals: ['shelf', 'item'],
+      data: labelArgsSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve(args),
+    })
+    .check({
+      name: 'shelf',
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 1000,
+      run: () => Promise.resolve({}),
     })
     .feature({ name: 'greeting', summary: 'Greet a visitor', paths: ['src/**'] })
     .build();

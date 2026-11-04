@@ -23,11 +23,11 @@ test('it maps each scalar, list and enum field to the gunshi flag of its type', 
   });
 
   expect(args).toStrictEqual({
-    sku: { type: 'string', description: 'The product to seed' },
+    sku: { type: 'string', parse: expect.any(Function), description: 'The product to seed' },
     count: { type: 'number' },
     price: { type: 'number' },
     dryRun: { type: 'boolean', negatable: true },
-    tags: { type: 'string', multiple: true },
+    tags: { type: 'string', parse: expect.any(Function), multiple: true },
     sizes: { type: 'number', multiple: true },
     colour: { type: 'enum', choices: ['red', 'blue'] },
   });
@@ -45,6 +45,19 @@ test('it leaves the positionals out of the flags', () => {
   });
 
   expect(Object.keys(args)).toStrictEqual(['quiet']);
+});
+
+test('it keeps an empty string flag and an empty list item as empty strings', () => {
+  const tags = z.array(z.string());
+
+  const args = buildGunshiArgs({
+    path: ['label'],
+    summary: 'Label an item',
+    args: z.strictObject({ label: z.string().default('sample'), tags }),
+    data: z.strictObject({}),
+  });
+
+  expect([args['label']?.parse?.(''), args['tags']?.parse?.('')]).toStrictEqual(['', '']);
 });
 
 test('it takes a field that is not one scalar as JSON text', () => {

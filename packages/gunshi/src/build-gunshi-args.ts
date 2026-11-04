@@ -53,7 +53,17 @@ function toFlagSchema(type: ScalarType, described: Pick<ArgSchema, 'description'
     return { type: 'number', ...described };
   }
 
+  // gunshi swaps an empty string for the flag's default, which is undefined here, so `--label ''`
+  // would reach the schema as a missing flag. A parse function keeps the value as typed.
+  if (type === 'string') {
+    return { type, parse: keepFlagText, ...described };
+  }
+
   return { type, ...described };
+}
+
+function keepFlagText(value: string): string {
+  return value;
 }
 
 function parseJSONFlag(value: string): unknown {
