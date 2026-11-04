@@ -50,8 +50,8 @@ own file.
 
 - The typed builder. Each action and command declares `effect: 'read' | 'write'`, and is a write
   unless it says otherwise.
-- The read-only fence: on a read-only target, each driver client and exec refuses a write with
-  `read-only` and the target's hint. A target's driver config lists the writes it grants.
+- Read-only targets: each driver client and exec refuses a write there with `read-only` and the
+  target's hint. A target's driver config lists the writes it grants.
 - One supervisor process per run, which owns the app and every driver service.
 - The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`.
 - The envelope's zod schema, and the JSON Schema built from it.
