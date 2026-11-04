@@ -70,6 +70,36 @@ test('it reads from the cursor that use marked when the read gives no from', asy
   expect(lines).toStrictEqual(['order placed']);
 });
 
+test('it reads a new run from its start when use marked cursors in an older run', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  await waitFor(async () => {
+    const result = await ctx.run('local', ['stream', 'read'], { name: 'app', from: 0 });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    return slice.records.some((record) => record.line === 'booted') ? true : null;
+  });
+
+  await ctx.run('local', ['use'], { feature: undefined });
+  await ctx.run('local', ['down']);
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const lines = await waitFor(async () => {
+    const result = await ctx.run('local', ['stream', 'read'], { name: 'app' });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+  });
+
+  expect(lines).toStrictEqual(['{"event":"listening","port":4000}', 'booted']);
+});
+
 test('it records a command source on an attach target', async () => {
   const ctx = await setupTest();
 
