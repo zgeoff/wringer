@@ -4,8 +4,9 @@ import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { runDataSchema, startRun } from './start-run.ts';
 import type { RunData } from './start-run.ts';
-import { stopDataSchema, stopRun } from './stop-run.ts';
-import type { StopData } from './stop-run.ts';
+import { stopDataSchema } from './stop-data-schema.ts';
+import type { StopData } from './stop-data-schema.ts';
+import { stopRun } from './stop-run.ts';
 
 export const launchReadyTimeoutMs = 120_000;
 const startArgsSchema = z.strictObject({ restart: z.boolean().default(false) });

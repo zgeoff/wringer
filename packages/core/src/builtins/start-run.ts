@@ -6,6 +6,7 @@ import { readFingerprint } from '../read-fingerprint.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
 import type { BuiltinContext } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
+import { callRunSupervisor } from './call-run-supervisor.ts';
 
 export const runDataSchema = z.strictObject({
   run: z.string(),
@@ -23,6 +24,8 @@ export interface StartRunRequest {
   readonly readyTimeoutMs: number;
 }
 
+const pingTimeoutMs = 2000;
+
 // `up` and `attach` hold the target's lock across check-and-create, so two at once never start two
 // supervisors. A live run is reused, keeping its doctor pass, unless the caller asks for a restart.
 export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise<RunData> {
@@ -32,27 +35,35 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     const currentID = pointers.currentRun[ctx.targetName];
     const current = currentID === undefined ? undefined : await ctx.state.readRun(currentID);
     const live = current?.status === 'running' || current?.status === 'starting';
-    const alive = live && current !== undefined ? await probeSupervisor(current) : false;
+
+    // A ping that times out rejects here, so a slow supervisor is never taken for a dead one.
+    const reach =
+      live && current !== undefined
+        ? await callRunSupervisor(
+            current,
+            'ping',
+            AbortSignal.any([ctx.signal, AbortSignal.timeout(pingTimeoutMs)]),
+          )
+        : 'gone';
 
     const replacement = pickRunReplacement({
       status: current?.status,
-      alive,
+      alive: reach === 'answered',
       restart: request.restart,
     });
 
     if (current !== undefined && replacement === 'reuse') {
+      ctx.bindRun(current.runID);
+
       return toRunData(current, true);
     }
 
-    if (current !== undefined && replacement === 'stop') {
-      await callSupervisor({
-        socket: current.supervisor?.socket ?? '',
-        request: { service: supervisorServiceName, method: 'stop', args: null },
-        signal: ctx.signal,
-      });
-    }
+    const stopped =
+      current !== undefined && replacement === 'stop'
+        ? await callRunSupervisor(current, 'stop', ctx.signal)
+        : 'answered';
 
-    if (current !== undefined && replacement === 'mark-crashed') {
+    if (current !== undefined && (replacement === 'mark-crashed' || stopped === 'gone')) {
       await ctx.state.appendEvent(current.runID, {
         type: 'crashed',
         at: ctx.now().toISOString(),
@@ -61,6 +72,8 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     }
 
     const runID = buildRunID(ctx.now());
+
+    ctx.bindRun(runID);
 
     const base = await readDefaultBase(ctx.session.root);
 
@@ -117,26 +130,6 @@ export function pickRunReplacement(input: RunReplacementInput): RunReplacement {
   }
 
   return input.status === 'running' && !input.restart ? 'reuse' : 'stop';
-}
-
-const pingTimeoutMs = 2000;
-
-async function probeSupervisor(run: RunView): Promise<boolean> {
-  if (run.supervisor === null) {
-    return false;
-  }
-
-  try {
-    await callSupervisor({
-      socket: run.supervisor.socket,
-      request: { service: supervisorServiceName, method: 'ping', args: null },
-      signal: AbortSignal.timeout(pingTimeoutMs),
-    });
-
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function toRunData(view: RunView, reused: boolean): RunData {

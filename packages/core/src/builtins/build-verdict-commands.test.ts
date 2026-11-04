@@ -67,7 +67,7 @@ test('#done records a verdict with the evidence of the drives since the doctor',
   await ctx.run(['up']);
   await ctx.run(['doctor']);
   await ctx.run(['use'], { feature: 'checkout' });
-  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['action', 'receipt']);
 
   const result = await ctx.run(['done']);
 
@@ -76,7 +76,9 @@ test('#done records a verdict with the evidence of the drives since the doctor',
     fingerprint: 'empty',
     run: result.envelope.instance,
     at: expect.any(String),
-    evidence: [],
+    evidence: [
+      { kind: 'note', path: expect.stringMatching(/receipt\.txt$/u), sha256: expect.any(String) },
+    ],
   });
 });
 
