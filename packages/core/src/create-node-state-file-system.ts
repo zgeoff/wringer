@@ -41,13 +41,22 @@ export function createNodeStateFileSystem(): StateFileSystem {
     },
     createDirectory,
 
-    // One write of the whole text to a file opened with O_APPEND, so lines from processes that
-    // append at once never interleave.
+    // A write may take fewer bytes than it was given, so the append writes on from where the last
+    // write stopped until the whole text is in the file. The caller holds the run lock, so no other
+    // append lands between two of these writes.
     appendText: async (path, text) => {
       const handle = await open(path, 'a');
 
+      const bytes = Buffer.from(text);
+
       try {
-        await handle.write(text);
+        let written = 0;
+
+        while (written < bytes.length) {
+          const result = await handle.write(bytes, written);
+
+          written += result.bytesWritten;
+        }
       } finally {
         await handle.close();
       }

@@ -58,6 +58,18 @@ test('#appendText adds the text after what the file holds', async () => {
   expect(text).toBe('kale\nleeks\n');
 });
 
+test('#appendText writes every byte of a long text with multi-byte letters', async () => {
+  const ctx = await setupTest();
+
+  const long = 'Grüße an die Beete\n'.repeat(400_000);
+
+  await ctx.fs.appendText(join(ctx.directory, 'notes.txt'), long);
+
+  const text = await readFile(join(ctx.directory, 'notes.txt'), 'utf8');
+
+  expect(text === long).toBeTrue();
+});
+
 test('#readFileSize reads the size of a file in bytes', async () => {
   const ctx = await setupTest();
 
