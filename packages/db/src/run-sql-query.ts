@@ -134,8 +134,14 @@ function runPostgresStatement(
   input: SQLQueryInput,
   onStart: (query: SQL.Query<unknown>) => void,
 ): Promise<unknown> {
+  // Bun.SQL sends `unsafe` with no parameters as a simple query, which runs every statement in the
+  // text, so `COMMIT; DELETE …` would end the read-only transaction. A tagged query always takes the
+  // extended protocol, where Postgres refuses a second statement.
   const start = (sql: SQL): SQL.Query<unknown> => {
-    const query = sql.unsafe<unknown>(input.sql, [...input.params]);
+    const query =
+      input.params.length === 0
+        ? sql<unknown>(Object.assign([input.sql], { raw: [input.sql] }))
+        : sql.unsafe<unknown>(input.sql, [...input.params]);
 
     onStart(query);
 

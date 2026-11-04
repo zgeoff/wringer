@@ -4,6 +4,7 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { SQL } from 'bun';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 import type { SqliteMode } from './run-sql-query.ts';
 
@@ -13,6 +14,11 @@ async function setupTest() {
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   const file = join(directory, 'shop.db');
+  const postgres = createFakePostgres();
+
+  onTestFinished(() => {
+    postgres.stop();
+  });
 
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
@@ -22,6 +28,22 @@ async function setupTest() {
   return {
     directory,
     file,
+    postgresStatements: postgres.statements,
+    runPostgresQuery: (
+      sql: string,
+      options: { params?: readonly unknown[]; write?: boolean } = {},
+    ) =>
+      runSQLQuery(
+        {
+          adapter: 'postgres',
+          url: postgres.url,
+          sql,
+          params: options.params ?? [],
+          write: options.write ?? false,
+          signal: new AbortController().signal,
+        },
+        clients,
+      ),
     seedNotes: (texts: readonly string[]) => {
       const database = new Database(file);
 
@@ -69,6 +91,28 @@ test('it refuses a write whose deadline passed before it started, and writes not
     failure: expect.objectContaining({ code: 'timeout' }),
     rows: [{ text: 'pay' }],
   });
+});
+
+test('it sends a Postgres read with no parameters as one extended-protocol statement in a read-only transaction', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runPostgresQuery('COMMIT; DELETE FROM notes');
+
+  expect(ctx.postgresStatements).toStrictEqual([
+    { protocol: 'simple', sql: 'BEGIN read only' },
+    { protocol: 'extended', sql: 'COMMIT; DELETE FROM notes' },
+    { protocol: 'simple', sql: 'COMMIT' },
+  ]);
+});
+
+test('it sends a Postgres write with no parameters as one extended-protocol statement', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runPostgresQuery('DELETE FROM notes; DROP TABLE notes', { write: true });
+
+  expect(ctx.postgresStatements).toStrictEqual([
+    { protocol: 'extended', sql: 'DELETE FROM notes; DROP TABLE notes' },
+  ]);
 });
 
 test('it reads rows with bound parameters, their columns and their count', async () => {

@@ -75,6 +75,8 @@ A query returns `{ columns, rows, rowCount }`.
 - A query is a read unless it passes `write: true`.
 - A read runs read-only in the database: SQLite opens the file read-only with `query_only` on, and
   Postgres runs it in a read-only transaction.
+- A query through `via: 'sql'` holds one statement. Postgres refuses a second one, so a read cannot
+  end its read-only transaction with `COMMIT`.
 - On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
   a string, a quoted name or a comment do not count. A read-only handle still runs `VACUUM INTO`,
   which copies the database to any path.
