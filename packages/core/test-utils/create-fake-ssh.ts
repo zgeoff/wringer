@@ -15,8 +15,8 @@ export interface FakeSSH {
 }
 
 // Keeps ssh's contract: options before `--`, then the destination and one command string for
-// `sh -c`. `unreachable` fails to connect with exit code 255, and `drops-stops` fails that way for
-// the group stop script.
+// `sh -c`. `unreachable` exits 255 as ssh does, `drops-stops` does so for the group stop script,
+// and `-tt` ends each line in `\r` as a terminal.
 export async function createFakeSSH(directory: string): Promise<FakeSSH> {
   const binary = join(directory, 'fake-ssh');
   const loginsPath = join(directory, 'logins.log');
@@ -53,10 +53,12 @@ export async function createFakeSSH(directory: string): Promise<FakeSSH> {
 
   const script = `#!/bin/sh
 user="$(id -un)"
+terminal=""
 while [ "$1" != "--" ]; do
   case "$1" in
     -o) shift 2 ;;
     -l) user="$2"; shift 2 ;;
+    -tt) terminal=" tty"; shift ;;
     *) echo "fake-ssh: unexpected option $1" >&2; exit 2 ;;
   esac
 done
@@ -73,7 +75,7 @@ case "$destination:$1" in
     echo "ssh: connect to host drops-stops port 22: Connection timed out" >&2
     exit 255 ;;
 esac
-echo "$user@$destination" >> '${loginsPath}'
+echo "$user@$destination$terminal" >> '${loginsPath}'
 PATH='${groupBin}':"$PATH"
 if [ "$destination" = slow-setsid ]; then
   PATH='${slowBin}':"$PATH"
@@ -81,6 +83,10 @@ if [ "$destination" = slow-setsid ]; then
   exec '${realSetsid}' -w ${recordGroup} sh -c "$1"
 fi
 export PATH
+if [ -n "$terminal" ]; then
+  sh -c "$1" | sed 's/$/\\r/'
+  exit
+fi
 exec sh -c "$1"
 `;
 
