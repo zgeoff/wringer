@@ -1,8 +1,10 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { join } from 'node:path';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
+import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -10,6 +12,7 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
+    root: shop.repo.root,
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
@@ -136,6 +139,96 @@ test('#down stops the run, ends its log and clears the pointer', async () => {
   expect({ status: view?.status, currentRun: pointers.currentRun }).toStrictEqual({
     status: 'ended',
     currentRun: {},
+  });
+});
+
+test('#down marks a run whose supervisor is gone as crashed and clears the pointer', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'supervisor-ready',
+    at: '2026-11-04T10:00:01.000Z',
+    pid: 1,
+    socket: '/nonexistent/wringer.sock',
+  });
+
+  await ctx.state.appendEvent('gone-run', { type: 'run-ready', at: '2026-11-04T10:00:02.000Z' });
+  await ctx.state.writePointers((current) => ({ ...current, currentRun: { local: 'gone-run' } }));
+
+  const result = await ctx.run('local', ['down']);
+
+  const [view, pointers] = await Promise.all([
+    ctx.state.readRun('gone-run'),
+    ctx.state.readPointers(),
+  ]);
+
+  expect({
+    data: result.envelope.data,
+    status: view?.status,
+    currentRun: pointers.currentRun,
+  }).toStrictEqual({
+    data: { run: 'gone-run', stopped: false },
+    status: 'crashed',
+    currentRun: {},
+  });
+});
+
+test('#down keeps a live run and its pointer when its supervisor answers too late', async () => {
+  const ctx = await setupTest();
+
+  const socket = join(ctx.root, 'late.sock');
+  const answer = Promise.withResolvers<null>();
+
+  const server = await listenSupervisorSocket(socket, () => answer.promise);
+
+  onTestFinished(() => {
+    answer.resolve(null);
+    server.close();
+  });
+
+  await ctx.state.appendEvent('late-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent('late-run', {
+    type: 'supervisor-ready',
+    at: '2026-11-04T10:00:01.000Z',
+    pid: process.pid,
+    socket,
+  });
+
+  await ctx.state.appendEvent('late-run', { type: 'run-ready', at: '2026-11-04T10:00:02.000Z' });
+  await ctx.state.writePointers((current) => ({ ...current, currentRun: { local: 'late-run' } }));
+
+  const result = await ctx.runWithin('local', ['down'], 100);
+
+  await ctx.state.withTargetLock('local', () => Promise.resolve(null));
+
+  const [view, pointers] = await Promise.all([
+    ctx.state.readRun('late-run'),
+    ctx.state.readPointers(),
+  ]);
+
+  expect({
+    code: result.envelope.error?.code,
+    status: view?.status,
+    currentRun: pointers.currentRun,
+  }).toStrictEqual({
+    code: 'timeout',
+    status: 'running',
+    currentRun: { local: 'late-run' },
   });
 });
 
