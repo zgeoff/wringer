@@ -1,4 +1,5 @@
 import { findLeadingWord } from './find-leading-word.ts';
+import { toBareSQL } from './to-bare-sql.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
@@ -13,7 +14,7 @@ const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 
 // read-only transaction can refuse it, so the statement's first word decides.
 export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): boolean {
   if (dialect === 'sqlite') {
-    return sqliteEscapePattern.test(sql);
+    return sqliteEscapePattern.test(toBareSQL(sql));
   }
 
   if (via === 'sql') {
