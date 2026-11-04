@@ -190,6 +190,29 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
   });
 });
 
+test.each(['GET', 'HEAD'])('it refuses a JSON body on a %s with a usage error', async (method) => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], {
+    method,
+    path: '/api/cart',
+    json: { item: 'mug' },
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+  }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+    message: `A ${method} request cannot send a JSON body.`,
+  });
+});
+
 test('it refuses a header that is not valid HTTP with a usage error', async () => {
   const ctx = await setupTest();
 

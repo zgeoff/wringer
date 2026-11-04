@@ -39,7 +39,8 @@ export const registry = createWringer({ name: 'shop' })
 ```
 
 An action calls `ctx.drivers.http.request({ method, path, headers, json })`. The CLI adds
-`http request --path /api/cart`, and the doctor check `http.reachable`.
+`http request --path /api/cart`, and the doctor check `http.reachable`. A `json` body on a GET or
+HEAD request fails with a usage error before the driver sends it.
 
 ## Target config
 
