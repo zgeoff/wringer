@@ -7,7 +7,7 @@ import { WringerError } from './wringer-error.ts';
 export type SupervisorOperation =
   | { readonly kind: 'stop' }
   | { readonly kind: 'status' }
-  | { readonly kind: 'call'; readonly call: () => Promise<unknown> }
+  | { readonly kind: 'call'; readonly call: (signal: AbortSignal) => Promise<unknown> }
   | { readonly kind: 'refuse'; readonly error: WringerError };
 
 export function pickSupervisorOperation(
@@ -30,5 +30,5 @@ export function pickSupervisorOperation(
     };
   }
 
-  return { kind: 'call', call: () => method(request.args) };
+  return { kind: 'call', call: (signal) => method(request.args, signal) };
 }

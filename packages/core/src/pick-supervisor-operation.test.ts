@@ -16,9 +16,17 @@ test.each([
   expect(operation).toStrictEqual({ kind: row.kind });
 });
 
-test("it picks a call that passes the request's args to the service method", async () => {
+test("it picks a call that passes the request's args and the caller's signal to the service method", async () => {
   const services = new Map([
-    ['shelf', { methods: { count: (args: unknown) => Promise.resolve({ counted: args }) } }],
+    [
+      'shelf',
+      {
+        methods: {
+          count: (args: unknown, signal: AbortSignal) =>
+            Promise.resolve({ counted: args, aborted: signal.aborted }),
+        },
+      },
+    ],
   ]);
 
   const operation = pickSupervisorOperation(
@@ -28,9 +36,9 @@ test("it picks a call that passes the request's args to the service method", asy
 
   invariant(operation.kind === 'call');
 
-  const result = await operation.call();
+  const result = await operation.call(AbortSignal.abort());
 
-  expect(result).toStrictEqual({ counted: { aisle: 4 } });
+  expect(result).toStrictEqual({ counted: { aisle: 4 }, aborted: true });
 });
 
 test.each([

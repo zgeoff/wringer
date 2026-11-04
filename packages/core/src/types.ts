@@ -101,8 +101,12 @@ export interface ServiceContext<Options, TargetConfig> {
   readonly signal: AbortSignal;
 }
 
+// A method's signal aborts when the caller stops waiting, such as at its deadline, so the method can
+// stop work that would otherwise land after the caller reported a timeout.
+export type ServiceMethod = (args: unknown, signal: AbortSignal) => Promise<unknown>;
+
 export interface ServiceInstance {
-  readonly methods: Readonly<Record<string, (args: unknown) => Promise<unknown>>>;
+  readonly methods: Readonly<Record<string, ServiceMethod>>;
   readonly stop: () => Promise<void>;
 }
 

@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { z } from 'zod';
 
@@ -53,6 +54,18 @@ export async function startStreamRecorder(request: RecorderRequest): Promise<Str
       lifetime.abort();
 
       await Promise.all(followers.map((follower) => follower.done));
+
+      const settled = await Promise.allSettled(followers.map((follower) => follower.drain()));
+
+      const failures = settled.flatMap((result) =>
+        result.status === 'rejected' ? [String(result.reason)] : [],
+      );
+
+      if (failures.length > 0) {
+        throw new WringerError('environment', {
+          message: `The recorder lost records: ${failures.join('; ')}`,
+        });
+      }
     },
   };
 }
@@ -66,22 +79,39 @@ interface FollowSourceRequest extends RecorderRequest {
 interface Follower {
   readonly status: () => SourceStatus;
   readonly done: Promise<void>;
+  readonly drain: () => Promise<void>;
+}
+
+type SourceState = SourceStatus['state'];
+
+// The supervisor sends each source's status to the CLI, so every change goes through this table. A
+// source that exited can still fail, when its last records never reach the disk.
+const sourceTransitions: Readonly<Record<SourceState, readonly SourceState[]>> = {
+  running: ['exited', 'failed'],
+  exited: ['failed'],
+  failed: [],
+};
+
+export function canMoveSource(from: SourceState, to: SourceState): boolean {
+  return sourceTransitions[from].includes(to);
 }
 
 function followSource(request: FollowSourceRequest): Follower {
   const path = join(request.directory, `${request.name}.ndjson`);
   let current: SourceStatus = { name: request.name, state: 'running', detail: null };
 
+  const move = (state: SourceState, detail: string): void => {
+    if (canMoveSource(current.state, state)) {
+      current = { ...current, state, detail };
+    }
+  };
+
   const writer = makeRecordWriter({
     path,
     now: request.now,
     pendingLimit: request.pendingLimit,
     onError: (error) => {
-      current = {
-        ...current,
-        state: 'failed',
-        detail: `The recorder could not write: ${String(error)}`,
-      };
+      move('failed', `The recorder could not write: ${String(error)}`);
     },
   });
 
@@ -93,15 +123,13 @@ function followSource(request: FollowSourceRequest): Follower {
     try {
       const exitCode = await runFollow(request, onLine);
 
-      current = { ...current, state: 'exited', detail: `exit code ${exitCode}` };
+      move('exited', `exit code ${exitCode}`);
     } catch (error) {
-      current = { ...current, state: 'failed', detail: String(error) };
+      move('failed', String(error));
     }
-
-    await writer.drain();
   };
 
-  return { status: () => current, done: watch() };
+  return { status: () => current, done: watch(), drain: writer.drain };
 }
 
 interface RecordWriterOptions {
@@ -117,11 +145,13 @@ interface RecordWriter {
 }
 
 // Appends the records that arrived while the last write ran in one write, so a fast source costs
-// one write per batch and a bounded amount of memory.
+// one write per batch and a bounded amount of memory. A batch that fails to write goes back to the
+// front of the queue for the next write, and a drain that still cannot write it rejects.
 function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
   let pending: string[] = [];
   let dropped = 0;
   let flushing: Promise<void> | null = null;
+  let failure: string | null = null;
 
   const takeBatch = (): string[] => {
     const batch = pending;
@@ -139,16 +169,46 @@ function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
     return batch;
   };
 
+  const keepBatch = (batch: readonly string[]): void => {
+    const kept = [...batch, ...pending];
+
+    dropped += Math.max(kept.length - options.pendingLimit, 0);
+    pending = kept.slice(0, options.pendingLimit);
+  };
+
   const flush = async (): Promise<void> => {
     for (let batch = takeBatch(); batch.length > 0; batch = takeBatch()) {
       try {
         await appendFile(options.path, `${batch.join('\n')}\n`);
+
+        failure = null;
       } catch (error) {
+        failure = error instanceof Error ? error.message : 'the write failed';
+
+        keepBatch(batch);
+
         options.onError(error);
+        break;
       }
     }
 
     flushing = null;
+  };
+
+  const drain = async (): Promise<void> => {
+    await flushing;
+
+    if (pending.length > 0 || dropped > 0) {
+      flushing = flush();
+
+      await flushing;
+    }
+
+    if (failure !== null) {
+      throw new WringerError('environment', {
+        message: `${options.path} kept ${pending.length} records the recorder could not write: ${failure}`,
+      });
+    }
   };
 
   return {
@@ -161,13 +221,13 @@ function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
 
       flushing ??= flush();
     },
-    drain: () => flushing ?? Promise.resolve(),
+    drain,
   };
 }
 
 // A record holds at most this many characters of its line, so every record fits well inside the
 // smallest slice a reader takes.
-export const recordLineCap = 4 * 1024;
+const recordLineCap = 4 * 1024;
 
 function capLine(line: string): string {
   return line.length > recordLineCap ? `${line.slice(0, recordLineCap)}...` : line;

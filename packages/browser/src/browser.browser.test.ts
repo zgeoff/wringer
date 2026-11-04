@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
+import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createBrowserWringer } from '../test-utils/create-browser-wringer.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { snapshotSchema } from './start-browser-page.ts';
@@ -18,8 +19,12 @@ async function setupTest() {
   return {
     root: shop.repo.root,
     posts: server.posts,
+    pageLoads: server.pageLoads,
+    revealRestock: server.revealRestock,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+    runWithin: (target: string, path: readonly string[], args: unknown, timeoutMs: number) =>
+      dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
   };
 }
 
@@ -165,6 +170,97 @@ test('it clicks the element a read-only target grants', async () => {
   expect({ exitCode: result.exitCode, posts: ctx.posts }).toStrictEqual({
     exitCode: 0,
     posts: ['/api/search'],
+  });
+});
+
+test('it refuses typing on a read-only target with exit code 3 and the target hint', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+  await ctx.run('prod', ['browser', 'goto'], { path: '/' });
+
+  const result = await ctx.run('prod', ['browser', 'type'], {
+    role: 'textbox',
+    name: 'Email',
+    value: 'buyer@shop.example',
+  });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 3,
+    error: {
+      code: 'read-only',
+      message: '`browser type` is a write, and target prod is read-only.',
+      hint: 'prod is read-only: place the order on local.',
+    },
+  });
+});
+
+test('it refuses typing inside an action that declared a read, at the client call', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'sneak-email']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 3,
+    error: {
+      code: 'read-only',
+      message: 'type on textbox "Email" is a write, and the target is read-only.',
+      hint: 'prod is read-only: place the order on local.',
+    },
+  });
+});
+
+test('it types into the field a read-only target grants', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+  await ctx.run('prod', ['browser', 'goto'], { path: '/' });
+
+  const result = await ctx.run('prod', ['browser', 'type'], {
+    role: 'textbox',
+    name: 'Search terms',
+    value: 'mugs',
+  });
+
+  expect(result.exitCode).toBe(0);
+});
+
+test('it stops a browser action that ran past the command deadline before it lands', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['browser', 'goto'], { path: '/' });
+
+  const result = await ctx.runWithin(
+    'local',
+    ['browser', 'click'],
+    { role: 'button', name: 'Restock' },
+    500,
+  );
+
+  // The driver closes the page under the late click and loads the same URL in a new page.
+  const reloaded = await waitFor(() => (ctx.pageLoads() === 2 ? true : null));
+
+  ctx.revealRestock();
+
+  await waitFor(async () => {
+    const snapshot = await ctx.run('local', ['browser', 'snapshot']);
+
+    const printed = snapshotSchema.parse(snapshot.envelope.data).snapshot;
+
+    return printed.includes('button "Restock"') ? true : null;
+  });
+
+  expect({ code: result.envelope.error?.code, reloaded, posts: ctx.posts }).toStrictEqual({
+    code: 'timeout',
+    reloaded: true,
+    posts: [],
   });
 });
 

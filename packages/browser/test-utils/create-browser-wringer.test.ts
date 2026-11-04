@@ -1,8 +1,13 @@
 import { expect, test } from 'bun:test';
 import { createBrowserWringer } from './create-browser-wringer.ts';
 
-test('it builds the local and prod targets with the browser driver and the order actions', () => {
-  const wringer = createBrowserWringer('http://127.0.0.1:4000/');
+function setupTest() {
+  return { wringer: createBrowserWringer('http://127.0.0.1:4000/') };
+}
+
+test('it builds the local and prod targets with the browser driver and the sneaky actions', () => {
+  const ctx = setupTest();
+  const wringer = ctx.wringer;
 
   expect({
     targets: [...wringer.targets.keys()],
@@ -11,6 +16,6 @@ test('it builds the local and prod targets with the browser driver and the order
   }).toStrictEqual({
     targets: ['local', 'prod'],
     access: ['read-write', 'read-only'],
-    actions: ['action sneak-order', 'action script-order'],
+    actions: ['action sneak-order', 'action sneak-email', 'action script-order'],
   });
 });

@@ -25,24 +25,52 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
     ...(options.executablePath === undefined ? {} : { executablePath: options.executablePath }),
   });
 
-  const page = await browser.newPage();
+  const openPage = async (): Promise<Page> => {
+    const opened = await browser.newPage();
 
-  page.setDefaultTimeout(options.actionTimeoutMs);
+    opened.setDefaultTimeout(options.actionTimeoutMs);
 
+    return opened;
+  };
+
+  let pageReady = openPage();
   let lastSnapshot = '';
+
+  // Playwright cannot cancel one action, so a caller that stops waiting gets the page closed under
+  // its action, and the next command a new page at the same URL; a late click never lands.
+  const runPageAction = async <T>(
+    signal: AbortSignal,
+    action: (page: Page) => Promise<T>,
+  ): Promise<T> => {
+    const page = await pageReady;
+
+    const reopen = (): void => {
+      pageReady = reopenPage(page, openPage);
+    };
+
+    signal.addEventListener('abort', reopen, { once: true });
+
+    try {
+      return await action(page);
+    } catch (error) {
+      throw toPageError(error);
+    } finally {
+      signal.removeEventListener('abort', reopen);
+    }
+  };
 
   return {
     methods: {
-      goto: (args) =>
-        runPageAction(async () => {
+      goto: (args, signal) =>
+        runPageAction(signal, async (page) => {
           const parsed = gotoSchema.parse(args);
 
           await page.goto(parsed.url);
 
           return readPageState(page);
         }),
-      snapshot: () =>
-        runPageAction(async () => {
+      snapshot: (_args, signal) =>
+        runPageAction(signal, async (page) => {
           lastSnapshot = await page.ariaSnapshot({ mode: 'ai' });
 
           const state = await readPageState(page);
@@ -64,22 +92,22 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
         return Promise.resolve({ ref: parsed.ref, ...element });
       },
-      click: (args) =>
-        runPageAction(async () => {
+      click: (args, signal) =>
+        runPageAction(signal, async (page) => {
           await locateElement(page, elementSchema.parse(args)).click();
 
           return readPageState(page);
         }),
-      type: (args) =>
-        runPageAction(async () => {
+      type: (args, signal) =>
+        runPageAction(signal, async (page) => {
           const parsed = typeSchema.parse(args);
 
           await locateElement(page, parsed.element).fill(parsed.value);
 
           return readPageState(page);
         }),
-      screenshot: () =>
-        runPageAction(async () => {
+      screenshot: (_args, signal) =>
+        runPageAction(signal, async (page) => {
           const png = await page.screenshot({ fullPage: true });
 
           return { png: png.toString('base64') };
@@ -90,16 +118,24 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
   };
 }
 
-// Playwright reports a missing element as a timeout and anything else as a plain error; both reach
-// the caller as one of the envelope's error codes.
-async function runPageAction<T>(action: () => Promise<T>): Promise<T> {
-  try {
-    return await action();
-  } catch (error) {
-    throw toPageError(error);
+async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
+  const url = stale.url();
+
+  const page = await openPage();
+
+  await stale.close();
+
+  // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page itself
+  // must still come back, or every later command would fail.
+  if (url !== 'about:blank') {
+    await page.goto(url).catch(() => null);
   }
+
+  return page;
 }
 
+// Playwright reports a missing element as a timeout and anything else as a plain error; both reach
+// the caller as one of the envelope's error codes.
 function toPageError(error: unknown): unknown {
   if (error instanceof WringerError || error instanceof z.ZodError) {
     return error;

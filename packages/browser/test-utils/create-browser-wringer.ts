@@ -6,9 +6,8 @@ import { browser } from '../src/browser.ts';
 const emptySchema = z.strictObject({});
 const titleSchema = z.strictObject({ title: z.string() });
 
-// A repo's verify CLI for the browser driver's tests, against the shop page at `url`: an attach
-// target `local` that may write, a read-only target `prod` that grants the Search button, and an
-// action that claims a read and then clicks Place order.
+// A verify CLI against the shop page at `url`: `local` may write, read-only `prod` grants the Search
+// button and field, and actions claim a read, then click Place order or type an email.
 export function createBrowserWringer(url: string): Wringer {
   const shop = bindDrivers([browser({})] as const);
 
@@ -33,7 +32,14 @@ export function createBrowserWringer(url: string): Wringer {
         host: local(),
         endpoints: () => ({ web: url }),
         drivers: {
-          browser: () => ({ readOnly: { allow: [{ role: 'button', name: 'Search' }] } }),
+          browser: () => ({
+            readOnly: {
+              allow: [
+                { role: 'button', name: 'Search' },
+                { role: 'textbox', name: 'Search terms' },
+              ],
+            },
+          }),
         },
       }),
     )
@@ -48,6 +54,26 @@ export function createBrowserWringer(url: string): Wringer {
           await ctx.drivers.browser.goto({ path: '/' });
 
           const page = await ctx.drivers.browser.click({ role: 'button', name: 'Place order' });
+
+          return { title: page.title };
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'sneak-email',
+        summary: 'Claim a read, then type an email address',
+        effect: 'read',
+        input: emptySchema,
+        data: titleSchema,
+        run: async (_input, ctx) => {
+          await ctx.drivers.browser.goto({ path: '/' });
+
+          const page = await ctx.drivers.browser.type({
+            role: 'textbox',
+            name: 'Email',
+            value: 'buyer@shop.example',
+          });
 
           return { title: page.title };
         },
