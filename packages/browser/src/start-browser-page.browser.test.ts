@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { chromium } from 'playwright-core';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { startBrowserPage } from './start-browser-page.ts';
 
@@ -11,8 +12,11 @@ function setupTest() {
     url: server.url,
     posts: server.posts,
     revealRestock: server.revealRestock,
-    startPage: async () => {
-      const service = await startBrowserPage({ actionTimeoutMs: 5000 });
+    startPage: async (actionTimeoutMs = 5000) => {
+      const service = await startBrowserPage({
+        launchBrowser: () => chromium.launch({ headless: true }),
+        actionTimeoutMs,
+      });
 
       onTestFinished(() => service.stop());
 
@@ -55,6 +59,24 @@ test('it refuses an action whose deadline passed before the browser started it',
 
   expect(service.methods['snapshot']?.({}, AbortSignal.abort())).rejects.toMatchObject({
     code: 'timeout',
+  });
+});
+
+test('it answers an element that never appears within the action timeout with a timeout error and the snapshot hint', async () => {
+  const ctx = setupTest();
+
+  const service = await ctx.startPage(300);
+
+  await service.methods['goto']?.({ url: ctx.url }, new AbortController().signal);
+
+  const click = service.methods['click']?.(
+    { role: 'button', name: 'Gift wrap' },
+    AbortSignal.timeout(5000),
+  );
+
+  expect(click).rejects.toMatchObject({
+    code: 'timeout',
+    hint: 'Run `browser snapshot` to see the page as it is now.',
   });
 });
 
