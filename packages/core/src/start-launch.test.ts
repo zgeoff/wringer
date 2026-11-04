@@ -147,6 +147,23 @@ test('it refuses with an environment error when the app cannot start', async () 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
 });
 
+test('it refuses to start the app of a run that stopped already', async () => {
+  const ctx = await setupTest();
+
+  const launching = startLaunch({
+    plan: { command: ['sleep', '60'], cwd: join(ctx.directory, 'missing'), ready: () => null },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: AbortSignal.abort(),
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  expect(launching).rejects.toThrowWithMessage(
+    WringerError,
+    'The run stopped before the app was ready.',
+  );
+});
+
 test('it refuses a log folder it cannot create before it tries to start the app', async () => {
   const ctx = await setupTest();
 
