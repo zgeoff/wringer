@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 import { buildRunView } from './build-run-view.ts';
 import type { RunView } from './build-run-view.ts';
@@ -31,6 +31,7 @@ export interface StatePort {
   readonly readRun: (runID: RunID) => Promise<RunView | undefined>;
   readonly listRuns: () => Promise<readonly RunID[]>;
   readonly writeManifest: (runID: RunID) => Promise<void>;
+  readonly readCursors: (runID: RunID) => Promise<Record<string, number>>;
 }
 
 export interface FileStateOptions {
@@ -138,6 +139,26 @@ export function createFileState(options: FileStateOptions): StatePort {
           `${JSON.stringify(buildManifest(view), null, 2)}\n`,
         );
       }),
+
+    // A cursor is a byte offset into a stream's NDJSON file, so reading the cursors costs one size
+    // read per stream, however long the streams grow.
+    readCursors: async (runID) => {
+      const streams = buildRunPaths(options.stateDir, runID).streams;
+
+      const names = await fs.listNames(streams);
+
+      const files = names.filter((name) => name.endsWith('.ndjson'));
+
+      const sizes = await Promise.all(
+        files.map(async (name) => {
+          const size = await fs.readFileSize(join(streams, name));
+
+          return [basename(name, '.ndjson'), size] as const;
+        }),
+      );
+
+      return Object.fromEntries(sizes);
+    },
   };
 }
 

@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
@@ -273,6 +273,40 @@ test('it reads the log for a manifest only once the run lock is free', async () 
   const manifest = await ctx.readManifest('mf3k2a-7q1z');
 
   expect(JSON.parse(manifest)).toHaveProperty('status', 'ended');
+});
+
+test('it reads each stream file size of a run as its cursor', async () => {
+  const ctx = await setupTest();
+
+  const streams = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z')).streams;
+
+  await mkdir(streams, { recursive: true });
+  await writeFile(join(streams, 'orders.ndjson'), '{"line":"paid"}\n');
+  await writeFile(join(streams, 'notes.txt'), 'kale\n');
+
+  const cursors = await ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'));
+
+  expect(cursors).toStrictEqual({ orders: 16 });
+});
+
+test('it reads no cursors for a run whose streams have not started', async () => {
+  const ctx = await setupTest();
+  const cursors = await ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'));
+
+  expect(cursors).toStrictEqual({});
+});
+
+test('it rejects a cursor read when the streams path is a file', async () => {
+  const ctx = await setupTest();
+
+  const runPaths = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z'));
+
+  await mkdir(runPaths.directory, { recursive: true });
+  await writeFile(runPaths.streams, 'kale\n');
+
+  expect(ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'))).rejects.toMatchObject({
+    code: 'ENOTDIR',
+  });
 });
 
 test('it lists the runs that have a log folder', async () => {
