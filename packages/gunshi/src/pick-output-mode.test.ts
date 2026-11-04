@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { parseArgs } from 'gunshi';
 import { pickOutputMode } from './pick-output-mode.ts';
 
 test.each([
@@ -26,6 +27,20 @@ test.each([
     mode: 'json',
   },
   {
+    name: 'json for --json=true at a terminal',
+    argv: ['status', '--json=true'],
+    isTTY: true,
+    isAgent: false,
+    mode: 'json',
+  },
+  {
+    name: 'human for --human=true on a pipe',
+    argv: ['status', '--human=true'],
+    isTTY: false,
+    isAgent: false,
+    mode: 'human',
+  },
+  {
     name: 'the last of --json and --human',
     argv: ['--human', '--json'],
     isTTY: false,
@@ -40,5 +55,7 @@ test.each([
     mode: 'json',
   },
 ] as const)('it picks $name', (row) => {
-  expect(pickOutputMode({ argv: row.argv, isTTY: row.isTTY, isAgent: row.isAgent })).toBe(row.mode);
+  expect(
+    pickOutputMode({ tokens: parseArgs([...row.argv]), isTTY: row.isTTY, isAgent: row.isAgent }),
+  ).toBe(row.mode);
 });

@@ -1,6 +1,6 @@
 import { WringerError, dispatch, exitCodeFor, supervisorCommandName } from '@wringer/core';
 import type { Envelope, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
-import { cli } from 'gunshi';
+import { cli, parseArgs } from 'gunshi';
 import { buildFailureEnvelope } from './build-failure-envelope.ts';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
@@ -38,7 +38,11 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
     return 0;
   }
 
-  const mode = pickOutputMode(ports);
+  const mode = pickOutputMode({
+    tokens: parseArgs([...ports.argv]),
+    isTTY: ports.isTTY,
+    isAgent: ports.isAgent,
+  });
 
   const parsed = await readInvocation(wringer, ports);
 
