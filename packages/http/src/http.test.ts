@@ -79,6 +79,32 @@ test('it sends a JSON body with its content type', async () => {
   expect(received).toHaveBeenCalledExactlyOnceWith({ item: 'mug', count: 2 }, 'application/json');
 });
 
+test('it sends a JSON body with the content type the caller set, in any letter case', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(contentType: string | null) => void>();
+
+  server.use(
+    http.post(`${SHOP_API_URL}/api/orders`, (resolver) => {
+      received(resolver.request.headers.get('content-type'));
+
+      return HttpResponse.json({ ordered: true });
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  await ctx.run('local', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/orders',
+    header: ['Content-Type: application/vnd.api+json'],
+    json: { item: 'mug' },
+  });
+
+  expect(received).toHaveBeenCalledExactlyOnceWith('application/vnd.api+json');
+});
+
 test('it refuses a POST on a read-only target with exit code 3 and the target hint', async () => {
   const ctx = await setupTest();
 

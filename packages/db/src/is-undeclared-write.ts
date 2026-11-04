@@ -1,10 +1,12 @@
+import { findLeadingWord } from './find-leading-word.ts';
+
 type Dialect = 'sqlite' | 'postgres';
 
 type Via = 'sql' | 'exec';
 
 const sqliteEscapePattern = /\b(?:attach|vacuum|query_only)\b/iu;
-const postgresReadPattern = /^(?:select|with|values|table|show|explain)\b/iu;
-const leadingNoisePattern = /^(?:\s+|--[^\n]*\n?|\/\*[\s\S]*?\*\/|\()*/u;
+
+const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
 
 // A read-only SQLite handle still runs `VACUUM INTO`, which copies the database to any path. A
 // psql read runs inside a SELECT wrapper, where a write fails as a syntax error before the
@@ -18,5 +20,5 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return false;
   }
 
-  return !postgresReadPattern.test(sql.replace(leadingNoisePattern, ''));
+  return !postgresReadWords.has(findLeadingWord(sql) ?? '');
 }

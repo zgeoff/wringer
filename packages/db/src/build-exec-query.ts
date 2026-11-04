@@ -1,4 +1,5 @@
 import { WringerError } from '@wringer/core';
+import { findLeadingWord } from './find-leading-word.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
@@ -50,6 +51,8 @@ function buildSqliteQuery(input: ExecQueryInput): ExecQuery {
   };
 }
 
+const unwrappableReadWords = new Set(['show', 'explain']);
+
 function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
   // psql runs a backslash outside a quoted string as its own command, such as `\!` for a shell.
   if (input.sql.includes('\\')) {
@@ -68,6 +71,14 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
 
   const argv = [...input.program, '-X', '-q', ...options];
   const statement = input.sql.trim().replace(/[;\s]+$/u, '');
+
+  // Postgres refuses SHOW and EXPLAIN inside the subquery that turns the rows into JSON.
+  if (unwrappableReadWords.has(findLeadingWord(statement) ?? '')) {
+    throw new WringerError('usage', {
+      message: 'A read through psql cannot run `show` or `explain`.',
+      hint: 'Connect with `via: sql` to run it.',
+    });
+  }
 
   // A `;` inside the statement could end the read-only transaction and run a write after it.
   if (statement.includes(';')) {

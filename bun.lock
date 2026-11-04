@@ -45,6 +45,7 @@
       "name": "@wringer/db",
       "version": "0.0.0",
       "dependencies": {
+        "ts-pattern": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {

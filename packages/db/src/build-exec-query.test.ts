@@ -81,6 +81,24 @@ test('it wraps a Postgres read in a read-only transaction that prints JSON', () 
   });
 });
 
+test.each(['show server_version', 'explain select id from orders'])(
+  'it refuses the Postgres read `%s`, which the JSON subquery cannot hold, with a usage error',
+  (sql) => {
+    expect(() =>
+      buildExecQuery({
+        dialect: 'postgres',
+        program: ['psql'],
+        database: 'shop',
+        sql,
+        params: [],
+        write: false,
+      }),
+    ).toThrow(
+      expect.objectContaining({ code: 'usage', hint: 'Connect with `via: sql` to run it.' }),
+    );
+  },
+);
+
 test('it rejects a Postgres read that holds a second statement', () => {
   expect(() =>
     buildExecQuery({

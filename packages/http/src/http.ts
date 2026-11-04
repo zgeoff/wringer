@@ -122,9 +122,12 @@ async function sendRequest(
   const hasBody = request.json !== undefined;
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
 
-  const headers = hasBody
-    ? { 'content-type': 'application/json', ...request.headers }
-    : request.headers;
+  // Headers match names in any case, so a caller's `Content-Type` replaces the default.
+  const headers = new Headers(request.headers);
+
+  if (hasBody && !headers.has('content-type')) {
+    headers.set('content-type', 'application/json');
+  }
 
   // A followed 307 or 308 repeats the method and body at a path the target never granted.
   const fetched = await sendFetch(transport, url, {
