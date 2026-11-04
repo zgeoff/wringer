@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
@@ -225,6 +225,51 @@ test('it fails a raw exec that exits non-zero with check-failed and exit code 1'
       error: { code: 'check-failed' },
       data: { exitCode: 3, stdout: 'nope\n', stderr: '' },
     },
+  });
+});
+
+test('it caps the data of a failed exec and still answers with its envelope', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['exec'], {
+    argv: ['sh', '-c', 'yes x | head -c 100000; exit 2'],
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    truncated: result.envelope.truncated,
+    data: result.envelope.data,
+  }).toStrictEqual({ exitCode: 1, code: 'check-failed', truncated: true, data: null });
+});
+
+test('it keeps a drive under the feature it started with when `use` moves on meanwhile', async () => {
+  const ctx = await setupTest();
+
+  const directory = join(ctx.root, '.wringer');
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['use'], { feature: 'checkout' });
+
+  Bun.spawnSync(['mkfifo', join(directory, 'entered'), join(directory, 'gate')]);
+
+  const paused = ctx.run('local', ['action', 'pause'], { directory });
+
+  await readFile(join(directory, 'entered'), 'utf8');
+
+  await ctx.run('local', ['use'], { feature: 'search' });
+
+  await writeFile(join(directory, 'gate'), 'go\n');
+
+  const result = await paused;
+
+  expect({ exitCode: result.exitCode, feature: result.envelope.feature }).toStrictEqual({
+    exitCode: 0,
+    feature: 'checkout',
   });
 });
 

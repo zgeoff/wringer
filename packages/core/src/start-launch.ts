@@ -10,6 +10,7 @@ export interface LaunchRequest {
   readonly plan: LaunchPlan;
   readonly logPath: string;
   readonly readyTimeoutMs: number;
+  readonly signal: AbortSignal;
   readonly onExit: (exitCode: number) => void;
 }
 
@@ -44,6 +45,14 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
       }),
     );
   }, request.readyTimeoutMs);
+
+  const onAbort = (): void => {
+    ready.reject(
+      new WringerError('environment', { message: 'The run stopped before the app was ready.' }),
+    );
+  };
+
+  request.signal.addEventListener('abort', onAbort, { once: true });
 
   await mkdir(dirname(request.logPath), { recursive: true });
 
@@ -100,6 +109,8 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
     throw error;
   } finally {
+    request.signal.removeEventListener('abort', onAbort);
+
     clearTimeout(timer);
   }
 }
@@ -128,11 +139,11 @@ function parseLogLine(line: string): Readonly<Record<string, unknown>> {
   }
 }
 
-// A stop command that fails must not keep the app alive, so its failure is dropped: the SIGTERM
-// and SIGKILL that follow end the app whatever the command did.
+// A stop command that fails or hangs must not keep the app alive, so it gets the grace period and
+// its failure is dropped: the SIGTERM and SIGKILL that follow end the app whatever it did.
 async function runStopCommand(argv: readonly string[], cwd: string): Promise<void> {
   try {
-    await runProcess({ argv, cwd });
+    await runProcess({ argv, cwd, signal: AbortSignal.timeout(stopGraceMs) });
   } catch {
     // Dropped on purpose; see above.
   }

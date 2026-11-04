@@ -101,12 +101,15 @@ export async function dispatch(
     failure = toWringerError(error);
   }
 
+  // A drive belongs to the run and feature it ran under, even when another command moved the
+  // pointers meanwhile; any other command reports the state it left, such as the run `up` started.
   const after = await readContext(wringer, state, session).catch(() => before);
 
-  const run = after?.run ?? before?.run;
-  const feature = after?.feature ?? null;
+  const settled = outcome?.drive === true ? before : after;
+  const run = settled?.run ?? before?.run;
+  const feature = settled?.feature ?? null;
 
-  const capped = await capData(outcome?.data, {
+  const capped = await capData(pickEnvelopeData(outcome?.data, failure), {
     root: session.root,
     directory:
       run === undefined
@@ -122,12 +125,12 @@ export async function dispatch(
 
   const envelope = buildEnvelope({
     command: path.join('.'),
-    target: after?.targetName ?? null,
+    target: settled?.targetName ?? null,
     instance: run?.runID ?? null,
     feature,
     sha,
     durationMs: performance.now() - startedMs,
-    data: pickEnvelopeData(capped.data, failure),
+    data: capped.data,
     evidence: [...(outcome?.evidence ?? []), ...capped.evidence],
     cursors,
     truncatedPath: capped.truncatedPath,
@@ -450,7 +453,7 @@ async function logEnvelope(
       type: 'internal-error',
       at,
       command: envelope.command,
-      stack: readStack(request.failure.data),
+      stack: parseStack(request.failure.data),
     });
   }
 
@@ -462,14 +465,17 @@ async function logEnvelope(
   });
 }
 
-function readStack(data: unknown): string {
+// A stack this long is a runaway, and the log refuses an event past its cap.
+const stackCapChars = 16 * 1024;
+
+function parseStack(data: unknown): string {
   if (
     typeof data === 'object' &&
     data !== null &&
     'stack' in data &&
     typeof data.stack === 'string'
   ) {
-    return data.stack;
+    return data.stack.slice(0, stackCapChars);
   }
 
   return '';

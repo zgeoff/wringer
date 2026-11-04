@@ -44,7 +44,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const at = (): string => options.now().toISOString();
   let launch: Launch | undefined;
   let stopping = false;
+  const startup = Promise.withResolvers<undefined>();
 
+  // A stop during startup waits for the app and services still starting, so it stops each one that
+  // comes up late instead of leaving it running.
   const stop = async (crashReason: string | null): Promise<void> => {
     if (stopping) {
       return;
@@ -53,6 +56,8 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     stopping = true;
 
     lifetime.abort();
+
+    await startup.promise;
 
     await launch?.stop();
     await Promise.allSettled([...services.values()].map((service) => service.stop()));
@@ -107,10 +112,13 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       appLog: run.childLog('app').path,
       targetName: options.target,
       readyTimeoutMs: options.readyTimeoutMs,
+      signal: lifetime.signal,
       onExit: (exitCode) => {
         void stop(`the app exited with code ${exitCode}`);
       },
     });
+
+    lifetime.signal.throwIfAborted();
 
     await append({ type: 'launch-ready', at: at(), endpoints: launch.endpoints });
 
@@ -126,11 +134,16 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       onReady: (key) => append({ type: 'service-ready', at: at(), service: key }),
     });
 
+    lifetime.signal.throwIfAborted();
+
     await append({ type: 'run-ready', at: at() });
 
     await options.state.writeManifest(options.runID);
   } catch (error) {
-    await stop(toWringerError(error).message);
+    // Not awaited: the stop waits for `startup`, which resolves just below.
+    void stop(toWringerError(error).message);
+  } finally {
+    startup.resolve(undefined);
   }
 
   await stopped.promise;
@@ -159,6 +172,7 @@ interface TargetStart {
   readonly appLog: string;
   readonly targetName: string;
   readonly readyTimeoutMs: number;
+  readonly signal: AbortSignal;
   readonly onExit: (exitCode: number) => void;
 }
 
@@ -168,6 +182,7 @@ async function startTarget(target: TargetDefinition, start: TargetStart): Promis
       plan: target.launch({ runDirectory: start.runDirectory }),
       logPath: start.appLog,
       readyTimeoutMs: start.readyTimeoutMs,
+      signal: start.signal,
       onExit: start.onExit,
     });
   }

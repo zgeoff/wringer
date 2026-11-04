@@ -8,10 +8,11 @@ import { notes } from './notes-driver.ts';
 const emptySchema = z.strictObject({});
 const countSchema = z.strictObject({ count: z.number() });
 const textSchema = z.strictObject({ text: z.string() });
+const directorySchema = z.strictObject({ directory: z.string() });
 
 // A repo's verify CLI for tests: a launch target `local` whose app is a shell that prints one ready
 // line, a launch target `broken` whose app exits before it is ready, read-only attach targets `prod`
-// (with a hint) and `archive` (without), and actions that read, write, hang, throw and flood.
+// (with a hint) and `archive` (without), and actions that read, write, hang, throw, flood and pause.
 export function createShopWringer(): Wringer {
   const shop = bindDrivers([notes({ prefix: '' })] as const);
 
@@ -139,6 +140,25 @@ export function createShopWringer(): Wringer {
         input: emptySchema,
         data: textSchema,
         run: () => Promise.resolve({ text: 'x'.repeat(40 * 1024) }),
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'pause',
+        summary: 'Write to the `entered` FIFO, then wait to read a line from the `gate` FIFO',
+        effect: 'write',
+        input: directorySchema,
+        data: emptySchema,
+        run: async (input, ctx) => {
+          await ctx.exec([
+            'sh',
+            '-c',
+            'echo in > "$0/entered"; read line < "$0/gate"',
+            input.directory,
+          ]);
+
+          return {};
+        },
       }),
     )
     .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
