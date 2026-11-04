@@ -140,7 +140,7 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
   const [fingerprint, changedPaths, verdicts] = await Promise.all([
     readCurrentFingerprint(ctx, base),
     readChangedPaths({ cwd: ctx.session.root, base, exclude: [ctx.wringer.stateDir] }),
-    readVerdicts(ctx.state),
+    readVerdicts(ctx.state, ctx.session.root),
   ]);
 
   return buildReport({ base, fingerprint, features: ctx.wringer.features, changedPaths, verdicts });

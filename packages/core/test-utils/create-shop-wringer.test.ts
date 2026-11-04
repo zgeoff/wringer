@@ -19,5 +19,6 @@ test('it registers the shop actions under `action`', () => {
     'action hang',
     'action crash',
     'action flood',
+    'action pause',
   ]);
 });

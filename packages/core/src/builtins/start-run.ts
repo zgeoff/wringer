@@ -32,10 +32,12 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     const currentID = pointers.currentRun[ctx.targetName];
     const current = currentID === undefined ? undefined : await ctx.state.readRun(currentID);
 
-    if (current !== undefined && current.status === 'running') {
+    // A run still starting here is one an earlier `up` gave up waiting for; it is replaced, never
+    // reused, so its app and services are stopped first.
+    if (current?.status === 'running' || current?.status === 'starting') {
       const alive = await probeSupervisor(current);
 
-      if (alive && !request.restart) {
+      if (alive && current.status === 'running' && !request.restart) {
         return toRunData(current, true);
       }
 
@@ -79,9 +81,15 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     await ctx.session.supervisor.start({ runID, target: ctx.targetName });
 
-    const ready = await waitForReady(ctx, runID, request.readyTimeoutMs);
+    try {
+      const ready = await waitForReady(ctx, runID, request.readyTimeoutMs);
 
-    return toRunData(ready, false);
+      return toRunData(ready, false);
+    } catch (error) {
+      await stopAbandonedRun(ctx, runID);
+
+      throw error;
+    }
   });
 }
 
@@ -152,6 +160,27 @@ async function waitForReady(
 
   throw new WringerError('timeout', {
     message: `Run ${runID} was not ready within ${timeoutMs} ms.`,
-    hint: `Read .wringer/runs/${runID}/children/app.log, then run \`down\`.`,
+    hint: `Read .wringer/runs/${runID}/children/app.log, then run \`up\` again.`,
   });
+}
+
+const stopTimeoutMs = 15_000;
+
+// A run that missed its deadline must not keep its app and services up behind the error.
+async function stopAbandonedRun(ctx: BuiltinContext, runID: string): Promise<void> {
+  const view = await ctx.state.readRun(runID);
+
+  if (view?.supervisor === null || view === undefined) {
+    return;
+  }
+
+  try {
+    await callSupervisor({
+      socket: view.supervisor.socket,
+      request: { service: supervisorServiceName, method: 'stop', args: null },
+      signal: AbortSignal.timeout(stopTimeoutMs),
+    });
+  } catch {
+    // The supervisor is already gone, which is the state this function wants.
+  }
 }
