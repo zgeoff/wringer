@@ -53,5 +53,24 @@ export function createBrowserWringer(url: string): Wringer {
         },
       }),
     )
+    .action(
+      shop.defineAction({
+        name: 'script-order',
+        summary: 'Claim a read, then open a script URL that clicks Place order',
+        effect: 'read',
+        input: emptySchema,
+        data: titleSchema,
+        run: async (_input, ctx) => {
+          await ctx.drivers.browser.goto({ path: '/' });
+
+          const page = await ctx.drivers.browser.goto({
+            // oxlint-disable-next-line no-script-url -- the driver must refuse this URL
+            path: 'javascript:document.querySelector("button").click()',
+          });
+
+          return { title: page.title };
+        },
+      }),
+    )
     .build();
 }

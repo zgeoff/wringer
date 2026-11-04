@@ -138,6 +138,21 @@ test('it refuses a click inside an action that declared a read, at the client ca
   });
 });
 
+test('it refuses a goto to a script URL inside an action, with a usage error', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'script-order']);
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    posts: ctx.posts,
+  }).toStrictEqual({ exitCode: 2, code: 'usage', posts: [] });
+});
+
 test('it clicks the element a read-only target grants', async () => {
   const ctx = await setupTest();
 

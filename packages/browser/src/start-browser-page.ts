@@ -13,7 +13,7 @@ export interface BrowserPageOptions {
 const refSchema = z.strictObject({ ref: z.string().min(1) });
 const roleSchema = z.strictObject({ role: z.string().min(1), name: z.string() });
 const elementSchema = z.union([refSchema, roleSchema]);
-const gotoSchema = z.strictObject({ url: z.url() });
+const gotoSchema = z.strictObject({ url: z.url({ protocol: /^https?$/v }) });
 const typeSchema = z.strictObject({ element: elementSchema, value: z.string() });
 
 // One headless browser and one page per run, held by the run's supervisor so the page keeps its
