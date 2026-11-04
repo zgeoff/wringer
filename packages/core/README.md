@@ -70,7 +70,7 @@ own file.
   commit, a shallow clone that lacks the merge base, and a submodule that holds work it has not
   committed fail with an `environment` error.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
-  layer.
+  layer. Each host also follows a long-running command, such as `tail -F`, line by line.
 
 ## Error codes
 

@@ -23,6 +23,10 @@ workspace publishes to npm.
 - [`@wringer/gunshi`](./packages/gunshi/README.md): turns a registry into the repo's verify CLI.
 - [`@wringer/http`](./packages/http/README.md): requests to the target's app.
 - [`@wringer/db`](./packages/db/README.md): SQL on the target's SQLite or Postgres database.
+- [`@wringer/stream`](./packages/stream/README.md): the target's logs, recorded for the run and read
+  from a cursor.
+- [`@wringer/browser`](./packages/browser/README.md): a page of the target's app in a headless
+  browser.
 
 ## Quick start
 
@@ -36,8 +40,12 @@ bun install
 bun run check
 ```
 
-CI runs the same checks on each pull request and scans its commits for secrets. A pull request that
-changes a package or the publish path also gets a rehearsal of the npm publish of each package.
+`bun run test` leaves out the browser lane, the `*.browser.test.ts` files, which
+`bun run test:browser` runs against a real headless Chromium.
+
+CI runs the checks that the `BUN_CHECK_SCRIPTS` repo variable lists on each pull request, and scans
+its commits for secrets. A pull request that changes a package or the publish path also gets a
+rehearsal of the npm publish of each package.
 
 ## Layout
 

@@ -57,7 +57,8 @@ export interface ServiceCaller {
 }
 
 // What a driver's client, commands and checks get on one target: the repo-wide options, the
-// target's parsed config, and the effect-checked exec and services core hands it.
+// target's parsed config, the stream cursors `use` last marked, and the effect-checked exec and
+// services core hands it.
 export interface DriverSession<Options, TargetConfig> {
   readonly target: string;
   readonly access: Access;
@@ -67,6 +68,7 @@ export interface DriverSession<Options, TargetConfig> {
   readonly run: RunHandle;
   readonly exec: DriverExec;
   readonly evidence: EvidenceWriter;
+  readonly cursors: Readonly<Record<string, number>>;
   readonly signal: AbortSignal;
 
   // The ms left before `signal` fires, for work that runs where the signal cannot reach, such as a
@@ -177,6 +179,7 @@ export interface SessionParts {
   readonly run: RunHandle;
   readonly exec: DriverExec;
   readonly evidence: EvidenceWriter;
+  readonly cursors: Readonly<Record<string, number>>;
   readonly signal: AbortSignal;
   readonly timeLeftMs: () => number;
   readonly fence: Fence;

@@ -1,0 +1,65 @@
+<div align="center">
+  <h1>@wringer/stream</h1>
+
+  <p>
+    <a href="https://www.npmjs.com/package/@wringer/stream"><img src="https://img.shields.io/npm/v/@wringer/stream" alt="npm version"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT license"></a>
+  </p>
+</div>
+
+The stream driver for wringer: it records a target's logs for the whole run, and reads them back
+from a cursor.
+
+## Install
+
+```bash
+bun add @wringer/core @wringer/stream
+```
+
+The package runs on [Bun](https://bun.sh) 1.3 or newer.
+
+## Usage
+
+```ts
+import { createWringer, ssh } from '@wringer/core';
+import { stream } from '@wringer/stream';
+
+export const registry = createWringer({ name: 'shop' })
+  .use(stream({}))
+  .target('staging', {
+    mode: 'attach',
+    access: 'read-only',
+    host: ssh({ destination: 'deploy@staging.shop.example' }),
+    drivers: {
+      stream: () => ({
+        sources: { jobs: { command: ['journalctl', '-f', '-u', 'shop-jobs', '-o', 'cat'] } },
+      }),
+    },
+  })
+  .build();
+```
+
+An action calls `ctx.drivers.stream.read({ name, from })`. The CLI adds `stream read <name>`, and
+the doctor check `stream.recording`, which fails when a source has stopped.
+
+## Sources
+
+- `{ command: [...] }` runs the command on the target's host and records each line it prints.
+- `{ file: '<path>' }` tails a file on the machine where the run lives.
+- A target with no `sources` records `app`: the log of the app that the run launched.
+
+The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one
+`{ at, line }` record per line. A record keeps at most 4096 characters of its line. When a source
+logs faster than the disk takes it, the supervisor holds at most 10,000 records per source. It drops
+the rest, and then writes a record that counts the dropped lines.
+
+## Cursors
+
+A cursor is a byte offset into a stream's file. `use` marks the end of each stream, and every
+envelope holds the current ends in `cursors`.
+
+- A read with no `from` starts at the cursor that `use` last marked, so it returns only what was
+  logged since.
+- A read returns the records up to the `maxBytes` option, 64 KiB by default, with the next `cursor`
+  and `more` when the stream holds more. A read may pass a smaller `maxBytes`, down to 32 KiB.
+- A cursor past the end of the file belongs to an older run, so the read starts over at 0.

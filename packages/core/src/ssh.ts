@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { findRemoteStopFailure } from './find-remote-stop-failure.ts';
+import { followProcess } from './follow-process.ts';
 import type { Host } from './host.ts';
 import { quoteShellWord } from './quote-shell-word.ts';
 import { runProcess } from './run-process.ts';
@@ -93,6 +94,20 @@ export function ssh(options: SSHOptions): Host {
       }
 
       return ran.value;
+    },
+    follow: (request) => {
+      const user = request.access === 'read-only' ? options.readOnlyUser : undefined;
+
+      return followProcess({
+        argv: buildSSHArgv({
+          binary: options.binary ?? 'ssh',
+          destination: options.destination,
+          user,
+          remote: buildRemoteCommand(request.argv, options.prefix ?? []),
+        }),
+        signal: request.signal,
+        onLine: request.onLine,
+      });
     },
   };
 }
