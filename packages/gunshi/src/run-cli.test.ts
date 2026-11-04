@@ -110,9 +110,18 @@ test.each([
   const ctx = await setupTest();
   const result = await ctx.run(argv);
 
-  expect({ exitCode: result.exitCode, envelope: ctx.parseEnvelope(result.stdout) }).toMatchObject({
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({
+    exitCode: result.exitCode,
+    ok: envelope.ok,
+    code: envelope.error?.code,
+    message: envelope.error?.message,
+  }).toStrictEqual({
     exitCode: 2,
-    envelope: { ok: false, error: { code: 'usage', message: expect.stringContaining(message) } },
+    ok: false,
+    code: 'usage',
+    message: expect.stringContaining(message),
   });
 });
 
@@ -120,9 +129,16 @@ test('it answers a missing required argument with a usage envelope from the sche
   const ctx = await setupTest();
   const result = await ctx.run(['gate', '--base', 'main']);
 
-  expect({ exitCode: result.exitCode, envelope: ctx.parseEnvelope(result.stdout) }).toMatchObject({
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({
+    exitCode: result.exitCode,
+    code: envelope.error?.code,
+    message: envelope.error?.message,
+  }).toStrictEqual({
     exitCode: 2,
-    envelope: { error: { code: 'usage', message: expect.stringContaining('bodyFile') } },
+    code: 'usage',
+    message: expect.stringContaining('bodyFile'),
   });
 });
 
