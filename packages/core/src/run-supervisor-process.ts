@@ -1,22 +1,19 @@
-import { join } from 'node:path';
 import { launchReadyTimeoutMs } from './builtins/build-lifecycle-commands.ts';
-import { createFileState } from './create-file-state.ts';
-import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+import { createRepoState } from './create-repo-state.ts';
 import { runSupervisor } from './run-supervisor.ts';
+import { supervisorArgsSchema } from './supervisor-protocol.ts';
 import type { Wringer } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
-const lockTimeoutMs = 30_000;
-
-// The entry of the supervisor process: argv is the run ID, the target and the worktree root, after
-// the hidden command name. The process exits once its run has stopped.
+// The entry of the supervisor process: argv is what follows the hidden command name. The process
+// exits once its run has stopped.
 export async function runSupervisorProcess(
   wringer: Wringer,
   argv: readonly string[],
 ): Promise<void> {
-  const [runID, target, root] = argv;
+  const parsed = supervisorArgsSchema.safeParse(argv);
 
-  if (runID === undefined || target === undefined || root === undefined) {
+  if (!parsed.success) {
     throw new WringerError('usage', { message: 'The supervisor needs a run ID, target and root.' });
   }
 
@@ -32,13 +29,9 @@ export async function runSupervisorProcess(
 
   await runSupervisor({
     wringer,
-    state: createFileState({
-      stateDir: join(root, wringer.stateDir),
-      lockTimeoutMs,
-      fs: createNodeStateFileSystem(),
-    }),
-    runID,
-    target,
+    state: createRepoState(parsed.data.root, wringer.stateDir),
+    runID: parsed.data.runID,
+    target: parsed.data.target,
     readyTimeoutMs: launchReadyTimeoutMs,
     now: () => new Date(),
     signal: signalled.signal,

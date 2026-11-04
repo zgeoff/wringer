@@ -410,6 +410,7 @@ export interface OutputPort {
 // What the CLI adapter knows about one invocation.
 export interface Session {
   readonly root: string;
+  readonly state: StatePort;
   readonly target?: string | undefined;
   readonly feature?: string | undefined;
   readonly timeoutMs?: number | undefined;

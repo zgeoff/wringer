@@ -1,9 +1,7 @@
 import { onTestFinished } from 'bun:test';
-import { join } from 'node:path';
 import { callSupervisor } from '../src/call-supervisor.ts';
-import { createFileState } from '../src/create-file-state.ts';
 import type { StatePort } from '../src/create-file-state.ts';
-import { createNodeStateFileSystem } from '../src/create-node-state-file-system.ts';
+import { createRepoState } from '../src/create-repo-state.ts';
 import { runSupervisor } from '../src/run-supervisor.ts';
 import { supervisorServiceName } from '../src/supervisor-protocol.ts';
 import type { Session, Wringer } from '../src/types.ts';
@@ -31,12 +29,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   const lines: string[] = [];
   const supervisors: Promise<void>[] = [];
   const runIDs: string[] = [];
-
-  const state = createFileState({
-    stateDir: join(repo.root, options.wringer.stateDir),
-    lockTimeoutMs: 5000,
-    fs: createNodeStateFileSystem(),
-  });
+  const state = createRepoState(repo.root, options.wringer.stateDir);
 
   onTestFinished(async () => {
     const views = await Promise.all(runIDs.map((runID) => state.readRun(runID)));
@@ -65,6 +58,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     lines,
     session: {
       root: repo.root,
+      state,
       output: {
         writeLine: (line) => {
           lines.push(line);
