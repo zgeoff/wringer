@@ -218,7 +218,19 @@ test('it runs a command against the target --target names', async () => {
 
   expect({ target: envelope.target, data: envelope.data }).toStrictEqual({
     target: 'prod',
-    data: expect.objectContaining({ access: 'read-only' }),
+    data: {
+      target: 'prod',
+      mode: 'attach',
+      access: 'read-only',
+      instance: null,
+      status: 'none',
+      doctor: 'none',
+      feature: null,
+      evidence: null,
+      endpoints: {},
+      services: [],
+      cursors: {},
+    },
   });
 });
 
