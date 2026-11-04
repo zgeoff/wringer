@@ -7,6 +7,8 @@ test.each([
   { dialect: 'sqlite', via: 'exec', sql: "vacuum into '/srv/copy.db'", write: true },
   { dialect: 'sqlite', via: 'sql', sql: "attach '/srv/other.db' as other", write: true },
   { dialect: 'sqlite', via: 'sql', sql: 'pragma query_only = 0', write: true },
+  { dialect: 'sqlite', via: 'sql', sql: "select 'vacuum' as label", write: false },
+  { dialect: 'sqlite', via: 'sql', sql: 'select 1 /* attach */', write: false },
   { dialect: 'postgres', via: 'sql', sql: 'delete from orders', write: false },
   { dialect: 'postgres', via: 'exec', sql: 'select id from orders', write: false },
   {
