@@ -48,6 +48,6 @@ Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
   the same name. `use --target` sets the target for later commands, where `status --target` reads
   one target once.
 - `--help` marks each command `[read]` or `[write]`, so a reader sees which commands a read-only
-  target refuses.
+  target refuses. A command whose arguments decide, such as `db query`, shows `[read or write]`.
 - The script starts itself again, detached, as the run's supervisor, so `up` and `attach` need no
   separate daemon.

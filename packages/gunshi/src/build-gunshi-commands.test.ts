@@ -23,6 +23,15 @@ test('it marks a command with no declared effect as a write', () => {
   expect(commands['exec']?.description).toEndWith('[write]');
 });
 
+test('it marks a command that decides its effect by its arguments as a read or a write', () => {
+  const commands = buildGunshiCommands(
+    createDemoWringer(),
+    mock<(invocation: Invocation) => void>(),
+  );
+
+  expect(commands['ship']?.description).toBe('Ship an order by post or for pickup [read or write]');
+});
+
 test('it gives every command the global flags', () => {
   const commands = buildGunshiCommands(
     createDemoWringer(),

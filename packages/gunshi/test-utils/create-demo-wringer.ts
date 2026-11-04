@@ -74,7 +74,7 @@ export function createDemoWringer(): Wringer {
       summary: 'Ship an order by post or for pickup',
       args: shipArgsSchema,
       data: shipArgsSchema,
-      effect: 'read',
+      decideEffect: (args) => (args.mode === 'post' ? 'write' : 'read'),
       needsRun: false,
       needsDoctor: false,
       run: (args) => Promise.resolve(args),
