@@ -226,7 +226,7 @@ test('it fails with an environment error when ssh cannot connect', async () => {
   });
 });
 
-test('it follows a remote command as the read-only user, line by line', async () => {
+test('it follows a remote command on a terminal as the read-only user, line by line', async () => {
   const ctx = await setupTest();
 
   const host = ssh({ destination: 'app-host', binary: ctx.fake.binary, readOnlyUser: 'app_ro' });
@@ -246,6 +246,6 @@ test('it follows a remote command as the read-only user, line by line', async ()
   expect({ exitCode, lines, logins }).toStrictEqual({
     exitCode: 0,
     lines: ["it's up", 'second'],
-    logins: 'app_ro@app-host\n',
+    logins: 'app_ro@app-host tty\n',
   });
 });

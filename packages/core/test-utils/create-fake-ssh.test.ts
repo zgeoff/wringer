@@ -38,6 +38,23 @@ test('it runs the command string through a shell and logs the login', async () =
   }).toStrictEqual({ exitCode: 0, stdout: 'a b|c|', logins: 'app_ro@db-host\n' });
 });
 
+test('it ends each line in a carriage return under -tt and logs the login as a terminal', async () => {
+  const ctx = await setupTest();
+
+  const result = Bun.spawnSync([
+    ctx.fake.binary,
+    '-tt',
+    '--',
+    'db-host',
+    String.raw`printf 'a\nb\n'`,
+  ]);
+
+  expect({
+    stdout: result.stdout.toString(),
+    logins: await readFile(ctx.fake.loginsPath, 'utf8'),
+  }).toStrictEqual({ stdout: 'a\r\nb\r\n', logins: expect.stringMatching(/@db-host tty\n$/u) });
+});
+
 test('it exits 255 for the unreachable destination', async () => {
   const ctx = await setupTest();
 
