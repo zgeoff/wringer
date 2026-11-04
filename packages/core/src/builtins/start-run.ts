@@ -142,6 +142,13 @@ async function waitForReady(
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
+    if (ctx.signal.aborted) {
+      throw new WringerError('timeout', {
+        message: `The command's deadline passed while run ${runID} started.`,
+        hint: 'Pass a longer `--timeout-ms`, then run `up` again.',
+      });
+    }
+
     const view = await ctx.state.readRun(runID);
 
     if (view?.status === 'running') {
@@ -166,21 +173,45 @@ async function waitForReady(
 
 const stopTimeoutMs = 15_000;
 
-// A run that missed its deadline must not keep its app and services up behind the error.
+// A run that missed its deadline must not keep its app and services up behind the error. Its
+// supervisor may not have opened its socket yet, so the stop waits for the socket first.
 async function stopAbandonedRun(ctx: BuiltinContext, runID: string): Promise<void> {
-  const view = await ctx.state.readRun(runID);
+  const socket = await readSupervisorSocket(ctx, runID);
 
-  if (view?.supervisor === null || view === undefined) {
+  if (socket === null) {
     return;
   }
 
   try {
     await callSupervisor({
-      socket: view.supervisor.socket,
+      socket,
       request: { service: supervisorServiceName, method: 'stop', args: null },
       signal: AbortSignal.timeout(stopTimeoutMs),
     });
   } catch {
     // The supervisor is already gone, which is the state this function wants.
   }
+}
+
+const socketWaitMs = 10_000;
+
+// Resolves null once the run has ended, or when its supervisor never opens a socket.
+async function readSupervisorSocket(ctx: BuiltinContext, runID: string): Promise<string | null> {
+  const deadline = Date.now() + socketWaitMs;
+
+  while (Date.now() < deadline) {
+    const view = await ctx.state.readRun(runID);
+
+    if (view === undefined || view.status === 'crashed' || view.status === 'ended') {
+      return null;
+    }
+
+    if (view.supervisor !== null) {
+      return view.supervisor.socket;
+    }
+
+    await Bun.sleep(readyPollMs);
+  }
+
+  return null;
 }

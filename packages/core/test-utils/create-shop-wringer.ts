@@ -10,9 +10,9 @@ const countSchema = z.strictObject({ count: z.number() });
 const textSchema = z.strictObject({ text: z.string() });
 const directorySchema = z.strictObject({ directory: z.string() });
 
-// A repo's verify CLI for tests: a launch target `local` whose app is a shell that prints one ready
-// line, a launch target `broken` whose app exits before it is ready, read-only attach targets `prod`
-// (with a hint) and `archive` (without), and actions that read, write, hang, throw, flood and pause.
+// A repo's verify CLI for tests: launch targets `local` (ready at once), `broken` (exits first) and
+// `slow` (ready after half a second), read-only attach targets `prod` (with a hint) and `archive`
+// (without), and actions that read, write, hang, throw, flood and pause.
 export function createShopWringer(): Wringer {
   const shop = bindDrivers([notes({ prefix: '' })] as const);
 
@@ -54,6 +54,23 @@ export function createShopWringer(): Wringer {
         launch: () => ({
           command: ['sh', '-c', 'echo starting; exit 3'],
           ready: () => null,
+        }),
+      }),
+    )
+    .target(
+      'slow',
+      shop.defineTarget({
+        mode: 'launch',
+        access: 'read-write',
+        host: local(),
+        launch: () => ({
+          command: [
+            'sh',
+            '-c',
+            `sleep 0.5; echo '{"event":"listening","port":4001}'; exec sleep 60`,
+          ],
+          ready: (line) =>
+            line['event'] === 'listening' ? { web: 'http://127.0.0.1:4001' } : null,
         }),
       }),
     )
@@ -125,11 +142,15 @@ export function createShopWringer(): Wringer {
     .action(
       shop.defineAction({
         name: 'crash',
-        summary: 'Throw a plain error',
+        summary: 'Keep a note as evidence, then throw a plain error',
         effect: 'read',
         input: emptySchema,
         data: emptySchema,
-        run: () => Promise.reject(new TypeError('cannot read the cart')),
+        run: async (_input, ctx) => {
+          await ctx.evidence.writeFile('note', 'cart.txt', 'the cart was empty');
+
+          throw new TypeError('cannot read the cart');
+        },
       }),
     )
     .action(

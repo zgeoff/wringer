@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 import { createShopWringer } from './create-shop-wringer.ts';
 
-test('it registers the four shop targets', () => {
+test('it registers the five shop targets', () => {
   const wringer = createShopWringer();
 
-  expect([...wringer.targets.keys()]).toStrictEqual(['local', 'prod', 'broken', 'archive']);
+  expect([...wringer.targets.keys()]).toStrictEqual(['local', 'prod', 'broken', 'slow', 'archive']);
 });
 
 test('it registers the shop actions under `action`', () => {

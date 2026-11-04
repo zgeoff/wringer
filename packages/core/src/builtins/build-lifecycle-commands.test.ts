@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
+import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 
 async function setupTest() {
@@ -12,6 +13,8 @@ async function setupTest() {
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+    runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
+      dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
   };
 }
 
@@ -76,6 +79,24 @@ test('#up fails with an environment error when the app exits before it is ready'
     exitCode: 4,
     error: { code: 'environment', message: expect.stringContaining('exited with code 3') },
   });
+});
+
+test('#up stops a run that becomes ready only after the command missed its deadline', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runWithin('slow', ['up'], 100);
+
+  const pointers = await ctx.state.readPointers();
+
+  const runID = pointers.currentRun['slow'] ?? '';
+
+  const status = await waitFor(async () => {
+    const view = await ctx.state.readRun(runID);
+
+    return view?.status === 'ended' || view?.status === 'crashed' ? view.status : null;
+  });
+
+  expect(status).toBe('ended');
 });
 
 test('#up refuses an attach target with a usage error naming attach', async () => {
