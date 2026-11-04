@@ -187,6 +187,17 @@ test('#runSupervisor ends and frees its socket when its final log write fails', 
   }).toStrictEqual({ stopFailure: expect.any(WringerError), socketLeft: false });
 });
 
+test('#runSupervisor ends and closes its socket when its first log write fails', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  await rm(join(ctx.runFolder('shelf-run'), 'log.ndjson'));
+  await mkdir(join(ctx.runFolder('shelf-run'), 'log.ndjson', 'blocked'), { recursive: true });
+
+  expect(ctx.runSupervisor('shelf-run')).resolves.toBeUndefined();
+});
+
 test('#runSupervisor records a service that failed to stop in the crash reason', async () => {
   const ctx = await setupTest();
 
