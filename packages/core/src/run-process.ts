@@ -31,6 +31,13 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
     });
   }
 
+  // Bun.spawn throws a plain AbortError on a signal that has already fired.
+  if (hasAborted(request.signal)) {
+    throw new WringerError('timeout', {
+      message: `${command} did not start: its deadline had passed.`,
+    });
+  }
+
   const child = Bun.spawn([executable, ...args], {
     cwd: request.cwd ?? process.cwd(),
     env,
@@ -46,11 +53,15 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
     child.exited,
   ]);
 
-  if (request.signal?.aborted === true) {
+  if (hasAborted(request.signal)) {
     throw new WringerError('timeout', {
       message: `${command} ran past its deadline and was stopped.`,
     });
   }
 
   return { exitCode, stdout, stderr };
+}
+
+function hasAborted(signal: AbortSignal | undefined): boolean {
+  return signal?.aborted === true;
 }

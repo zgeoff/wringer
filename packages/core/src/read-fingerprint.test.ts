@@ -107,6 +107,57 @@ test('it leaves the evidence folder out of the fingerprint', async () => {
   expect(fingerprint).toBe(emptyFingerprint);
 });
 
+test('it reads the fingerprint of a repo that ignores the evidence folder', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitignore'), '.wringer/\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await mkdir(join(ctx.repo, '.wringer'));
+  await writeFile(join(ctx.repo, '.wringer', 'state.json'), '{}\n');
+
+  const fingerprint = await ctx.readFingerprint();
+
+  expect(fingerprint).toBe(emptyFingerprint);
+});
+
+test('it leaves a committed change to the evidence folder out of the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await mkdir(join(ctx.repo, '.wringer'));
+  await writeFile(join(ctx.repo, '.wringer', 'notes.md'), 'checked by hand\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'notes');
+
+  const fingerprint = await ctx.readFingerprint();
+
+  expect(fingerprint).toBe(emptyFingerprint);
+});
+
+test('it gives two calls at once the same fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const fingerprints = await Promise.all([ctx.readFingerprint(), ctx.readFingerprint()]);
+
+  expect(new Set(fingerprints).size).toBe(1);
+});
+
 test('it leaves the real index untouched', async () => {
   const ctx = await setupTest();
 

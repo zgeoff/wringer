@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { envelopeSchema, streamEventSchema } from './envelope.ts';
 
+// zod leaves the envelope's two refinements out of the JSON Schema, so they are written here: an
+// envelope has an error exactly when it is not ok, and `truncated` comes with `truncatedPath`.
+const envelopeRules = {
+  oneOf: [
+    { type: 'object', properties: { ok: { const: true }, error: { type: 'null' } } },
+    { type: 'object', properties: { ok: { const: false }, error: { type: 'object' } } },
+  ],
+  dependentRequired: { truncated: ['truncatedPath'], truncatedPath: ['truncated'] },
+};
+
 // The published schema covers both lines a command can write: an NDJSON event of a streaming
 // command, and the one envelope that ends every command.
 export function buildEnvelopeJSONSchema(): Record<string, unknown> {
@@ -9,7 +19,7 @@ export function buildEnvelopeJSONSchema(): Record<string, unknown> {
     $id: 'https://unpkg.com/@wringer/core/envelope.schema.json',
     title: 'wringer envelope',
     $defs: {
-      envelope: buildSubschema(envelopeSchema),
+      envelope: { ...buildSubschema(envelopeSchema), ...envelopeRules },
       streamEvent: buildSubschema(streamEventSchema),
     },
     $ref: '#/$defs/envelope',

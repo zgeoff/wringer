@@ -22,6 +22,12 @@ test('it fails with a timeout error when the signal aborts the command', () => {
   ).rejects.toMatchObject({ code: 'timeout' });
 });
 
+test('it fails with a timeout error when the signal fired before the command started', () => {
+  expect(runProcess({ argv: ['true'], signal: AbortSignal.abort() })).rejects.toMatchObject({
+    code: 'timeout',
+  });
+});
+
 test('it fails with a usage error for an empty argv', () => {
   expect(runProcess({ argv: [] })).rejects.toMatchObject({ code: 'usage' });
 });

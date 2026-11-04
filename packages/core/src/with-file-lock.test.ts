@@ -55,6 +55,45 @@ test('it takes over a lock whose owner has died', async () => {
   expect(result).toBe('held');
 });
 
+test('it lets one of many callers at a time past a dead owner’s lock', async () => {
+  const ctx = await setupTest();
+
+  const dead = Bun.spawnSync(['true']).pid;
+  const path = join(ctx.directory, 'stale.lock');
+
+  await writeFile(path, String(dead));
+
+  let inside = 0;
+  let most = 0;
+
+  const hold = (): Promise<void> =>
+    withFileLock({ path, timeoutMs: 5000 }, async () => {
+      inside += 1;
+      most = Math.max(most, inside);
+
+      await writeFile(join(ctx.directory, 'holder.txt'), String(inside));
+
+      inside -= 1;
+    });
+
+  await Promise.all(Array.from({ length: 8 }, hold));
+
+  expect(most).toBe(1);
+});
+
+test('it takes over an empty lock file', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.directory, 'empty.lock'), '');
+
+  const result = await withFileLock(
+    { path: join(ctx.directory, 'empty.lock'), timeoutMs: 1000 },
+    () => Promise.resolve('held'),
+  );
+
+  expect(result).toBe('held');
+});
+
 test('it fails with an environment error when a live owner keeps the lock past the timeout', async () => {
   const ctx = await setupTest();
 

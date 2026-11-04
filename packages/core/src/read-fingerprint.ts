@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { runGit } from './run-git.ts';
@@ -27,16 +28,23 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
 
   try {
     await runGit({ cwd: request.cwd, args: ['read-tree', 'HEAD'], env });
+    await runGit({ cwd: request.cwd, args: ['add', '--all'], env });
 
-    await runGit({
-      cwd: request.cwd,
-      args: ['add', '--all', '--', '.', ...request.exclude.map((path) => `:(exclude)${path}`)],
-      env,
-    });
-
+    // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
+    // and a committed change to an excluded path reaches the index through `read-tree` anyway.
     const diff = await runGit({
       cwd: request.cwd,
-      args: ['diff', '--cached', '--binary', '--no-color', '--no-ext-diff', mergeBase],
+      args: [
+        'diff',
+        '--cached',
+        '--binary',
+        '--no-color',
+        '--no-ext-diff',
+        mergeBase,
+        '--',
+        '.',
+        ...request.exclude.map((path) => `:(exclude)${path}`),
+      ],
       env,
     });
 
@@ -57,7 +65,7 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
 async function readTemporaryIndexPath(cwd: string): Promise<string> {
   const result = await runGit({
     cwd,
-    args: ['rev-parse', '--git-path', `wringer-index-${process.pid}`],
+    args: ['rev-parse', '--git-path', `wringer-index-${randomUUID()}`],
   });
 
   const gitPath = result.stdout.trim();

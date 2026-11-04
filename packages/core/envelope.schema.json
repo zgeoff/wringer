@@ -124,7 +124,35 @@
         "cursors",
         "error"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": true
+            },
+            "error": {
+              "type": "null"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "ok": {
+              "const": false
+            },
+            "error": {
+              "type": "object"
+            }
+          }
+        }
+      ],
+      "dependentRequired": {
+        "truncated": ["truncatedPath"],
+        "truncatedPath": ["truncated"]
+      }
     },
     "streamEvent": {
       "type": "object",
