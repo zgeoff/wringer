@@ -12,9 +12,11 @@
       "packages/*"
     ],
     "catalog": {
+      "@mswjs/interceptors": "0.45.10",
       "@zgeoff/std": "0.4.1",
       "@zgeoff/testing": "0.2.1",
       "gunshi": "0.37.3",
+      "msw": "3.0.3",
       "tiny-invariant": "1.3.3",
       "ts-pattern": "5.9.2",
       "xstate": "5.33.3",
@@ -50,6 +52,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.4",
     "@maschwenk/tsrslint": "0.1.6",
+    "@mswjs/interceptors": "catalog:",
     "@stylistic/eslint-plugin": "5.10.0",
     "@tsconfig/strictest": "2.0.8",
     "@types/bun": "1.4.3",
@@ -61,6 +64,7 @@
     "ajv": "8.20.0",
     "knip": "6.41.0",
     "lefthook": "2.2.2",
+    "msw": "catalog:",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
     "ts-pattern": "5.9.2",

@@ -33,7 +33,8 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@wringer/core": "workspace:*"
+    "@wringer/core": "workspace:*",
+    "msw": "catalog:"
   },
   "peerDependencies": {
     "@wringer/core": "workspace:*"

@@ -1,22 +1,24 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, test } from 'bun:test';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
+import { HttpResponse, delay, http } from 'msw';
+import { server } from '../../../test-utils/mocks/node.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { createHttpWringer } from '../test-utils/create-http-wringer.ts';
-import { createShopServer } from '../test-utils/create-shop-server.ts';
+import { SHOP_API_URL, shopRequests } from '../test-utils/shop-handlers.ts';
 
 async function setupTest() {
-  const server = createShopServer();
-
-  onTestFinished(() => server.stop());
-
-  const wringer = createHttpWringer(server.url);
+  const wringer = createHttpWringer(SHOP_API_URL);
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
     root: shop.repo.root,
-    requests: server.requests,
+    readEvidence: async (path: string) => {
+      const evidence: unknown = await Bun.file(join(shop.repo.root, path)).json();
+
+      return evidence;
+    },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
   };
@@ -29,15 +31,52 @@ test('it sends a GET and keeps the response as evidence', async () => {
   await ctx.run('local', ['doctor']);
 
   const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+  const evidence = await ctx.readEvidence(result.envelope.evidence[0]?.path ?? '');
 
-  const evidencePath = result.envelope.evidence[0]?.path ?? '';
-
-  const evidence: unknown = await Bun.file(join(ctx.root, evidencePath)).json();
-
-  expect({ data: result.envelope.data, evidence }).toMatchObject({
-    data: { status: 200, json: { method: 'GET', path: '/api/cart' } },
-    evidence: { request: { method: 'GET', path: '/api/cart' }, response: { status: 200 } },
+  expect({ data: result.envelope.data, evidence }).toStrictEqual({
+    data: {
+      status: 200,
+      headers: expect.objectContaining({ 'content-type': 'application/json' }),
+      body: '{"method":"GET","path":"/api/cart"}',
+      json: { method: 'GET', path: '/api/cart' },
+    },
+    evidence: {
+      request: {
+        method: 'GET',
+        path: '/api/cart',
+        headers: {},
+        url: 'https://shop.example/api/cart',
+      },
+      response: expect.objectContaining({ status: 200 }),
+    },
   });
+});
+
+test('it sends a JSON body with its content type', async () => {
+  const ctx = await setupTest();
+
+  const received = mock<(body: unknown, contentType: string | null) => void>();
+
+  server.use(
+    http.post(`${SHOP_API_URL}/api/orders`, async (resolver) => {
+      const body: unknown = await resolver.request.json();
+
+      received(body, resolver.request.headers.get('content-type'));
+
+      return HttpResponse.json({ ordered: true });
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  await ctx.run('local', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/orders',
+    json: { item: 'mug', count: 2 },
+  });
+
+  expect(received).toHaveBeenCalledExactlyOnceWith({ item: 'mug', count: 2 }, 'application/json');
 });
 
 test('it refuses a POST on a read-only target with exit code 3 and the target hint', async () => {
@@ -54,7 +93,7 @@ test('it refuses a POST on a read-only target with exit code 3 and the target hi
   expect({
     exitCode: result.exitCode,
     error: result.envelope.error,
-    requests: ctx.requests.filter((request) => request.startsWith('POST')),
+    requests: shopRequests.filter((request) => request.startsWith('POST')),
   }).toStrictEqual({
     exitCode: 3,
     error: {
@@ -77,7 +116,7 @@ test('it refuses a POST inside an action that declared a read, at the client cal
   expect({
     exitCode: result.exitCode,
     error: result.envelope.error,
-    requests: ctx.requests.filter((request) => request.startsWith('POST')),
+    requests: shopRequests.filter((request) => request.startsWith('POST')),
   }).toStrictEqual({
     exitCode: 3,
     error: {
@@ -101,9 +140,9 @@ test('it sends a POST the read-only target grants', async () => {
     json: { query: 'mug' },
   });
 
-  expect({ exitCode: result.exitCode, requests: ctx.requests.at(-1) }).toStrictEqual({
+  expect({ exitCode: result.exitCode, request: shopRequests.at(-1) }).toStrictEqual({
     exitCode: 0,
-    requests: 'POST /api/search',
+    request: 'POST /api/search',
   });
 });
 
@@ -119,9 +158,9 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
     json: { query: 'mug' },
   });
 
-  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
     exitCode: 2,
-    code: 'usage',
+    error: { code: 'usage' },
   });
 });
 
@@ -139,7 +178,7 @@ test('it returns a redirect from a granted POST without following it', async () 
   expect({
     exitCode: result.exitCode,
     data: result.envelope.data,
-    requests: ctx.requests.filter((request) => request.startsWith('POST')),
+    requests: shopRequests.filter((request) => request.startsWith('POST')),
   }).toStrictEqual({
     exitCode: 0,
     data: expect.objectContaining({
@@ -150,6 +189,72 @@ test('it returns a redirect from a granted POST without following it', async () 
   });
 });
 
+test('it answers a connection failure with an environment error', async () => {
+  const ctx = await setupTest();
+
+  server.use(http.get(`${SHOP_API_URL}/api/cart`, () => HttpResponse.error()));
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+    exitCode: 4,
+    error: { code: 'environment' },
+  });
+});
+
+test('it answers a response that stalls past the request timeout with a timeout error', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/cart`, async () => {
+      await delay('infinite');
+
+      return HttpResponse.json({});
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+
+  expect(result.envelope.error).toStrictEqual({
+    code: 'timeout',
+    message: 'GET https://shop.example/api/cart timed out.',
+    hint: null,
+  });
+});
+
+test('it answers a body that breaks off mid-read with an environment error', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/cart`, () => {
+      const body = new ReadableStream({
+        start: (controller) => {
+          controller.enqueue(new TextEncoder().encode('{"items":['));
+          controller.error(new Error('the connection dropped'));
+        },
+      });
+
+      return new HttpResponse(body, { headers: { 'content-type': 'application/json' } });
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+    exitCode: 4,
+    error: { code: 'environment' },
+  });
+});
+
 test('it passes the doctor when the app answers its health path', async () => {
   const ctx = await setupTest();
 
@@ -157,9 +262,12 @@ test('it passes the doctor when the app answers its health path', async () => {
 
   const result = await ctx.run('local', ['doctor']);
 
-  expect({ exitCode: result.exitCode, data: result.envelope.data }).toMatchObject({
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 0,
-    data: { passed: true, results: [{ name: 'http.reachable', status: 'passed' }] },
+    data: {
+      passed: true,
+      results: [expect.objectContaining({ name: 'http.reachable', status: 'passed' })],
+    },
   });
 });
 
@@ -170,8 +278,11 @@ test('it fails the doctor when the app answers its health path with a 5xx', asyn
 
   const result = await ctx.run('broken', ['doctor']);
 
-  expect({ exitCode: result.exitCode, data: result.envelope.data }).toMatchObject({
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 1,
-    data: { passed: false, results: [{ name: 'http.reachable', status: 'failed' }] },
+    data: {
+      passed: false,
+      results: [expect.objectContaining({ name: 'http.reachable', status: 'failed' })],
+    },
   });
 });

@@ -6,11 +6,11 @@ import { http } from '../src/http.ts';
 const emptySchema = z.strictObject({});
 const statusSchema = z.strictObject({ status: z.number() });
 
-// A repo's verify CLI for the http driver's tests, against the app at `url`: an attach target
-// `local` that may write, a read-only target `prod` that grants POST /api/search, a target `broken`
-// whose health path fails, and an action that claims a read and then posts an order.
+// A verify CLI against the app at `url`, whose requests time out after half a second: `local` may
+// write, read-only `prod` grants POST /api/search, `broken` has a failing health path, and an
+// action claims a read, then posts an order.
 export function createHttpWringer(url: string): Wringer {
-  const shop = bindDrivers([http({})] as const);
+  const shop = bindDrivers([http({ timeoutMs: 500 })] as const);
 
   return createWringer({ name: 'shop' })
     .use(...shop.drivers)

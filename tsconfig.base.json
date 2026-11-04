@@ -10,6 +10,9 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
-    "moduleDetection": "force"
+    "moduleDetection": "force",
+    // the test preload loads MSW's web fetch interceptor, the one that sees Bun's fetch, so
+    // the types resolve to the same browser build as the code that runs
+    "customConditions": ["browser"]
   }
 }

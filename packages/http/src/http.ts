@@ -48,7 +48,7 @@ const requestArgsSchema = z.strictObject({
 
 // Requests the target's app over HTTP. GET, HEAD and OPTIONS are reads; any other method is a write,
 // which a read-only target refuses unless its `readOnly.allow` grants that method and path. Each
-// response is kept as evidence.
+// response is kept as evidence. The client is the driver's entry point, so it picks the transport.
 export const http = defineDriver({
   name: 'http',
   options: optionsSchema,
@@ -58,7 +58,7 @@ export const http = defineDriver({
       effect: (request: HttpRequest) =>
         pickHttpEffect(request.method ?? 'GET', request.path, session.config.readOnly?.allow ?? []),
       describe: (request) => `${request.method ?? 'GET'} ${request.path}`,
-      run: (request) => sendRequest(session, httpRequestSchema.parse(request)),
+      run: (request) => sendRequest(session, fetch, httpRequestSchema.parse(request)),
     }),
   }),
   commands: (command) => [
@@ -101,8 +101,11 @@ type HttpConfig = z.infer<typeof targetConfigSchema>;
 
 type ParsedRequest = z.infer<typeof httpRequestSchema>;
 
+type HttpTransport = (url: URL, init: RequestInit) => Promise<Response>;
+
 async function sendRequest(
   session: DriverSession<HttpOptions, HttpConfig>,
+  transport: HttpTransport,
   request: ParsedRequest,
 ): Promise<HttpResponse> {
   const base = new URL(getBaseURL(session));
@@ -124,7 +127,7 @@ async function sendRequest(
     : request.headers;
 
   // A followed 307 or 308 repeats the method and body at a path the target never granted.
-  const response = await sendFetch(url, {
+  const fetched = await sendFetch(transport, url, {
     method: request.method,
     headers,
     signal,
@@ -132,13 +135,11 @@ async function sendRequest(
     ...(hasBody ? { body: JSON.stringify(request.json) } : {}),
   });
 
-  const body = await response.text();
-
   const result: HttpResponse = {
-    status: response.status,
-    headers: Object.fromEntries(response.headers),
-    body,
-    json: parseJSONBody(body),
+    status: fetched.response.status,
+    headers: Object.fromEntries(fetched.response.headers),
+    body: fetched.body,
+    json: parseJSONBody(fetched.body),
   };
 
   await session.evidence.writeFile(
@@ -163,9 +164,23 @@ function getBaseURL(session: DriverSession<HttpOptions, HttpConfig>): string {
   return baseURL;
 }
 
-async function sendFetch(url: URL, init: RequestInit): Promise<Response> {
+interface FetchedResponse {
+  readonly response: Response;
+  readonly body: string;
+}
+
+// The body read shares the request's deadline and error mapping: a server can send its headers,
+// then stall or drop the connection mid-body.
+async function sendFetch(
+  transport: HttpTransport,
+  url: URL,
+  init: RequestInit,
+): Promise<FetchedResponse> {
   try {
-    return await fetch(url, init);
+    const response = await transport(url, init);
+    const body = await response.text();
+
+    return { response, body };
   } catch (error) {
     if (init.signal?.aborted === true) {
       throw new WringerError('timeout', {
