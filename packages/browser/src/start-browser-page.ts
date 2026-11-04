@@ -28,8 +28,12 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
     ...(options.executablePath === undefined ? {} : { executablePath: options.executablePath }),
   });
 
+  // `browser.newPage` gives each page a context of its own, which dies with the page; one context
+  // per run keeps the cookies and storage of a page that a timeout replaced.
+  const context = await browser.newContext();
+
   const openPage = async (): Promise<Page> => {
-    const opened = await browser.newPage();
+    const opened = await context.newPage();
 
     opened.setDefaultTimeout(options.actionTimeoutMs);
 
