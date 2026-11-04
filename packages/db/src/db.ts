@@ -41,7 +41,8 @@ export const db = defineDriver({
   client: (session, fence): DbClient => {
     const clients: SQLClients = {
       openSqlite: (file, mode) => new Database(file, { [mode]: true }),
-      openPostgres: (url) => new SQL(url),
+      openPostgres: (url, sessionName) =>
+        new SQL(url, { connection: { application_name: sessionName } }),
     };
 
     return {

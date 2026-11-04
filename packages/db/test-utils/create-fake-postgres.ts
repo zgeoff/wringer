@@ -14,30 +14,45 @@ export interface FakePostgres {
 interface Connection {
   buffer: Uint8Array;
   started: boolean;
+  applicationName: string | null;
+  statement: string;
+  hanging: boolean;
 }
 
-// A Postgres server for tests that records each statement a client sends and the wire protocol it
-// came in, and answers every statement with no rows. It speaks only enough of the protocol for
-// Bun.SQL: no TLS, no password, and a transaction state of "in a transaction" after each query.
+// A Postgres server for tests that records each statement and its wire protocol, and answers with no
+// rows. It speaks only enough of the protocol for Bun.SQL: no TLS, no password, and a transaction
+// state of "in a transaction" after each query.
 export function createFakePostgres(): FakePostgres {
   const statements: PostgresStatement[] = [];
+
+  const connections = new Set<Socket<Connection>>();
 
   const server = Bun.listen<Connection>({
     hostname: '127.0.0.1',
     port: 0,
     socket: {
       open: (socket) => {
-        socket.data = { buffer: new Uint8Array(), started: false };
+        socket.data = {
+          buffer: new Uint8Array(),
+          started: false,
+          applicationName: null,
+          statement: '',
+          hanging: false,
+        };
+
+        connections.add(socket);
+      },
+      close: (socket) => {
+        connections.delete(socket);
       },
       data: (socket, chunk) => {
         const read = collectMessages(joinBytes(socket.data.buffer, chunk), socket.data.started);
 
-        socket.data = { buffer: read.rest, started: read.started };
+        socket.data.buffer = read.rest;
+        socket.data.started = read.started;
 
         for (const message of read.messages) {
-          statements.push(...pickStatement(message));
-
-          writeReplies(socket, message);
+          answerMessage(socket, message, statements, connections);
         }
       },
     },
@@ -91,7 +106,10 @@ function collectMessages(
     } else {
       const code = view.getInt32(4);
 
-      messages.push({ type: code === tlsRequestCode ? 'tls' : 'startup', body: new Uint8Array() });
+      messages.push({
+        type: code === tlsRequestCode ? 'tls' : 'startup',
+        body: bytes.slice(offset + 8, offset + length),
+      });
 
       isStarted = code !== tlsRequestCode;
     }
@@ -109,6 +127,51 @@ function joinBytes(first: Uint8Array, second: Uint8Array): Uint8Array {
   joined.set(second, first.length);
 
   return joined;
+}
+
+function answerMessage(
+  socket: Socket<Connection>,
+  message: Message,
+  statements: PostgresStatement[],
+  connections: ReadonlySet<Socket<Connection>>,
+): void {
+  if (message.type === 'startup') {
+    socket.data.applicationName =
+      parseStartupParameters(message.body).get('application_name') ?? null;
+  }
+
+  const statement = pickStatement(message);
+
+  statements.push(...statement);
+
+  if (message.type === 'P') {
+    socket.data.statement = statement[0]?.sql ?? '';
+  }
+
+  if (message.type === 'B' && socket.data.statement.includes('pg_cancel_backend')) {
+    writeCancels(connections, parseFirstParameter(message.body));
+  }
+
+  if (message.type === 'E' && socket.data.statement.includes('pg_sleep')) {
+    socket.data.hanging = true;
+  }
+
+  if (socket.data.hanging) {
+    return;
+  }
+
+  writeReplies(socket, message);
+}
+
+// The startup body holds name and value pairs, each ending in a zero byte, then one more zero byte.
+function parseStartupParameters(body: Uint8Array): Map<string, string> {
+  const words = new TextDecoder().decode(body).split('\0');
+
+  return new Map(
+    words.flatMap((word, index) =>
+      index % 2 === 0 && word !== '' ? [[word, words[index + 1] ?? '']] : [],
+    ),
+  );
 }
 
 // A Parse message holds the statement's name, then its text, each ending in a zero byte.
@@ -133,6 +196,53 @@ function pickStatement(message: Message): PostgresStatement[] {
 
 // The status bytes of a ReadyForQuery message: `I` for idle, `T` for in a transaction.
 const idle = 73;
+
+// Postgres answers a cancelled statement with SQLSTATE 57014, then waits for the client's Sync.
+function writeCancels(connections: ReadonlySet<Socket<Connection>>, applicationName: string): void {
+  for (const connection of connections) {
+    if (connection.data.hanging && connection.data.applicationName === applicationName) {
+      connection.data.hanging = false;
+
+      connection.write(
+        buildFrame('E', buildText('SERROR\0C57014\0Mcanceling statement due to user request\0')),
+      );
+
+      connection.write(buildFrame('Z', new Uint8Array([idle])));
+    }
+  }
+}
+
+function buildFrame(type: string, body: Uint8Array = new Uint8Array()): Uint8Array {
+  const frame = new Uint8Array(5 + body.length);
+
+  frame[0] = type.codePointAt(0) ?? 0;
+
+  new DataView(frame.buffer).setInt32(1, 4 + body.length);
+
+  frame.set(body, 5);
+
+  return frame;
+}
+
+function buildText(value: string): Uint8Array {
+  return new TextEncoder().encode(`${value}\0`);
+}
+
+// A Bind message holds the portal and statement names, the parameter formats, then each parameter
+// as a length and its bytes.
+function parseFirstParameter(body: Uint8Array): string {
+  const portalEnd = body.indexOf(0);
+  const statementEnd = body.indexOf(0, portalEnd + 1);
+
+  const view = new DataView(body.buffer, body.byteOffset);
+
+  const formatCount = view.getInt16(statementEnd + 1);
+  const parameterStart = statementEnd + 3 + formatCount * 2 + 2;
+  const length = view.getInt32(parameterStart);
+
+  return new TextDecoder().decode(body.subarray(parameterStart + 4, parameterStart + 4 + length));
+}
+
 const inTransaction = 84;
 
 function writeReplies(socket: Socket<Connection>, message: Message): void {
@@ -157,20 +267,4 @@ function writeReplies(socket: Socket<Connection>, message: Message): void {
   if (message.type === 'X') {
     socket.end();
   }
-}
-
-function buildFrame(type: string, body: Uint8Array = new Uint8Array()): Uint8Array {
-  const frame = new Uint8Array(5 + body.length);
-
-  frame[0] = type.codePointAt(0) ?? 0;
-
-  new DataView(frame.buffer).setInt32(1, 4 + body.length);
-
-  frame.set(body, 5);
-
-  return frame;
-}
-
-function buildText(value: string): Uint8Array {
-  return new TextEncoder().encode(`${value}\0`);
 }
