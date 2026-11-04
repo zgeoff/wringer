@@ -1,9 +1,10 @@
-import { appendFile, mkdir } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
+import { appendWholeText } from './append-whole-text.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
@@ -150,7 +151,7 @@ function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
   const writer = createActor(recordWriterMachine, {
     input: {
       ...options,
-      write: (text: string) => appendFile(options.path, text),
+      write: (text: string) => appendWholeText(options.path, text),
     },
   });
 
