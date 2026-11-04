@@ -50,6 +50,24 @@ test('it keeps both changes when two commands write the pointers at once', async
   });
 });
 
+test('it keeps the run that the saved cursors belong to', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.writePointers((current) => ({
+    ...current,
+    cursors: { app: 120 },
+    cursorsRun: runIDSchema.parse('mf3k2a-7q1z'),
+  }));
+
+  const pointers = await ctx.state.readPointers();
+
+  expect(pointers).toStrictEqual({
+    currentRun: {},
+    cursors: { app: 120 },
+    cursorsRun: 'mf3k2a-7q1z',
+  });
+});
+
 test('it never interleaves events that many writers append at once', async () => {
   const ctx = await setupTest();
 

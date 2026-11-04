@@ -16,6 +16,7 @@ export const pointersSchema = z.strictObject({
   target: z.string().optional(),
   feature: z.string().optional(),
   cursors: z.record(z.string(), z.number().int().nonnegative()),
+  cursorsRun: runIDSchema.optional(),
 });
 
 export type Pointers = z.infer<typeof pointersSchema>;
