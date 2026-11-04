@@ -33,7 +33,10 @@ async function setupTest() {
 
       database.close();
     },
-    runQuery: (sql: string, options: { params?: readonly unknown[]; write?: boolean } = {}) =>
+    runQuery: (
+      sql: string,
+      options: { params?: readonly unknown[]; write?: boolean; signal?: AbortSignal } = {},
+    ) =>
       runSQLQuery(
         {
           adapter: 'sqlite',
@@ -41,12 +44,32 @@ async function setupTest() {
           sql,
           params: options.params ?? [],
           write: options.write ?? false,
-          signal: new AbortController().signal,
+          signal: options.signal ?? new AbortController().signal,
         },
         clients,
       ),
   };
 }
+
+test('it refuses a write whose deadline passed before it started, and writes nothing', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  const failure = await ctx
+    .runQuery("insert into notes (text) values ('ship')", {
+      write: true,
+      signal: AbortSignal.abort(),
+    })
+    .catch((error: unknown) => error);
+
+  const notes = await ctx.runQuery('select text from notes');
+
+  expect({ failure, rows: notes.rows }).toStrictEqual({
+    failure: expect.objectContaining({ code: 'timeout' }),
+    rows: [{ text: 'pay' }],
+  });
+});
 
 test('it reads rows with bound parameters, their columns and their count', async () => {
   const ctx = await setupTest();
