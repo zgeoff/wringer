@@ -88,6 +88,20 @@ test('it stops a command that closed its stdout and runs on when the signal fire
   expect(followed).resolves.toBeNumber();
 });
 
+test('it ends when the command exits, though a child it left running holds stdout', async () => {
+  const ctx = await setupTest();
+
+  const startedMs = performance.now();
+
+  await ctx.followProcess({
+    argv: ['sh', '-c', 'echo up; sleep 30 &'],
+    signal: new AbortController().signal,
+    onLine: mock<(line: string) => void>(),
+  });
+
+  expect(performance.now() - startedMs).toBeLessThan(5000);
+});
+
 test('it stops a child the command left running when the command exits', async () => {
   const ctx = await setupTest();
 

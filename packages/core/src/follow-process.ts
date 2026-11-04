@@ -38,19 +38,25 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
 
   request.signal.addEventListener('abort', killGroup, { once: true });
 
-  // A command can close stdout and run on, so the abort stays wired until the command exits. A
-  // child it left behind is killed before the abort is unwired; nothing could stop it later. A
-  // reader or callback that throws stops the group too, so nothing runs on unread.
-  try {
-    for await (const line of readStreamLines(child.stdout)) {
-      request.onLine(line);
-    }
-
+  // A child the command left behind is killed as the command exits: it may hold stdout open, and
+  // nothing could stop it once the abort is unwired. A reader or callback that throws stops the
+  // group too, so nothing runs on unread.
+  const watchExit = async (): Promise<number> => {
     const exitCode = await child.exited;
 
     killGroup();
 
     return exitCode;
+  };
+
+  const exited = watchExit();
+
+  try {
+    for await (const line of readStreamLines(child.stdout)) {
+      request.onLine(line);
+    }
+
+    return await exited;
   } catch (error) {
     killGroup();
 
