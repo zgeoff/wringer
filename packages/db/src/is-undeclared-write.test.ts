@@ -37,7 +37,25 @@ test.each([
     sql: "select lo_export(16384, '/srv/blob')",
     write: true,
   },
-  { dialect: 'postgres', via: 'sql', sql: "select 'copy' as label", write: false },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: 'select pg_catalog."lo_export"(16384, \'/srv/blob\')',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "do $$ begin execute 'copy (select 1) to program ''touch /srv/flag'''; end $$",
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: String.raw`select U&"\006Co_export"(1, 'x')`,
+    write: true,
+  },
+  { dialect: 'postgres', via: 'sql', sql: 'select "copy_count" from orders', write: false },
   {
     dialect: 'postgres',
     via: 'exec',
