@@ -2,7 +2,9 @@ import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
+import { createActor } from 'xstate';
 import { z } from 'zod';
+import { recordWriterMachine } from './record-writer-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
 const fileSourceSchema = z.strictObject({ file: z.string().min(1) });
@@ -144,84 +146,27 @@ interface RecordWriter {
   readonly drain: () => Promise<void>;
 }
 
-// Appends the records that arrived while the last write ran in one write, so a fast source costs
-// one write per batch and a bounded amount of memory. A batch that fails to write goes back to the
-// front of the queue for the next write, and a drain that still cannot write it rejects.
 function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
-  let pending: string[] = [];
-  let dropped = 0;
-  let flushing: Promise<void> | null = null;
-  let failure: string | null = null;
+  const writer = createActor(recordWriterMachine, {
+    input: {
+      ...options,
+      write: (text: string) => appendFile(options.path, text),
+    },
+  });
 
-  const takeBatch = (): string[] => {
-    const batch = pending;
-
-    pending = [];
-
-    if (dropped > 0) {
-      const line = `[wringer] the recorder dropped ${dropped} lines while it caught up`;
-
-      batch.push(JSON.stringify({ at: options.now().toISOString(), line }));
-
-      dropped = 0;
-    }
-
-    return batch;
-  };
-
-  const keepBatch = (batch: readonly string[]): void => {
-    const kept = [...batch, ...pending];
-
-    dropped += Math.max(kept.length - options.pendingLimit, 0);
-    pending = kept.slice(0, options.pendingLimit);
-  };
-
-  const flush = async (): Promise<void> => {
-    for (let batch = takeBatch(); batch.length > 0; batch = takeBatch()) {
-      try {
-        await appendFile(options.path, `${batch.join('\n')}\n`);
-
-        failure = null;
-      } catch (error) {
-        failure = error instanceof Error ? error.message : 'the write failed';
-
-        keepBatch(batch);
-
-        options.onError(error);
-        break;
-      }
-    }
-
-    flushing = null;
-  };
-
-  const drain = async (): Promise<void> => {
-    await flushing;
-
-    if (pending.length > 0 || dropped > 0) {
-      flushing = flush();
-
-      await flushing;
-    }
-
-    if (failure !== null) {
-      throw new WringerError('environment', {
-        message: `${options.path} kept ${pending.length} records the recorder could not write: ${failure}`,
-      });
-    }
-  };
+  writer.start();
 
   return {
     add: (record) => {
-      if (pending.length >= options.pendingLimit) {
-        dropped += 1;
-      } else {
-        pending.push(record);
-      }
-
-      flushing ??= flush();
+      writer.send({ type: 'add', record });
     },
-    drain,
+    drain: async () => {
+      const settle = Promise.withResolvers<null>();
+
+      writer.send({ type: 'drain', settle });
+
+      await settle.promise;
+    },
   };
 }
 
