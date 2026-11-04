@@ -1,12 +1,7 @@
-import { randomUUID } from 'node:crypto';
-import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { formatLockOwner } from './format-lock-owner.ts';
-import { isErrorCode } from './is-error-code.ts';
 import { parseLockOwner } from './parse-lock-owner.ts';
 import { pickLockRecovery } from './pick-lock-recovery.ts';
-import { probeProcess } from './probe-process.ts';
-import { readPIDNamespace } from './read-pid-namespace.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface FileLockOptions {
@@ -16,124 +11,107 @@ export interface FileLockOptions {
 
 export type FileLock = <T>(options: FileLockOptions, work: () => Promise<T>) => Promise<T>;
 
+// Everything the lock reads or changes outside itself. `createFileOnce` resolves false when the
+// file exists already, and `readText` resolves null when it does not.
+export interface LockHost {
+  readonly pid: number;
+  readonly namespace: string;
+  readonly createToken: () => string;
+  readonly nowMs: () => number;
+  readonly sleep: (durationMs: number) => Promise<void>;
+  readonly probeProcess: (pid: number) => boolean;
+  readonly createDirectory: (path: string) => Promise<void>;
+  readonly createFileOnce: (path: string, content: string) => Promise<boolean>;
+  readonly readText: (path: string) => Promise<string | null>;
+  readonly removeFile: (path: string) => Promise<void>;
+}
+
 const lockRetryMs = 20;
 
 // The lock is a file that names its owner. Each turn either creates the file, or reads the one in
 // place and acts on what `pickLockRecovery` makes of it, until the caller holds the lock or the
 // timeout passes.
-export async function withFileLock<T>(
-  options: FileLockOptions,
-  work: () => Promise<T>,
-): Promise<T> {
-  await mkdir(dirname(options.path), { recursive: true });
+export function makeFileLock(host: LockHost): FileLock {
+  return async (options, work) => {
+    await host.createDirectory(dirname(options.path));
 
-  const namespace = readPIDNamespace();
-  const content = formatLockOwner({ pid: process.pid, namespace, token: randomUUID() });
-  const deadline = Date.now() + options.timeoutMs;
+    const content = createOwnerContent(host);
+    const deadline = host.nowMs() + options.timeoutMs;
 
-  while (!(await takeLock(options.path, content, namespace))) {
-    if (Date.now() > deadline) {
-      throw new WringerError('environment', {
-        message: `Another wringer command holds the lock ${options.path}.`,
-        hint: 'Wait for the other command to end, then run this one again.',
-      });
+    while (!(await takeLock(host, options.path, content))) {
+      if (host.nowMs() > deadline) {
+        throw new WringerError('environment', {
+          message: `Another wringer command holds the lock ${options.path}.`,
+          hint: 'Wait for the other command to end, then run this one again.',
+        });
+      }
+
+      await host.sleep(lockRetryMs);
     }
 
-    await Bun.sleep(lockRetryMs);
-  }
+    try {
+      return await work();
+    } finally {
+      await removeLockHolding(host, options.path, content);
+    }
+  };
+}
 
-  try {
-    return await work();
-  } finally {
-    await removeLockHolding(options.path, content);
-  }
+function createOwnerContent(host: LockHost): string {
+  return formatLockOwner({ pid: host.pid, namespace: host.namespace, token: host.createToken() });
 }
 
 // One turn: true once this caller holds the lock.
-async function takeLock(path: string, content: string, namespace: string): Promise<boolean> {
-  const created = await createLockFile(path, content);
+async function takeLock(host: LockHost, path: string, content: string): Promise<boolean> {
+  const created = await host.createFileOnce(path, content);
 
   if (created) {
     return true;
   }
 
-  const held = await readLockContent(path);
+  const held = await host.readText(path);
 
   const owner = held === null ? null : parseLockOwner(held);
 
   const recovery = pickLockRecovery({
     content: held,
-    namespace,
-    isOwnerAlive: owner !== null && probeProcess(owner.pid),
+    namespace: host.namespace,
+    isOwnerAlive: owner !== null && host.probeProcess(owner.pid),
   });
 
   // `retry` and `wait` both end the turn here; the caller sleeps before the next one.
   if (recovery === 'clear-stale' && held !== null) {
-    await removeStaleLock(path, held, namespace);
+    await removeStaleLock(host, path, held);
   }
 
   return false;
 }
 
-// The content goes into a file of its own, then `link` puts it at the lock path in one step, so a
-// lock file is never seen empty, and a crash leaves either no lock or a whole one.
-async function createLockFile(path: string, content: string): Promise<boolean> {
-  const draft = `${path}.${randomUUID()}.draft`;
-
-  await writeFile(draft, content);
-
-  try {
-    await link(draft, path);
-
-    return true;
-  } catch (error) {
-    if (isErrorCode(error, 'EEXIST')) {
-      return false;
-    }
-
-    throw error;
-  } finally {
-    await rm(draft, { force: true });
-  }
-}
-
-async function readLockContent(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (error) {
-    if (isErrorCode(error, 'ENOENT')) {
-      return null;
-    }
-
-    throw error;
-  }
-}
-
 // Two callers can read the same stale content. Each must first take the claim, a lock named after
 // that content, which only one of them holds at a time; it then removes the lock only if the lock
 // still holds that content, so a lock that a new owner took meanwhile stays.
-async function removeStaleLock(path: string, stale: string, namespace: string): Promise<void> {
+async function removeStaleLock(host: LockHost, path: string, stale: string): Promise<void> {
   const claim = `${path}.${Bun.hash(stale).toString(36)}.claim`;
-  const claimant = formatLockOwner({ pid: process.pid, namespace, token: randomUUID() });
+  const claimant = createOwnerContent(host);
 
-  const claimed = await takeLock(claim, claimant, namespace);
+  const claimed = await takeLock(host, claim, claimant);
 
   if (!claimed) {
     return;
   }
 
   try {
-    await removeLockHolding(path, stale);
+    await removeLockHolding(host, path, stale);
   } finally {
-    await removeLockHolding(claim, claimant);
+    await removeLockHolding(host, claim, claimant);
   }
 }
 
 // Removes the lock only while it still holds `content`, so a lock someone else took stays.
-async function removeLockHolding(path: string, content: string): Promise<void> {
-  const current = await readLockContent(path);
+async function removeLockHolding(host: LockHost, path: string, content: string): Promise<void> {
+  const current = await host.readText(path);
 
   if (current === content) {
-    await rm(path, { force: true });
+    await host.removeFile(path);
   }
 }
