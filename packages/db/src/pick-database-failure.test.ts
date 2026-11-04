@@ -32,6 +32,36 @@ test.each([
     failure: 'environment',
   },
   {
+    name: 'the sqlite3 locked message',
+    code: null,
+    message: 'Runtime error near line 1: database is locked (5)',
+    failure: 'environment',
+  },
+  {
+    name: 'the sqlite3 not-a-database message',
+    code: null,
+    message: 'Error: file is not a database',
+    failure: 'environment',
+  },
+  {
+    name: 'the sqlite3 disk message',
+    code: null,
+    message: 'Error: disk I/O error',
+    failure: 'environment',
+  },
+  {
+    name: 'the sqlite3 full-disk message',
+    code: null,
+    message: 'Error: database or disk is full',
+    failure: 'environment',
+  },
+  {
+    name: 'the sqlite3 permission message',
+    code: null,
+    message: 'Error: access permission denied',
+    failure: 'environment',
+  },
+  {
     name: 'a missing table',
     code: 'SQLITE_ERROR',
     message: 'no such table: notes',

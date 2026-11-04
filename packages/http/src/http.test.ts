@@ -190,6 +190,23 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
   });
 });
 
+test('it refuses a header that is not valid HTTP with a usage error', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], {
+    path: '/api/cart',
+    header: ['bad name: mug'],
+  });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+  });
+});
+
 test('it returns a redirect from a granted POST without following it', async () => {
   const ctx = await setupTest();
 

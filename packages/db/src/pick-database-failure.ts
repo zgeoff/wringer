@@ -21,8 +21,9 @@ const environmentCodes = new Set([
 const environmentStatePattern = /^(?:08|28|3D|53|57)[0-9A-Z]{3}$/u;
 const readOnlyMessagePattern = /attempt to write a readonly database|read-only transaction/iu;
 
+// The sqlite3 shell prints only the message of each SQLite code above, never the code.
 const environmentMessagePattern =
-  /unable to open database|could not connect|connection to server|connection refused|no such file|password authentication failed|database "[^"]*" does not exist/iu;
+  /unable to open database|database is locked|file is not a database|disk I\/O error|database or disk is full|access permission denied|could not connect|connection to server|connection refused|no such file|password authentication failed|database "[^"]*" does not exist/iu;
 
 // SQLite and Postgres each report a failure with their own code, from a driver, or text, from the
 // database's own client. A refused write in a read-only session is the target's to answer; a
