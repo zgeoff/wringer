@@ -158,34 +158,43 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
     json: { query: 'mug' },
   });
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 2,
-    error: { code: 'usage' },
+    code: 'usage',
   });
 });
 
 test('it returns a redirect from a granted POST without following it', async () => {
   const ctx = await setupTest();
 
+  server.use(
+    http.post(
+      `${SHOP_API_URL}/api/search`,
+      () => new HttpResponse(null, { status: 307, headers: { location: '/api/orders' } }),
+    ),
+  );
+
   await ctx.run('prod', ['attach']);
   await ctx.run('prod', ['doctor']);
 
   const result = await ctx.run('prod', ['http', 'request'], {
     method: 'POST',
-    path: '/api/search?to=/api/orders',
+    path: '/api/search',
   });
 
   expect({
     exitCode: result.exitCode,
     data: result.envelope.data,
-    requests: shopRequests.filter((request) => request.startsWith('POST')),
+    followed: shopRequests.filter((request) => request.endsWith(' /api/orders')),
   }).toStrictEqual({
     exitCode: 0,
-    data: expect.objectContaining({
+    data: {
       status: 307,
-      headers: expect.objectContaining({ location: '/api/orders' }),
-    }),
-    requests: ['POST /api/search'],
+      headers: { location: '/api/orders' },
+      body: '',
+      json: null,
+    },
+    followed: [],
   });
 });
 
@@ -199,9 +208,9 @@ test('it answers a connection failure with an environment error', async () => {
 
   const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 4,
-    error: { code: 'environment' },
+    code: 'environment',
   });
 });
 
@@ -249,9 +258,9 @@ test('it answers a body that breaks off mid-read with an environment error', asy
 
   const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 4,
-    error: { code: 'environment' },
+    code: 'environment',
   });
 });
 

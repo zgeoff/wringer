@@ -6,27 +6,24 @@ export const SHOP_API_URL = 'https://shop.example';
 // left the CLI. The test preload clears it after each test.
 export const shopRequests: string[] = [];
 
-// The shop app: `/api/broken` answers 500, a request with `?to=<path>` a 307 redirect to that path,
-// and every other path JSON that names the request.
-export function answerShopRequest(request: Request): Response {
-  const url = new URL(request.url);
+// The shop app: `/api/broken` answers 500, and every other path answers JSON that names the request.
+export const shopHandlers = [
+  http.all(`${SHOP_API_URL}/api/broken`, (resolver) => {
+    recordShopRequest(resolver.request);
 
-  const path = url.pathname;
-  const redirectPath = url.searchParams.get('to');
+    return HttpResponse.json({ error: 'broken' }, { status: 500 });
+  }),
+  http.all(`${SHOP_API_URL}/*`, (resolver) => {
+    const path = recordShopRequest(resolver.request);
+
+    return HttpResponse.json({ method: resolver.request.method, path });
+  }),
+];
+
+function recordShopRequest(request: Request): string {
+  const path = new URL(request.url).pathname;
 
   shopRequests.push(`${request.method} ${path}`);
 
-  if (path === '/api/broken') {
-    return HttpResponse.json({ error: 'broken' }, { status: 500 });
-  }
-
-  if (redirectPath !== null) {
-    return new HttpResponse(null, { status: 307, headers: { location: redirectPath } });
-  }
-
-  return HttpResponse.json({ method: request.method, path });
+  return path;
 }
-
-export const shopHandlers = [
-  http.all(`${SHOP_API_URL}/*`, (resolver) => answerShopRequest(resolver.request)),
-];
