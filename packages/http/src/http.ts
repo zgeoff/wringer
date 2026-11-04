@@ -105,7 +105,16 @@ async function sendRequest(
   session: DriverSession<HttpOptions, HttpConfig>,
   request: ParsedRequest,
 ): Promise<HttpResponse> {
-  const url = new URL(request.path, getBaseURL(session));
+  const base = new URL(getBaseURL(session));
+  const url = new URL(request.path, base);
+
+  // A path such as `//host/` resolves to another origin, which the target's grants never cover.
+  if (url.origin !== base.origin) {
+    throw new WringerError('usage', {
+      message: `${request.path} is not a path of the app at ${base.origin}.`,
+      hint: 'Pass a path that starts with one /, such as /api/search.',
+    });
+  }
 
   const hasBody = request.json !== undefined;
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);

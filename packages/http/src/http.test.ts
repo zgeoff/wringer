@@ -107,6 +107,24 @@ test('it sends a POST the read-only target grants', async () => {
   });
 });
 
+test('it refuses a path that leaves the app origin with a usage error', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['http', 'request'], {
+    method: 'POST',
+    path: '//127.0.0.1:9/api/search',
+    json: { query: 'mug' },
+  });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+  });
+});
+
 test('it returns a redirect from a granted POST without following it', async () => {
   const ctx = await setupTest();
 
