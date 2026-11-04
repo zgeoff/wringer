@@ -42,27 +42,30 @@ async function answerConnection(
   for await (const line of lines) {
     const response = await answerLine(line, handle);
 
-    connection.end(`${JSON.stringify(response)}\n`);
+    connection.end(`${response}\n`);
     break;
   }
 }
 
-async function answerLine(
-  line: string,
-  handle: SupervisorRequestHandler,
-): Promise<SupervisorResponse> {
+// A service may return a value JSON cannot hold, such as a bigint, so the result is serialized
+// inside the try and its failure reaches the caller as an error response.
+async function answerLine(line: string, handle: SupervisorRequestHandler): Promise<string> {
   try {
     const request = supervisorRequestSchema.parse(JSON.parse(line));
 
     const result = await handle(request);
 
-    return { ok: true, result: result ?? null };
+    const response: SupervisorResponse = { ok: true, result: result ?? null };
+
+    return JSON.stringify(response);
   } catch (error) {
     const failure = toWringerError(error);
 
-    return {
+    const response: SupervisorResponse = {
       ok: false,
       error: { code: failure.code, message: failure.message, hint: failure.hint ?? null },
     };
+
+    return JSON.stringify(response);
   }
 }
