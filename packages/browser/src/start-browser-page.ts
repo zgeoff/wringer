@@ -1,8 +1,11 @@
 import { WringerError } from '@wringer/core';
 import type { ServiceInstance } from '@wringer/core';
-import { chromium, errors } from 'playwright-core';
+import { chromium } from 'playwright-core';
 import type { Locator, Page } from 'playwright-core';
+import { createActor } from 'xstate';
 import { z } from 'zod';
+import { browserPageMachine } from './browser-page-machine.ts';
+import type { PageActionResult } from './browser-page-machine.ts';
 import { findSnapshotElement } from './find-snapshot-element.ts';
 
 export interface BrowserPageOptions {
@@ -18,7 +21,7 @@ const typeSchema = z.strictObject({ element: elementSchema, value: z.string() })
 
 // One headless browser and one page per run, held by the run's supervisor so the page keeps its
 // state between commands. `describe` reads the last snapshot, because a new snapshot renumbers
-// every ref.
+// every ref, so it skips the command queue.
 export async function startBrowserPage(options: BrowserPageOptions): Promise<ServiceInstance> {
   const browser = await chromium.launch({
     headless: true,
@@ -35,43 +38,21 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
   const firstPage = await openPage();
 
-  // A reopen settles to an error in place of a rejection: a run can stop before any command awaits
-  // the new page, and Bun fails the process on an unhandled rejection.
-  let pageReady: Promise<Page | WringerError> = Promise.resolve(firstPage);
-  let lastSnapshot = '';
+  const pageActor = createActor(browserPageMachine, {
+    input: { page: firstPage, reopen: (stale: Page) => reopenPage(stale, openPage) },
+  });
 
-  // Playwright cannot cancel one action, so a caller that stops waiting gets the page closed under
-  // its action, and the next command a new page at the same URL; a late click never lands.
-  const runPageAction = async <T>(
+  pageActor.start();
+
+  const runPageAction = (
     signal: AbortSignal,
-    action: (page: Page) => Promise<T>,
-  ): Promise<T> => {
-    const page = await pageReady;
+    action: (page: Page) => Promise<PageActionResult>,
+  ): Promise<unknown> => {
+    const settle = Promise.withResolvers<unknown>();
 
-    if (page instanceof WringerError) {
-      throw page;
-    }
+    pageActor.send({ type: 'run', command: { action, signal, settle } });
 
-    // An abort while the page reopened fired before the listener below, which would never see it.
-    if (signal.aborted) {
-      throw new WringerError('timeout', {
-        message: 'The command ran past its deadline before the browser started it.',
-      });
-    }
-
-    const reopen = (): void => {
-      pageReady = reopenPage(page, openPage);
-    };
-
-    signal.addEventListener('abort', reopen, { once: true });
-
-    try {
-      return await action(page);
-    } catch (error) {
-      throw toPageError(error);
-    } finally {
-      signal.removeEventListener('abort', reopen);
-    }
+    return settle.promise;
   };
 
   return {
@@ -82,18 +63,18 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
           await page.goto(parsed.url);
 
-          return readPageState(page);
+          return { data: await readPageState(page) };
         }),
       snapshot: (_args, signal) =>
         runPageAction(signal, async (page) => {
-          lastSnapshot = await page.ariaSnapshot({ mode: 'ai' });
-
+          const snapshot = await page.ariaSnapshot({ mode: 'ai' });
           const state = await readPageState(page);
 
-          return { ...state, snapshot: lastSnapshot };
+          return { data: { ...state, snapshot }, snapshot };
         }),
       describe: (args) => {
         const parsed = refSchema.parse(args);
+        const lastSnapshot = pageActor.getSnapshot().context.snapshot;
         const element = findSnapshotElement(lastSnapshot, parsed.ref);
 
         if (element === null) {
@@ -111,7 +92,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
         runPageAction(signal, async (page) => {
           await locateElement(page, elementSchema.parse(args)).click();
 
-          return readPageState(page);
+          return { data: await readPageState(page) };
         }),
       type: (args, signal) =>
         runPageAction(signal, async (page) => {
@@ -119,64 +100,39 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
           await locateElement(page, parsed.element).fill(parsed.value);
 
-          return readPageState(page);
+          return { data: await readPageState(page) };
         }),
       screenshot: (_args, signal) =>
         runPageAction(signal, async (page) => {
           const png = await page.screenshot({ fullPage: true });
 
-          return { png: png.toString('base64') };
+          return { data: { png: png.toString('base64') } };
         }),
       status: () => Promise.resolve({ connected: browser.isConnected() }),
     },
-    stop: () => browser.close(),
+    stop: async () => {
+      pageActor.send({ type: 'stop' });
+
+      await browser.close();
+    },
   };
 }
 
-async function reopenPage(
-  stale: Page,
-  openPage: () => Promise<Page>,
-): Promise<Page | WringerError> {
+async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
   const url = stale.url();
 
-  try {
-    // The stale page closes first, so its action cannot land while the new page opens.
-    await stale.close();
+  // The stale page closes first, so its action cannot land while the new page opens.
+  await stale.close();
 
-    const page = await openPage();
+  const page = await openPage();
 
-    // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
-    // itself must still come back, or every later command would fail.
-    if (url !== 'about:blank') {
-      await page.goto(url).catch(() => null);
-    }
-
-    return page;
-  } catch (error) {
-    return new WringerError('environment', {
-      message: `The browser could not open a new page: ${String(error)}`,
-      hint: 'Run `up --restart` to start a new browser.',
-    });
-  }
-}
-
-// Playwright reports a missing element as a timeout and anything else as a plain error; both reach
-// the caller as one of the envelope's error codes.
-function toPageError(error: unknown): unknown {
-  if (error instanceof WringerError || error instanceof z.ZodError) {
-    return error;
+  // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
+  // itself must still come back, or every later command would fail.
+  if (url !== 'about:blank') {
+    await page.goto(url).catch(() => null);
   }
 
-  const message = error instanceof Error ? error.message.split('\n')[0] : String(error);
-
-  if (error instanceof errors.TimeoutError) {
-    return new WringerError('timeout', {
-      message: `The browser gave up: ${message}`,
-      hint: 'Run `browser snapshot` to see the page as it is now.',
-    });
-  }
-
-  return new WringerError('environment', { message: `The browser failed: ${message}` });
+  return page;
 }
 
 export const pageStateSchema = z.strictObject({
