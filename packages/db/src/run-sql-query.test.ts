@@ -1,11 +1,12 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-run-sql-query-'));
+  const directory = await createTestFolder(import.meta.dir, 'run-sql-query');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

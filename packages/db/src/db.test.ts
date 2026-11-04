@@ -1,14 +1,15 @@
 import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { createDbWringer } from '../test-utils/create-db-wringer.ts';
 import { createFakeSqlite3 } from '../test-utils/create-fake-sqlite3.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-db-'));
+  const directory = await createTestFolder(import.meta.dir, 'db');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
