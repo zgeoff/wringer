@@ -1,9 +1,11 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { buildSpawnError } from './build-spawn-error.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
 import { runProcess } from './run-process.ts';
+import { toWringerError } from './to-wringer-error.ts';
 import type { LaunchPlan } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
@@ -12,7 +14,7 @@ export interface LaunchRequest {
   readonly logPath: string;
   readonly readyTimeoutMs: number;
   readonly signal: AbortSignal;
-  readonly onExit: (exitCode: number) => void;
+  readonly onCrash: (reason: string) => void;
 }
 
 export interface Launch {
@@ -29,17 +31,24 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const guard = Bun.which('setpriv') === null ? [] : ['setpriv', '--pdeathsig', 'KILL', '--'];
   const cwd = request.plan.cwd ?? process.cwd();
 
-  const child = Bun.spawn([...guard, ...request.plan.command], {
+  const child = spawnApp([...guard, ...request.plan.command], {
     cwd,
     env: { ...process.env, ...request.plan.env },
-    stdin: 'ignore',
-    stdout: 'pipe',
-    stderr: 'pipe',
-    detached: true,
   });
 
   const ready = Promise.withResolvers<Endpoints>();
   let stopping = false;
+
+  // Each failure after the start, the app's exit or a lost log, ends the run once.
+  const crash = (reason: string): void => {
+    ready.reject(new WringerError('environment', { message: reason }));
+
+    if (!stopping) {
+      stopping = true;
+
+      request.onCrash(reason);
+    }
+  };
 
   const timer = setTimeout(() => {
     ready.reject(
@@ -59,7 +68,18 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
   await mkdir(dirname(request.logPath), { recursive: true });
 
-  void pipeLines(child.stdout, request.logPath, (line) => {
+  const pumpLog = async (
+    stream: ReadableStream<Uint8Array>,
+    onLine: (line: string) => void,
+  ): Promise<void> => {
+    try {
+      await pipeLines(stream, request.logPath, onLine);
+    } catch (error) {
+      crash(`The app's output could not be logged: ${toWringerError(error).message}`);
+    }
+  };
+
+  void pumpLog(child.stdout, (line) => {
     const endpoints = request.plan.ready(parseLogLine(line));
 
     if (endpoints !== null) {
@@ -67,7 +87,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     }
   });
 
-  void pipeLines(child.stderr, request.logPath, () => {
+  void pumpLog(child.stderr, () => {
     // The log keeps stderr; only stdout carries the ready line.
   });
 
@@ -76,14 +96,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
     // A child the app started may outlive it; nothing else would stop it.
     killProcessGroup(child.pid);
-
-    ready.reject(
-      new WringerError('environment', { message: `The app exited with code ${exitCode}.` }),
-    );
-
-    if (!stopping) {
-      request.onExit(exitCode);
-    }
+    crash(`The app exited with code ${exitCode}.`);
   };
 
   void watchExit();
@@ -119,6 +132,26 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     request.signal.removeEventListener('abort', onAbort);
 
     clearTimeout(timer);
+  }
+}
+
+interface SpawnOptions {
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
+}
+
+function spawnApp(argv: readonly string[], options: SpawnOptions) {
+  try {
+    return Bun.spawn([...argv], {
+      cwd: options.cwd,
+      env: { ...options.env },
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: 'pipe',
+      detached: true,
+    });
+  } catch (error) {
+    throw buildSpawnError(argv.join(' '), error);
   }
 }
 

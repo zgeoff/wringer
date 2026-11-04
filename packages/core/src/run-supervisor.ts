@@ -43,35 +43,43 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const at = (): string => options.now().toISOString();
   let launch: Launch | undefined;
-  let stopping = false;
+  let stopping: Promise<void> | undefined;
   const startup = Promise.withResolvers<undefined>();
 
   // A stop during startup waits for the app and services still starting, so it stops each one that
-  // comes up late instead of leaving it running.
-  const stop = async (crashReason: string | null): Promise<void> => {
-    if (stopping) {
-      return;
-    }
-
-    stopping = true;
-
+  // comes up late instead of leaving it running. Every cleanup runs, even after one fails.
+  const shutDown = async (crashReason: string | null): Promise<void> => {
     lifetime.abort();
 
     await startup.promise;
 
-    await launch?.stop();
-    await Promise.allSettled([...services.values()].map((service) => service.stop()));
+    const cleanups = [
+      ['app', () => launch?.stop() ?? Promise.resolve()] as const,
+      ...[...services].map(([key, service]) => [key, () => service.stop()] as const),
+    ];
 
-    const ended: RunEvent =
-      crashReason === null
-        ? { type: 'run-ended', at: at() }
-        : { type: 'crashed', at: at(), reason: crashReason };
+    const settled = await Promise.allSettled(cleanups.map(([, cleanup]) => cleanup()));
 
-    await append(ended);
+    const failures = settled.flatMap((result, index) =>
+      result.status === 'rejected'
+        ? [`${cleanups[index]?.[0] ?? 'unknown'}: ${toWringerError(result.reason).message}`]
+        : [],
+    );
+
+    for (const event of buildStopEvents({ crashReason, failures, at: at() })) {
+      await append(event);
+    }
 
     await options.state.writeManifest(options.runID);
 
     stopped.resolve(undefined);
+  };
+
+  // A second stop, such as a `down` while a crash is still stopping the run, waits for the first.
+  const stop = (crashReason: string | null): Promise<void> => {
+    stopping ??= shutDown(crashReason);
+
+    return stopping;
   };
 
   const answerRequest = async (request: SupervisorRequest): Promise<unknown> => {
@@ -113,8 +121,8 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       targetName: options.target,
       readyTimeoutMs: options.readyTimeoutMs,
       signal: lifetime.signal,
-      onExit: (exitCode) => {
-        void stop(`the app exited with code ${exitCode}`);
+      onCrash: (reason) => {
+        void stop(reason);
       },
     });
 
@@ -153,6 +161,26 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   await rm(socket, { force: true });
 }
 
+interface StopOutcome {
+  readonly crashReason: string | null;
+  readonly failures: readonly string[];
+  readonly at: string;
+}
+
+// A cleanup that failed makes the stop a crash, so the log names what may still run.
+export function buildStopEvents(outcome: StopOutcome): readonly RunEvent[] {
+  const reasons = [
+    ...(outcome.crashReason === null ? [] : [outcome.crashReason]),
+    ...(outcome.failures.length === 0 ? [] : [`cleanup failed for ${outcome.failures.join('; ')}`]),
+  ];
+
+  if (reasons.length === 0) {
+    return [{ type: 'run-ended', at: outcome.at }];
+  }
+
+  return [{ type: 'crashed', at: outcome.at, reason: reasons.join('; ') }];
+}
+
 // Unix socket paths are capped near 108 bytes, so a deep worktree puts the socket in the temp
 // folder under a hash of the path it would have had.
 const maxSocketPathBytes = 100;
@@ -173,7 +201,7 @@ interface TargetStart {
   readonly targetName: string;
   readonly readyTimeoutMs: number;
   readonly signal: AbortSignal;
-  readonly onExit: (exitCode: number) => void;
+  readonly onCrash: (reason: string) => void;
 }
 
 async function startTarget(target: TargetDefinition, start: TargetStart): Promise<Launch> {
@@ -183,7 +211,7 @@ async function startTarget(target: TargetDefinition, start: TargetStart): Promis
       logPath: start.appLog,
       readyTimeoutMs: start.readyTimeoutMs,
       signal: start.signal,
-      onExit: start.onExit,
+      onCrash: start.onCrash,
     });
   }
 

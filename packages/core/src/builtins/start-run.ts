@@ -31,29 +31,33 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     const currentID = pointers.currentRun[ctx.targetName];
     const current = currentID === undefined ? undefined : await ctx.state.readRun(currentID);
+    const live = current?.status === 'running' || current?.status === 'starting';
+    const alive = live && current !== undefined ? await probeSupervisor(current) : false;
 
-    // A run still starting here is one an earlier `up` gave up waiting for; it is replaced, never
-    // reused, so its app and services are stopped first.
-    if (current?.status === 'running' || current?.status === 'starting') {
-      const alive = await probeSupervisor(current);
+    const replacement = pickRunReplacement({
+      status: current?.status,
+      alive,
+      restart: request.restart,
+    });
 
-      if (alive && current.status === 'running' && !request.restart) {
-        return toRunData(current, true);
-      }
+    if (current !== undefined && replacement === 'reuse') {
+      return toRunData(current, true);
+    }
 
-      if (alive) {
-        await callSupervisor({
-          socket: current.supervisor?.socket ?? '',
-          request: { service: supervisorServiceName, method: 'stop', args: null },
-          signal: ctx.signal,
-        });
-      } else {
-        await ctx.state.appendEvent(current.runID, {
-          type: 'crashed',
-          at: ctx.now().toISOString(),
-          reason: "the run's supervisor stopped answering",
-        });
-      }
+    if (current !== undefined && replacement === 'stop') {
+      await callSupervisor({
+        socket: current.supervisor?.socket ?? '',
+        request: { service: supervisorServiceName, method: 'stop', args: null },
+        signal: ctx.signal,
+      });
+    }
+
+    if (current !== undefined && replacement === 'mark-crashed') {
+      await ctx.state.appendEvent(current.runID, {
+        type: 'crashed',
+        at: ctx.now().toISOString(),
+        reason: "the run's supervisor stopped answering",
+      });
     }
 
     const runID = buildRunID(ctx.now());
@@ -91,6 +95,28 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
       throw error;
     }
   });
+}
+
+interface RunReplacementInput {
+  readonly status: RunView['status'] | undefined;
+  readonly alive: boolean;
+  readonly restart: boolean;
+}
+
+type RunReplacement = 'reuse' | 'stop' | 'mark-crashed' | 'start';
+
+// A run still starting is one an earlier `up` gave up waiting for; it is replaced, never reused, so
+// its app and services are stopped first.
+export function pickRunReplacement(input: RunReplacementInput): RunReplacement {
+  if (input.status !== 'running' && input.status !== 'starting') {
+    return 'start';
+  }
+
+  if (!input.alive) {
+    return 'mark-crashed';
+  }
+
+  return input.status === 'running' && !input.restart ? 'reuse' : 'stop';
 }
 
 const pingTimeoutMs = 2000;

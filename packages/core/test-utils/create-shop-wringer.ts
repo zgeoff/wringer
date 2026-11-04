@@ -84,6 +84,41 @@ export function createShopWringer(): Wringer {
         drivers: { notes: () => ({}) },
       }),
     )
+    .command({
+      path: ['stock'],
+      summary: 'Print the stock count, with or without a run',
+      args: emptySchema,
+      data: textSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: async (_args, ctx) => {
+        const result = await ctx.exec(['echo', '12']);
+
+        return { text: result.stdout.trim() };
+      },
+    })
+    .command({
+      path: ['shelf'],
+      summary: 'List the notes on the shelf, without asking for a run',
+      args: emptySchema,
+      data: countSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: async (_args, ctx) => {
+        const listed = await ctx.drivers.notes.list(null);
+
+        return { count: listed.length };
+      },
+    })
+    .command({
+      path: ['restock'],
+      summary: 'Restock the shelves, with no declared effect',
+      args: emptySchema,
+      data: emptySchema,
+      run: () => Promise.resolve({}),
+    })
     .action(
       shop.defineAction({
         name: 'count',

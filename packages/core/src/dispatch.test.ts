@@ -348,6 +348,59 @@ test('it refuses a write action on a read-only target with exit code 3 and the t
   });
 });
 
+test('it refuses a repo command with no declared effect on a read-only target', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['restock']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 3,
+    error: {
+      code: 'read-only',
+      message: '`restock` is a write, and target prod is read-only.',
+      hint: 'prod is read-only: reproduce it on local.',
+    },
+  });
+});
+
+test('it runs a repo command that needs no run on a target with no run', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['stock']);
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { text: '12' },
+  });
+});
+
+test("it gives a repo command that needs no run the running run's services", async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'seed']);
+
+  const result = await ctx.run('local', ['shelf']);
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { count: 1 },
+  });
+});
+
+test('it refuses a driver call from a repo command that needs no run while no run is up', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['shelf']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+    exitCode: 3,
+    error: { code: 'not-running' },
+  });
+});
+
 test('it runs a declared read-only action on a read-only target', async () => {
   const ctx = await setupTest();
 

@@ -9,6 +9,7 @@ import { createWringer } from '../create-wringer.ts';
 import { defineDriver } from '../define-driver.ts';
 import { dispatch } from '../dispatch.ts';
 import { local } from '../local.ts';
+import { probeProcess } from '../probe-process.ts';
 import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {
@@ -17,6 +18,7 @@ async function setupTest() {
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   const pidPath = join(directory, 'check.pid');
+  const scribblePath = join(directory, 'scribble.txt');
 
   const clock = defineDriver({
     name: 'clock',
@@ -53,11 +55,23 @@ async function setupTest() {
         throw new WringerError('check-failed', { message: 'The cart was empty.' });
       },
     })
+    .check({
+      name: 'scribble',
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 1000,
+      run: async (_input, ctx) => {
+        await ctx.exec(['sh', '-c', `echo restocked > '${scribblePath}'`]);
+
+        return {};
+      },
+    })
     .build();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
+    probeScribble: () => Bun.file(scribblePath).exists(),
     readRun: (runID: string) => shop.state.readRun(runID),
     runWithin: (path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
@@ -78,16 +92,7 @@ test('it stops the work of a check that ran past its own deadline', async () => 
 
   const result = await ctx.run(['doctor']);
   const pid = await ctx.readPID();
-
-  const stopped = await waitFor(() => {
-    try {
-      process.kill(pid, 0);
-
-      return null;
-    } catch {
-      return true;
-    }
-  });
+  const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
 
   expect({ exitCode: result.exitCode, stopped }).toStrictEqual({ exitCode: 1, stopped: true });
 });
@@ -121,5 +126,21 @@ test('it starts no check once the doctor ran past its own deadline', async () =>
   expect(view.doctorResults.map((check) => [check.name, check.code])).toStrictEqual([
     ['clock.hang', 'timeout'],
     ['note', 'timeout'],
+    ['scribble', 'timeout'],
   ]);
+});
+
+test('it refuses a write from a check on a read-write target, which stays unchanged', async () => {
+  const ctx = await setupTest();
+  const attached = await ctx.run(['attach']);
+
+  await ctx.run(['doctor']);
+
+  const view = await ctx.readRun(attached.envelope.instance ?? '');
+  const scribbled = await ctx.probeScribble();
+
+  expect({
+    scribble: view?.doctorResults.find((check) => check.name === 'scribble')?.code,
+    scribbled,
+  }).toStrictEqual({ scribble: 'read-only', scribbled: false });
 });

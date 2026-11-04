@@ -7,6 +7,15 @@ test('it registers the five shop targets', () => {
   expect([...wringer.targets.keys()]).toStrictEqual(['local', 'prod', 'broken', 'slow', 'archive']);
 });
 
+test('it registers the stock and restock repo commands', () => {
+  const wringer = createShopWringer();
+
+  expect([wringer.commands.has('stock'), wringer.commands.has('restock')]).toStrictEqual([
+    true,
+    true,
+  ]);
+});
+
 test('it registers the shop actions under `action`', () => {
   const wringer = createShopWringer();
   const actions = [...wringer.commands.keys()].filter((path) => path.startsWith('action '));
