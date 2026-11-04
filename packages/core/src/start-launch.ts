@@ -1,6 +1,7 @@
-import { appendFile, mkdir } from 'node:fs/promises';
+import { appendFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
+import { createDirectory } from './create-directory.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
@@ -30,6 +31,8 @@ const stopGraceMs = 5000;
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const guard = Bun.which('setpriv') === null ? [] : ['setpriv', '--pdeathsig', 'KILL', '--'];
   const cwd = request.plan.cwd ?? process.cwd();
+
+  await createLogFolder(request.logPath);
 
   const child = spawnApp([...guard, ...request.plan.command], {
     cwd,
@@ -65,8 +68,6 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   };
 
   request.signal.addEventListener('abort', onAbort, { once: true });
-
-  await mkdir(dirname(request.logPath), { recursive: true });
 
   const pumpLog = async (
     stream: ReadableStream<Uint8Array>,
@@ -132,6 +133,16 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     request.signal.removeEventListener('abort', onAbort);
 
     clearTimeout(timer);
+  }
+}
+
+async function createLogFolder(logPath: string): Promise<void> {
+  try {
+    await createDirectory(dirname(logPath));
+  } catch (error) {
+    throw new WringerError('environment', {
+      message: `The folder for the app log could not be created: ${String(error)}`,
+    });
   }
 }
 

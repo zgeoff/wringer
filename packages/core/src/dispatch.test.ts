@@ -17,6 +17,8 @@ async function setupTest() {
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+    runOnPointers: (path: readonly string[], args: unknown = {}) =>
+      dispatch(wringer, path, args, shop.session),
   };
 }
 
@@ -38,6 +40,20 @@ test('it answers arguments that fail the schema with a usage error', async () =>
     exitCode: 2,
     code: 'usage',
   });
+});
+
+test('it names no run in the envelope of a move to a target with none', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runOnPointers(['up']);
+
+  const result = await ctx.runOnPointers(['use'], { target: 'prod' });
+
+  expect({
+    target: result.envelope.target,
+    instance: result.envelope.instance,
+    cursors: result.envelope.cursors,
+  }).toStrictEqual({ target: 'prod', instance: null, cursors: {} });
 });
 
 test('it writes an envelope that parses against the published schema', async () => {
