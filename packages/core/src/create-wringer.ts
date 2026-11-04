@@ -105,6 +105,16 @@ function buildWringer(parts: Parts): Wringer {
     })),
   );
 
+  // A driver command reaches its client through the run's services, so it cannot run without one.
+  const runless = driverCommands.find((command) => command.info.needsRun === false);
+
+  if (runless !== undefined) {
+    throw new WringerError('usage', {
+      message: `The driver command \`${runless.info.path.join(' ')}\` needs a run, because its client calls the run's services.`,
+      hint: 'Leave `needsRun` unset on a driver command.',
+    });
+  }
+
   const registered = [
     ...buildLifecycleCommands(),
     ...buildStateCommands(),
