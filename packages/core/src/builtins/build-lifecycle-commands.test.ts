@@ -5,6 +5,7 @@ import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
+import { makeProcessSupervisorStarter } from '../make-process-supervisor-starter.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -18,6 +19,23 @@ async function setupTest() {
       dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
+
+    // The supervisor's command names no program on this machine, so its spawn fails.
+    runWithMissingSupervisor: (target: string, path: readonly string[]) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target,
+          supervisor: makeProcessSupervisorStarter({
+            selfCommand: [join(shop.repo.root, 'no-such-cli')],
+            root: shop.repo.root,
+            stateDir: wringer.stateDir,
+          }),
+        },
+      ),
   };
 }
 
@@ -167,6 +185,17 @@ test('#up stops a run that becomes ready only after the command missed its deadl
   });
 
   expect(status).toBe('ended');
+});
+
+test('#up marks the new run crashed when its supervisor cannot start', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runWithMissingSupervisor('local', ['up']);
+  const view = await ctx.state.readRun(result.envelope.instance ?? '');
+
+  expect({ code: result.envelope.error?.code, status: view?.status }).toStrictEqual({
+    code: 'environment',
+    status: 'crashed',
+  });
 });
 
 test('#up refuses an attach target with a usage error naming attach', async () => {
