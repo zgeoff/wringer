@@ -1,6 +1,7 @@
 import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
+import { buildRequestHeaders } from './build-request-headers.ts';
 import { pickHttpEffect } from './pick-http-effect.ts';
 
 const methodSchema = z.enum(['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -121,13 +122,7 @@ async function sendRequest(
 
   const hasBody = request.json !== undefined;
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
-
-  // Headers match names in any case, so a caller's `Content-Type` replaces the default.
-  const headers = new Headers(request.headers);
-
-  if (hasBody && !headers.has('content-type')) {
-    headers.set('content-type', 'application/json');
-  }
+  const headers = buildRequestHeaders(request.headers, hasBody);
 
   // A followed 307 or 308 repeats the method and body at a path the target never granted.
   const fetched = await sendFetch(transport, url, {

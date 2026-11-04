@@ -115,14 +115,10 @@ function rejectUndeclaredWrite(fence: Fence, sql: string): Promise<never> {
   const declare = fence({
     effect: () => 'write',
     describe: () => `The statement \`${summarize(sql)}\``,
-    run: () => rejectWith(undeclared),
+    run: () => Promise.reject(undeclared),
   });
 
   return declare(null);
-}
-
-function rejectWith(error: WringerError): Promise<never> {
-  return Promise.reject(error);
 }
 
 type RunnablePlan = Exclude<QueryPlan, { readonly kind: 'undeclared-write' }>;
@@ -145,7 +141,7 @@ async function readResult(
 // reach or open is the environment's fault; anything else is the statement's.
 function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise<never> {
   if (error instanceof WringerError) {
-    return rejectWith(error);
+    return Promise.reject(error);
   }
 
   const message = error instanceof Error ? error.message : String(error);
@@ -155,7 +151,7 @@ function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise
     return rejectUndeclaredWrite(fence, sql);
   }
 
-  return rejectWith(buildDatabaseError(failure, message));
+  return Promise.reject(buildDatabaseError(failure, message));
 }
 
 function pickErrorCode(error: unknown): string | null {
