@@ -259,7 +259,9 @@ async function readContext(
     target,
     run,
     feature: session.feature ?? pointers.feature ?? null,
-    cursors: pointers.cursors,
+
+    // Saved cursors are offsets into one run's streams; another run's streams start over.
+    cursors: runID !== undefined && pointers.cursorsRun === runID ? pointers.cursors : {},
   };
 }
 
