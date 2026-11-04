@@ -1,13 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { z } from 'zod';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
+import { buildRunPaths } from './build-state-paths.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { createRepoState } from './create-repo-state.ts';
 import { createWringer } from './create-wringer.ts';
 import { defineDriver } from './define-driver.ts';
 import { local } from './local.ts';
+import { readLaunchHost } from './read-launch-host.ts';
 import { buildStopEvents, runSupervisor } from './run-supervisor.ts';
 import { supervisorServiceName } from './supervisor-protocol.ts';
 import { WringerError } from './wringer-error.ts';
@@ -71,6 +74,7 @@ async function setupTest() {
       stopGate.resolve(undefined);
     },
     readRun: (runID: string) => state.readRun(runID),
+    runFolder: (runID: string) => buildRunPaths(state.paths.root, runID).directory,
     seedRun: (runID: string) =>
       state.appendEvent(runID, {
         type: 'run-started',
@@ -82,6 +86,7 @@ async function setupTest() {
     runSupervisor: (runID: string) =>
       runSupervisor({
         wringer,
+        launchHost: readLaunchHost(),
         state,
         runID,
         target: 'box',
@@ -149,6 +154,37 @@ test('#runSupervisor answers a second stop only once the first has ended the run
   const [afterFirst, afterSecond] = await Promise.all([first, second, supervising]);
 
   expect([afterFirst?.status, afterSecond?.status]).toStrictEqual(['crashed', 'crashed']);
+});
+
+test('#runSupervisor ends and frees its socket when its final log write fails', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  await rm(join(ctx.runFolder('shelf-run'), 'manifest.json'));
+  await mkdir(join(ctx.runFolder('shelf-run'), 'manifest.json', 'blocked'), { recursive: true });
+
+  ctx.openStopGate();
+
+  const socket = ready.supervisor?.socket ?? '';
+
+  const [stopFailure] = await Promise.all([
+    ctx.stopThenRead(socket, 'shelf-run').catch((error: unknown) => error),
+    supervising,
+  ]);
+
+  expect({
+    stopFailure,
+    socketLeft: await Bun.file(socket).exists(),
+  }).toStrictEqual({ stopFailure: expect.any(WringerError), socketLeft: false });
 });
 
 test('#runSupervisor records a service that failed to stop in the crash reason', async () => {

@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { probeProcess } from './probe-process.ts';
+import { readLaunchHost } from './read-launch-host.ts';
 import { startLaunch } from './start-launch.ts';
+import type { LaunchRequest } from './start-launch.ts';
 import { WringerError } from './wringer-error.ts';
 
 async function setupTest() {
@@ -12,9 +14,18 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
+  const host = readLaunchHost();
+
   return {
     directory,
     logPath: join(directory, 'app.log'),
+    startApp: async (request: Omit<LaunchRequest, 'host'>) => {
+      const launch = await startLaunch({ host, ...request });
+
+      onTestFinished(() => launch.stop());
+
+      return launch;
+    },
     readPID: async (path: string) => {
       const text = await readFile(path, 'utf8');
 
@@ -27,7 +38,7 @@ async function setupTest() {
 test('it resolves the endpoints from the first ready line', async () => {
   const ctx = await setupTest();
 
-  const launch = await startLaunch({
+  const launch = await ctx.startApp({
     plan: {
       command: ['sh', '-c', 'echo booting; echo \'{"port":4100}\'; exec sleep 60'],
       ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
@@ -38,8 +49,6 @@ test('it resolves the endpoints from the first ready line', async () => {
     onCrash: mock<(reason: string) => void>(),
   });
 
-  onTestFinished(() => launch.stop());
-
   expect(launch.endpoints).toStrictEqual({ web: 'http://127.0.0.1:4100' });
 });
 
@@ -48,7 +57,7 @@ test('it stops a server that the app started when the run stops', async () => {
 
   const pidPath = join(ctx.directory, 'server.pid');
 
-  const launch = await startLaunch({
+  const launch = await ctx.startApp({
     plan: {
       command: ['sh', '-c', 'sleep 60 & echo $! > "$0"; echo \'{"port":4100}\'; wait', pidPath],
       ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
@@ -76,7 +85,7 @@ test('it stops the app when the run stops before the app is ready', async () => 
 
   const controller = new AbortController();
 
-  const launching = startLaunch({
+  const launching = ctx.startApp({
     plan: {
       command: ['sh', '-c', 'echo $$ > "$0"; echo booting; exec sleep 60', pidPath],
       ready: (line) => {
@@ -106,7 +115,7 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
   const onCrash = mock<(reason: string) => void>();
   const exitPath = join(ctx.directory, 'exit');
 
-  await startLaunch({
+  await ctx.startApp({
     plan: {
       command: [
         'sh',
@@ -129,10 +138,39 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
   expect(onCrash.mock.calls).toStrictEqual([['The app exited with code 7.']]);
 });
 
+test('it starts the app in the host folder with the host environment and the plan’s own', async () => {
+  const ctx = await setupTest();
+
+  const launch = await startLaunch({
+    host: { guard: [], cwd: ctx.directory, env: { PATH: process.env['PATH'], SHELF: 'herbs' } },
+    plan: {
+      command: [
+        'sh',
+        '-c',
+        `printf '{"cwd":"%s","shelf":"%s","row":"%s"}' "$PWD" "$SHELF" "$ROW"; echo; exec sleep 60`,
+      ],
+      env: { ROW: '3' },
+      ready: (line) => ({
+        cwd: String(line['cwd']),
+        shelf: String(line['shelf']),
+        row: String(line['row']),
+      }),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  onTestFinished(() => launch.stop());
+
+  expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
+});
+
 test('it refuses with an environment error when the app cannot start', async () => {
   const ctx = await setupTest();
 
-  const launching = startLaunch({
+  const launching = ctx.startApp({
     plan: {
       command: ['sh', '-c', 'exec sleep 60'],
       cwd: join(ctx.directory, 'missing'),
@@ -150,7 +188,7 @@ test('it refuses with an environment error when the app cannot start', async () 
 test('it refuses to start the app of a run that stopped already', async () => {
   const ctx = await setupTest();
 
-  const launching = startLaunch({
+  const launching = ctx.startApp({
     plan: { command: ['sleep', '60'], cwd: join(ctx.directory, 'missing'), ready: () => null },
     logPath: ctx.logPath,
     readyTimeoutMs: 10_000,
@@ -169,7 +207,7 @@ test('it refuses a log folder it cannot create before it tries to start the app'
 
   await writeFile(join(ctx.directory, 'logs'), 'a file where the log folder goes\n');
 
-  const launching = startLaunch({
+  const launching = ctx.startApp({
     plan: { command: ['sleep', '60'], cwd: join(ctx.directory, 'missing'), ready: () => null },
     logPath: join(ctx.directory, 'logs', 'app.log'),
     readyTimeoutMs: 10_000,
@@ -188,7 +226,7 @@ test('it refuses with an environment error when the app log cannot be written', 
 
   await mkdir(ctx.logPath);
 
-  const launching = startLaunch({
+  const launching = ctx.startApp({
     plan: {
       command: ['sh', '-c', 'echo booting; exec sleep 60'],
       ready: () => null,

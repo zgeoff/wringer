@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
 import { createDirectory } from './create-directory.ts';
 import { killProcessGroup } from './kill-process-group.ts';
+import type { LaunchHost } from './read-launch-host.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
 import { runProcess } from './run-process.ts';
@@ -11,6 +12,7 @@ import type { LaunchPlan } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface LaunchRequest {
+  readonly host: LaunchHost;
   readonly plan: LaunchPlan;
   readonly logPath: string;
   readonly readyTimeoutMs: number;
@@ -26,11 +28,9 @@ export interface Launch {
 const stopGraceMs = 5000;
 
 // The app runs in a process group of its own, and every stop signals the whole group, so a server
-// that a shell or a script runner started stops with it. setpriv asks the kernel to kill the app
-// when the supervisor dies; hosts without setpriv, such as macOS, run the app without that guard.
+// that a shell or a script runner started stops with it.
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
-  const guard = Bun.which('setpriv') === null ? [] : ['setpriv', '--pdeathsig', 'KILL', '--'];
-  const cwd = request.plan.cwd ?? process.cwd();
+  const cwd = request.plan.cwd ?? request.host.cwd;
 
   await createLogFolder(request.logPath);
 
@@ -39,9 +39,9 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     throw new WringerError('environment', { message: 'The run stopped before the app was ready.' });
   }
 
-  const child = spawnApp([...guard, ...request.plan.command], {
+  const child = spawnApp([...request.host.guard, ...request.plan.command], {
     cwd,
-    env: { ...process.env, ...request.plan.env },
+    env: { ...request.host.env, ...request.plan.env },
   });
 
   const ready = Promise.withResolvers<Endpoints>();

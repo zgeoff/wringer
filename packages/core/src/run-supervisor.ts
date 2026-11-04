@@ -6,6 +6,7 @@ import type { StatePort } from './create-file-state.ts';
 import { getTarget } from './get-target.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
 import { defaultRefusalHint } from './make-fence.ts';
+import type { LaunchHost } from './read-launch-host.ts';
 import type { Endpoints, RunEvent } from './run-events.ts';
 import { startLaunch } from './start-launch.ts';
 import type { Launch } from './start-launch.ts';
@@ -18,6 +19,7 @@ import { WringerError } from './wringer-error.ts';
 
 export interface SupervisorOptions {
   readonly wringer: Wringer;
+  readonly launchHost: LaunchHost;
   readonly state: StatePort;
   readonly runID: string;
   readonly target: string;
@@ -43,12 +45,13 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const at = (): string => options.now().toISOString();
   let launch: Launch | undefined;
-  let stopping: Promise<void> | undefined;
+  let stopping: Promise<WringerError | null> | undefined;
   const startup = Promise.withResolvers<undefined>();
 
   // A stop during startup waits for the app and services still starting, so it stops each one that
-  // comes up late instead of leaving it running. Every cleanup runs, even after one fails.
-  const shutDown = async (crashReason: string | null): Promise<void> => {
+  // comes up late instead of leaving it running. Every cleanup runs, even after one fails, and the
+  // supervisor ends even when the final log write fails; that failure goes to the stop's caller.
+  const shutDown = async (crashReason: string | null): Promise<WringerError | null> => {
     lifetime.abort();
 
     await startup.promise;
@@ -66,17 +69,23 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
         : [],
     );
 
-    for (const event of buildStopEvents({ crashReason, failures, at: at() })) {
-      await append(event);
+    try {
+      for (const event of buildStopEvents({ crashReason, failures, at: at() })) {
+        await append(event);
+      }
+
+      await options.state.writeManifest(options.runID);
+
+      return null;
+    } catch (error) {
+      return toWringerError(error);
+    } finally {
+      stopped.resolve(undefined);
     }
-
-    await options.state.writeManifest(options.runID);
-
-    stopped.resolve(undefined);
   };
 
   // A second stop, such as a `down` while a crash is still stopping the run, waits for the first.
-  const stop = (crashReason: string | null): Promise<void> => {
+  const stop = (crashReason: string | null): Promise<WringerError | null> => {
     stopping ??= shutDown(crashReason);
 
     return stopping;
@@ -84,8 +93,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const answerRequest = async (request: SupervisorRequest): Promise<unknown> => {
     if (request.service === supervisorServiceName) {
-      if (request.method === 'stop') {
-        await stop(null);
+      const failure = request.method === 'stop' ? await stop(null) : null;
+
+      if (failure !== null) {
+        throw failure;
       }
 
       return { pid: process.pid };
@@ -116,6 +127,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   try {
     launch = await startTarget(target, {
+      launchHost: options.launchHost,
       runDirectory: run.paths.directory,
       appLog: run.childLog('app').path,
       targetName: options.target,
@@ -196,6 +208,7 @@ function pickSocketPath(path: string): string {
 }
 
 interface TargetStart {
+  readonly launchHost: LaunchHost;
   readonly runDirectory: string;
   readonly appLog: string;
   readonly targetName: string;
@@ -207,6 +220,7 @@ interface TargetStart {
 async function startTarget(target: TargetDefinition, start: TargetStart): Promise<Launch> {
   if (target.mode === 'launch') {
     return startLaunch({
+      host: start.launchHost,
       plan: target.launch({ runDirectory: start.runDirectory }),
       logPath: start.appLog,
       readyTimeoutMs: start.readyTimeoutMs,
