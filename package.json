@@ -72,7 +72,8 @@
     "oxlint": "1.87.0",
     "ts-pattern": "5.9.2",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "zod": "catalog:"
   },
   "engines": {
     "node": ">=24"
