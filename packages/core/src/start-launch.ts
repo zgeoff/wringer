@@ -34,6 +34,11 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
   await createLogFolder(request.logPath);
 
+  // The abort listener below never fires for a run that stopped already, so the app would start.
+  if (request.signal.aborted) {
+    throw new WringerError('environment', { message: 'The run stopped before the app was ready.' });
+  }
+
   const child = spawnApp([...guard, ...request.plan.command], {
     cwd,
     env: { ...process.env, ...request.plan.env },
