@@ -155,6 +155,22 @@ export function createShopWringer(): Wringer {
     )
     .action(
       shop.defineAction({
+        name: 'hoard',
+        summary: 'Keep more notes as evidence than one log event can list',
+        effect: 'read',
+        input: emptySchema,
+        data: emptySchema,
+        run: async (_input, ctx) => {
+          for (let index = 0; index < 400; index += 1) {
+            await ctx.evidence.writeFile('note', 'cart.txt', `note ${index}`);
+          }
+
+          return {};
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
         name: 'flood',
         summary: 'Return more data than the cap',
         effect: 'read',

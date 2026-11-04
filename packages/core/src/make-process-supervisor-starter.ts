@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { buildRunPaths } from './build-state-paths.ts';
 import { supervisorCommandName } from './supervisor-protocol.ts';
 import type { SupervisorStarter } from './types.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface ProcessSupervisorOptions {
   readonly selfCommand: readonly string[];
@@ -22,6 +23,7 @@ export function makeProcessSupervisorStarter(options: ProcessSupervisorOptions):
 
       const log = openSync(paths.supervisorLog, 'a');
       const [command = 'bun', ...args] = options.selfCommand;
+      const started = Promise.withResolvers<void>();
 
       const child = spawn(
         command,
@@ -29,11 +31,25 @@ export function makeProcessSupervisorStarter(options: ProcessSupervisorOptions):
         { cwd: options.root, detached: true, stdio: ['ignore', log, log] },
       );
 
+      // A command that cannot start, such as one missing from the PATH, fails after spawn returns.
+      child.once('spawn', () => {
+        started.resolve();
+      });
+
+      child.once('error', (error) => {
+        started.reject(
+          new WringerError('environment', {
+            message: `The supervisor did not start: ${error.message}`,
+            hint: `Check that ${command} runs from ${options.root}.`,
+          }),
+        );
+      });
+
       child.unref();
 
       closeSync(log);
 
-      return Promise.resolve();
+      return started.promise;
     },
   };
 }

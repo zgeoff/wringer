@@ -107,6 +107,17 @@ async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<Check
   const deadline = AbortSignal.any([ctx.signal, AbortSignal.timeout(check.timeoutMs)]);
   const timedOut = Promise.withResolvers<never>();
 
+  // An abort listener added to a signal that already fired never runs, so the check would run on.
+  if (deadline.aborted) {
+    return {
+      name: check.name,
+      status: 'failed',
+      durationMs: 0,
+      code: 'timeout',
+      message: `${check.name} did not start: the doctor's deadline had passed.`,
+    };
+  }
+
   const onAbort = (): void => {
     timedOut.reject(
       new WringerError('timeout', { message: `${check.name} ran past ${check.timeoutMs} ms.` }),

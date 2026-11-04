@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
 import { buildEnvelope } from './build-envelope.ts';
+import type { EnvelopeInput } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
@@ -49,7 +50,7 @@ interface CommandOutcome {
 // What a command has done so far, filled in as it runs, so a command that fails or misses its
 // deadline still reports the evidence it kept and the run and feature it drove.
 interface DriveTrace {
-  evidence: readonly Evidence[];
+  readonly evidence: (readonly Evidence[])[];
   drive: boolean;
 }
 
@@ -117,6 +118,15 @@ export async function dispatch(
   const run = settled?.run ?? before?.run;
   const feature = settled?.feature ?? null;
 
+  const cursorsRead =
+    run === undefined ? {} : await readEnvelopeCursors(buildRunPaths(stateDir, run.runID).streams);
+
+  const cursors = cursorsRead instanceof WringerError ? {} : cursorsRead;
+
+  if (failure === null && cursorsRead instanceof WringerError) {
+    failure = cursorsRead;
+  }
+
   const capped = await capData(pickEnvelopeData(outcome?.data, failure), {
     root: session.root,
     directory:
@@ -128,10 +138,7 @@ export async function dispatch(
 
   const sha = await readHeadSHA(session.root);
 
-  const cursors =
-    run === undefined ? {} : await readCursors(buildRunPaths(stateDir, run.runID).streams);
-
-  const envelope = buildEnvelope({
+  const input: EnvelopeInput = {
     command: path.join('.'),
     target: settled?.targetName ?? null,
     instance: run?.runID ?? null,
@@ -139,14 +146,24 @@ export async function dispatch(
     sha,
     durationMs: performance.now() - startedMs,
     data: capped.data,
-    evidence: [...trace.evidence, ...capped.evidence],
+    evidence: [...trace.evidence.flat(), ...capped.evidence],
     cursors,
     truncatedPath: capped.truncatedPath,
     error: failure,
-  });
+  };
 
-  if (run !== undefined) {
-    await logEnvelope(state, run, envelope, { drive: trace.drive, failure, now });
+  const envelope = buildEnvelope(input);
+
+  const logFailure =
+    run === undefined
+      ? null
+      : await writeEnvelopeLog(state, run, envelope, { drive: trace.drive, failure, now });
+
+  if (logFailure !== null) {
+    return {
+      envelope: buildEnvelope({ ...input, data: null, truncatedPath: null, error: logFailure }),
+      exitCode: exitCodeFor[logFailure.code],
+    };
   }
 
   return { envelope, exitCode: failure === null ? 0 : exitCodeFor[failure.code] };
@@ -236,8 +253,11 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     });
   }
 
-  // The drive's evidence list grows as the command runs; the trace holds the same list.
-  request.trace.evidence = drive?.evidence ?? [];
+  // A drive's evidence list grows as the command runs; the trace holds the same list, one per drive.
+  if (drive !== undefined) {
+    request.trace.evidence.push(drive.evidence);
+  }
+
   request.trace.drive = needsRun && needsDoctor;
 
   const data = await prepared.run();
@@ -373,8 +393,18 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     signal: request.deadline,
     now: request.now,
     emit: makeEmit(request.session),
-    openDrive: (access, signal) =>
-      openRunDrive(request, { run: getRunningRun(request.context.run), access, hint, signal }),
+    openDrive: (access, signal) => {
+      const drive = openRunDrive(request, {
+        run: getRunningRun(request.context.run),
+        access,
+        hint,
+        signal,
+      });
+
+      request.trace.evidence.push(drive.evidence);
+
+      return drive;
+    },
   };
 }
 
@@ -407,6 +437,16 @@ async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise
     return await Promise.race([work, aborted.promise]);
   } finally {
     deadline.removeEventListener('abort', onAbort);
+  }
+}
+
+async function readEnvelopeCursors(
+  streamsDirectory: string,
+): Promise<Record<string, number> | WringerError> {
+  try {
+    return await readCursors(streamsDirectory);
+  } catch (error) {
+    return toWringerError(error);
   }
 }
 
@@ -455,6 +495,23 @@ interface LogRequest {
   readonly drive: boolean;
   readonly failure: WringerError | null;
   readonly now: () => Date;
+}
+
+// The command has already run, so a log write that fails, such as an event over the log's cap,
+// still yields an envelope, one that carries the failure.
+async function writeEnvelopeLog(
+  state: StatePort,
+  run: RunView,
+  envelope: Envelope,
+  request: LogRequest,
+): Promise<WringerError | null> {
+  try {
+    await logEnvelope(state, run, envelope, request);
+
+    return null;
+  } catch (error) {
+    return toWringerError(error);
+  }
 }
 
 async function logEnvelope(
