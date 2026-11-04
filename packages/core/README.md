@@ -39,7 +39,7 @@ An envelope's `error.code` is one of these, and the command exits with its exit 
 | -------------------- | ---- | ---------------------------------------------- |
 | `check-failed`       | 1    | A check or an assertion failed.                |
 | `usage`              | 2    | The command or its arguments are not valid.    |
-| `read-only`          | 3    | The read-only fence refused a write.           |
+| `read-only`          | 3    | A read-only target refused a write.            |
 | `doctor-required`    | 3    | The doctor has not passed on the current run.  |
 | `not-running`        | 3    | The target has no running run.                 |
 | `target-not-allowed` | 3    | The command does not run on this target.       |
