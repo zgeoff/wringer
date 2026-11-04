@@ -6,20 +6,31 @@ type Dialect = 'sqlite' | 'postgres';
 type Via = 'sql' | 'exec';
 
 const sqliteEscapePattern = /\b(?:attach|vacuum|query_only)\b/iu;
+const postgresEscapePattern = /\b(?:copy|lo_export)\b/iu;
 
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
 
-// A read-only SQLite handle still runs `VACUUM INTO`, which copies the database to any path. A
-// psql read runs inside a SELECT wrapper, where a write fails as a syntax error before the
-// read-only transaction can refuse it, so the statement's first word decides.
+const writeWordPattern = /\b(?:insert|update|delete|merge)\b/iu;
+
+// Read-only SQLite still runs `VACUUM INTO`, and a read-only Postgres transaction still runs
+// `COPY … TO` and `lo_export`: each writes a file. A psql read runs inside a SELECT wrapper, where a
+// write fails as a syntax error before the transaction can refuse it, so its words decide.
 export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): boolean {
+  const bare = toBareSQL(sql);
+
   if (dialect === 'sqlite') {
-    return sqliteEscapePattern.test(toBareSQL(sql));
+    return sqliteEscapePattern.test(bare);
+  }
+
+  if (postgresEscapePattern.test(bare)) {
+    return true;
   }
 
   if (via === 'sql') {
     return false;
   }
 
-  return !postgresReadWords.has(findLeadingWord(sql) ?? '');
+  const leading = findLeadingWord(sql) ?? '';
+
+  return !postgresReadWords.has(leading) || (leading === 'with' && writeWordPattern.test(bare));
 }
