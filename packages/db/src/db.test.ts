@@ -109,9 +109,9 @@ test('it answers a database file that went away with an environment error', asyn
 
   const result = await ctx.run('local', ['db', 'query'], { sql: 'select id from notes' });
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 4,
-    error: { code: 'environment' },
+    code: 'environment',
   });
 });
 
