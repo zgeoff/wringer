@@ -1,0 +1,148 @@
+import { buildActionCommand, buildRepoCheck, buildRepoCommand } from './build-commands.ts';
+import { buildDoctorCommand } from './builtins/build-doctor-command.ts';
+import { buildExecCommand } from './builtins/build-exec-command.ts';
+import { buildLifecycleCommands } from './builtins/build-lifecycle-commands.ts';
+import { buildStateCommands } from './builtins/build-state-commands.ts';
+import { buildVerdictCommands } from './builtins/build-verdict-commands.ts';
+import type {
+  ActionDefinition,
+  AnyDriver,
+  AnyDrivers,
+  CheckDefinition,
+  CommandSpec,
+  FeatureDefinition,
+  HookHandlers,
+  RegisteredCommand,
+  RunnableRepoCheck,
+  TargetDefinition,
+  Wringer,
+} from './types.ts';
+import { WringerError } from './wringer-error.ts';
+
+export interface WringerOptions {
+  readonly name: string;
+  readonly stateDir?: string | undefined;
+}
+
+export interface WringerBuilder<Ds extends AnyDrivers> {
+  readonly use: <const Added extends readonly AnyDriver[]>(
+    ...drivers: Added
+  ) => WringerBuilder<readonly [...Ds, ...Added]>;
+  readonly target: (name: string, target: TargetDefinition<Ds>) => WringerBuilder<Ds>;
+  readonly command: <Args, Data>(spec: CommandSpec<Args, Data, Ds>) => WringerBuilder<Ds>;
+  readonly action: <Input, Data>(action: ActionDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
+  readonly check: <Input, Data>(check: CheckDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
+  readonly feature: (...features: readonly FeatureDefinition[]) => WringerBuilder<Ds>;
+  readonly hook: <Name extends keyof HookHandlers>(
+    name: Name,
+    handler: HookHandlers[Name],
+  ) => WringerBuilder<Ds>;
+  readonly build: () => Wringer;
+}
+
+// Each call returns a new builder. `build` adds the built-in commands, refuses a duplicate command
+// path or target name, then freezes the registry.
+export function createWringer(options: WringerOptions): WringerBuilder<readonly []> {
+  return makeBuilder({
+    options,
+    drivers: [],
+    targets: [],
+    commands: [],
+    checks: [],
+    features: [],
+    hooks: {},
+  });
+}
+
+interface Parts {
+  readonly options: WringerOptions;
+  readonly drivers: readonly AnyDriver[];
+  readonly targets: readonly (readonly [string, TargetDefinition])[];
+  readonly commands: readonly ((driverNames: readonly string[]) => RegisteredCommand)[];
+  readonly checks: readonly ((driverNames: readonly string[]) => RunnableRepoCheck)[];
+  readonly features: readonly FeatureDefinition[];
+  readonly hooks: Partial<HookHandlers>;
+}
+
+function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
+  return {
+    // oxlint-disable-next-line zgeoff/function-verb -- the public builder API names this step `use`
+    use: (...drivers) => makeBuilder({ ...parts, drivers: [...parts.drivers, ...drivers] }),
+    target: (name, target) =>
+      makeBuilder({ ...parts, targets: [...parts.targets, [name, target]] }),
+    command: (spec) =>
+      makeBuilder({
+        ...parts,
+        commands: [...parts.commands, (names) => buildRepoCommand(spec, undefined, names)],
+      }),
+    action: (action) =>
+      makeBuilder({
+        ...parts,
+        commands: [...parts.commands, (names) => buildActionCommand(action, names)],
+      }),
+    check: (check) =>
+      makeBuilder({ ...parts, checks: [...parts.checks, (names) => buildRepoCheck(check, names)] }),
+    feature: (...features) => makeBuilder({ ...parts, features: [...parts.features, ...features] }),
+    hook: (name, handler) => makeBuilder({ ...parts, hooks: { ...parts.hooks, [name]: handler } }),
+    build: () => buildWringer(parts),
+  };
+}
+
+export const defaultStateDir = '.wringer';
+
+function buildWringer(parts: Parts): Wringer {
+  if (parts.targets.length === 0) {
+    throw new WringerError('usage', { message: 'A wringer CLI needs at least one target.' });
+  }
+
+  const driverNames = parts.drivers.map((driver) => driver.name);
+
+  const driverCommands = parts.drivers.flatMap((driver) =>
+    driver.commands.map((info): RegisteredCommand => ({
+      kind: 'driver',
+      info,
+      driver: driver.name,
+    })),
+  );
+
+  const registered = [
+    ...buildLifecycleCommands(),
+    ...buildStateCommands(),
+    ...buildVerdictCommands(),
+    buildDoctorCommand(),
+    buildExecCommand(),
+    ...driverCommands,
+    ...parts.commands.map((buildEntry) => buildEntry(driverNames)),
+  ];
+
+  return Object.freeze({
+    name: parts.options.name,
+    stateDir: parts.options.stateDir ?? defaultStateDir,
+    drivers: Object.freeze([...parts.drivers]),
+    targets: buildUniqueMap(parts.targets, 'target'),
+    commands: buildUniqueMap(
+      registered.map((command) => [command.info.path.join(' '), command] as const),
+      'command',
+    ),
+    checks: Object.freeze(parts.checks.map((buildEntry) => buildEntry(driverNames))),
+    features: Object.freeze([...parts.features]),
+    hooks: Object.freeze({ ...parts.hooks }),
+  });
+}
+
+function buildUniqueMap<Value>(
+  entries: readonly (readonly [string, Value])[],
+  kind: string,
+): ReadonlyMap<string, Value> {
+  const map = new Map<string, Value>();
+
+  for (const [key, value] of entries) {
+    if (map.has(key)) {
+      throw new WringerError('usage', { message: `Two ${kind}s share the name \`${key}\`.` });
+    }
+
+    map.set(key, value);
+  }
+
+  return map;
+}

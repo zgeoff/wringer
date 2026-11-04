@@ -1,0 +1,125 @@
+import { expect, test } from 'bun:test';
+import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
+import { createTestSession } from '../../test-utils/create-test-session.ts';
+import { dispatch } from '../dispatch.ts';
+
+async function setupTest() {
+  const wringer = createShopWringer();
+
+  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+
+  return {
+    state: shop.state,
+    run: (target: string, path: readonly string[], args: unknown = {}) =>
+      dispatch(wringer, path, args, { ...shop.session, target }),
+  };
+}
+
+test('#up reuses the running run of a target, keeping its doctor pass', async () => {
+  const ctx = await setupTest();
+  const first = await ctx.run('local', ['up']);
+
+  await ctx.run('local', ['doctor']);
+
+  const second = await ctx.run('local', ['up']);
+
+  expect(second.envelope.data).toMatchObject({ run: first.envelope.instance, reused: true });
+});
+
+test('#up --restart ends the current run and starts a new one', async () => {
+  const ctx = await setupTest();
+  const first = await ctx.run('local', ['up']);
+  const second = await ctx.run('local', ['up'], { restart: true });
+  const old = await ctx.state.readRun(first.envelope.instance ?? '');
+
+  expect({
+    fresh: second.envelope.instance !== first.envelope.instance,
+    old: old?.status,
+  }).toStrictEqual({
+    fresh: true,
+    old: 'ended',
+  });
+});
+
+test('#up marks a run whose supervisor is gone as crashed, then starts a new run', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'supervisor-ready',
+    at: '2026-11-04T10:00:01.000Z',
+    pid: 1,
+    socket: '/nonexistent/wringer.sock',
+  });
+
+  await ctx.state.appendEvent('gone-run', { type: 'run-ready', at: '2026-11-04T10:00:02.000Z' });
+  await ctx.state.writePointers((current) => ({ ...current, currentRun: { local: 'gone-run' } }));
+  await ctx.run('local', ['up']);
+
+  const old = await ctx.state.readRun('gone-run');
+
+  expect(old?.status).toBe('crashed');
+});
+
+test('#up fails with an environment error when the app exits before it is ready', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('broken', ['up']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+    exitCode: 4,
+    error: { code: 'environment', message: expect.stringContaining('exited with code 3') },
+  });
+});
+
+test('#up refuses an attach target with a usage error naming attach', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('prod', ['up']);
+
+  expect(result.envelope.error).toStrictEqual({
+    code: 'usage',
+    message: 'Target prod is an attach target.',
+    hint: 'Run `attach --target prod`.',
+  });
+});
+
+test('#down stops the run, ends its log and clears the pointer', async () => {
+  const ctx = await setupTest();
+  const up = await ctx.run('local', ['up']);
+
+  await ctx.run('local', ['down']);
+
+  const [view, pointers] = await Promise.all([
+    ctx.state.readRun(up.envelope.instance ?? ''),
+    ctx.state.readPointers(),
+  ]);
+
+  expect({ status: view?.status, currentRun: pointers.currentRun }).toStrictEqual({
+    status: 'ended',
+    currentRun: {},
+  });
+});
+
+test('#down on a target with no run reports that it stopped nothing', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['down']);
+
+  expect(result.envelope.data).toStrictEqual({ run: null, stopped: false });
+});
+
+test('#detach ends the run of an attach target', async () => {
+  const ctx = await setupTest();
+  const attach = await ctx.run('prod', ['attach']);
+
+  await ctx.run('prod', ['detach']);
+
+  const view = await ctx.state.readRun(attach.envelope.instance ?? '');
+
+  expect(view?.status).toBe('ended');
+});

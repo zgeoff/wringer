@@ -30,6 +30,7 @@ test('it reads a running run with its endpoints, services and supervisor from it
         endpoints: { web: 'http://127.0.0.1:4000' },
       },
       { type: 'service-ready', at: '2026-11-04T10:00:03.000Z', service: 'browser' },
+      { type: 'run-ready', at: '2026-11-04T10:00:04.000Z' },
     ],
   });
 
