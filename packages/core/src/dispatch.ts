@@ -180,6 +180,18 @@ async function readContext(
   state: StatePort,
   session: Session,
 ): Promise<CommandContext> {
+  // A feature names a folder of the run, so only a feature of the map may reach a path; `use` checks
+  // the feature it saves, and this checks the one a command passes.
+  if (
+    session.feature !== undefined &&
+    !wringer.features.some((feature) => feature.name === session.feature)
+  ) {
+    throw new WringerError('usage', {
+      message: `The feature map has no feature named ${session.feature}.`,
+      hint: 'Run `features` to list them.',
+    });
+  }
+
   const pointers = await state.readPointers();
 
   const [firstTarget = ''] = wringer.targets.keys();

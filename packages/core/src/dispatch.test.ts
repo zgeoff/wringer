@@ -19,6 +19,8 @@ async function setupTest() {
       dispatch(wringer, path, args, { ...shop.session, target }),
     runOnPointers: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, shop.session),
+    runAsFeature: (feature: string, path: readonly string[], args: unknown) =>
+      dispatch(wringer, path, args, { ...shop.session, target: 'local', feature }),
   };
 }
 
@@ -40,6 +42,21 @@ test('it answers arguments that fail the schema with a usage error', async () =>
     exitCode: 2,
     code: 'usage',
   });
+});
+
+test('it refuses a feature flag the feature map lacks before the command runs', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.runAsFeature('../../escape', ['notes', 'add'], { text: 'pay' });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    feature: result.envelope.feature,
+  }).toStrictEqual({ exitCode: 2, code: 'usage', feature: null });
 });
 
 test('it names no run in the envelope of a move to a target with none', async () => {
