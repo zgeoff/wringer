@@ -121,6 +121,15 @@ async function sendRequest(
   }
 
   const hasBody = request.json !== undefined;
+
+  // fetch refuses a body on GET or HEAD, which would otherwise read as an app that is down.
+  if (hasBody && (request.method === 'GET' || request.method === 'HEAD')) {
+    throw new WringerError('usage', {
+      message: `A ${request.method} request cannot send a JSON body.`,
+      hint: 'Pass the values in the path, or send the body with POST, PUT or PATCH.',
+    });
+  }
+
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
   const headers = buildRequestHeaders(request.headers, hasBody);
 
