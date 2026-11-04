@@ -48,5 +48,8 @@ test('it explains a block that does not hold JSON', () => {
 test('it explains a block whose JSON is not a report', () => {
   const parsed = parseReportBlock('<!-- wringer-report v1\n{"version":2}\n-->');
 
-  expect(parsed).toMatchObject({ ok: false });
+  expect(parsed).toStrictEqual({
+    ok: false,
+    reason: expect.stringMatching(/^The wringer report block does not match the report schema: /u),
+  });
 });
