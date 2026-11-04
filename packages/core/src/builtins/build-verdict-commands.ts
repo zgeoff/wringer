@@ -15,7 +15,10 @@ import type { Report, Verdict } from '../report-schema.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 
-const doneArgsSchema = z.strictObject({ feature: z.string().min(1).optional() });
+const doneArgsSchema = z.strictObject({
+  feature: z.string().min(1).optional(),
+  base: z.string().min(1).optional(),
+});
 
 type DoneArgs = z.infer<typeof doneArgsSchema>;
 
@@ -102,10 +105,12 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     });
   }
 
-  const base = await readDefaultBase(ctx.session.root);
-  const fingerprint = await readCurrentFingerprint(ctx, base);
+  // The run took its fingerprint against the default base, so the tree check uses that base; the
+  // verdict takes the base the PR's gate will use.
+  const defaultBase = await readDefaultBase(ctx.session.root);
+  const treeFingerprint = await readCurrentFingerprint(ctx, defaultBase);
 
-  if (ctx.target.mode === 'launch' && fingerprint !== ctx.run.fingerprint) {
+  if (ctx.target.mode === 'launch' && treeFingerprint !== ctx.run.fingerprint) {
     throw new WringerError('doctor-required', {
       message: 'The working tree changed since this run started.',
       hint: 'Run `up --restart` and `doctor`, then drive the feature again.',
@@ -120,6 +125,11 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
       hint: `Drive the feature with \`--feature ${feature}\`, then run \`done\` again.`,
     });
   }
+
+  const fingerprint =
+    args.base === undefined || args.base === defaultBase
+      ? treeFingerprint
+      : await readCurrentFingerprint(ctx, args.base);
 
   return {
     feature,

@@ -130,6 +130,39 @@ test('#gate passes a PR body whose report holds a verdict at the current fingerp
   });
 });
 
+test('#gate passes a PR into another branch when done took the same base', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+
+  await ctx.git('checkout', '--quiet', '-b', 'release');
+
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'add pay');
+  await ctx.git('checkout', '--quiet', '-b', 'express');
+
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 2;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['done'], { base: 'release' });
+
+  const report = await ctx.run(['report'], { base: 'release' });
+
+  await ctx.writeBody(ctx.parseReportData(report.envelope.data).markdown);
+
+  const result = await ctx.run(['gate'], { base: 'release', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [] },
+  });
+});
+
 test('#gate fails a PR body whose verdict predates a change to the feature', async () => {
   const ctx = await setupTest();
 
