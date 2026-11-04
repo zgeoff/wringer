@@ -82,16 +82,18 @@ function foldRunStatus(events: readonly RunEvent[]): RunStatus | null {
 export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
   return match(eventType)
     .returnType<RunStatus | null>()
-    .with('launch-ready', () => 'running')
+    .with('run-ready', () => 'running')
     .with('crashed', () => 'crashed')
     .with('run-ended', () => 'ended')
     .with(
       'run-started',
       'supervisor-ready',
+      'launch-ready',
       'service-ready',
       'doctor-passed',
       'doctor-failed',
       'envelope',
+      'internal-error',
       () => null,
     )
     .exhaustive();

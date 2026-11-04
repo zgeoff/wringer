@@ -170,7 +170,8 @@ test.each([
 });
 
 test.each([
-  ['launch-ready', 'running'],
+  ['run-ready', 'running'],
+  ['launch-ready', null],
   ['crashed', 'crashed'],
   ['run-ended', 'ended'],
   ['doctor-passed', null],
