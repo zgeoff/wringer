@@ -22,6 +22,7 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
+    directory,
     file,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
@@ -48,6 +49,69 @@ test('it reads rows with their column names', async () => {
       { id: 1, text: 'pay' },
       { id: 2, text: 'ship' },
     ],
+    rowCount: 2,
+  });
+});
+
+test('it keeps the column names of a read that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  const database = new Database(ctx.file);
+
+  database.run('create table notes (id integer primary key, text text not null)');
+  database.close();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['db', 'query'], {
+    sql: 'select id, text from notes where 1 = 0',
+  });
+
+  expect(result.envelope.data).toStrictEqual({ columns: ['id', 'text'], rows: [], rowCount: 0 });
+});
+
+test('it refuses a read that copies the database to another file on a read-only target', async () => {
+  const ctx = await setupTest();
+
+  const copy = join(ctx.directory, 'copy.db');
+
+  const database = new Database(ctx.file);
+
+  database.run('create table notes (id integer primary key, text text not null)');
+  database.close();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['db', 'query'], { sql: `vacuum into '${copy}'` });
+  const copied = await Bun.file(copy).exists();
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code, copied }).toStrictEqual({
+    exitCode: 3,
+    code: 'read-only',
+    copied: false,
+  });
+});
+
+test('it answers a database file that went away with an environment error', async () => {
+  const ctx = await setupTest();
+
+  const database = new Database(ctx.file);
+
+  database.run('create table notes (id integer primary key, text text not null)');
+  database.close();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  await rm(ctx.file);
+
+  const result = await ctx.run('local', ['db', 'query'], { sql: 'select id from notes' });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+    exitCode: 4,
+    error: { code: 'environment' },
   });
 });
 
@@ -69,7 +133,7 @@ test('it runs a write that asks to write on a target that may write', async () =
 
   expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 0,
-    data: { columns: ['id'], rows: [{ id: 1 }] },
+    data: { columns: ['id'], rows: [{ id: 1 }], rowCount: 1 },
   });
 });
 
@@ -172,7 +236,11 @@ test('it runs the write a read-only target grants', async () => {
 
   const result = await ctx.run('prod', ['db', 'query'], { sql: 'select text from notes' });
 
-  expect(result.envelope.data).toStrictEqual({ columns: ['text'], rows: [{ text: 'archived' }] });
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['text'],
+    rows: [{ text: 'archived' }],
+    rowCount: 1,
+  });
 });
 
 test('it reads rows through the database client on the target host', async () => {
@@ -189,7 +257,11 @@ test('it reads rows through the database client on the target host', async () =>
 
   const result = await ctx.run('box', ['db', 'query'], { sql: 'select text from notes' });
 
-  expect(result.envelope.data).toStrictEqual({ columns: ['text'], rows: [{ text: 'pay' }] });
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['text'],
+    rows: [{ text: 'pay' }],
+    rowCount: 1,
+  });
 });
 
 test('it refuses an undeclared write through the database client with exit code 3', async () => {
