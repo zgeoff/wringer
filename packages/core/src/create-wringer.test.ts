@@ -82,6 +82,15 @@ test('it refuses a driver command that declares it needs no run', () => {
   );
 });
 
+test('it refuses two drivers of one name', () => {
+  const builder = createWringer({ name: 'shop' })
+    .use(notes({ prefix: 'a' }))
+    .use(notes({ prefix: 'b' }))
+    .target('local', { mode: 'attach', access: 'read-write', host: local() });
+
+  expect(() => builder.build()).toThrow('Two drivers are named `notes`.');
+});
+
 test('it refuses a CLI with no target', () => {
   expect(() => createWringer({ name: 'shop' }).build()).toThrow(
     'A wringer CLI needs at least one target.',
