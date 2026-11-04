@@ -1,14 +1,15 @@
-import { WringerError, dispatch, exitCodeFor, supervisorCommandName } from '@wringer/core';
-import type { Envelope, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
+import { WringerError, dispatch, supervisorCommandName } from '@wringer/core';
+import type { StatePort, SupervisorStarter, Wringer } from '@wringer/core';
 import { cli, parseArgs } from 'gunshi';
-import { buildFailureEnvelope } from './build-failure-envelope.ts';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
+import { pickCLIOutcome } from './pick-cli-outcome.ts';
+import type { ParsedInvocation } from './pick-cli-outcome.ts';
 import { pickCommandName } from './pick-command-name.ts';
 import { pickDispatchPlan } from './pick-dispatch-plan.ts';
 import { pickOutputMode } from './pick-output-mode.ts';
 import type { OutputMode } from './pick-output-mode.ts';
-import { renderHumanEnvelope } from './render-human-envelope.ts';
+import { renderEnvelope } from './render-envelope.ts';
 import { renderHumanEvent } from './render-human-event.ts';
 
 interface RepoPorts {
@@ -46,25 +47,16 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
 
   const parsed = await readInvocation(wringer, ports);
 
-  if (parsed.kind === 'printed') {
-    ports.writeStdout(parsed.text);
+  const outcome = pickCLIOutcome(parsed, mode);
 
-    return 0;
+  if (outcome.kind === 'dispatch') {
+    return dispatchInvocation(wringer, ports, mode, outcome.invocation);
   }
 
-  if (parsed.kind === 'failed') {
-    writeEnvelope(ports, mode, buildFailureEnvelope(parsed.command, parsed.error));
+  ports.writeStdout(outcome.text);
 
-    return exitCodeFor[parsed.error.code];
-  }
-
-  return dispatchInvocation(wringer, ports, mode, parsed.invocation);
+  return outcome.exitCode;
 }
-
-type ParsedInvocation =
-  | { readonly kind: 'invoked'; readonly invocation: Invocation }
-  | { readonly kind: 'printed'; readonly text: string }
-  | { readonly kind: 'failed'; readonly command: string; readonly error: WringerError };
 
 // gunshi only records the invocation; the command runs after `cli` returns, so a gunshi parse error
 // and a command error never mix. gunshi resolves the command path before it checks the flags, so a
@@ -130,12 +122,6 @@ function toUsageError(error: unknown): WringerError {
   });
 }
 
-function writeEnvelope(ports: CLIPorts, mode: OutputMode, envelope: Envelope): void {
-  const text = mode === 'json' ? `${JSON.stringify(envelope)}\n` : renderHumanEnvelope(envelope);
-
-  ports.writeStdout(text);
-}
-
 async function dispatchInvocation(
   wringer: Wringer,
   ports: CLIPorts,
@@ -147,7 +133,7 @@ async function dispatchInvocation(
   const plan = pickDispatchPlan(invocation, root);
 
   if (plan.kind === 'refuse') {
-    writeEnvelope(ports, mode, plan.envelope);
+    ports.writeStdout(renderEnvelope(plan.envelope, mode));
 
     return plan.exitCode;
   }
@@ -170,7 +156,7 @@ async function dispatchInvocation(
     },
   });
 
-  writeEnvelope(ports, mode, result.envelope);
+  ports.writeStdout(renderEnvelope(result.envelope, mode));
 
   return result.exitCode;
 }
