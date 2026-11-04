@@ -16,6 +16,7 @@ import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
+import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { readDefaultBase } from './read-default-base.ts';
@@ -53,6 +54,7 @@ interface CommandOutcome {
 interface DriveTrace {
   readonly evidence: (readonly Evidence[])[];
   drive: boolean;
+  ranOnRun: boolean;
   boundRun: RunID | null;
 }
 
@@ -76,7 +78,7 @@ export async function dispatch(
   const before = read instanceof WringerError ? null : read;
   let outcome: CommandOutcome | null = null;
   let failure: WringerError | null = null;
-  const trace: DriveTrace = { evidence: [], drive: false, boundRun: null };
+  const trace: DriveTrace = { evidence: [], drive: false, ranOnRun: false, boundRun: null };
 
   try {
     if (read instanceof WringerError) {
@@ -112,12 +114,10 @@ export async function dispatch(
     failure = toWringerError(error);
   }
 
-  // A drive belongs to the run and feature it ran under, even when another command moved the
-  // pointers meanwhile; any other command reports the state it left, such as the run `up` started.
   const after = await readContext(wringer, state, session).catch(() => before);
   const bound = await readBoundRun(state, trace.boundRun);
 
-  const settled = trace.drive ? before : after;
+  const settled = pickEnvelopeContext(before, after, trace.ranOnRun);
   const run = pickEnvelopeRun(before, settled, bound);
   const feature = settled?.feature ?? null;
 
@@ -261,6 +261,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   }
 
   request.trace.drive = needsRun && needsDoctor;
+  request.trace.ranOnRun = needsRun;
 
   const data = await prepared.run();
 
