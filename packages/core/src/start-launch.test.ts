@@ -1,11 +1,12 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { startLaunch } from './start-launch.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-start-launch-'));
+  const directory = await createTestFolder(import.meta.dir, 'start-launch');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

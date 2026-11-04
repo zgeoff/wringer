@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { callSupervisor } from '../src/call-supervisor.ts';
 import { createFileState } from '../src/create-file-state.ts';
 import type { StatePort } from '../src/create-file-state.ts';
+import { createNodeStateFileSystem } from '../src/create-node-state-file-system.ts';
 import { runSupervisor } from '../src/run-supervisor.ts';
 import { supervisorServiceName } from '../src/supervisor-protocol.ts';
 import type { Session, Wringer } from '../src/types.ts';
@@ -34,6 +35,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
   const state = createFileState({
     stateDir: join(repo.root, options.wringer.stateDir),
     lockTimeoutMs: 5000,
+    fs: createNodeStateFileSystem(),
   });
 
   onTestFinished(async () => {

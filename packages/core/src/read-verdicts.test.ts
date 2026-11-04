@@ -1,15 +1,21 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFileState } from './create-file-state.ts';
+import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { readVerdicts } from './read-verdicts.ts';
 
 async function setupTest() {
-  const root = await mkdtemp(join(import.meta.dir, '.test-read-verdicts-'));
+  const root = await createTestFolder(import.meta.dir, 'read-verdicts');
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const state = createFileState({ stateDir: join(root, '.wringer'), lockTimeoutMs: 1000 });
+  const state = createFileState({
+    stateDir: join(root, '.wringer'),
+    lockTimeoutMs: 1000,
+    fs: createNodeStateFileSystem(),
+  });
 
   return { root, state, readVerdicts: () => readVerdicts(state, root) };
 }

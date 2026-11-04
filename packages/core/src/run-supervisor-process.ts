@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { launchReadyTimeoutMs } from './builtins/build-lifecycle-commands.ts';
 import { createFileState } from './create-file-state.ts';
+import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { runSupervisor } from './run-supervisor.ts';
 import type { Wringer } from './types.ts';
 import { WringerError } from './wringer-error.ts';
@@ -31,7 +32,11 @@ export async function runSupervisorProcess(
 
   await runSupervisor({
     wringer,
-    state: createFileState({ stateDir: join(root, wringer.stateDir), lockTimeoutMs }),
+    state: createFileState({
+      stateDir: join(root, wringer.stateDir),
+      lockTimeoutMs,
+      fs: createNodeStateFileSystem(),
+    }),
     runID,
     target,
     readyTimeoutMs: launchReadyTimeoutMs,
