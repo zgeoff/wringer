@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { waitFor } from '../test-utils/wait-for.ts';
 import { followProcess } from './follow-process.ts';
 import { probeProcess } from './probe-process.ts';
 
@@ -85,6 +86,23 @@ test('it stops a command that closed its stdout and runs on when the signal fire
   });
 
   expect(followed).resolves.toBeNumber();
+});
+
+test('it stops a child the command left running when the command exits', async () => {
+  const ctx = await setupTest();
+
+  await ctx.followProcess({
+    argv: ['sh', '-c', 'sleep 60 >/dev/null 2>&1 & echo $! > "$0"', ctx.pidPath],
+    signal: new AbortController().signal,
+    onLine: mock<(line: string) => void>(),
+  });
+
+  const pid = await ctx.readPID(ctx.pidPath);
+
+  // The killed child lingers until init reaps it, so the test waits for it to go.
+  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+
+  expect(exited).toBeTrue();
 });
 
 test('it stops the command and rethrows when onLine throws', async () => {
