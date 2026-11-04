@@ -13,6 +13,10 @@
     "packages/core": {
       "component": "@wringer/core",
       "initial-version": "0.1.0"
+    },
+    "packages/gunshi": {
+      "component": "@wringer/gunshi",
+      "initial-version": "0.1.0"
     }
   }
 }

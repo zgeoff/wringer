@@ -18,8 +18,9 @@ workspace publishes to npm.
 
 ## Packages
 
-- [`@wringer/core`](./packages/core/README.md): the JSON envelope, the error codes, the run state,
-  the fingerprint and the exec hosts.
+- [`@wringer/core`](./packages/core/README.md): the typed registry, the JSON envelope, the error
+  codes, read-only targets, the run supervisor, the run state and the fingerprint.
+- [`@wringer/gunshi`](./packages/gunshi/README.md): turns a registry into the repo's verify CLI.
 
 ## Quick start
 

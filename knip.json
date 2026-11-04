@@ -10,7 +10,11 @@
   // the test script names its roots, so knip reads no package's tests from it
   "workspaces": {
     ".": { "entry": ["scripts/**/*.test.ts", "test-utils/**/*.test.ts"] },
-    "packages/*": { "entry": ["src/**/*.test.ts"] }
+    "packages/*": { "entry": ["src/**/*.test.ts"] },
+    // the verify CLI tests start this script as a process, so no module imports it
+    "packages/gunshi": {
+      "entry": ["src/**/*.test.ts", "test-utils/**/*.test.ts", "test-utils/demo-cli.ts"]
+    }
   },
   "ignoreIssues": {
     "scripts/parse-shell-words.ts": ["types"],
