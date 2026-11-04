@@ -30,6 +30,7 @@
     "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
+    "xstate": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

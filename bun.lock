@@ -32,6 +32,7 @@
       "version": "0.0.0",
       "dependencies": {
         "playwright-core": "catalog:",
+        "xstate": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -105,6 +106,7 @@
       "name": "@wringer/stream",
       "version": "0.0.0",
       "dependencies": {
+        "xstate": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {

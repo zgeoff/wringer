@@ -221,13 +221,17 @@ test('it types into the field a read-only target grants', async () => {
   await ctx.run('prod', ['doctor']);
   await ctx.run('prod', ['browser', 'goto'], { path: '/' });
 
-  const result = await ctx.run('prod', ['browser', 'type'], {
+  await ctx.run('prod', ['browser', 'type'], {
     role: 'textbox',
     name: 'Search terms',
     value: 'mugs',
   });
 
-  expect(result.exitCode).toBe(0);
+  const snapshot = await ctx.run('prod', ['browser', 'snapshot']);
+
+  expect(snapshotSchema.parse(snapshot.envelope.data).snapshot).toMatch(
+    /textbox "Search terms".*: mugs$/mu,
+  );
 });
 
 test('it stops a browser action that ran past the command deadline before it lands', async () => {
