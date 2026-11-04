@@ -12,6 +12,7 @@ interface WriterInput {
 interface WriterContext extends WriterInput {
   readonly pending: readonly string[];
   readonly batch: readonly string[];
+  readonly batchDropped: number;
   readonly dropped: number;
   readonly failure: string | null;
   readonly drains: readonly PromiseWithResolvers<null>[];
@@ -23,19 +24,22 @@ type WriterEvent =
 
 const writerTypes: { context?: WriterContext; events?: WriterEvent; input?: WriterInput } = {};
 
+interface BatchInput {
+  readonly write: WriterInput['write'];
+  readonly lines: readonly string[];
+}
+
 // Appends the records that arrived while the last write ran in one write, so a fast source costs
 // one write per batch and a bounded amount of memory. A batch that fails to write goes back to the
 // front of the queue: the next record retries it, and a drain retries it once, then rejects.
 export const recordWriterMachine = setup({
   types: writerTypes,
   actors: {
-    writeBatch: fromPromise<null, Pick<WriterInput, 'write'> & { batch: readonly string[] }>(
-      async (args) => {
-        await args.input.write(`${args.input.batch.join('\n')}\n`);
+    writeBatch: fromPromise<null, BatchInput>(async (args) => {
+      await args.input.write(`${args.input.lines.join('\n')}\n`);
 
-        return null;
-      },
-    ),
+      return null;
+    }),
   },
   guards: {
     hasPending: (args) => args.context.pending.length > 0 || args.context.dropped > 0,
@@ -51,7 +55,8 @@ export const recordWriterMachine = setup({
         : { pending: [...args.context.pending, args.event.record] };
     }),
     takeBatch: assign((args) => ({
-      batch: [...args.context.pending, ...buildDropNotice(args.context.dropped, args.context.now)],
+      batch: args.context.pending,
+      batchDropped: args.context.dropped,
       pending: [],
       dropped: 0,
     })),
@@ -61,8 +66,10 @@ export const recordWriterMachine = setup({
 
       return {
         batch: [],
+        batchDropped: 0,
         pending: kept.slice(0, limit),
-        dropped: args.context.dropped + Math.max(kept.length - limit, 0),
+        dropped:
+          args.context.batchDropped + args.context.dropped + Math.max(kept.length - limit, 0),
       };
     }),
     keepDrain: assign({
@@ -95,6 +102,7 @@ export const recordWriterMachine = setup({
     ...args.input,
     pending: [],
     batch: [],
+    batchDropped: 0,
     dropped: 0,
     failure: null,
     drains: [],
@@ -113,15 +121,21 @@ export const recordWriterMachine = setup({
       invoke: {
         // oxlint-disable-next-line zgeoff/no-abbreviated-names -- xstate names this key `src`
         src: 'writeBatch',
-        input: (args) => ({ write: args.context.write, batch: args.context.batch }),
+        input: (args) => ({
+          write: args.context.write,
+          lines: [
+            ...args.context.batch,
+            ...buildDropNotice(args.context.batchDropped, args.context.now),
+          ],
+        }),
         onDone: [
           {
             guard: 'hasPending',
             target: 'writing',
             reenter: true,
-            actions: assign({ batch: [], failure: null }),
+            actions: assign({ batch: [], batchDropped: 0, failure: null }),
           },
-          { target: 'idle', actions: assign({ batch: [], failure: null }) },
+          { target: 'idle', actions: assign({ batch: [], batchDropped: 0, failure: null }) },
         ],
         onError: {
           target: 'stalled',
