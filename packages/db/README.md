@@ -86,8 +86,8 @@ A query returns `{ columns, rows, rowCount }`.
   as a write.
 - Through psql, a read that starts with `with` and holds `insert`, `update`, `delete` or `merge`
   counts as a write.
-- The read fence ends at the statements above. Connect a read-only target with a role that holds no
-  file or program rights, such as `pg_write_server_files`.
+- The driver catches only the statements in this list. Connect a read-only target with a role that
+  holds no file or program rights, such as `pg_write_server_files`.
 - A statement that writes without asking fails with a usage error, or on a read-only target with
   `read-only` and the target's hint.
 - A read-only target refuses each write with exit code 3, unless `readOnly.allow` lists the
