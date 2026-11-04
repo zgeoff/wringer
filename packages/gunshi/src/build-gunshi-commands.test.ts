@@ -9,8 +9,8 @@ test('it nests each command under the words of its path', () => {
     mock<(invocation: Invocation) => void>(),
   );
 
-  expect(commands['action']?.subCommands).toMatchObject({
-    greet: { name: 'greet', description: 'Greet someone [read]' },
+  expect(commands['action']?.subCommands).toStrictEqual({
+    greet: expect.objectContaining({ name: 'greet', description: 'Greet someone [read]' }),
   });
 });
 
