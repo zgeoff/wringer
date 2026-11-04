@@ -51,3 +51,31 @@ test('it reads a field that two union branches type differently as JSON text', (
 
   expect(properties).toStrictEqual({ parcel: {}, fragile: { type: 'boolean' } });
 });
+
+test('it reads a list field whose items two union branches type differently as JSON text', () => {
+  const words = z.strictObject({ kind: z.literal('words'), items: z.array(z.string()) });
+  const sizes = z.strictObject({ kind: z.literal('sizes'), items: z.array(z.number()) });
+
+  const properties = parseArgProperties({
+    path: ['pack'],
+    summary: 'Pack a crate',
+    args: z.discriminatedUnion('kind', [words, sizes]),
+    data: z.strictObject({}),
+  });
+
+  expect(properties['items']).toStrictEqual({});
+});
+
+test('it joins the choices of an enum field that two union branches declare', () => {
+  const small = z.strictObject({ size: z.enum(['xs', 's']) });
+  const large = z.strictObject({ size: z.enum(['l', 'xl']), crate: z.boolean() });
+
+  const properties = parseArgProperties({
+    path: ['pack'],
+    summary: 'Pack a crate',
+    args: z.union([small, large]),
+    data: z.strictObject({}),
+  });
+
+  expect(properties['size']).toStrictEqual({ type: 'string', enum: ['xs', 's', 'l', 'xl'] });
+});
