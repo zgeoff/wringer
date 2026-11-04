@@ -35,11 +35,15 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
     writer: {
       directory: options.directory,
       writeFile: async (kind, name, content) => {
-        const path = join(options.directory, `${formatStamp(options.now())}-${basename(name)}`);
         const bytes = typeof content === 'string' ? Buffer.from(content) : content;
 
         await mkdir(options.directory, { recursive: true });
-        await writeFile(path, bytes);
+
+        const path = await writeNewFile(
+          options.directory,
+          `${formatStamp(options.now())}-${basename(name)}`,
+          bytes,
+        );
 
         return record(kind, path, bytes);
       },
@@ -50,6 +54,39 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
       },
     },
   };
+}
+
+// Two writes in one millisecond, from this process or another, can share a name, so the write
+// creates the file exclusively and numbers the name until one is free.
+async function writeNewFile(directory: string, name: string, bytes: Uint8Array): Promise<string> {
+  for (let attempt = 0; ; attempt += 1) {
+    const numbered = attempt === 0 ? name : `${attempt}-${name}`;
+    const path = join(directory, numbered);
+
+    const created = await writeExclusive(path, bytes);
+
+    if (created) {
+      return path;
+    }
+  }
+}
+
+async function writeExclusive(path: string, bytes: Uint8Array): Promise<boolean> {
+  try {
+    await writeFile(path, bytes, { flag: 'wx' });
+
+    return true;
+  } catch (error) {
+    if (isAlreadyThere(error)) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function isAlreadyThere(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';
 }
 
 function formatStamp(date: Date): string {
