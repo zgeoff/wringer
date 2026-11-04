@@ -1,8 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { formatLockOwner } from './format-lock-owner.ts';
 import { isErrorCode } from './is-error-code.ts';
+import { parseLockOwner } from './parse-lock-owner.ts';
+import { pickLockRecovery } from './pick-lock-recovery.ts';
 import { probeProcess } from './probe-process.ts';
+import { readPIDNamespace } from './read-pid-namespace.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface FileLockOptions {
@@ -14,18 +18,20 @@ export type FileLock = <T>(options: FileLockOptions, work: () => Promise<T>) => 
 
 const lockRetryMs = 20;
 
-// The lock is a file that holds its owner's PID and a token. A lock whose owner has died is stale,
-// so the next caller removes it and tries again.
+// The lock is a file that names its owner. Each turn either creates the file, or reads the one in
+// place and acts on what `pickLockRecovery` makes of it, until the caller holds the lock or the
+// timeout passes.
 export async function withFileLock<T>(
   options: FileLockOptions,
   work: () => Promise<T>,
 ): Promise<T> {
   await mkdir(dirname(options.path), { recursive: true });
 
-  const content = `${process.pid} ${randomUUID()}`;
+  const namespace = readPIDNamespace();
+  const content = formatLockOwner({ pid: process.pid, namespace, token: randomUUID() });
   const deadline = Date.now() + options.timeoutMs;
 
-  while (!(await createLockFile(options.path, content))) {
+  while (!(await takeLock(options.path, content, namespace))) {
     if (Date.now() > deadline) {
       throw new WringerError('environment', {
         message: `Another wringer command holds the lock ${options.path}.`,
@@ -39,8 +45,34 @@ export async function withFileLock<T>(
   try {
     return await work();
   } finally {
-    await removeOwnLock(options.path, content);
+    await removeLockHolding(options.path, content);
   }
+}
+
+// One turn: true once this caller holds the lock.
+async function takeLock(path: string, content: string, namespace: string): Promise<boolean> {
+  const created = await createLockFile(path, content);
+
+  if (created) {
+    return true;
+  }
+
+  const held = await readLockContent(path);
+
+  const owner = held === null ? null : parseLockOwner(held);
+
+  const recovery = pickLockRecovery({
+    content: held,
+    namespace,
+    isOwnerAlive: owner !== null && probeProcess(owner.pid),
+  });
+
+  // `retry` and `wait` both end the turn here; the caller sleeps before the next one.
+  if (recovery === 'clear-stale' && held !== null) {
+    await removeStaleLock(path, held, namespace);
+  }
+
+  return false;
 }
 
 // The content goes into a file of its own, then `link` puts it at the lock path in one step, so a
@@ -55,20 +87,14 @@ async function createLockFile(path: string, content: string): Promise<boolean> {
 
     return true;
   } catch (error) {
-    if (!isErrorCode(error, 'EEXIST')) {
-      throw error;
+    if (isErrorCode(error, 'EEXIST')) {
+      return false;
     }
+
+    throw error;
   } finally {
     await rm(draft, { force: true });
   }
-
-  const stale = await readLockContent(path);
-
-  if (stale !== null && !probeProcess(parseOwnerPID(stale))) {
-    await removeStaleLock(path, stale);
-  }
-
-  return false;
 }
 
 async function readLockContent(path: string): Promise<string | null> {
@@ -83,35 +109,28 @@ async function readLockContent(path: string): Promise<string | null> {
   }
 }
 
-function parseOwnerPID(content: string): number {
-  const [pid = ''] = content.split(' ');
-
-  return Number(pid);
-}
-
-// Two callers can read the same stale content. Each must first take the claim file named after that
-// content, which only one of them creates, then check that the lock still holds that content; so
-// the other never removes a lock a new owner has taken since. Only the claimant removes the lock.
-async function removeStaleLock(path: string, stale: string): Promise<void> {
+// Two callers can read the same stale content. Each must first take the claim, a lock named after
+// that content, which only one of them holds at a time; it then removes the lock only if the lock
+// still holds that content, so a lock that a new owner took meanwhile stays.
+async function removeStaleLock(path: string, stale: string, namespace: string): Promise<void> {
   const claim = `${path}.${Bun.hash(stale).toString(36)}.claim`;
-  const claimant = `${process.pid} ${randomUUID()}`;
+  const claimant = formatLockOwner({ pid: process.pid, namespace, token: randomUUID() });
 
-  if (!(await createLockFile(claim, claimant))) {
+  const claimed = await takeLock(claim, claimant, namespace);
+
+  if (!claimed) {
     return;
   }
 
   try {
-    const current = await readLockContent(path);
-
-    if (current === stale) {
-      await rm(path, { force: true });
-    }
+    await removeLockHolding(path, stale);
   } finally {
-    await removeOwnLock(claim, claimant);
+    await removeLockHolding(claim, claimant);
   }
 }
 
-async function removeOwnLock(path: string, content: string): Promise<void> {
+// Removes the lock only while it still holds `content`, so a lock someone else took stays.
+async function removeLockHolding(path: string, content: string): Promise<void> {
   const current = await readLockContent(path);
 
   if (current === content) {

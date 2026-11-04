@@ -1,10 +1,12 @@
 import { join } from 'node:path';
 import { probeProcess } from '../packages/core/src/probe-process.ts';
+import { readPIDNamespace } from '../packages/core/src/read-pid-namespace.ts';
 import type { FileSystem } from './ci/file-system.ts';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 
 export interface StaleTestFoldersRequest {
   readonly root: string;
+  readonly namespace: string;
   readonly fileSystem: Pick<FileSystem, 'readFolderNames' | 'removePath'>;
   readonly probeProcess: (pid: number) => boolean;
 }
@@ -15,15 +17,11 @@ export async function removeStaleTestFolders(
 ): Promise<readonly string[]> {
   const folders = await readTestFolders(request.fileSystem, request.root);
 
-  const owners = folders.flatMap((folder) => {
-    const pid = parseTestFolderPID(folder.name);
+  const livePIDs = new Set(
+    collectTestFolderPIDs(folders, request.namespace).filter((pid) => request.probeProcess(pid)),
+  );
 
-    return pid === null ? [] : [pid];
-  });
-
-  const livePIDs = new Set(owners.filter((pid) => request.probeProcess(pid)));
-
-  const stale = pickStaleTestFolders(folders, livePIDs);
+  const stale = pickStaleTestFolders(folders, { namespace: request.namespace, livePIDs });
 
   await Promise.all(stale.map((path) => request.fileSystem.removePath(path)));
 
@@ -58,30 +56,59 @@ async function readTestFolders(
   return [...found, ...nested.flat()];
 }
 
-const testFolderPattern = /^\.test-p(?<pid>\d+)-/v;
+// The PIDs worth a liveness check: those of folders from this namespace only.
+function collectTestFolderPIDs(folders: readonly TestFolder[], namespace: string): number[] {
+  return folders.flatMap((folder) => {
+    const owner = parseTestFolderOwner(folder.name);
 
-function parseTestFolderPID(name: string): number | null {
-  const pid = testFolderPattern.exec(name)?.groups?.['pid'];
-
-  return pid === undefined ? null : Number(pid);
+    return owner?.namespace === namespace ? [owner.pid] : [];
+  });
 }
 
-// A folder named after a process that still runs belongs to a run in progress, and a folder with
-// no process in its name is not this sweep's to judge, so both stay.
+interface TestFolderOwner {
+  readonly namespace: string;
+  readonly pid: number;
+}
+
+const testFolderPattern = /^\.test-n(?<namespace>\d+|host)-p(?<pid>\d+)-/v;
+
+function parseTestFolderOwner(name: string): TestFolderOwner | null {
+  const groups = testFolderPattern.exec(name)?.groups;
+
+  if (groups === undefined) {
+    return null;
+  }
+
+  return { namespace: groups['namespace'] ?? '', pid: Number(groups['pid']) };
+}
+
+export interface LiveProcesses {
+  readonly namespace: string;
+  readonly livePIDs: ReadonlySet<number>;
+}
+
+// Only a folder from this PID namespace whose process has ended is stale. A folder from another
+// namespace may belong to a run whose PID means nothing here, and a folder with no owner in its
+// name is not this sweep's to judge, so both stay.
 export function pickStaleTestFolders(
   folders: readonly TestFolder[],
-  livePIDs: ReadonlySet<number>,
+  live: LiveProcesses,
 ): readonly string[] {
   return folders.flatMap((folder) => {
-    const pid = parseTestFolderPID(folder.name);
+    const owner = parseTestFolderOwner(folder.name);
 
-    return pid === null || livePIDs.has(pid) ? [] : [folder.path];
+    if (owner === null || owner.namespace !== live.namespace || live.livePIDs.has(owner.pid)) {
+      return [];
+    }
+
+    return [folder.path];
   });
 }
 
 if (import.meta.main) {
   const removed = await removeStaleTestFolders({
     root: join(import.meta.dir, '..'),
+    namespace: readPIDNamespace(),
     fileSystem: nodeFileSystem,
     probeProcess,
   });

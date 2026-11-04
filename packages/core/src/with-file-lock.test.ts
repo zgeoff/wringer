@@ -2,6 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { formatLockOwner } from './format-lock-owner.ts';
+import { readPIDNamespace } from './read-pid-namespace.ts';
 import { withFileLock } from './with-file-lock.ts';
 
 async function setupTest() {
@@ -12,6 +14,7 @@ async function setupTest() {
   return {
     directory,
     lockPath: join(directory, 'locks', 'target-local.lock'),
+    namespace: readPIDNamespace(),
     claimPathOf: (lockPath: string, staleContent: string) =>
       `${lockPath}.${Bun.hash(staleContent).toString(36)}.claim`,
   };
@@ -58,15 +61,26 @@ test('it takes over a lock whose owner has died', async () => {
   const ctx = await setupTest();
 
   const dead = Bun.spawnSync(['true']).pid;
+  const path = join(ctx.directory, 'stale.lock');
 
-  await writeFile(join(ctx.directory, 'stale.lock'), String(dead));
+  await writeFile(path, formatLockOwner({ pid: dead, namespace: ctx.namespace, token: 'owner' }));
 
-  const result = await withFileLock(
-    { path: join(ctx.directory, 'stale.lock'), timeoutMs: 1000 },
-    () => Promise.resolve('held'),
-  );
+  const result = await withFileLock({ path, timeoutMs: 1000 }, () => Promise.resolve('held'));
 
   expect(result).toBe('held');
+});
+
+test('it leaves the lock of an owner in another PID namespace in place', async () => {
+  const ctx = await setupTest();
+
+  const dead = Bun.spawnSync(['true']).pid;
+  const path = join(ctx.directory, 'foreign.lock');
+
+  await writeFile(path, formatLockOwner({ pid: dead, namespace: 'elsewhere', token: 'owner' }));
+
+  expect(
+    withFileLock({ path, timeoutMs: 100 }, () => Promise.resolve('held')),
+  ).rejects.toMatchObject({ code: 'environment' });
 });
 
 test('it lets one of many callers at a time past a dead owner’s lock', async () => {
@@ -75,7 +89,7 @@ test('it lets one of many callers at a time past a dead owner’s lock', async (
   const dead = Bun.spawnSync(['true']).pid;
   const path = join(ctx.directory, 'stale.lock');
 
-  await writeFile(path, String(dead));
+  await writeFile(path, formatLockOwner({ pid: dead, namespace: ctx.namespace, token: 'owner' }));
 
   let inside = 0;
   let most = 0;
@@ -100,9 +114,14 @@ test('it removes the claim of a caller that died while it held the claim', async
 
   const dead = Bun.spawnSync(['true']).pid;
   const path = join(ctx.directory, 'stale.lock');
+  const stale = formatLockOwner({ pid: dead, namespace: ctx.namespace, token: 'owner' });
 
-  await writeFile(path, `${dead} owner`);
-  await writeFile(ctx.claimPathOf(path, `${dead} owner`), `${dead} claimant`);
+  await writeFile(path, stale);
+
+  await writeFile(
+    ctx.claimPathOf(path, stale),
+    formatLockOwner({ pid: dead, namespace: ctx.namespace, token: 'claimant' }),
+  );
 
   const result = await withFileLock({ path, timeoutMs: 1000 }, () => Promise.resolve('held'));
 
@@ -114,9 +133,14 @@ test('it leaves the claim of a live caller in place, however old', async () => {
 
   const dead = Bun.spawnSync(['true']).pid;
   const path = join(ctx.directory, 'stale.lock');
+  const stale = formatLockOwner({ pid: dead, namespace: ctx.namespace, token: 'owner' });
 
-  await writeFile(path, `${dead} owner`);
-  await writeFile(ctx.claimPathOf(path, `${dead} owner`), `${process.pid} claimant`);
+  await writeFile(path, stale);
+
+  await writeFile(
+    ctx.claimPathOf(path, stale),
+    formatLockOwner({ pid: process.pid, namespace: ctx.namespace, token: 'claimant' }),
+  );
 
   expect(
     withFileLock({ path, timeoutMs: 100 }, () => Promise.resolve('held')),
@@ -139,11 +163,14 @@ test('it takes over an empty lock file', async () => {
 test('it fails with an environment error when a live owner keeps the lock past the timeout', async () => {
   const ctx = await setupTest();
 
-  await writeFile(join(ctx.directory, 'live.lock'), String(process.pid));
+  const path = join(ctx.directory, 'live.lock');
+
+  await writeFile(
+    path,
+    formatLockOwner({ pid: process.pid, namespace: ctx.namespace, token: 'owner' }),
+  );
 
   expect(
-    withFileLock({ path: join(ctx.directory, 'live.lock'), timeoutMs: 50 }, () =>
-      Promise.resolve('held'),
-    ),
+    withFileLock({ path, timeoutMs: 50 }, () => Promise.resolve('held')),
   ).rejects.toMatchObject({ code: 'environment' });
 });
