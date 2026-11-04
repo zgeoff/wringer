@@ -23,7 +23,7 @@ const newline = 0x0a;
 // well under the smallest slice, so a full slice always ends on a line end. A cursor past the end
 // of the file comes from an older run, so the read starts over at 0.
 export async function readStreamSlice(request: StreamSliceRequest): Promise<StreamSlice> {
-  const handle = await open(request.path, 'r').catch(() => null);
+  const handle = await openStreamFile(request.path);
 
   if (handle === null) {
     return { records: [], cursor: 0, more: false };
@@ -58,6 +58,19 @@ export async function readStreamSlice(request: StreamSliceRequest): Promise<Stre
 }
 
 type FileHandle = Awaited<ReturnType<typeof open>>;
+
+// A stream that has recorded nothing yet has no file. Any other failure, such as EACCES, rejects.
+async function openStreamFile(path: string): Promise<FileHandle | null> {
+  try {
+    return await open(path, 'r');
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null;
+    }
+
+    throw error;
+  }
+}
 
 // A cursor a caller typed may land inside a record; the read then starts at the next one.
 async function readLineStart(handle: FileHandle, from: number, size: number): Promise<number> {
