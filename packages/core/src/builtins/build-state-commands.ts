@@ -3,7 +3,6 @@ import { z } from 'zod';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildRunPaths } from '../build-state-paths.ts';
 import { unassignedFeature } from '../open-drive.ts';
-import { readCursors } from '../read-cursors.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 
@@ -78,7 +77,7 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
             : relative(ctx.session.root, join(paths.features, ctx.feature ?? unassignedFeature)),
         endpoints: ctx.run?.endpoints ?? {},
         services: [...(ctx.run?.services ?? [])],
-        cursors: paths === undefined ? {} : await readCursors(paths.streams),
+        cursors: ctx.run === undefined ? {} : await ctx.state.readCursors(ctx.run.runID),
       };
     },
   };
@@ -113,9 +112,7 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
       const before = await ctx.state.readPointers();
 
       const runID = before.currentRun[args.target ?? ctx.targetName];
-
-      const cursors =
-        runID === undefined ? {} : await readCursors(buildRunPaths(ctx.stateDir, runID).streams);
+      const cursors = runID === undefined ? {} : await ctx.state.readCursors(runID);
 
       const pointers = await ctx.state.writePointers((current) => ({
         currentRun: current.currentRun,

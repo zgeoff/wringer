@@ -13,7 +13,8 @@ export { createWringer, defaultStateDir } from './create-wringer.ts';
 export type { WringerBuilder, WringerOptions } from './create-wringer.ts';
 export { defineDriver } from './define-driver.ts';
 export type { DriverDefinition, DriverFactory } from './define-driver.ts';
-export { dataCapBytes, defaultTimeoutMs, dispatch } from './dispatch.ts';
+export { dataCapBytes } from './cap-data.ts';
+export { defaultTimeoutMs, dispatch } from './dispatch.ts';
 export type { DispatchResult } from './dispatch.ts';
 
 export {

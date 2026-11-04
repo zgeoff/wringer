@@ -4,7 +4,7 @@ import { buildEnvelope } from './build-envelope.ts';
 import type { EnvelopeInput } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
-import { createEvidenceWriter } from './create-evidence-writer.ts';
+import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
 import { decideGuard } from './decide-guard.ts';
 import { envelopeVersion } from './envelope-version.ts';
@@ -15,10 +15,11 @@ import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
-import { readCursors } from './read-cursors.ts';
+import { openRunlessDrive } from './open-runless-drive.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
+import type { RunID } from './run-events.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type {
   ArgsResult,
@@ -114,10 +115,7 @@ export async function dispatch(
   const settled = trace.drive ? before : after;
   const run = settled?.run ?? before?.run;
   const feature = settled?.feature ?? null;
-
-  const cursorsRead =
-    run === undefined ? {} : await readEnvelopeCursors(buildRunPaths(stateDir, run.runID).streams);
-
+  const cursorsRead = run === undefined ? {} : await readEnvelopeCursors(state, run.runID);
   const cursors = cursorsRead instanceof WringerError ? {} : cursorsRead;
 
   if (failure === null && cursorsRead instanceof WringerError) {
@@ -228,12 +226,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   }
 
   const hint = context.target.refusalHint ?? defaultRefusalHint;
-
-  const drive =
-    needsRun && context.run !== undefined
-      ? openRunDrive(request, { run: context.run, access: context.target.access, hint })
-      : undefined;
-
+  const drive = openCommandDrive(request, { needsRun, hint });
   const prepared = prepareCommand(request, drive, hint);
   const commandText = `\`${info.path.join(' ')}\``;
 
@@ -295,6 +288,45 @@ async function probeFingerprintChanged(
   });
 
   return fingerprint !== run.fingerprint;
+}
+
+interface CommandDriveOptions {
+  readonly needsRun: boolean;
+  readonly hint: string;
+}
+
+// A command that needs a run drives it; a repo command that needs none gets a drive with no run;
+// a built-in or driver command that needs none reaches no drive.
+function openCommandDrive(
+  request: CommandRequest,
+  options: CommandDriveOptions,
+): Drive | undefined {
+  const run = request.context.run;
+  const access = request.context.target.access;
+  const repo = request.command.kind === 'repo';
+
+  // A repo command that needs no run still reaches the run's services while one is running.
+  if (run !== undefined && (options.needsRun || (repo && run.status === 'running'))) {
+    return openRunDrive(request, { run, access, hint: options.hint });
+  }
+
+  if (!options.needsRun && repo) {
+    return openRunlessDrive({
+      wringer: request.wringer,
+      root: request.session.root,
+      stateDir: request.stateDir,
+      targetName: request.context.targetName,
+      target: request.context.target,
+      access,
+      hint: options.hint,
+      feature: request.context.feature,
+      signal: request.deadline,
+      now: request.now,
+      emit: makeEmit(request.session),
+    });
+  }
+
+  return undefined;
 }
 
 interface RunDriveOptions {
@@ -442,49 +474,13 @@ async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise
 }
 
 async function readEnvelopeCursors(
-  streamsDirectory: string,
+  state: StatePort,
+  runID: RunID,
 ): Promise<Record<string, number> | WringerError> {
   try {
-    return await readCursors(streamsDirectory);
+    return await state.readCursors(runID);
   } catch (error) {
     return toWringerError(error);
-  }
-}
-
-export const dataCapBytes = 32 * 1024;
-
-interface CapRequest {
-  readonly root: string;
-  readonly directory: string;
-  readonly now: () => Date;
-}
-
-interface CappedData {
-  readonly data: unknown;
-  readonly evidence: readonly Evidence[];
-  readonly truncatedPath: string | null;
-  readonly failure: WringerError | null;
-}
-
-// Over the cap, the full data goes to an evidence file and the envelope carries its path. Data
-// that fails to serialize or to write still yields an envelope, one that carries the failure.
-async function capData(data: unknown, request: CapRequest): Promise<CappedData> {
-  try {
-    const text = JSON.stringify(data ?? null);
-
-    if (Buffer.byteLength(text) <= dataCapBytes) {
-      return { data, evidence: [], truncatedPath: null, failure: null };
-    }
-
-    const evidence = await createEvidenceWriter(request).writer.writeFile(
-      'payload',
-      'payload.json',
-      text,
-    );
-
-    return { data: null, evidence: [evidence], truncatedPath: evidence.path, failure: null };
-  } catch (error) {
-    return { data: null, evidence: [], truncatedPath: null, failure: toWringerError(error) };
   }
 }
 

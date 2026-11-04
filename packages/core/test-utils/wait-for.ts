@@ -1,7 +1,8 @@
 export interface WaitForOptions {
   readonly timeoutMs?: number;
-  readonly intervalMs?: number;
 }
+
+const pollIntervalMs = 25;
 
 // Polls `probe` until it returns a value other than null, for state that another process changes,
 // such as a file a recorder appends to. Rejects once the time is up.
@@ -23,6 +24,6 @@ export async function waitFor<T>(
       throw new Error(`waitFor gave up after ${timeoutMs} ms.`);
     }
 
-    await Bun.sleep(options.intervalMs ?? 25);
+    await Bun.sleep(pollIntervalMs);
   }
 }
