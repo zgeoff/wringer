@@ -25,6 +25,15 @@ export interface SQLQueryInput {
 // A read opens SQLite read-only with `query_only` on, and runs on Postgres in a read-only
 // transaction, so the database refuses a statement that writes whatever the caller claimed.
 export function runSQLQuery(input: SQLQueryInput, clients: SQLClients): Promise<DbResult> {
+  // The cancel below listens for an abort that has yet to come; one that came already never fires.
+  if (input.signal.aborted) {
+    return Promise.reject(
+      new WringerError('timeout', {
+        message: 'The query ran past its deadline before it started.',
+      }),
+    );
+  }
+
   if (input.adapter === 'sqlite') {
     return Promise.try(() => runSqliteQuery(input, clients));
   }
