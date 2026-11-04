@@ -71,6 +71,19 @@ test('it keeps an empty string flag and an empty list item as empty strings', ()
   expect([args['label']?.parse?.(''), args['tags']?.parse?.('')]).toStrictEqual(['', '']);
 });
 
+test('it takes a tuple field as JSON text', () => {
+  const slot = z.tuple([z.string(), z.number()]);
+
+  const args = buildGunshiArgs({
+    path: ['shelve'],
+    summary: 'Shelve an item',
+    args: z.strictObject({ slot }),
+    data: z.strictObject({}),
+  });
+
+  expect(args['slot']?.parse?.('["aisle", 3]')).toStrictEqual(['aisle', 3]);
+});
+
 test('it takes a field that is not one scalar as JSON text', () => {
   const address = z.strictObject({ city: z.string() });
 
