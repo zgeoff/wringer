@@ -80,9 +80,12 @@ A query returns `{ columns, rows, rowCount }`.
 - On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
   a string, a quoted name or a comment do not count. A read-only handle still runs `VACUUM INTO`,
   which copies the database to any path.
-- On Postgres, a read that runs `copy` or `lo_export` counts as a write, because a read-only
-  transaction still lets both write server files. Through psql, a read that starts with `with` and
-  holds `insert`, `update`, `delete` or `merge` counts as a write too.
+- On Postgres, a read that holds the word `copy` or `lo_export` counts as a write, because a
+  read-only transaction still lets both write server files. Postgres can run SQL from a string, so
+  the word counts inside a string, a quoted name or a comment too. A read with a `U&"…"` name counts
+  as a write.
+- Through psql, a read that starts with `with` and holds `insert`, `update`, `delete` or `merge`
+  counts as a write.
 - The read fence ends at the statements above. Connect a read-only target with a role that holds no
   file or program rights, such as `pg_write_server_files`.
 - A statement that writes without asking fails with a usage error, or on a read-only target with

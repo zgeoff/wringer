@@ -6,7 +6,11 @@ type Dialect = 'sqlite' | 'postgres';
 type Via = 'sql' | 'exec';
 
 const sqliteEscapePattern = /\b(?:attach|vacuum|query_only)\b/iu;
+
+// Postgres runs SQL held in a string, through `EXECUTE` or a function, and a `U&"…"` name can spell
+// any word in escapes, so the search keeps strings and comments and refuses escaped names.
 const postgresEscapePattern = /\b(?:copy|lo_export)\b/iu;
+const escapedNamePattern = /\bu&"/iu;
 
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
 
@@ -22,7 +26,7 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return sqliteEscapePattern.test(bare);
   }
 
-  if (postgresEscapePattern.test(bare)) {
+  if (postgresEscapePattern.test(sql.replaceAll('"', '')) || escapedNamePattern.test(sql)) {
     return true;
   }
 
