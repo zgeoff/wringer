@@ -28,14 +28,69 @@ test('#up reuses the running run of a target, keeping its doctor pass', async ()
   await ctx.run('local', ['doctor']);
 
   const second = await ctx.run('local', ['up']);
+  const reused = await ctx.state.readRun(first.envelope.instance ?? '');
 
-  expect(second.envelope.data).toStrictEqual({
-    run: first.envelope.instance,
+  expect({ data: second.envelope.data, doctor: reused?.doctor }).toStrictEqual({
+    data: {
+      run: first.envelope.instance,
+      target: 'local',
+      status: 'running',
+      endpoints: expect.any(Object),
+      services: expect.any(Array),
+      reused: true,
+    },
+    doctor: 'passed',
+  });
+});
+
+test('#up keeps a live run and its pointer when its supervisor answers the ping too late', async () => {
+  const ctx = await setupTest();
+
+  const socket = join(ctx.root, 'late.sock');
+  const answer = Promise.withResolvers<null>();
+
+  const server = await listenSupervisorSocket(socket, () => answer.promise);
+
+  onTestFinished(() => {
+    answer.resolve(null);
+    server.close();
+  });
+
+  await ctx.state.appendEvent('late-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
     target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent('late-run', {
+    type: 'supervisor-ready',
+    at: '2026-11-04T10:00:01.000Z',
+    pid: process.pid,
+    socket,
+  });
+
+  await ctx.state.appendEvent('late-run', { type: 'run-ready', at: '2026-11-04T10:00:02.000Z' });
+  await ctx.state.writePointers((current) => ({ ...current, currentRun: { local: 'late-run' } }));
+
+  const result = await ctx.runWithin('local', ['up'], 100);
+
+  await ctx.state.withTargetLock('local', () => Promise.resolve(null));
+
+  const [view, pointers] = await Promise.all([
+    ctx.state.readRun('late-run'),
+    ctx.state.readPointers(),
+  ]);
+
+  expect({
+    code: result.envelope.error?.code,
+    status: view?.status,
+    currentRun: pointers.currentRun,
+  }).toStrictEqual({
+    code: 'timeout',
     status: 'running',
-    endpoints: expect.any(Object),
-    services: expect.any(Array),
-    reused: true,
+    currentRun: { local: 'late-run' },
   });
 });
 

@@ -44,11 +44,24 @@ test.each([
     runID: 'mf3k2b-8r2y',
   },
 ])('it picks $name', (row) => {
-  const run = pickEnvelopeRun(row.before, row.settled);
+  const run = pickEnvelopeRun(row.before, row.settled, null);
 
   expect(run?.runID ?? null).toBe(row.runID);
 });
 
 test('it picks no run when no context could be read', () => {
-  expect(pickEnvelopeRun(null, null)).toBeUndefined();
+  expect(pickEnvelopeRun(null, null, null)).toBeUndefined();
+});
+
+test('it picks the run a lifecycle command bound over the run the pointers name after it', () => {
+  const run = pickEnvelopeRun(
+    { targetName: 'local', run: undefined },
+    {
+      targetName: 'local',
+      run: buildMockRunView({ runID: runIDSchema.parse('mf3k2b-8r2y') }),
+    },
+    buildMockRunView({ runID: runIDSchema.parse('mf3k2a-7q1z') }),
+  );
+
+  expect(run?.runID).toBe('mf3k2a-7q1z');
 });

@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
 import { buildEnvelope } from './build-envelope.ts';
-import type { EnvelopeInput } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { capData } from './cap-data.ts';
@@ -16,11 +15,14 @@ import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
+import { pickAccessRefusal } from './pick-access-refusal.ts';
+import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
 import type { RunID } from './run-events.ts';
+import { settleEnvelope } from './settle-envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type {
   ArgsResult,
@@ -51,6 +53,7 @@ interface CommandOutcome {
 interface DriveTrace {
   readonly evidence: (readonly Evidence[])[];
   drive: boolean;
+  boundRun: RunID | null;
 }
 
 // Every command, built-in, driver, repo or action, ends here and yields exactly one envelope.
@@ -73,7 +76,7 @@ export async function dispatch(
   const before = read instanceof WringerError ? null : read;
   let outcome: CommandOutcome | null = null;
   let failure: WringerError | null = null;
-  const trace: DriveTrace = { evidence: [], drive: false };
+  const trace: DriveTrace = { evidence: [], drive: false, boundRun: null };
 
   try {
     if (read instanceof WringerError) {
@@ -112,18 +115,19 @@ export async function dispatch(
   // A drive belongs to the run and feature it ran under, even when another command moved the
   // pointers meanwhile; any other command reports the state it left, such as the run `up` started.
   const after = await readContext(wringer, state, session).catch(() => before);
+  const bound = await readBoundRun(state, trace.boundRun);
 
   const settled = trace.drive ? before : after;
-  const run = pickEnvelopeRun(before, settled);
+  const run = pickEnvelopeRun(before, settled, bound);
   const feature = settled?.feature ?? null;
-  const cursorsRead = run === undefined ? {} : await readEnvelopeCursors(state, run.runID);
-  const cursors = cursorsRead instanceof WringerError ? {} : cursorsRead;
 
-  if (failure === null && cursorsRead instanceof WringerError) {
-    failure = cursorsRead;
-  }
+  const payload = pickEnvelopePayload({
+    data: outcome?.data,
+    commandFailure: failure,
+    cursors: run === undefined ? {} : await readEnvelopeCursors(state, run.runID),
+  });
 
-  const capped = await capData(pickEnvelopeData(outcome?.data, failure), {
+  const capped = await capData(payload.data, {
     root: session.root,
     directory:
       run === undefined
@@ -132,32 +136,28 @@ export async function dispatch(
     now,
   });
 
-  if (failure === null && capped.failure !== null) {
-    failure = capped.failure;
-  }
-
-  const sha = await readHeadSHA(session.root);
-
-  const input: EnvelopeInput = {
+  const input = settleEnvelope({
     command: path.join('.'),
     target: settled?.targetName ?? null,
     instance: run?.runID ?? null,
     feature,
-    sha,
+    sha: await readHeadSHA(session.root),
     durationMs: performance.now() - startedMs,
-    data: capped.data,
-    evidence: [...trace.evidence.flat(), ...capped.evidence],
-    cursors,
-    truncatedPath: capped.truncatedPath,
-    error: failure,
-  };
+    driveEvidence: trace.evidence.flat(),
+    payload,
+    capped,
+  });
 
   const envelope = buildEnvelope(input);
 
   const logFailure =
     run === undefined
       ? null
-      : await writeEnvelopeLog(state, run, envelope, { drive: trace.drive, failure, now });
+      : await writeEnvelopeLog(state, run, envelope, {
+          drive: trace.drive,
+          failure: input.error,
+          now,
+        });
 
   if (logFailure !== null) {
     return {
@@ -166,7 +166,7 @@ export async function dispatch(
     };
   }
 
-  return { envelope, exitCode: failure === null ? 0 : exitCodeFor[failure.code] };
+  return { envelope, exitCode: input.error === null ? 0 : exitCodeFor[input.error.code] };
 }
 
 interface CommandContext {
@@ -241,23 +241,18 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   const hint = context.target.refusalHint ?? defaultRefusalHint;
   const drive = openCommandDrive(request, { needsRun, hint });
   const prepared = prepareCommand(request, drive, hint);
-  const commandText = `\`${info.path.join(' ')}\``;
 
-  if (
-    request.command.kind === 'repo' &&
-    request.command.targets !== undefined &&
-    !request.command.targets.includes(context.targetName)
-  ) {
-    throw new WringerError('target-not-allowed', {
-      message: `${commandText} runs only on ${request.command.targets.join(', ')}.`,
-    });
-  }
+  const accessRefusal = pickAccessRefusal({
+    path: info.path,
+    allowedTargets: request.command.kind === 'repo' ? request.command.targets : undefined,
+    targetName: context.targetName,
+    access: context.target.access,
+    effect: prepared.effect,
+    hint,
+  });
 
-  if (context.target.access === 'read-only' && prepared.effect !== 'read') {
-    throw new WringerError('read-only', {
-      message: `${commandText} is a write, and target ${context.targetName} is read-only.`,
-      hint,
-    });
+  if (accessRefusal !== null) {
+    throw accessRefusal;
   }
 
   // A drive's evidence list grows as the command runs; the trace holds the same list, one per drive.
@@ -273,7 +268,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
 
   if (!output.success) {
     throw new WringerError('internal', {
-      message: `${commandText} returned data that does not match its schema: ${output.error.message}`,
+      message: `\`${info.path.join(' ')}\` returned data that does not match its schema: ${output.error.message}`,
       data: { stack: output.error.stack ?? output.error.message },
     });
   }
@@ -451,6 +446,9 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
 
       return drive;
     },
+    bindRun: (runID) => {
+      request.trace.boundRun = runID;
+    },
   };
 }
 
@@ -486,6 +484,21 @@ async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise
   }
 }
 
+// A bound run whose log cannot be read leaves the envelope to the run the pointers name.
+async function readBoundRun(state: StatePort, runID: RunID | null): Promise<RunView | null> {
+  if (runID === null) {
+    return null;
+  }
+
+  try {
+    const view = await state.readRun(runID);
+
+    return view ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function readEnvelopeCursors(
   state: StatePort,
   runID: RunID,
@@ -495,16 +508,6 @@ async function readEnvelopeCursors(
   } catch (error) {
     return toWringerError(error);
   }
-}
-
-// A failed command's envelope carries the data its error gives, such as the doctor's results; an
-// internal error's data is its stack, which goes to the run's log instead.
-function pickEnvelopeData(data: unknown, failure: WringerError | null): unknown {
-  if (failure === null) {
-    return data;
-  }
-
-  return failure.code === 'internal' ? null : failure.data;
 }
 
 interface LogRequest {

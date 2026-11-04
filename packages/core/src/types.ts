@@ -4,7 +4,7 @@ import type { RunPaths } from './build-state-paths.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
-import type { Endpoints } from './run-events.ts';
+import type { Endpoints, RunID } from './run-events.ts';
 import type { ProcessResult } from './run-process.ts';
 
 export type Effect = 'read' | 'write';
@@ -352,6 +352,10 @@ export interface BuiltinContext {
   readonly now: () => Date;
   readonly emit: Emit;
   readonly openDrive: (access: Access, signal?: AbortSignal) => Drive;
+
+  // A lifecycle command names the run it started, reused or stopped while it holds the target's
+  // lock, and its envelope belongs to that run, whatever the pointers say once the lock is free.
+  readonly bindRun: (runID: RunID) => void;
 }
 
 export interface BuiltinCommandSpec<Args, Data> extends CommandShape<Args, Data> {

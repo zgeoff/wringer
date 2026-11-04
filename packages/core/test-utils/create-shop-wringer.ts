@@ -13,7 +13,7 @@ const directorySchema = z.strictObject({ directory: z.string() });
 
 // A repo's verify CLI for tests: launch targets `local` (ready at once), `broken` (exits first) and
 // `slow` (ready after half a second), read-only attach targets `prod` (with a hint) and `archive`
-// (without), and actions that read, write, hang, throw, flood and pause.
+// (without), and actions that read, write, keep evidence, hang, throw, flood and pause.
 export function createShopWringer(): Wringer {
   const shop = bindDrivers([notes({ prefix: '' })] as const);
 
@@ -173,6 +173,20 @@ export function createShopWringer(): Wringer {
         input: emptySchema,
         data: emptySchema,
         run: () => Promise.withResolvers<Record<string, never>>().promise,
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'receipt',
+        summary: 'Keep the receipt as evidence',
+        effect: 'read',
+        input: emptySchema,
+        data: emptySchema,
+        run: async (_input, ctx) => {
+          await ctx.evidence.writeFile('note', 'receipt.txt', 'paid 12 for the cart');
+
+          return {};
+        },
       }),
     )
     .action(

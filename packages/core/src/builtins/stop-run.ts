@@ -1,36 +1,26 @@
-import { z } from 'zod';
-import { callSupervisor } from '../call-supervisor.ts';
-import { supervisorServiceName } from '../supervisor-protocol.ts';
 import type { BuiltinContext } from '../types.ts';
-import { WringerError } from '../wringer-error.ts';
+import { callRunSupervisor } from './call-run-supervisor.ts';
+import { pickStopPlan } from './pick-stop-plan.ts';
+import type { StopData } from './stop-data-schema.ts';
 
-export const stopDataSchema = z.strictObject({
-  run: z.string().nullable(),
-  stopped: z.boolean(),
-});
-
-export type StopData = z.infer<typeof stopDataSchema>;
-
-// `down` and `detach` end the target's current run and clear its pointer. A run whose supervisor
-// already died is marked crashed, so its log still ends in a final status.
+// `down` and `detach` end the target's current run and clear its pointer, as `pickStopPlan`
+// decides. A stop call that fails other than with a gone supervisor rejects, and leaves the run and
+// its pointer for the next `down`.
 export function stopRun(ctx: BuiltinContext): Promise<StopData> {
   return ctx.state.withTargetLock(ctx.targetName, async () => {
     const pointers = await ctx.state.readPointers();
 
     const runID = pointers.currentRun[ctx.targetName];
+    const view = runID === undefined ? undefined : await ctx.state.readRun(runID);
 
-    if (runID === undefined) {
-      return { run: null, stopped: false };
+    if (runID !== undefined) {
+      ctx.bindRun(runID);
     }
 
-    const view = await ctx.state.readRun(runID);
+    const reach = view === undefined ? 'gone' : await callRunSupervisor(view, 'stop', ctx.signal);
+    const plan = pickStopPlan({ runID, status: view?.status, reach });
 
-    const stopped =
-      view?.supervisor === null || view === undefined
-        ? false
-        : await runSupervisorStop(view.supervisor.socket, ctx.signal);
-
-    if (!stopped && (view?.status === 'running' || view?.status === 'starting')) {
+    if (runID !== undefined && plan.markCrashed) {
       await ctx.state.appendEvent(runID, {
         type: 'crashed',
         at: ctx.now().toISOString(),
@@ -40,37 +30,15 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
       await ctx.state.writeManifest(runID);
     }
 
-    await ctx.state.writePointers((latest) => ({
-      ...latest,
-      currentRun: Object.fromEntries(
-        Object.entries(latest.currentRun).filter(([target]) => target !== ctx.targetName),
-      ),
-    }));
-
-    return { run: runID, stopped };
-  });
-}
-
-// Only a supervisor that is gone lets the run end without its answer. A late or failed call leaves
-// the run and its pointer in place, so the next `down` can still reach it.
-async function runSupervisorStop(socket: string, signal: AbortSignal): Promise<boolean> {
-  try {
-    await callSupervisor({
-      socket,
-      request: { service: supervisorServiceName, method: 'stop', args: null },
-      signal,
-    });
-
-    return true;
-  } catch (error) {
-    if (isSupervisorGone(error)) {
-      return false;
+    if (plan.clearPointer) {
+      await ctx.state.writePointers((latest) => ({
+        ...latest,
+        currentRun: Object.fromEntries(
+          Object.entries(latest.currentRun).filter(([target]) => target !== ctx.targetName),
+        ),
+      }));
     }
 
-    throw error;
-  }
-}
-
-export function isSupervisorGone(error: unknown): boolean {
-  return error instanceof WringerError && error.code === 'not-running';
+    return plan.data;
+  });
 }
