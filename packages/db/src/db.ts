@@ -1,11 +1,19 @@
+import { Database } from 'bun:sqlite';
 import { WringerError, defineDriver } from '@wringer/core';
-import type { DriverSession, Effect, Fence } from '@wringer/core';
+import type { DriverSession, Fence } from '@wringer/core';
+import { SQL } from 'bun';
+import { match } from 'ts-pattern';
 import { z } from 'zod';
-import { buildExecQuery } from './build-exec-query.ts';
-import { isReadOnlyRefusal } from './is-read-only-refusal.ts';
-import { parseExecRows } from './parse-exec-rows.ts';
-import type { Row } from './parse-exec-rows.ts';
+import { dbResultSchema } from './db-result-schema.ts';
+import type { DbResult } from './db-result-schema.ts';
+import { parseExecResult } from './parse-exec-result.ts';
+import { pickDatabaseFailure } from './pick-database-failure.ts';
+import { dbConfigSchema, pickQueryEffect } from './pick-query-effect.ts';
+import type { DbConfig } from './pick-query-effect.ts';
+import { pickQueryPlan } from './pick-query-plan.ts';
+import type { QueryPlan } from './pick-query-plan.ts';
 import { runSQLQuery } from './run-sql-query.ts';
+import type { SQLClients } from './run-sql-query.ts';
 
 export const dbQuerySchema = z.strictObject({
   sql: z.string().min(1),
@@ -15,57 +23,36 @@ export const dbQuerySchema = z.strictObject({
 
 export type DbQuery = z.input<typeof dbQuerySchema>;
 
-const rowSchema = z.record(z.string(), z.unknown());
-
-export const dbResultSchema = z.strictObject({
-  columns: z.array(z.string()),
-  rows: z.array(rowSchema),
-});
-
-export type DbResult = z.infer<typeof dbResultSchema>;
-
 export interface DbClient {
   readonly query: (query: DbQuery) => Promise<DbResult>;
 }
-
-const grantsSchema = z.strictObject({ allow: z.array(z.string().min(1)) });
-
-const sqlConfigSchema = z.strictObject({
-  via: z.literal('sql'),
-  adapter: z.enum(['sqlite', 'postgres']),
-  url: z.string().min(1),
-  readOnly: grantsSchema.optional(),
-});
-
-const execConfigSchema = z.strictObject({
-  via: z.literal('exec'),
-  dialect: z.enum(['sqlite', 'postgres']),
-  database: z.string().min(1),
-  program: z.array(z.string().min(1)).min(1).optional(),
-  readOnly: grantsSchema.optional(),
-});
-
-const targetConfigSchema = z.discriminatedUnion('via', [sqlConfigSchema, execConfigSchema]);
 
 const queryArgsSchema = z.strictObject({
   sql: z.string().min(1),
   write: z.boolean().default(false),
 });
 
-// Runs SQL on the target's database, over Bun.SQL or with the database's own client on the target's
-// host. A read runs read-only in the database, so a statement that writes without asking is refused
-// there too. A read-only target refuses each write that `readOnly.allow` does not hold verbatim.
+// A read runs read-only in the database too, so a statement that writes without asking is refused
+// there. The client is the driver's entry point, so it opens the real database connections.
 export const db = defineDriver({
   name: 'db',
   options: z.strictObject({}),
-  targetConfig: targetConfigSchema,
-  client: (session, fence): DbClient => ({
-    query: fence({
-      effect: (query: DbQuery) => pickQueryEffect(query.sql, query.write ?? false, session.config),
-      describe: (query) => `The statement \`${summarize(query.sql)}\``,
-      run: (query) => runQuery(session, fence, dbQuerySchema.parse(query)),
-    }),
-  }),
+  targetConfig: dbConfigSchema,
+  client: (session, fence): DbClient => {
+    const clients: SQLClients = {
+      openSqlite: (file, mode) => new Database(file, { [mode]: true }),
+      openPostgres: (url) => new SQL(url),
+    };
+
+    return {
+      query: fence({
+        effect: (query: DbQuery) =>
+          pickQueryEffect(query.sql, query.write ?? false, session.config),
+        describe: (query) => `The statement \`${summarize(query.sql)}\``,
+        run: (query) => runQuery(session, fence, clients, dbQuerySchema.parse(query)),
+      }),
+    };
+  },
   commands: (command) => [
     command({
       path: ['db', 'query'],
@@ -88,14 +75,6 @@ export const db = defineDriver({
   ],
 });
 
-type DbConfig = z.infer<typeof targetConfigSchema>;
-
-function pickQueryEffect(sql: string, write: boolean, config: DbConfig): Effect {
-  const granted = config.readOnly?.allow.includes(sql.trim()) === true;
-
-  return write && !granted ? 'write' : 'read';
-}
-
 function summarize(sql: string): string {
   const flat = sql.trim().replaceAll(/\s+/gu, ' ');
 
@@ -106,65 +85,28 @@ type DbSession = DriverSession<Record<string, never>, DbConfig>;
 
 type ParsedQuery = z.infer<typeof dbQuerySchema>;
 
-async function runQuery(session: DbSession, fence: Fence, query: ParsedQuery): Promise<DbResult> {
-  try {
-    const rows = await readRows(session, query);
+async function runQuery(
+  session: DbSession,
+  fence: Fence,
+  clients: SQLClients,
+  query: ParsedQuery,
+): Promise<DbResult> {
+  const plan = pickQueryPlan(session.config, query);
 
-    return { columns: Object.keys(rows[0] ?? {}), rows: [...rows] };
+  if (plan.kind === 'undeclared-write') {
+    return rejectUndeclaredWrite(fence, query.sql);
+  }
+
+  try {
+    return await readResult(session, clients, plan);
   } catch (error) {
     return rejectDatabaseError(error, fence, query.sql);
   }
 }
 
-async function readRows(session: DbSession, query: ParsedQuery): Promise<readonly Row[]> {
-  const config = session.config;
-
-  if (config.via === 'sql') {
-    return runSQLQuery({
-      adapter: config.adapter,
-      url: config.url,
-      sql: query.sql,
-      params: query.params,
-      write: query.write,
-    });
-  }
-
-  const exec = buildExecQuery({
-    dialect: config.dialect,
-    program: config.program ?? [config.dialect === 'sqlite' ? 'sqlite3' : 'psql'],
-    database: config.database,
-    sql: query.sql,
-    params: query.params,
-    write: query.write,
-  });
-
-  // The client call already checked this statement against the target's grants.
-  const effect = pickQueryEffect(query.sql, query.write, config);
-
-  const result = await session.exec(exec.argv, effect, { stdin: exec.stdin });
-
-  if (result.exitCode !== 0) {
-    throw new Error(result.stderr.trim() || `The database client exited with ${result.exitCode}.`);
-  }
-
-  return exec.printsRows ? parseExecRows(result.stdout) : [];
-}
-
-// A read the database refused because it writes is an undeclared write, so the fence answers it as
-// one: on a read-only target with the target's hint, elsewhere with a usage error.
-function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise<never> {
-  if (error instanceof WringerError) {
-    return Promise.reject(error);
-  }
-
-  const message = error instanceof Error ? error.message : String(error);
-
-  if (!isReadOnlyRefusal(pickErrorCode(error), message)) {
-    return Promise.reject(
-      new WringerError('usage', { message: `The database refused the statement: ${message}` }),
-    );
-  }
-
+// The fence answers an undeclared write as a write: on a read-only target with the target's hint,
+// elsewhere with a usage error.
+function rejectUndeclaredWrite(fence: Fence, sql: string): Promise<never> {
   const undeclared = new WringerError('usage', {
     message: `The statement \`${summarize(sql)}\` writes, but the query did not ask to write.`,
     hint: 'Add `--write`, or `write: true`, to a statement that writes.',
@@ -179,6 +121,43 @@ function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise
   return declare(null);
 }
 
+function rejectWith(error: WringerError): Promise<never> {
+  return Promise.reject(error);
+}
+
+type RunnablePlan = Exclude<QueryPlan, { readonly kind: 'undeclared-write' }>;
+
+async function readResult(
+  session: DbSession,
+  clients: SQLClients,
+  plan: RunnablePlan,
+): Promise<DbResult> {
+  if (plan.kind === 'sql') {
+    return runSQLQuery({ ...plan, signal: session.signal }, clients);
+  }
+
+  const result = await session.exec(plan.exec.argv, plan.effect, { stdin: plan.exec.stdin });
+
+  return parseExecResult({ result, output: plan.exec.output, write: plan.write });
+}
+
+// A read the database refused because it writes is an undeclared write; a database it could not
+// reach or open is the environment's fault; anything else is the statement's.
+function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise<never> {
+  if (error instanceof WringerError) {
+    return rejectWith(error);
+  }
+
+  const message = error instanceof Error ? error.message : String(error);
+  const failure = pickDatabaseFailure(pickErrorCode(error), message);
+
+  if (failure === 'read-only') {
+    return rejectUndeclaredWrite(fence, sql);
+  }
+
+  return rejectWith(buildDatabaseError(failure, message));
+}
+
 function pickErrorCode(error: unknown): string | null {
   if (typeof error !== 'object' || error === null) {
     return null;
@@ -190,6 +169,20 @@ function pickErrorCode(error: unknown): string | null {
   return sqlState ?? named;
 }
 
-function rejectWith(error: WringerError): Promise<never> {
-  return Promise.reject(error);
+function buildDatabaseError(failure: 'environment' | 'statement', message: string): WringerError {
+  return match(failure)
+    .with(
+      'environment',
+      () =>
+        new WringerError('environment', {
+          message: `The database could not run the statement: ${message}`,
+          hint: 'Check that the database is up and its url or file is right, then run `doctor`.',
+        }),
+    )
+    .with(
+      'statement',
+      () =>
+        new WringerError('usage', { message: `The database refused the statement: ${message}` }),
+    )
+    .exhaustive();
 }

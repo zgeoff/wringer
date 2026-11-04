@@ -11,10 +11,13 @@ export interface ExecQueryInput {
   readonly write: boolean;
 }
 
+// A client prints JSON `rows`, or, for a psql write, the `command-tag` such as `UPDATE 3`.
+export type ExecOutput = 'rows' | 'command-tag';
+
 export interface ExecQuery {
   readonly argv: readonly string[];
   readonly stdin: string;
-  readonly printsRows: boolean;
+  readonly output: ExecOutput;
 }
 
 // The SQL goes on stdin, so no shell layer between here and the database client quotes it. A read
@@ -43,7 +46,7 @@ function buildSqliteQuery(input: ExecQueryInput): ExecQuery {
   return {
     argv: [...input.program, '-safe', '-json', ...readOnly, input.database],
     stdin: input.sql,
-    printsRows: true,
+    output: 'rows',
   };
 }
 
@@ -56,22 +59,14 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
     });
   }
 
-  const argv = [
-    ...input.program,
-    '-X',
-    '-q',
-    '-t',
-    '-A',
-    '-v',
-    'ON_ERROR_STOP=1',
-    '-d',
-    input.database,
-  ];
+  const options = ['-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', input.database];
 
+  // Without `-q`, psql prints a write's command tag, which carries the count of rows it changed.
   if (input.write) {
-    return { argv, stdin: input.sql, printsRows: false };
+    return { argv: [...input.program, '-X', ...options], stdin: input.sql, output: 'command-tag' };
   }
 
+  const argv = [...input.program, '-X', '-q', ...options];
   const statement = input.sql.trim().replace(/[;\s]+$/u, '');
 
   // A `;` inside the statement could end the read-only transaction and run a write after it.
@@ -85,6 +80,6 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
   return {
     argv,
     stdin: `begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\n${statement}\n) q;\ncommit;\n`,
-    printsRows: true,
+    output: 'rows',
   };
 }

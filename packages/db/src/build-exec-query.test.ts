@@ -14,7 +14,7 @@ test('it opens SQLite read-only and in safe mode for a read', () => {
   expect(query).toStrictEqual({
     argv: ['sqlite3', '-safe', '-json', '-readonly', '/srv/shop.db'],
     stdin: 'select * from notes',
-    printsRows: true,
+    output: 'rows',
   });
 });
 
@@ -77,7 +77,7 @@ test('it wraps a Postgres read in a read-only transaction that prints JSON', () 
     ],
     stdin:
       "begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\nselect id from orders\n) q;\ncommit;\n",
-    printsRows: true,
+    output: 'rows',
   });
 });
 
@@ -107,7 +107,7 @@ test('it rejects a Postgres statement that holds a psql command', () => {
   ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
 
-test('it sends a Postgres write as it is and reads no rows back', () => {
+test('it sends a Postgres write as it is and reads its command tag back', () => {
   const query = buildExecQuery({
     dialect: 'postgres',
     program: ['psql'],
@@ -117,8 +117,9 @@ test('it sends a Postgres write as it is and reads no rows back', () => {
     write: true,
   });
 
-  expect({ stdin: query.stdin, printsRows: query.printsRows }).toStrictEqual({
+  expect(query).toStrictEqual({
+    argv: ['psql', '-X', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', 'shop'],
     stdin: 'delete from orders',
-    printsRows: false,
+    output: 'command-tag',
   });
 });
