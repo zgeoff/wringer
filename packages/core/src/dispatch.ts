@@ -16,6 +16,7 @@ import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
+import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
@@ -483,19 +484,6 @@ async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise
   } finally {
     deadline.removeEventListener('abort', onAbort);
   }
-}
-
-// `down` clears the pointer to the run it ended, so its envelope names that run from before the
-// command. A command that moved to another target names only that target's run.
-function pickEnvelopeRun(
-  before: CommandContext | null,
-  settled: CommandContext | null,
-): RunView | undefined {
-  if (settled?.targetName !== before?.targetName) {
-    return settled?.run;
-  }
-
-  return settled?.run ?? before?.run;
 }
 
 async function readEnvelopeCursors(
