@@ -1,10 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 
 async function setupTest() {
-  const root = await mkdtemp(join(import.meta.dir, '.test-evidence-writer-'));
+  const root = await createTestFolder(import.meta.dir, 'evidence-writer');
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 

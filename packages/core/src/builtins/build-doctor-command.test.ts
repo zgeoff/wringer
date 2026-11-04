@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { createTestFolder } from '../../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { waitFor } from '../../test-utils/wait-for.ts';
 import { createWringer } from '../create-wringer.ts';
@@ -10,7 +11,7 @@ import { dispatch } from '../dispatch.ts';
 import { local } from '../local.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-doctor-'));
+  const directory = await createTestFolder(import.meta.dir, 'doctor');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

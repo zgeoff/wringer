@@ -6,6 +6,7 @@ import { buildRunPaths } from './build-state-paths.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import { createFileState } from './create-file-state.ts';
 import type { StatePort } from './create-file-state.ts';
+import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { decideGuard } from './decide-guard.ts';
 import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
@@ -63,7 +64,7 @@ export async function dispatch(
   const startedMs = performance.now();
   const now = session.now ?? (() => new Date());
   const stateDir = join(session.root, wringer.stateDir);
-  const state = createFileState({ stateDir, lockTimeoutMs });
+  const state = createFileState({ stateDir, lockTimeoutMs, fs: createNodeStateFileSystem() });
 
   const read = await readContext(wringer, state, session).catch((error: unknown) =>
     toWringerError(error),

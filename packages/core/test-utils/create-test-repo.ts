@@ -1,5 +1,6 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runGit } from '../src/run-git.ts';
 
 export interface TestRepo {
@@ -11,7 +12,7 @@ export interface TestRepo {
 // A git repo on `main` with one commit and `.wringer/` ignored. The caller removes it, after it has
 // stopped whatever still writes into it.
 export async function createTestRepo(parent: string): Promise<TestRepo> {
-  const root = await mkdtemp(join(parent, '.test-repo-'));
+  const root = await createTestFolder(parent, 'repo');
 
   const git = async (...args: readonly string[]): Promise<string> => {
     const result = await runGit({ cwd: root, args });
