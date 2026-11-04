@@ -33,7 +33,11 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
     return opened;
   };
 
-  let pageReady = openPage();
+  const firstPage = await openPage();
+
+  // A reopen settles to an error in place of a rejection: a run can stop before any command awaits
+  // the new page, and Bun fails the process on an unhandled rejection.
+  let pageReady: Promise<Page | WringerError> = Promise.resolve(firstPage);
   let lastSnapshot = '';
 
   // Playwright cannot cancel one action, so a caller that stops waiting gets the page closed under
@@ -43,6 +47,10 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
     action: (page: Page) => Promise<T>,
   ): Promise<T> => {
     const page = await pageReady;
+
+    if (page instanceof WringerError) {
+      throw page;
+    }
 
     const reopen = (): void => {
       pageReady = reopenPage(page, openPage);
@@ -118,20 +126,30 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
   };
 }
 
-async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
+async function reopenPage(
+  stale: Page,
+  openPage: () => Promise<Page>,
+): Promise<Page | WringerError> {
   const url = stale.url();
 
-  const page = await openPage();
+  try {
+    const page = await openPage();
 
-  await stale.close();
+    await stale.close();
 
-  // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page itself
-  // must still come back, or every later command would fail.
-  if (url !== 'about:blank') {
-    await page.goto(url).catch(() => null);
+    // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
+    // itself must still come back, or every later command would fail.
+    if (url !== 'about:blank') {
+      await page.goto(url).catch(() => null);
+    }
+
+    return page;
+  } catch (error) {
+    return new WringerError('environment', {
+      message: `The browser could not open a new page: ${String(error)}`,
+      hint: 'Run `up --restart` to start a new browser.',
+    });
   }
-
-  return page;
 }
 
 // Playwright reports a missing element as a timeout and anything else as a plain error; both reach
