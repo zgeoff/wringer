@@ -73,8 +73,9 @@ A query returns `{ columns, rows, rowCount }`.
 ## Reads and writes
 
 - A query is a read unless it passes `write: true`.
-- A read runs read-only in the database: SQLite opens the file read-only with `query_only` on, and
-  Postgres runs it in a read-only transaction.
+- A read runs read-only in the database. On SQLite, `via: 'sql'` opens the file read-only with
+  `query_only` on, and `via: 'exec'` runs sqlite3 with `-readonly`. Postgres runs a read in a
+  read-only transaction.
 - A query through `via: 'sql'` holds one statement. Postgres refuses a second one, so a read cannot
   end its read-only transaction with `COMMIT`.
 - On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
@@ -84,6 +85,8 @@ A query returns `{ columns, rows, rowCount }`.
   read-only transaction still lets both write server files. Postgres can run SQL from a string, so
   the word counts inside a string, a quoted name or a comment too. A read with a `U&"…"` name counts
   as a write.
+- On Postgres, a `DO` block and a call to a `query_to_xml` or `dblink` function count as writes.
+  Each runs SQL from a string that the query can build at run time, where no search sees its words.
 - Through psql, a read that starts with `with` and holds `insert`, `update`, `delete` or `merge`
   counts as a write.
 - The driver catches only the statements in this list. Connect a read-only target with a role that

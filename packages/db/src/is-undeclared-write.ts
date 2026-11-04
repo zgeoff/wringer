@@ -12,6 +12,12 @@ const sqliteEscapePattern = /\b(?:attach|vacuum|query_only)\b/iu;
 const postgresEscapePattern = /\b(?:copy|lo_export)\b/iu;
 const escapedNamePattern = /\bu&"/iu;
 
+// A string built at run time, such as `'CO' || 'PY …'`, hides its words from any search. A `DO`
+// block and the `query_to_xml` family run such a string in the session; `dblink` runs it in a
+// session of its own, outside the read-only transaction.
+const postgresStringRunnerPattern = /\b(?:query_to_xml\w*|dblink\w*)\b/iu;
+const doBlockPattern = /\bdo\b/iu;
+
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
 
 const writeWordPattern = /\b(?:insert|update|delete|merge)\b/iu;
@@ -26,7 +32,14 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return sqliteEscapePattern.test(bare);
   }
 
-  if (postgresEscapePattern.test(sql.replaceAll('"', '')) || escapedNamePattern.test(sql)) {
+  const unquoted = sql.replaceAll('"', '');
+
+  if (
+    postgresEscapePattern.test(unquoted) ||
+    postgresStringRunnerPattern.test(unquoted) ||
+    doBlockPattern.test(bare) ||
+    escapedNamePattern.test(sql)
+  ) {
     return true;
   }
 

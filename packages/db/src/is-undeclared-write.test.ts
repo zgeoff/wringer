@@ -52,6 +52,31 @@ test.each([
   {
     dialect: 'postgres',
     via: 'sql',
+    sql: "DO $$ BEGIN EXECUTE 'CO' || 'PY (select 1) TO PROGRAM ''touch /srv/flag'''; END $$",
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: 'select 1; /* tidy */ do $$ begin perform 1; end $$',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "select \"query_to_xml\"('CO' || 'PY orders TO ''/srv/o.csv''', true, true, '')",
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "select dblink_exec('host=db', 'delete from orders')",
+    write: true,
+  },
+  { dialect: 'postgres', via: 'sql', sql: "select 'what to do' as note", write: false },
+  {
+    dialect: 'postgres',
+    via: 'sql',
     sql: String.raw`select U&"\006Co_export"(1, 'x')`,
     write: true,
   },
