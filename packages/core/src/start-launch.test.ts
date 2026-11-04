@@ -78,6 +78,33 @@ test('it stops a server that the app started when the run stops', async () => {
   expect(exited).toBeTrue();
 });
 
+test('it runs the plan’s stop command, then stops the app and its server when that command fails', async () => {
+  const ctx = await setupTest();
+
+  const pidPath = join(ctx.directory, 'server.pid');
+  const stoppedPath = join(ctx.directory, 'stop-ran');
+
+  const launch = await ctx.startApp({
+    plan: {
+      command: ['sh', '-c', 'sleep 60 & echo $! > "$0"; echo \'{"port":4100}\'; wait', pidPath],
+      stop: ['sh', '-c', 'echo ran > "$0"; exit 4', stoppedPath],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  await launch.stop();
+
+  const pid = await ctx.readPID(pidPath);
+  const exited = await ctx.waitForExit(pid);
+  const stopRan = await readFile(stoppedPath, 'utf8');
+
+  expect({ stopRan, exited }).toStrictEqual({ stopRan: 'ran\n', exited: true });
+});
+
 test('it stops the app when the run stops before the app is ready', async () => {
   const ctx = await setupTest();
 
