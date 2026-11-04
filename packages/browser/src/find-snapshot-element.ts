@@ -3,7 +3,10 @@ export interface SnapshotElement {
   readonly name: string;
 }
 
-const elementKey = /^(?<role>[a-z]+)(?: (?<name>"(?:[^"\\]|\\.)*"))?.*\[ref=(?<ref>[a-z0-9]+)\]/u;
+// The ref is one of the bracketed attributes right after the role and name. A field's value, which
+// follows the key after `: `, is page text and may itself hold `[ref=…]`.
+const elementKey =
+  /^(?<role>[a-z]+)(?: (?<name>"(?:[^"\\]|\\.)*"))?(?: \[[^\]]*\])*? \[ref=(?<ref>[a-z0-9]+)\]/u;
 
 // Reads the role and accessible name of `ref` out of a snapshot that Playwright's `ai` mode
 // printed, such as `- button "Place order" [ref=e5]`. A ref the snapshot lacks returns null.

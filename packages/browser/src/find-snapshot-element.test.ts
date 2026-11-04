@@ -30,6 +30,18 @@ test.each([
   expect(findSnapshotElement(row.line, 'e2')).toStrictEqual({ role: 'button', name: row.name });
 });
 
+test.each([
+  { case: 'a field value', line: '  - textbox "Search terms" [ref=e3]: "[ref=e5]"' },
+  { case: 'a name', line: '  - button "Copy [ref=e5]" [ref=e3]' },
+])('it never reads a ref out of $case', (row) => {
+  const snapshot = [row.line, '  - button "Place order" [ref=e5]'].join('\n');
+
+  expect(findSnapshotElement(snapshot, 'e5')).toStrictEqual({
+    role: 'button',
+    name: 'Place order',
+  });
+});
+
 test('it gives an element with no name an empty name', () => {
   expect(findSnapshotElement('- generic [ref=e3]:', 'e3')).toStrictEqual({
     role: 'generic',
