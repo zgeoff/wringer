@@ -115,13 +115,16 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const server = await listenSupervisorSocket(socket, answerRequest);
 
-  options.signal?.addEventListener(
-    'abort',
-    () => {
-      void stop('the supervisor was signalled to stop');
-    },
-    { once: true },
-  );
+  const onSignal = (): void => {
+    void stop('the supervisor was signalled to stop');
+  };
+
+  options.signal?.addEventListener('abort', onSignal, { once: true });
+
+  // A signal that came while the socket opened fired before the listener, which never sees it.
+  if (options.signal?.aborted === true) {
+    onSignal();
+  }
 
   // A failed first write stops the run like any startup failure, so the socket still closes.
   try {
