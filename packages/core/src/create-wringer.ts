@@ -97,6 +97,17 @@ function buildWringer(parts: Parts): Wringer {
 
   const driverNames = parts.drivers.map((driver) => driver.name);
 
+  // A run keys each driver's services by its name, so a second driver of one name would replace
+  // the first one's services and leave them running past the run.
+  const repeated = driverNames.find((name, index) => driverNames.indexOf(name) !== index);
+
+  if (repeated !== undefined) {
+    throw new WringerError('usage', {
+      message: `Two drivers are named \`${repeated}\`.`,
+      hint: 'Give each driver its own name.',
+    });
+  }
+
   const driverCommands = parts.drivers.flatMap((driver) =>
     driver.commands.map((info): RegisteredCommand => ({
       kind: 'driver',
