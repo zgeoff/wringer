@@ -108,10 +108,14 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
         });
       }
 
+      // The cursors belong to the target the pointers name after this command, which `--target`
+      // may change.
+      const before = await ctx.state.readPointers();
+
+      const runID = before.currentRun[args.target ?? ctx.targetName];
+
       const cursors =
-        ctx.run === undefined
-          ? {}
-          : await readCursors(buildRunPaths(ctx.stateDir, ctx.run.runID).streams);
+        runID === undefined ? {} : await readCursors(buildRunPaths(ctx.stateDir, runID).streams);
 
       const pointers = await ctx.state.writePointers((current) => ({
         ...current,

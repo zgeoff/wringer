@@ -43,8 +43,13 @@ const lockTimeoutMs = 30_000;
 
 interface CommandOutcome {
   readonly data: unknown;
-  readonly evidence: readonly Evidence[];
-  readonly drive: boolean;
+}
+
+// What a command has done so far, filled in as it runs, so a command that fails or misses its
+// deadline still reports the evidence it kept and the run and feature it drove.
+interface DriveTrace {
+  evidence: readonly Evidence[];
+  drive: boolean;
 }
 
 // Every command, built-in, driver, repo or action, ends here and yields exactly one envelope.
@@ -67,6 +72,7 @@ export async function dispatch(
   const before = read instanceof WringerError ? null : read;
   let outcome: CommandOutcome | null = null;
   let failure: WringerError | null = null;
+  const trace: DriveTrace = { evidence: [], drive: false };
 
   try {
     if (read instanceof WringerError) {
@@ -94,6 +100,7 @@ export async function dispatch(
       context,
       now,
       deadline,
+      trace,
     });
 
     outcome = await raceDeadline(work, deadline);
@@ -105,7 +112,7 @@ export async function dispatch(
   // pointers meanwhile; any other command reports the state it left, such as the run `up` started.
   const after = await readContext(wringer, state, session).catch(() => before);
 
-  const settled = outcome?.drive === true ? before : after;
+  const settled = trace.drive ? before : after;
   const run = settled?.run ?? before?.run;
   const feature = settled?.feature ?? null;
 
@@ -131,14 +138,14 @@ export async function dispatch(
     sha,
     durationMs: performance.now() - startedMs,
     data: capped.data,
-    evidence: [...(outcome?.evidence ?? []), ...capped.evidence],
+    evidence: [...trace.evidence, ...capped.evidence],
     cursors,
     truncatedPath: capped.truncatedPath,
     error: failure,
   });
 
   if (run !== undefined) {
-    await logEnvelope(state, run, envelope, { drive: outcome?.drive === true, failure, now });
+    await logEnvelope(state, run, envelope, { drive: trace.drive, failure, now });
   }
 
   return { envelope, exitCode: failure === null ? 0 : exitCodeFor[failure.code] };
@@ -177,6 +184,7 @@ interface CommandRequest {
   readonly context: CommandContext;
   readonly now: () => Date;
   readonly deadline: AbortSignal;
+  readonly trace: DriveTrace;
 }
 
 async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
@@ -204,7 +212,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
 
   const drive =
     needsRun && context.run !== undefined
-      ? openRunDrive(request, context.run, context.target.access, hint)
+      ? openRunDrive(request, { run: context.run, access: context.target.access, hint })
       : undefined;
 
   const prepared = prepareCommand(request, drive, hint);
@@ -227,6 +235,10 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     });
   }
 
+  // The drive's evidence list grows as the command runs; the trace holds the same list.
+  request.trace.evidence = drive?.evidence ?? [];
+  request.trace.drive = needsRun && needsDoctor;
+
   const data = await prepared.run();
 
   const output = info.data.safeParse(data);
@@ -238,11 +250,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     });
   }
 
-  return {
-    data: output.data,
-    evidence: drive?.evidence ?? [],
-    drive: needsRun && needsDoctor,
-  };
+  return { data: output.data };
 }
 
 // A launched app runs this worktree's code, so a drive on it needs the tree unchanged since launch.
@@ -267,18 +275,25 @@ async function probeFingerprintChanged(
   return fingerprint !== run.fingerprint;
 }
 
-function openRunDrive(request: CommandRequest, run: RunView, access: Access, hint: string): Drive {
+interface RunDriveOptions {
+  readonly run: RunView;
+  readonly access: Access;
+  readonly hint: string;
+  readonly signal?: AbortSignal | undefined;
+}
+
+function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive {
   return openDrive({
     wringer: request.wringer,
     root: request.session.root,
     stateDir: request.stateDir,
     targetName: request.context.targetName,
     target: request.context.target,
-    access,
-    hint,
-    run,
+    access: options.access,
+    hint: options.hint,
+    run: options.run,
     feature: request.context.feature,
-    signal: request.deadline,
+    signal: options.signal ?? request.deadline,
     now: request.now,
     emit: makeEmit(request.session),
   });
@@ -357,7 +372,8 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     signal: request.deadline,
     now: request.now,
     emit: makeEmit(request.session),
-    openDrive: (access) => openRunDrive(request, getRunningRun(request.context.run), access, hint),
+    openDrive: (access, signal) =>
+      openRunDrive(request, { run: getRunningRun(request.context.run), access, hint, signal }),
   };
 }
 

@@ -24,11 +24,10 @@ export function buildDoctorCommand(): RegisteredCommand {
     needsRun: true,
     needsDoctor: false,
     run: async (_args, ctx) => {
-      const drive = ctx.openDrive('read-only');
       const results: CheckResult[] = [];
 
-      for (const check of collectChecks(ctx, drive)) {
-        const result = await runCheck(check, ctx.signal);
+      for (const check of collectChecks(ctx, ctx.openDrive('read-only'))) {
+        const result = await runCheck(ctx, check);
 
         results.push(result);
         ctx.emit('check', result);
@@ -62,30 +61,50 @@ export function buildDoctorCommand(): RegisteredCommand {
 interface PlannedCheck {
   readonly name: string;
   readonly timeoutMs: number;
-  readonly run: () => Promise<void>;
+  readonly run: (drive: Drive) => Promise<void>;
 }
 
+// Each check runs in a drive of its own, whose clients and execs stop at the check's deadline.
 function collectChecks(ctx: BuiltinContext, drive: Drive): readonly PlannedCheck[] {
   const driverChecks = [...drive.drivers].flatMap(([driverName, opened]) =>
     opened.checks.map((check) => ({
       name: `${driverName}.${check.name}`,
       timeoutMs: check.timeoutMs,
-      run: () => check.run(ctx.feature, ctx.emit),
+      run: (checkDrive: Drive) => runDriverCheck(ctx, checkDrive, driverName, check.name),
     })),
   );
 
   const repoChecks = ctx.wringer.checks.map((check) => ({
     name: check.name,
     timeoutMs: check.timeoutMs,
-    run: () => check.run(drive.ctx),
+    run: (checkDrive: Drive) => check.run(checkDrive.ctx),
   }));
 
   return [...driverChecks, ...repoChecks];
 }
 
-async function runCheck(check: PlannedCheck, signal: AbortSignal): Promise<CheckResult> {
+function runDriverCheck(
+  ctx: BuiltinContext,
+  drive: Drive,
+  driverName: string,
+  checkName: string,
+): Promise<void> {
+  const check = drive.drivers.get(driverName)?.checks.find((each) => each.name === checkName);
+
+  if (check === undefined) {
+    return Promise.reject(
+      new WringerError('internal', {
+        message: `The ${driverName} driver lost its check ${checkName}.`,
+      }),
+    );
+  }
+
+  return check.run(ctx.feature, ctx.emit);
+}
+
+async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<CheckResult> {
   const started = performance.now();
-  const deadline = AbortSignal.any([signal, AbortSignal.timeout(check.timeoutMs)]);
+  const deadline = AbortSignal.any([ctx.signal, AbortSignal.timeout(check.timeoutMs)]);
   const timedOut = Promise.withResolvers<never>();
 
   const onAbort = (): void => {
@@ -97,7 +116,7 @@ async function runCheck(check: PlannedCheck, signal: AbortSignal): Promise<Check
   deadline.addEventListener('abort', onAbort, { once: true });
 
   try {
-    await Promise.race([check.run(), timedOut.promise]);
+    await Promise.race([check.run(ctx.openDrive('read-only', deadline)), timedOut.promise]);
 
     return {
       name: check.name,

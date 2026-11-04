@@ -351,7 +351,7 @@ export interface BuiltinContext {
   readonly signal: AbortSignal;
   readonly now: () => Date;
   readonly emit: Emit;
-  readonly openDrive: (access: Access) => Drive;
+  readonly openDrive: (access: Access, signal?: AbortSignal) => Drive;
 }
 
 export interface BuiltinCommandSpec<Args, Data> extends CommandShape<Args, Data> {

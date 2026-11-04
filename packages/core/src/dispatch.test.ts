@@ -162,6 +162,19 @@ test('it turns a plain thrown error into an internal error with exit code 4', as
   });
 });
 
+test('it keeps the evidence of a drive that failed in its envelope', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'crash']);
+
+  expect(result.envelope.evidence).toStrictEqual([
+    { kind: 'note', path: expect.stringMatching(/cart\.txt$/u), sha256: expect.any(String) },
+  ]);
+});
+
 test("it writes an internal error's stack to the run's log", async () => {
   const ctx = await setupTest();
 

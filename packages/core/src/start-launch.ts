@@ -1,5 +1,6 @@
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { killProcessGroup } from './kill-process-group.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
 import { runProcess } from './run-process.ts';
@@ -21,8 +22,9 @@ export interface Launch {
 
 const stopGraceMs = 5000;
 
-// setpriv asks the kernel to kill the app when the supervisor dies, so a crashed supervisor leaves
-// no orphan behind. Hosts without setpriv, such as macOS, run the app without that guard.
+// The app runs in a process group of its own, and every stop signals the whole group, so a server
+// that a shell or a script runner started stops with it. setpriv asks the kernel to kill the app
+// when the supervisor dies; hosts without setpriv, such as macOS, run the app without that guard.
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const guard = Bun.which('setpriv') === null ? [] : ['setpriv', '--pdeathsig', 'KILL', '--'];
   const cwd = request.plan.cwd ?? process.cwd();
@@ -33,6 +35,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     stdin: 'ignore',
     stdout: 'pipe',
     stderr: 'pipe',
+    detached: true,
   });
 
   const ready = Promise.withResolvers<Endpoints>();
@@ -71,6 +74,9 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const watchExit = async (): Promise<void> => {
     const exitCode = await child.exited;
 
+    // A child the app started may outlive it; nothing else would stop it.
+    killProcessGroup(child.pid);
+
     ready.reject(
       new WringerError('environment', { message: `The app exited with code ${exitCode}.` }),
     );
@@ -89,15 +95,16 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
       await runStopCommand(request.plan.stop, cwd);
     }
 
-    child.kill('SIGTERM');
+    killProcessGroup(child.pid, 'SIGTERM');
 
     const forced = setTimeout(() => {
-      child.kill('SIGKILL');
+      killProcessGroup(child.pid);
     }, stopGraceMs);
 
     await child.exited;
 
     clearTimeout(forced);
+    killProcessGroup(child.pid);
   };
 
   try {
