@@ -1,3 +1,4 @@
+import { killProcessGroup } from './kill-process-group.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface ProcessRequest {
@@ -38,20 +39,30 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
     });
   }
 
+  // The command runs in a process group of its own, so the deadline also stops a child it started,
+  // which would otherwise hold the output pipes open past the deadline.
   const child = Bun.spawn([executable, ...args], {
     cwd: request.cwd ?? process.cwd(),
     env,
     stdin: request.stdin === undefined ? 'ignore' : Buffer.from(request.stdin),
     stdout: 'pipe',
     stderr: 'pipe',
-    ...(request.signal === undefined ? {} : { signal: request.signal }),
+    detached: true,
   });
+
+  const killGroup = (): void => {
+    killProcessGroup(child.pid);
+  };
+
+  request.signal?.addEventListener('abort', killGroup, { once: true });
 
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(child.stdout).text(),
     new Response(child.stderr).text(),
     child.exited,
   ]);
+
+  request.signal?.removeEventListener('abort', killGroup);
 
   if (hasAborted(request.signal)) {
     throw new WringerError('timeout', {

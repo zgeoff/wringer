@@ -22,6 +22,20 @@ test('it fails with a timeout error when the signal aborts the command', () => {
   ).rejects.toMatchObject({ code: 'timeout' });
 });
 
+test('it stops a child the command started when the signal aborts', async () => {
+  const startedMs = performance.now();
+
+  const failed = await runProcess({
+    argv: ['sh', '-c', 'sleep 3; echo late'],
+    signal: AbortSignal.timeout(50),
+  }).catch((error: unknown) => error);
+
+  expect({ failed, fast: performance.now() - startedMs < 2000 }).toStrictEqual({
+    failed: expect.objectContaining({ code: 'timeout' }),
+    fast: true,
+  });
+});
+
 test('it fails with a timeout error when the signal fired before the command started', () => {
   expect(runProcess({ argv: ['true'], signal: AbortSignal.abort() })).rejects.toMatchObject({
     code: 'timeout',
