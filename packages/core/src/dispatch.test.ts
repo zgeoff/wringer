@@ -17,6 +17,8 @@ async function setupTest() {
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+    runWithin: (timeoutMs: number, path: readonly string[], args: unknown) =>
+      dispatch(wringer, path, args, { ...shop.session, target: 'local', timeoutMs }),
     runOnPointers: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, shop.session),
     runAsFeature: (feature: string, path: readonly string[], args: unknown) =>
@@ -175,6 +177,23 @@ test('it times out a command past its deadline with exit code 5', async () => {
     exitCode: 5,
     code: 'timeout',
   });
+});
+
+test('it never runs the body of a command whose deadline passed while its guards ran', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.runWithin(1, ['action', 'receipt'], {});
+
+  // A later command reads the fingerprint too, so the timed-out one has finished its guards by then.
+  await ctx.run('local', ['action', 'count']);
+
+  const receipts = await Array.fromAsync(
+    new Bun.Glob('**/*-receipt.txt').scan({ cwd: ctx.root, dot: true }),
+  );
+
+  expect(receipts).toStrictEqual([]);
 });
 
 test('it turns a plain thrown error into an internal error with exit code 4', async () => {

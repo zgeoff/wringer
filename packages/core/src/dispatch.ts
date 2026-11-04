@@ -238,6 +238,12 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     throw refusal;
   }
 
+  // The envelope answers at the deadline without waiting for this function, so a body that would
+  // start after it never starts.
+  if (request.deadline.aborted) {
+    throw new WringerError('timeout');
+  }
+
   const hint = context.target.refusalHint ?? defaultRefusalHint;
   const drive = openCommandDrive(request, { needsRun, hint });
   const prepared = prepareCommand(request, drive, hint);
