@@ -133,13 +133,15 @@ function toGunshiCommand(
 }
 
 // The help marks each command as a read or a write, so a reader of a read-only target sees which
-// commands it refuses before running one.
+// commands it refuses before running one. A command that decides by its arguments may be either.
 function buildDescription(info: CommandInfo | null): string {
   if (info === null) {
     return '';
   }
 
-  return `${info.summary} [${info.effect ?? 'write'}]`;
+  const effect = info.decideEffect === undefined ? (info.effect ?? 'write') : 'read or write';
+
+  return `${info.summary} [${effect}]`;
 }
 
 const globalFlagsSchema = z.strictObject({
