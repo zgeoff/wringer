@@ -34,7 +34,8 @@ const objectJSONSchema = z.looseObject({
   anyOf: z.array(z.unknown()).default([]),
 });
 
-// A field that two branches type differently takes JSON text, so either branch's value parses.
+// A field that two branches type differently, items included, takes JSON text, so either branch's
+// value parses. Two enums of one type join their choices.
 function collectProperties(jsonSchema: unknown): Record<string, ArgProperty> {
   const parsed = objectJSONSchema.safeParse(jsonSchema);
 
@@ -51,12 +52,23 @@ function collectProperties(jsonSchema: unknown): Record<string, ArgProperty> {
       for (const [name, property] of Object.entries(properties)) {
         const seen = collected[name];
 
-        collected[name] =
-          seen === undefined || seen.type === property.type ? (seen ?? property) : {};
+        collected[name] = seen === undefined ? property : pickMergedProperty(seen, property);
       }
 
       return collected;
     },
     {},
   );
+}
+
+function pickMergedProperty(seen: ArgProperty, property: ArgProperty): ArgProperty {
+  if (seen.type !== property.type || seen.items?.type !== property.items?.type) {
+    return {};
+  }
+
+  if (seen.enum === undefined || property.enum === undefined) {
+    return seen.enum === property.enum ? seen : {};
+  }
+
+  return { ...seen, enum: [...new Set([...seen.enum, ...property.enum])] };
 }
