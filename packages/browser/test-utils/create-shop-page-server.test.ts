@@ -30,6 +30,17 @@ test('it counts each load of the page', async () => {
   expect(ctx.server.pageLoads()).toBe(2);
 });
 
+test('it answers an unknown path with 404 and counts no page load', async () => {
+  const ctx = setupTest();
+
+  const response = await ctx.request('/favicon.ico');
+
+  expect({ status: response.status, pageLoads: ctx.server.pageLoads() }).toStrictEqual({
+    status: 404,
+    pageLoads: 0,
+  });
+});
+
 test('it records the path of each POST', async () => {
   const ctx = setupTest();
 

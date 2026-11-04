@@ -40,31 +40,37 @@ const page = `<!doctype html>
 
 // A shop app for browser tests on a free port: `/` serves a page with two fields, order and search
 // buttons, and a Restock button that appears once the test calls `revealRestock`. The server
-// records each POST path and counts the page loads.
+// records the path of each POST to an `/api` route and counts the page loads.
 export function createShopPageServer(): ShopPageServer {
   const posts: string[] = [];
   let restockReady = false;
   let pageLoads = 0;
 
-  const answerRequest = (request: Request): Response => {
-    const path = new URL(request.url).pathname;
-
-    if (request.method === 'POST') {
+  const makePostRoute = (path: string) => ({
+    POST: () => {
       posts.push(path);
 
       return Response.json({ ok: true });
-    }
+    },
+  });
 
-    if (path === '/api/restock-ready') {
-      return Response.json(restockReady);
-    }
+  const server = Bun.serve({
+    port: 0,
+    hostname: '127.0.0.1',
+    routes: {
+      '/': {
+        GET: () => {
+          pageLoads += 1;
 
-    pageLoads += 1;
-
-    return new Response(page, { headers: { 'content-type': 'text/html' } });
-  };
-
-  const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: answerRequest });
+          return new Response(page, { headers: { 'content-type': 'text/html' } });
+        },
+      },
+      '/api/restock-ready': { GET: () => Response.json(restockReady) },
+      '/api/orders': makePostRoute('/api/orders'),
+      '/api/search': makePostRoute('/api/search'),
+      '/api/restock': makePostRoute('/api/restock'),
+    },
+  });
 
   return {
     url: server.url.href,
