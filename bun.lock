@@ -39,10 +39,25 @@
         "tiny-invariant": "catalog:",
       },
     },
+    "packages/gunshi": {
+      "name": "@wringer/gunshi",
+      "version": "0.0.0",
+      "dependencies": {
+        "gunshi": "catalog:",
+        "zod": "catalog:",
+      },
+      "devDependencies": {
+        "@wringer/core": "workspace:*",
+      },
+      "peerDependencies": {
+        "@wringer/core": "workspace:*",
+      },
+    },
   },
   "catalog": {
     "@zgeoff/std": "0.4.1",
     "@zgeoff/testing": "0.2.1",
+    "gunshi": "0.37.3",
     "tiny-invariant": "1.3.3",
     "ts-pattern": "5.9.2",
     "xstate": "5.33.3",
@@ -379,6 +394,8 @@
 
     "@wringer/core": ["@wringer/core@workspace:packages/core"],
 
+    "@wringer/gunshi": ["@wringer/gunshi@workspace:packages/gunshi"],
+
     "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.6", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-Ex99nLNCeeVG6GkbjJYKCpepr8VRESSB9SJaA7mRwt6Ls9ndtB+Qps4BbYg5oKueiYZoT3lvNZWzv/Mygv8x5A=="],
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.2.3", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.5.2" } }, "sha512-4ZNPft3LunVKp+s2esoJXSe64EaEywsu3z6Cg5/s/MJcdygmrQeAyfECioePCo5RuAIcaPfgF3lhYsPKcmVJ4w=="],
@@ -503,7 +520,7 @@
 
     "global-directory": ["global-directory@5.0.0", "", { "dependencies": { "ini": "6.0.0" } }, "sha512-1pgFdhK3J2LeM+dVf2Pd424yHx2ou338lC0ErNP2hPx4j8eW1Sp0XqSjNxtk6Tc4Kr5wlWtSvz8cn2yb7/SG/w=="],
 
-    "gunshi": ["gunshi@1.0.0-rc.1", "", {}, "sha512-/nSFKVrJHKg9O4ppBl+lOSLDQWmvJ5fG3ldVsdJX8KMtUV2uYwlx/a8OaOWuvniuV28bZDjsB8p6YFtDxSlMcw=="],
+    "gunshi": ["gunshi@0.37.3", "", {}, "sha512-uwm23bguqDcleEetknuQnF5okLcgmQPM3iv4aWVHTPDbiSs9shh02F079NCY0mWkrIRjHqNhgmzW6k0FCXhy1g=="],
 
     "has-flag": ["has-flag@4.0.0", "", {}, "sha512-EykJT/Q1KjTWctppgIAgfSO0tKVuZUjhgMr17kqTumMl6Afv3EISleU7qZUzoXDFTAHTDC4NOoG/ZxU3EvlMPQ=="],
 
@@ -696,6 +713,8 @@
     "@eslint-community/eslint-utils/eslint-visitor-keys": ["eslint-visitor-keys@3.4.3", "", {}, "sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag=="],
 
     "@types/node/undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
+
+    "@zgeoff/format-codemod/gunshi": ["gunshi@1.0.0-rc.1", "", {}, "sha512-/nSFKVrJHKg9O4ppBl+lOSLDQWmvJ5fG3ldVsdJX8KMtUV2uYwlx/a8OaOWuvniuV28bZDjsB8p6YFtDxSlMcw=="],
 
     "cliui/string-width": ["string-width@7.2.0", "", { "dependencies": { "emoji-regex": "^10.3.0", "get-east-asian-width": "^1.0.0", "strip-ansi": "^7.1.0" } }, "sha512-tsaTIkKW9b4N+AEj+SVA+WhJzV7/zMhcSu78mLKWSk7cXMOSHsBKFWUs0fWwq8QyK3MgJBQRX6Gbi4kYbdvGkQ=="],
 
