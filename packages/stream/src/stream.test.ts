@@ -1,14 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createStreamWringer } from '../test-utils/create-stream-wringer.ts';
 import { streamSliceSchema } from './stream.ts';
 
 async function setupTest() {
-  const triggers = await mkdtemp(join(import.meta.dir, '.test-stream-triggers-'));
+  const triggers = await createTestFolder(import.meta.dir, 'stream-triggers');
 
   onTestFinished(() => rm(triggers, { recursive: true, force: true }));
 

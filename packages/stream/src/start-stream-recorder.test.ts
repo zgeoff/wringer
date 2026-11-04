@@ -1,13 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { local } from '@wringer/core';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { recordLineCap, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-stream-recorder-'));
+  const directory = await createTestFolder(import.meta.dir, 'stream-recorder');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

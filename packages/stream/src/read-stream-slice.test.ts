@@ -1,10 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { readStreamSlice } from './read-stream-slice.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-stream-slice-'));
+  const directory = await createTestFolder(import.meta.dir, 'stream-slice');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
@@ -28,6 +29,14 @@ test('it reads nothing from a stream that has no file yet', async () => {
   const slice = await ctx.read(0);
 
   expect(slice).toStrictEqual({ records: [], cursor: 0, more: false });
+});
+
+test('it rejects a stream path that is a folder', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(ctx.path);
+
+  expect(ctx.read(0)).rejects.toMatchObject({ code: 'EISDIR' });
 });
 
 test('it reads every record and returns the end of the file as the cursor', async () => {
