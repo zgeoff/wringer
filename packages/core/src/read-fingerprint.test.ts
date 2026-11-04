@@ -18,7 +18,7 @@ async function setupTest() {
   return {
     repo,
     git: (...args: readonly string[]) => runGit({ cwd: repo, args }),
-    readFingerprint: () => readFingerprint({ cwd: repo, base: 'main', exclude: ['.wringer'] }),
+    readFingerprint: (cwd = repo) => readFingerprint({ cwd, base: 'main', exclude: ['.wringer'] }),
   };
 }
 
@@ -90,6 +90,29 @@ test('it changes the fingerprint when an untracked file changes', async () => {
   const after = await ctx.readFingerprint();
 
   expect(after).not.toBe(before);
+});
+
+test('it gives a subfolder of the repo the fingerprint of the whole repo', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.repo, 'web'));
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+  await writeFile(join(ctx.repo, 'web', 'page.ts'), 'export const title = "Shop";\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+  await mkdir(join(ctx.repo, '.wringer'));
+  await writeFile(join(ctx.repo, '.wringer', 'state.json'), '{}\n');
+
+  const fromRoot = await ctx.readFingerprint();
+  const fromSubfolder = await ctx.readFingerprint(join(ctx.repo, 'web'));
+
+  expect({ fromSubfolder, empty: fromRoot === emptyFingerprint }).toStrictEqual({
+    fromSubfolder: fromRoot,
+    empty: false,
+  });
 });
 
 test('it leaves the evidence folder out of the fingerprint', async () => {

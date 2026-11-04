@@ -31,7 +31,8 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
     await runGit({ cwd: request.cwd, args: ['add', '--all'], env });
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
-    // and a committed change to an excluded path reaches the index through `read-tree` anyway.
+    // and a committed change to an excluded path reaches the index through `read-tree` anyway. The
+    // pathspecs start at the repo root, so a call from a subfolder sees the whole tree.
     const diff = await runGit({
       cwd: request.cwd,
       args: [
@@ -42,8 +43,8 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
         '--no-ext-diff',
         mergeBase,
         '--',
-        '.',
-        ...request.exclude.map((path) => `:(exclude)${path}`),
+        ':(top)',
+        ...request.exclude.map((path) => `:(top,exclude)${path}`),
       ],
       env,
     });
