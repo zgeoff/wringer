@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { open, readFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
+import { appendFile, readFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
 
@@ -41,26 +41,9 @@ export function createNodeStateFileSystem(): StateFileSystem {
     },
     createDirectory,
 
-    // A write may take fewer bytes than it was given, so the append writes on from where the last
-    // write stopped until the whole text is in the file. The caller holds the run lock, so no other
-    // append lands between two of these writes.
-    appendText: async (path, text) => {
-      const handle = await open(path, 'a');
-
-      const bytes = Buffer.from(text);
-
-      try {
-        let written = 0;
-
-        while (written < bytes.length) {
-          const result = await handle.write(bytes, written);
-
-          written += result.bytesWritten;
-        }
-      } finally {
-        await handle.close();
-      }
-    },
+    // `appendFile` writes on until the whole text is in the file, and the caller holds the run lock,
+    // so no other append lands between two of its writes.
+    appendText: (path, text) => appendFile(path, text),
     readFileSize: async (path) => {
       const info = await stat(path);
 

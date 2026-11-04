@@ -1,13 +1,26 @@
 import { expect, test } from 'bun:test';
+import { existsSync } from 'node:fs';
 import { readPIDNamespace } from './read-pid-namespace.ts';
 
-test('it reads the PID namespace as digits, or as host where the system has no /proc', () => {
-  expect(readPIDNamespace()).toMatch(/^(?:\d+|host)$/u);
-});
+function setupTest() {
+  return {
+    // A child shares the test's PID namespace, and `readlink` prints its link as `pid:[<id>]`.
+    readNamespaceLink: () => Bun.spawnSync(['readlink', '/proc/self/ns/pid']).stdout.toString(),
+    readPIDNamespace,
+  };
+}
 
-test('it reads the same namespace each time in one process', () => {
-  const first = readPIDNamespace();
-  const second = readPIDNamespace();
+test.skipIf(!existsSync('/proc/self/ns/pid'))(
+  'it reads the id of the PID namespace that /proc names',
+  () => {
+    const ctx = setupTest();
 
-  expect(second).toBe(first);
+    expect(`pid:[${ctx.readPIDNamespace()}]\n`).toBe(ctx.readNamespaceLink());
+  },
+);
+
+test.skipIf(existsSync('/proc/self/ns/pid'))('it reads host where the system has no /proc', () => {
+  const ctx = setupTest();
+
+  expect(ctx.readPIDNamespace()).toBe('host');
 });
