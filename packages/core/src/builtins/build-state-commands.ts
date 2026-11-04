@@ -118,10 +118,13 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
         runID === undefined ? {} : await readCursors(buildRunPaths(ctx.stateDir, runID).streams);
 
       const pointers = await ctx.state.writePointers((current) => ({
-        ...current,
+        currentRun: current.currentRun,
+        ...(current.target === undefined ? {} : { target: current.target }),
+        ...(current.feature === undefined ? {} : { feature: current.feature }),
         ...(args.feature === undefined ? {} : { feature: args.feature }),
         ...(args.target === undefined ? {} : { target: args.target }),
         cursors,
+        ...(runID === undefined ? {} : { cursorsRun: runID }),
       }));
 
       return { target: pointers.target ?? null, feature: pointers.feature ?? null, cursors };

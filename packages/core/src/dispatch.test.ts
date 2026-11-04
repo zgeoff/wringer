@@ -190,6 +190,21 @@ test('it answers with an internal error when the envelope is too large for the l
   }).toStrictEqual({ exitCode: 4, code: 'internal', evidence: 400 });
 });
 
+test('it answers with an internal error when the data has no JSON form', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'tally']);
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    data: result.envelope.data,
+  }).toStrictEqual({ exitCode: 4, code: 'internal', data: null });
+});
+
 test("it writes an internal error's stack to the run's log", async () => {
   const ctx = await setupTest();
 

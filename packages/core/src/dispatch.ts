@@ -136,6 +136,10 @@ export async function dispatch(
     now,
   });
 
+  if (failure === null && capped.failure !== null) {
+    failure = capped.failure;
+  }
+
   const sha = await readHeadSHA(session.root);
 
   const input: EnvelopeInput = {
@@ -462,23 +466,29 @@ interface CappedData {
   readonly data: unknown;
   readonly evidence: readonly Evidence[];
   readonly truncatedPath: string | null;
+  readonly failure: WringerError | null;
 }
 
-// Over the cap, the full data goes to an evidence file and the envelope carries its path.
+// Over the cap, the full data goes to an evidence file and the envelope carries its path. Data
+// that fails to serialize or to write still yields an envelope, one that carries the failure.
 async function capData(data: unknown, request: CapRequest): Promise<CappedData> {
-  const text = JSON.stringify(data ?? null);
+  try {
+    const text = JSON.stringify(data ?? null);
 
-  if (Buffer.byteLength(text) <= dataCapBytes) {
-    return { data, evidence: [], truncatedPath: null };
+    if (Buffer.byteLength(text) <= dataCapBytes) {
+      return { data, evidence: [], truncatedPath: null, failure: null };
+    }
+
+    const evidence = await createEvidenceWriter(request).writer.writeFile(
+      'payload',
+      'payload.json',
+      text,
+    );
+
+    return { data: null, evidence: [evidence], truncatedPath: evidence.path, failure: null };
+  } catch (error) {
+    return { data: null, evidence: [], truncatedPath: null, failure: toWringerError(error) };
   }
-
-  const evidence = await createEvidenceWriter(request).writer.writeFile(
-    'payload',
-    'payload.json',
-    text,
-  );
-
-  return { data: null, evidence: [evidence], truncatedPath: evidence.path };
 }
 
 // A failed command's envelope carries the data its error gives, such as the doctor's results; an

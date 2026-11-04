@@ -8,6 +8,7 @@ import { notes } from './notes-driver.ts';
 const emptySchema = z.strictObject({});
 const countSchema = z.strictObject({ count: z.number() });
 const textSchema = z.strictObject({ text: z.string() });
+const tallySchema = z.strictObject({ count: z.bigint() });
 const directorySchema = z.strictObject({ directory: z.string() });
 
 // A repo's verify CLI for tests: launch targets `local` (ready at once), `broken` (exits first) and
@@ -167,6 +168,16 @@ export function createShopWringer(): Wringer {
 
           return {};
         },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'tally',
+        summary: 'Return data that has no JSON form',
+        effect: 'read',
+        input: emptySchema,
+        data: tallySchema,
+        run: () => Promise.resolve({ count: 3n }),
       }),
     )
     .action(
