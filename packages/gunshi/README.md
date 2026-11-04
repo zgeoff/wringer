@@ -39,7 +39,11 @@ Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
 - The CLI prints text in place of JSON when stdout is a terminal and no coding agent runs it.
   `--human` and `--json` choose the format.
 - An unknown flag, a flag of the wrong type or arguments that fail the command's schema end in a
-  `usage` envelope and exit code 2.
+  `usage` envelope and exit code 2. So does a flag with no value after it; write `--label ''` to
+  pass an empty one.
+- A flag of an object or a list of objects takes JSON text, such as `--address '{"town":"Hollin"}'`.
+- When a command's arguments are a union of objects, each branch's fields are flags, and the
+  command's schema picks the branch.
 - Every command takes `--target`, `--feature` and `--timeout-ms`, unless it declares an argument of
   the same name. `use --target` sets the target for later commands, where `status --target` reads
   one target once.
