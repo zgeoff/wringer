@@ -113,8 +113,9 @@ export interface CommandShape<Args, Data> {
   readonly timeoutMs?: number | undefined;
 }
 
-// A command with its argument and data types erased, as the registry and the CLI adapter see it.
-export type CommandInfo = CommandShape<unknown, unknown>;
+// A command with its argument and data types erased, as the registry and the CLI adapter see it. A
+// command with `decideEffect` reads or writes by its arguments, so its `effect` is only a default.
+export type CommandInfo = CommandShape<unknown, unknown> & { readonly decideEffect?: unknown };
 
 export interface DriverCommandContext<Options, TargetConfig, Client> {
   readonly session: DriverSession<Options, TargetConfig>;
