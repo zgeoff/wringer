@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { callSupervisor } from '../call-supervisor.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
 import type { BuiltinContext } from '../types.ts';
+import { WringerError } from '../wringer-error.ts';
 
 export const stopDataSchema = z.strictObject({
   run: z.string().nullable(),
@@ -27,14 +28,7 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
     const stopped =
       view?.supervisor === null || view === undefined
         ? false
-        : await callSupervisor({
-            socket: view.supervisor.socket,
-            request: { service: supervisorServiceName, method: 'stop', args: null },
-            signal: ctx.signal,
-          }).then(
-            () => true,
-            () => false,
-          );
+        : await runSupervisorStop(view.supervisor.socket, ctx.signal);
 
     if (!stopped && (view?.status === 'running' || view?.status === 'starting')) {
       await ctx.state.appendEvent(runID, {
@@ -55,4 +49,28 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
 
     return { run: runID, stopped };
   });
+}
+
+// Only a supervisor that is gone lets the run end without its answer. A late or failed call leaves
+// the run and its pointer in place, so the next `down` can still reach it.
+async function runSupervisorStop(socket: string, signal: AbortSignal): Promise<boolean> {
+  try {
+    await callSupervisor({
+      socket,
+      request: { service: supervisorServiceName, method: 'stop', args: null },
+      signal,
+    });
+
+    return true;
+  } catch (error) {
+    if (isSupervisorGone(error)) {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+export function isSupervisorGone(error: unknown): boolean {
+  return error instanceof WringerError && error.code === 'not-running';
 }
