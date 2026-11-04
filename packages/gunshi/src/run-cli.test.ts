@@ -106,6 +106,8 @@ test.each([
   ],
   ['no command', [], 'Name a command.'],
   ['a word the command takes no argument for', ['down', 'prod'], 'takes no argument `prod`'],
+  ['an empty --target', ['down', '--target', ''], 'at target'],
+  ['an empty --feature', ['status', '--feature', ''], 'at feature'],
 ])('it answers %s with a usage envelope and exit code 2', async (_name, argv, message) => {
   const ctx = await setupTest();
   const result = await ctx.run(argv);

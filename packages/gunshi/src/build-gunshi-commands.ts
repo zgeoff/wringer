@@ -6,6 +6,7 @@ import { buildGunshiArgs } from './build-gunshi-args.ts';
 import type { GunshiArgs } from './build-gunshi-args.ts';
 import { buildPositionals } from './build-positionals.ts';
 import { buildRawArgs } from './build-raw-args.ts';
+import { keepFlagText } from './keep-flag-text.ts';
 
 interface GlobalFlags {
   readonly target?: string | undefined;
@@ -67,8 +68,16 @@ function resolveChild(node: CommandNode, name: string): CommandNode {
 }
 
 const globalArgs: GunshiArgs = {
-  target: { type: 'string', description: 'The target to run on, for this command only' },
-  feature: { type: 'string', description: 'The feature to record evidence under' },
+  target: {
+    type: 'string',
+    parse: keepFlagText,
+    description: 'The target to run on, for this command only',
+  },
+  feature: {
+    type: 'string',
+    parse: keepFlagText,
+    description: 'The feature to record evidence under',
+  },
   timeoutMs: { type: 'number', description: 'The deadline of the command, in milliseconds' },
   human: { type: 'boolean', description: 'Print text for a person' },
   json: { type: 'boolean', description: 'Print the JSON envelope' },
