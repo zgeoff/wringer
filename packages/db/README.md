@@ -58,8 +58,8 @@ A query through `via: 'exec'` has these limits:
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
 - A statement for psql holds no backslash, and a read holds one statement, with no `;` inside it.
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
-- A read through psql starts with `select`, `with`, `values`, `table`, `show` or `explain`. The
-  driver answers any other read as a write that did not ask to write.
+- A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
+  with a usage error, and any other read counts as a write that did not ask to write.
 
 ## Results
 
