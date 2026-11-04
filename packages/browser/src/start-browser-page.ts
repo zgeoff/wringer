@@ -52,6 +52,13 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
       throw page;
     }
 
+    // An abort while the page reopened fired before the listener below, which would never see it.
+    if (signal.aborted) {
+      throw new WringerError('timeout', {
+        message: 'The command ran past its deadline before the browser started it.',
+      });
+    }
+
     const reopen = (): void => {
       pageReady = reopenPage(page, openPage);
     };
@@ -133,9 +140,10 @@ async function reopenPage(
   const url = stale.url();
 
   try {
-    const page = await openPage();
-
+    // The stale page closes first, so its action cannot land while the new page opens.
     await stale.close();
+
+    const page = await openPage();
 
     // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
     // itself must still come back, or every later command would fail.
