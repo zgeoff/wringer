@@ -262,12 +262,14 @@ test('it fails a raw exec that exits non-zero with check-failed and exit code 1'
 
   const result = await ctx.run('local', ['exec'], { argv: ['sh', '-c', 'echo nope; exit 3'] });
 
-  expect({ exitCode: result.exitCode, envelope: result.envelope }).toMatchObject({
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    data: result.envelope.data,
+  }).toStrictEqual({
     exitCode: 1,
-    envelope: {
-      error: { code: 'check-failed' },
-      data: { exitCode: 3, stdout: 'nope\n', stderr: '' },
-    },
+    code: 'check-failed',
+    data: { exitCode: 3, stdout: 'nope\n', stderr: '' },
   });
 });
 
@@ -395,9 +397,9 @@ test('it refuses a driver call from a repo command that needs no run while no ru
   const ctx = await setupTest();
   const result = await ctx.run('local', ['shelf']);
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 3,
-    error: { code: 'not-running' },
+    code: 'not-running',
   });
 });
 

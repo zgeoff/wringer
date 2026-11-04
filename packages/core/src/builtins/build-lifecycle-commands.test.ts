@@ -26,7 +26,14 @@ test('#up reuses the running run of a target, keeping its doctor pass', async ()
 
   const second = await ctx.run('local', ['up']);
 
-  expect(second.envelope.data).toMatchObject({ run: first.envelope.instance, reused: true });
+  expect(second.envelope.data).toStrictEqual({
+    run: first.envelope.instance,
+    target: 'local',
+    status: 'running',
+    endpoints: expect.any(Object),
+    services: expect.any(Array),
+    reused: true,
+  });
 });
 
 test('#up --restart ends the current run and starts a new one', async () => {
@@ -75,9 +82,14 @@ test('#up fails with an environment error when the app exits before it is ready'
   const ctx = await setupTest();
   const result = await ctx.run('broken', ['up']);
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toMatchObject({
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+  }).toStrictEqual({
     exitCode: 4,
-    error: { code: 'environment', message: expect.stringContaining('exited with code 3') },
+    code: 'environment',
+    message: expect.stringContaining('exited with code 3'),
   });
 });
 

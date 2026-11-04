@@ -150,11 +150,18 @@ test('#gate fails a PR body whose verdict predates a change to the feature', asy
 
   const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
 
-  expect({ exitCode: result.exitCode, envelope: result.envelope }).toMatchObject({
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    data: result.envelope.data,
+  }).toStrictEqual({
     exitCode: 1,
-    envelope: {
-      error: { code: 'check-failed' },
-      data: { failing: [{ name: 'checkout', reason: expect.stringContaining('verdict at') }] },
+    code: 'check-failed',
+    data: {
+      fingerprint: expect.any(String),
+      failing: [
+        { name: 'checkout', reason: expect.stringMatching(/^verdict at \S+, tree at \S+$/u) },
+      ],
     },
   });
 });
