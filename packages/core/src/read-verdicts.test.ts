@@ -2,8 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createFileState } from './create-file-state.ts';
-import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+import { createRepoState } from './create-repo-state.ts';
 import { readVerdicts } from './read-verdicts.ts';
 
 async function setupTest() {
@@ -11,11 +10,7 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const state = createFileState({
-    stateDir: join(root, '.wringer'),
-    lockTimeoutMs: 1000,
-    fs: createNodeStateFileSystem(),
-  });
+  const state = createRepoState(root, '.wringer');
 
   return { root, state, readVerdicts: () => readVerdicts(state, root) };
 }

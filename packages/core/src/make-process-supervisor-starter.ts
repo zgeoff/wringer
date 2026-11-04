@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildRunPaths } from './build-state-paths.ts';
-import { supervisorCommandName } from './supervisor-protocol.ts';
+import { buildSupervisorArgv } from './supervisor-protocol.ts';
 import type { SupervisorStarter } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
@@ -27,7 +27,14 @@ export function makeProcessSupervisorStarter(options: ProcessSupervisorOptions):
 
       const child = spawn(
         command,
-        [...args, supervisorCommandName, request.runID, request.target, options.root],
+        [
+          ...args,
+          ...buildSupervisorArgv({
+            runID: request.runID,
+            target: request.target,
+            root: options.root,
+          }),
+        ],
         { cwd: options.root, detached: true, stdio: ['ignore', log, log] },
       );
 

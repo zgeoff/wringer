@@ -5,9 +5,7 @@ import type { EnvelopeInput } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
-import { createFileState } from './create-file-state.ts';
 import type { StatePort } from './create-file-state.ts';
-import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { decideGuard } from './decide-guard.ts';
 import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
@@ -41,7 +39,6 @@ export interface DispatchResult {
 }
 
 export const defaultTimeoutMs = 120_000;
-const lockTimeoutMs = 30_000;
 
 interface CommandOutcome {
   readonly data: unknown;
@@ -65,7 +62,7 @@ export async function dispatch(
   const startedMs = performance.now();
   const now = session.now ?? (() => new Date());
   const stateDir = join(session.root, wringer.stateDir);
-  const state = createFileState({ stateDir, lockTimeoutMs, fs: createNodeStateFileSystem() });
+  const state = session.state;
 
   const read = await readContext(wringer, state, session).catch((error: unknown) =>
     toWringerError(error),
