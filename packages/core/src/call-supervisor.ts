@@ -27,16 +27,18 @@ export async function callSupervisor(call: SupervisorCall): Promise<unknown> {
 }
 
 async function exchangeLine(call: SupervisorCall): Promise<string> {
+  // An abort that came before the listener never fires it, so a late call would still run.
+  if (call.signal.aborted) {
+    throw buildLateError();
+  }
+
   const connection = createConnection({ path: call.socket });
   const lines = createInterface({ input: connection });
   const reply = Promise.withResolvers<string>();
 
   const onAbort = (): void => {
     connection.destroy();
-
-    reply.reject(
-      new WringerError('timeout', { message: 'The supervisor did not answer in time.' }),
-    );
+    reply.reject(buildLateError());
   };
 
   call.signal.addEventListener('abort', onAbort, { once: true });
@@ -67,6 +69,10 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
     lines.close();
     connection.destroy();
   }
+}
+
+function buildLateError(): WringerError {
+  return new WringerError('timeout', { message: 'The supervisor did not answer in time.' });
 }
 
 function toConnectionError(error: Error): WringerError {

@@ -113,7 +113,7 @@ export async function dispatch(
   const after = await readContext(wringer, state, session).catch(() => before);
 
   const settled = trace.drive ? before : after;
-  const run = settled?.run ?? before?.run;
+  const run = pickEnvelopeRun(before, settled);
   const feature = settled?.feature ?? null;
   const cursorsRead = run === undefined ? {} : await readEnvelopeCursors(state, run.runID);
   const cursors = cursorsRead instanceof WringerError ? {} : cursorsRead;
@@ -471,6 +471,19 @@ async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise
   } finally {
     deadline.removeEventListener('abort', onAbort);
   }
+}
+
+// `down` clears the pointer to the run it ended, so its envelope names that run from before the
+// command. A command that moved to another target names only that target's run.
+function pickEnvelopeRun(
+  before: CommandContext | null,
+  settled: CommandContext | null,
+): RunView | undefined {
+  if (settled?.targetName !== before?.targetName) {
+    return settled?.run;
+  }
+
+  return settled?.run ?? before?.run;
 }
 
 async function readEnvelopeCursors(

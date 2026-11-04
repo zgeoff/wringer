@@ -1,10 +1,11 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { probeProcess } from './probe-process.ts';
 import { startLaunch } from './start-launch.ts';
+import { WringerError } from './wringer-error.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'start-launch');
@@ -144,6 +145,25 @@ test('it refuses with an environment error when the app cannot start', async () 
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
+});
+
+test('it refuses a log folder it cannot create before it tries to start the app', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.directory, 'logs'), 'a file where the log folder goes\n');
+
+  const launching = startLaunch({
+    plan: { command: ['sleep', '60'], cwd: join(ctx.directory, 'missing'), ready: () => null },
+    logPath: join(ctx.directory, 'logs', 'app.log'),
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  expect(launching).rejects.toThrowWithMessage(
+    WringerError,
+    /^The folder for the app log could not be created/u,
+  );
 });
 
 test('it refuses with an environment error when the app log cannot be written', async () => {
