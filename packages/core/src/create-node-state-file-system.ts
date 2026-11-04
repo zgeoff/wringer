@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { open, readFile, readdir, rename, truncate, writeFile } from 'node:fs/promises';
+import { open, readFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
 
@@ -8,6 +8,7 @@ import { isErrorCode } from './is-error-code.ts';
 export interface StateFileSystem {
   readonly readText: (path: string) => Promise<string | null>;
   readonly listNames: (directory: string) => Promise<readonly string[]>;
+  readonly readFileSize: (path: string) => Promise<number>;
   readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
   readonly truncateFile: (path: string, length: number) => Promise<void>;
@@ -50,6 +51,11 @@ export function createNodeStateFileSystem(): StateFileSystem {
       } finally {
         await handle.close();
       }
+    },
+    readFileSize: async (path) => {
+      const info = await stat(path);
+
+      return info.size;
     },
     truncateFile: (path, length) => truncate(path, length),
     writeTextAtomic: async (path, text) => {

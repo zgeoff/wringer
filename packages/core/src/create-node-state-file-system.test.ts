@@ -58,6 +58,16 @@ test('#appendText adds the text after what the file holds', async () => {
   expect(text).toBe('kale\nleeks\n');
 });
 
+test('#readFileSize reads the size of a file in bytes', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.directory, 'notes.txt'), 'kale\n');
+
+  const size = await ctx.fs.readFileSize(join(ctx.directory, 'notes.txt'));
+
+  expect(size).toBe(5);
+});
+
 test('#truncateFile keeps the first bytes of the file', async () => {
   const ctx = await setupTest();
 
