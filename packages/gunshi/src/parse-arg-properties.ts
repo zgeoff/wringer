@@ -5,10 +5,15 @@ export const scalarTypeSchema = z.enum(['string', 'number', 'integer', 'boolean'
 
 export type ScalarType = z.infer<typeof scalarTypeSchema>;
 
+const itemSchema = z.looseObject({ type: z.unknown().optional() });
+
+// A tuple's JSON Schema holds `items: false`, so its items have no one type.
+const noItemSchema = z.boolean().transform(() => ({ type: null }));
+
 const propertyJSONSchema = z.looseObject({
   type: z.unknown().optional(),
   enum: z.array(z.unknown()).optional(),
-  items: z.looseObject({ type: z.unknown().optional() }).optional(),
+  items: z.union([itemSchema, noItemSchema]).optional(),
   description: z.string().optional(),
 });
 
