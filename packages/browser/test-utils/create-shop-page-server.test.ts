@@ -21,6 +21,27 @@ test('it serves the shop page', async () => {
   expect(body).toContain("<button onclick=\"send('/api/orders', 'Ordered')\">Place order</button>");
 });
 
+test('it sets the basket cookie on the first fill only', async () => {
+  const ctx = setupTest();
+
+  const first = await ctx.request('/basket/fill');
+  const second = await ctx.request('/basket/fill');
+
+  expect([first.headers.get('set-cookie'), second.headers.get('set-cookie')]).toStrictEqual([
+    'basket=mugs; Path=/',
+    null,
+  ]);
+});
+
+test('it puts the basket cookie in the basket title', async () => {
+  const ctx = setupTest();
+
+  const response = await ctx.request('/basket', { headers: { cookie: 'basket=mugs' } });
+  const body = await response.text();
+
+  expect(body).toBe('<!doctype html><title>Basket: mugs</title>');
+});
+
 test('it counts each load of the page', async () => {
   const ctx = setupTest();
 

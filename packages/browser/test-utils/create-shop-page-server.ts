@@ -38,13 +38,14 @@ const page = `<!doctype html>
   waitForRestock();
 </script>`;
 
-// A shop app for browser tests on a free port: `/` serves a page with two fields, order and search
-// buttons, and a Restock button that appears once the test calls `revealRestock`. The server
-// records the path of each POST to an `/api` route and counts the page loads.
+// A shop app for browser tests on a free port: `/` has two fields, two buttons and a Restock button
+// that `revealRestock` shows; each `/api` POST and page load is counted. The first `/basket/fill`
+// sets a basket cookie, which `/basket` prints in its title.
 export function createShopPageServer(): ShopPageServer {
   const posts: string[] = [];
   let restockReady = false;
   let pageLoads = 0;
+  let basketFilled = false;
 
   const makePostRoute = (path: string) => ({
     POST: () => {
@@ -63,6 +64,28 @@ export function createShopPageServer(): ShopPageServer {
           pageLoads += 1;
 
           return new Response(page, { headers: { 'content-type': 'text/html' } });
+        },
+      },
+      '/basket/fill': {
+        GET: () => {
+          const headers = new Headers({ 'content-type': 'text/html' });
+
+          if (!basketFilled) {
+            basketFilled = true;
+
+            headers.set('set-cookie', 'basket=mugs; Path=/');
+          }
+
+          return new Response('<!doctype html><title>Basket filled</title>', { headers });
+        },
+      },
+      '/basket': {
+        GET: (request) => {
+          const basket = request.cookies.get('basket') ?? 'empty';
+
+          return new Response(`<!doctype html><title>Basket: ${basket}</title>`, {
+            headers: { 'content-type': 'text/html' },
+          });
         },
       },
       '/api/restock-ready': { GET: () => Response.json(restockReady) },

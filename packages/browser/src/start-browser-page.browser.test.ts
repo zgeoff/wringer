@@ -99,6 +99,29 @@ test('it runs a command queued behind a timed-out click on the reopened page', a
   });
 });
 
+test('it keeps the cookies of a page that a timed-out command replaced', async () => {
+  const ctx = setupTest();
+
+  const service = await ctx.startPage();
+
+  await service.methods['goto']?.(
+    { url: new URL('/basket/fill', ctx.url).href },
+    new AbortController().signal,
+  );
+
+  await service.methods['click']?.(
+    { role: 'button', name: 'Restock' },
+    AbortSignal.timeout(300),
+  )?.catch(() => null);
+
+  const basket = await service.methods['goto']?.(
+    { url: new URL('/basket', ctx.url).href },
+    AbortSignal.timeout(5000),
+  );
+
+  expect(basket).toStrictEqual({ url: new URL('/basket', ctx.url).href, title: 'Basket: mugs' });
+});
+
 test('it refuses a queued command whose deadline passed while it waited, before it starts', async () => {
   const ctx = setupTest();
 
