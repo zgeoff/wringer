@@ -1,5 +1,6 @@
 import { launchReadyTimeoutMs } from './builtins/build-lifecycle-commands.ts';
 import { createRepoState } from './create-repo-state.ts';
+import { readLaunchHost } from './read-launch-host.ts';
 import { runSupervisor } from './run-supervisor.ts';
 import { supervisorArgsSchema } from './supervisor-protocol.ts';
 import type { Wringer } from './types.ts';
@@ -29,6 +30,7 @@ export async function runSupervisorProcess(
 
   await runSupervisor({
     wringer,
+    launchHost: readLaunchHost(),
     state: createRepoState(parsed.data.root, wringer.stateDir),
     runID: parsed.data.runID,
     target: parsed.data.target,
