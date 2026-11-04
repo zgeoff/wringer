@@ -225,3 +225,27 @@ test('it fails with an environment error when ssh cannot connect', async () => {
     code: 'environment',
   });
 });
+
+test('it follows a remote command as the read-only user, line by line', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary, readOnlyUser: 'app_ro' });
+  const lines: string[] = [];
+
+  const exitCode = await host.follow({
+    argv: ['printf', '%s\n', "it's up", 'second'],
+    access: 'read-only',
+    signal: new AbortController().signal,
+    onLine: (line) => {
+      lines.push(line);
+    },
+  });
+
+  const logins = await readFile(ctx.fake.loginsPath, 'utf8');
+
+  expect({ exitCode, lines, logins }).toStrictEqual({
+    exitCode: 0,
+    lines: ["it's up", 'second'],
+    logins: 'app_ro@app-host\n',
+  });
+});

@@ -6,6 +6,11 @@
     "es2024": true
   },
   "ignorePatterns": [".claude/**", ".reviews/**", ".worktrees/**"],
+  // the browser lane runs `*.browser.test.ts` against a real browser, 10 s per test
+  "rules": {
+    "zgeoff/max-test-timeout": ["error", { "lanes": { "browser": 10000 } }],
+    "zgeoff/test-beside-module": ["error", { "lanes": { "browser": 10000 } }]
+  },
   "overrides": [
     // repo-sync delivers these scripts from zgeoff/tools and overwrites a local edit, so their verbs
     // are fixed at that source

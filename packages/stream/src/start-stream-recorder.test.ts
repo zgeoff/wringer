@@ -1,0 +1,138 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { appendFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { local } from '@wringer/core';
+import { waitFor } from '../../core/test-utils/wait-for.ts';
+import { recordLineCap, startStreamRecorder } from './start-stream-recorder.ts';
+import type { StreamSource } from './start-stream-recorder.ts';
+
+async function setupTest() {
+  const directory = await mkdtemp(join(import.meta.dir, '.test-stream-recorder-'));
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  const streams = join(directory, 'streams');
+
+  return {
+    directory,
+    start: async (sources: Readonly<Record<string, StreamSource>>, pendingLimit = 10_000) => {
+      const recorder = await startStreamRecorder({
+        sources,
+        directory: streams,
+        host: local(),
+        localHost: local(),
+        access: 'read-only',
+        now: () => new Date('2026-03-01T09:30:00.000Z'),
+        pendingLimit,
+      });
+
+      onTestFinished(() => recorder.stop());
+
+      return recorder;
+    },
+    readStream: async (name: string) => {
+      const file = Bun.file(join(streams, `${name}.ndjson`));
+
+      const exists = await file.exists();
+
+      return exists ? file.text() : '';
+    },
+  };
+}
+
+test('it records each line of a command source with the time it arrived', async () => {
+  const ctx = await setupTest();
+  const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted', 'ready'] } });
+
+  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(
+    '{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n{"at":"2026-03-01T09:30:00.000Z","line":"ready"}\n',
+  );
+});
+
+test('it records the lines appended to a file source', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  await writeFile(log, 'booted\n');
+
+  await ctx.start({ app: { file: log } });
+
+  await appendFile(log, 'order 7 placed\n');
+
+  const recorded = await waitFor(async () => {
+    const text = await ctx.readStream('app');
+
+    return text.includes('order 7 placed') ? text : null;
+  });
+
+  expect(recorded).toBe(
+    '{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n{"at":"2026-03-01T09:30:00.000Z","line":"order 7 placed"}\n',
+  );
+});
+
+test('it caps a long line', async () => {
+  const ctx = await setupTest();
+  const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
+
+  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(
+    `${JSON.stringify({ at: '2026-03-01T09:30:00.000Z', line: `${'x'.repeat(recordLineCap)}...` })}\n`,
+  );
+});
+
+test('it drops the lines past the pending limit and records how many it dropped', async () => {
+  const ctx = await setupTest();
+
+  const lines = Array.from({ length: 50 }, (_, index) => `line ${index}`);
+
+  const recorder = await ctx.start({ app: { command: ['printf', '%s\n', ...lines] } }, 2);
+
+  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toMatch(
+    /"line":"\[wringer\] the recorder dropped \d+ lines while it caught up"/u,
+  );
+});
+
+test('it reports a running source, an exited source and a failed source', async () => {
+  const ctx = await setupTest();
+
+  const recorder = await ctx.start({
+    tail: { command: ['sleep', '60'] },
+    done: { command: ['sh', '-c', 'exit 4'] },
+    missing: { command: ['wringer-no-such-command'] },
+  });
+
+  const statuses = await waitFor(() => {
+    const current = recorder.status();
+    const settled = current.filter((status) => status.state !== 'running');
+
+    return settled.length === 2 ? current : null;
+  });
+
+  expect(statuses).toStrictEqual([
+    { name: 'tail', state: 'running', detail: null },
+    { name: 'done', state: 'exited', detail: 'exit code 4' },
+    {
+      name: 'missing',
+      state: 'failed',
+      detail: expect.stringContaining('wringer-no-such-command'),
+    },
+  ]);
+});

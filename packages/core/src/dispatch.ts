@@ -220,6 +220,7 @@ interface CommandContext {
   readonly target: TargetDefinition;
   readonly run: RunView | undefined;
   readonly feature: string | null;
+  readonly cursors: Readonly<Record<string, number>>;
 }
 
 async function readContext(
@@ -253,7 +254,13 @@ async function readContext(
   const runID = findOwnValue(pointers.currentRun, targetName);
   const run = runID === undefined ? undefined : await state.readRun(runID);
 
-  return { targetName, target, run, feature: session.feature ?? pointers.feature ?? null };
+  return {
+    targetName,
+    target,
+    run,
+    feature: session.feature ?? pointers.feature ?? null,
+    cursors: pointers.cursors,
+  };
 }
 
 interface CommandRequest {
@@ -403,6 +410,7 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     hint: options.hint,
     run: options.run,
     feature: request.context.feature,
+    cursors: request.context.cursors,
     signal: options.deadline?.signal ?? request.deadline,
     deadlineAt: options.deadline?.at ?? request.deadlineAt,
     now: request.now,

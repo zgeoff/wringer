@@ -25,6 +25,14 @@
     "packages/db": {
       "component": "@wringer/db",
       "initial-version": "0.1.0"
+    },
+    "packages/stream": {
+      "component": "@wringer/stream",
+      "initial-version": "0.1.0"
+    },
+    "packages/browser": {
+      "component": "@wringer/browser",
+      "initial-version": "0.1.0"
     }
   }
 }
