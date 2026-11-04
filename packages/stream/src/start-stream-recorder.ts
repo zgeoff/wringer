@@ -4,7 +4,6 @@ import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
-import { appendWholeText } from './append-whole-text.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
@@ -21,6 +20,7 @@ export interface RecorderRequest {
   readonly localHost: Host;
   readonly access: Access;
   readonly now: () => Date;
+  readonly appendText: (path: string, text: string) => Promise<void>;
 
   // At most this many records wait for the disk; a source that logs faster loses the excess, and
   // the stream says how many lines it lost.
@@ -112,6 +112,7 @@ function followSource(request: FollowSourceRequest): Follower {
   const writer = makeRecordWriter({
     path,
     now: request.now,
+    appendText: request.appendText,
     pendingLimit: request.pendingLimit,
     onError: (error) => {
       move('failed', `The recorder could not write: ${String(error)}`);
@@ -138,6 +139,7 @@ function followSource(request: FollowSourceRequest): Follower {
 interface RecordWriterOptions {
   readonly path: string;
   readonly now: () => Date;
+  readonly appendText: (path: string, text: string) => Promise<void>;
   readonly pendingLimit: number;
   readonly onError: (error: unknown) => void;
 }
@@ -151,7 +153,7 @@ function makeRecordWriter(options: RecordWriterOptions): RecordWriter {
   const writer = createActor(recordWriterMachine, {
     input: {
       ...options,
-      write: (text: string) => appendWholeText(options.path, text),
+      write: (text: string) => options.appendText(options.path, text),
     },
   });
 
