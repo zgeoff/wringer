@@ -16,11 +16,26 @@ async function setupTest() {
 
   return {
     file,
+
+    // `using` closes the database even when a statement throws.
+    seedNotes: (texts: readonly string[]) => {
+      using database = new Database(file);
+
+      database.run('create table notes (text text)');
+
+      for (const text of texts) {
+        database.run('insert into notes values (?)', [text]);
+      }
+    },
     run: async (args: readonly string[], sql: string) => {
       const child = Bun.spawn([program, ...args], {
         stdin: Buffer.from(sql),
         stdout: 'pipe',
         stderr: 'pipe',
+      });
+
+      onTestFinished(() => {
+        child.kill();
       });
 
       const [stdout, stderr, exitCode] = await Promise.all([
@@ -37,11 +52,7 @@ async function setupTest() {
 test('it prints the rows of a read as JSON', async () => {
   const ctx = await setupTest();
 
-  const database = new Database(ctx.file);
-
-  database.run('create table notes (text text)');
-  database.run("insert into notes values ('pay')");
-  database.close();
+  ctx.seedNotes(['pay']);
 
   const result = await ctx.run(['-json', '-readonly', ctx.file], 'select text from notes');
 
@@ -51,10 +62,7 @@ test('it prints the rows of a read as JSON', async () => {
 test('it refuses a write with -readonly as sqlite3 does', async () => {
   const ctx = await setupTest();
 
-  const database = new Database(ctx.file);
-
-  database.run('create table notes (text text)');
-  database.close();
+  ctx.seedNotes([]);
 
   const result = await ctx.run(['-json', '-readonly', ctx.file], "insert into notes values ('x')");
 
