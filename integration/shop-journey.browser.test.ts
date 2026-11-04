@@ -68,7 +68,7 @@ test('it drives a page, an http call, a stream read and a db query, then reports
   }).toStrictEqual({
     orders: 0,
     logged: 0,
-    counted: { columns: ['orders'], rows: [{ orders: 1 }] },
+    counted: { columns: ['orders'], rows: [{ orders: 1 }], rowCount: 1 },
     done: expect.objectContaining({ feature: 'checkout', run: done.envelope.instance }),
     report: expect.objectContaining({
       report: expect.objectContaining({ complete: true, features: [checkout] }),

@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { z } from 'zod';
 
 // The example shop app that the journey test launches: a page with a Place order button, an orders
 // API over a SQLite file at SHOP_DB, and one log line per order. It prints its ready line once it
@@ -19,25 +20,38 @@ const page = `<!doctype html>
   }
 </script>`;
 
-function answerRequest(request: Request): Response {
-  const path = new URL(request.url).pathname;
+const orderSchema = z.strictObject({ id: z.number().int(), item: z.string() });
+const placedOrderSchema = orderSchema.pick({ id: true });
 
-  if (path === '/api/orders' && request.method === 'POST') {
-    const placed = database.run('insert into orders (item) values (?)', ['mug']);
-    const id = Number(placed.lastInsertRowid);
+type Order = z.infer<typeof orderSchema>;
 
-    console.log(`order ${id} placed`);
+type PlacedOrder = z.infer<typeof placedOrderSchema>;
 
-    return Response.json({ id });
-  }
-
-  if (path === '/api/orders') {
-    return Response.json(database.query('select id, item from orders order by id').all());
-  }
-
-  return new Response(page, { headers: { 'content-type': 'text/html' } });
+function readOrders(): Order[] {
+  return z
+    .array(orderSchema)
+    .parse(database.query('select id, item from orders order by id').all());
 }
 
-const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: answerRequest });
+function writeOrder(): PlacedOrder {
+  const placed = database.run('insert into orders (item) values (?)', ['mug']);
+  const order = placedOrderSchema.parse({ id: Number(placed.lastInsertRowid) });
+
+  console.log(`order ${order.id} placed`);
+
+  return order;
+}
+
+const server = Bun.serve({
+  port: 0,
+  hostname: '127.0.0.1',
+  routes: {
+    '/api/orders': {
+      GET: () => Response.json(readOrders()),
+      POST: () => Response.json(writeOrder()),
+    },
+    '/': new Response(page, { headers: { 'content-type': 'text/html' } }),
+  },
+});
 
 console.log(JSON.stringify({ event: 'listening', port: server.port }));
