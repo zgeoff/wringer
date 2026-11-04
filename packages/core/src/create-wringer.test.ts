@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { notes } from '../test-utils/notes-driver.ts';
 import { bindDrivers } from './bind-drivers.ts';
 import { createWringer } from './create-wringer.ts';
+import { defineDriver } from './define-driver.ts';
 import { local } from './local.ts';
 
 test('it registers the built-ins, the driver commands and each action under `action`', () => {
@@ -50,6 +51,35 @@ test('it refuses a repo command whose path a built-in already holds', () => {
     });
 
   expect(() => builder.build()).toThrow('Two commands share the name `status`.');
+});
+
+test('it refuses a driver command that declares it needs no run', () => {
+  const shelf = defineDriver({
+    name: 'shelf',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {},
+    client: () => ({}),
+    commands: (command) => [
+      command({
+        path: ['shelf', 'count'],
+        summary: 'Count the shelf',
+        args: z.strictObject({}),
+        data: z.strictObject({}),
+        effect: 'read',
+        needsRun: false,
+        run: () => Promise.resolve({}),
+      }),
+    ],
+  });
+
+  const builder = createWringer({ name: 'shop' })
+    .use(shelf({}))
+    .target('local', { mode: 'attach', access: 'read-write', host: local() });
+
+  expect(() => builder.build()).toThrow(
+    "The driver command `shelf count` needs a run, because its client calls the run's services.",
+  );
 });
 
 test('it refuses a CLI with no target', () => {
