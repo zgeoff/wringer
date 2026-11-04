@@ -1,13 +1,13 @@
-import { mkdir, open, readFile, readdir, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import { buildRunView } from './build-run-view.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths, buildStatePaths } from './build-state-paths.ts';
 import type { StatePaths } from './build-state-paths.ts';
-import { isErrorCode } from './is-error-code.ts';
+import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
 import type { RunEvent, RunID } from './run-events.ts';
+import { appendRunEvent, parseRunLog } from './run-log.ts';
 import { withFileLock } from './with-file-lock.ts';
 import { WringerError } from './wringer-error.ts';
 
@@ -35,33 +35,31 @@ export interface StatePort {
 export interface FileStateOptions {
   readonly stateDir: string;
   readonly lockTimeoutMs: number;
+  readonly fs: StateFileSystem;
 }
 
 export const eventSizeCapBytes = 64 * 1024;
 
 export function createFileState(options: FileStateOptions): StatePort {
   const paths = buildStatePaths(options.stateDir);
+  const fs = options.fs;
 
   const readPointers = async (): Promise<Pointers> => {
-    const text = await readFile(paths.state, 'utf8').catch((error: unknown) => {
-      if (isErrorCode(error, 'ENOENT')) {
-        return null;
-      }
-
-      throw error;
-    });
+    const text = await fs.readText(paths.state);
 
     if (text === null) {
       return { currentRun: {}, cursors: {} };
     }
 
-    return pointersSchema.parse(JSON.parse(text));
+    const parsed: unknown = JSON.parse(text);
+
+    return pointersSchema.parse(parsed);
   };
 
   const readRunEvents = async (runID: RunID): Promise<readonly RunEvent[]> => {
-    const text = await readFile(buildRunPaths(options.stateDir, runID).log, 'utf8').catch(() => '');
+    const text = await fs.readText(buildRunPaths(options.stateDir, runID).log);
 
-    return parseRunLog(text);
+    return parseRunLog(text ?? '');
   };
 
   const readRun = async (runID: RunID): Promise<RunView | undefined> => {
@@ -86,38 +84,39 @@ export function createFileState(options: FileStateOptions): StatePort {
 
           const next = pointersSchema.parse(change(current));
 
-          await writeFileAtomic(paths.state, `${JSON.stringify(next, null, 2)}\n`);
+          await fs.writeTextAtomic(paths.state, `${JSON.stringify(next, null, 2)}\n`);
 
           return next;
         },
       ),
     appendEvent: async (runID, event) => {
-      const line = Buffer.from(`${JSON.stringify(runEventSchema.parse(event))}\n`);
+      const parsed = runEventSchema.parse(event);
+      const line = `${JSON.stringify(parsed)}\n`;
+      const lineBytes = Buffer.byteLength(line);
 
-      if (line.byteLength > eventSizeCapBytes) {
+      if (lineBytes > eventSizeCapBytes) {
         throw new WringerError('internal', {
-          message: `A ${event.type} event of ${line.byteLength} bytes is over the log's cap of ${eventSizeCapBytes} bytes.`,
+          message: `A ${event.type} event of ${lineBytes} bytes is over the log's cap of ${eventSizeCapBytes} bytes.`,
         });
       }
 
       const runPaths = buildRunPaths(options.stateDir, runID);
 
-      await mkdir(runPaths.directory, { recursive: true });
+      await fs.createDirectory(runPaths.directory);
 
-      // One write of the whole line to a file opened with O_APPEND, so lines from processes that
-      // append at once never interleave.
-      const handle = await open(runPaths.log, 'a');
-
-      try {
-        await handle.write(line);
-      } finally {
-        await handle.close();
-      }
+      await appendRunEvent({
+        fs,
+        logPath: runPaths.log,
+        lockPath: join(paths.locks, `run-${runID}.lock`),
+        lockTimeoutMs: options.lockTimeoutMs,
+        line,
+        event: parsed,
+      });
     },
     readRunEvents,
     readRun,
     listRuns: async () => {
-      const names = await readdir(paths.runs).catch(() => []);
+      const names = await fs.listNames(paths.runs);
 
       return names.flatMap((name) => {
         const parsed = runIDSchema.safeParse(name);
@@ -143,38 +142,10 @@ export function createFileState(options: FileStateOptions): StatePort {
         endedAt: view.endedAt,
       };
 
-      await writeFileAtomic(
+      await fs.writeTextAtomic(
         buildRunPaths(options.stateDir, runID).manifest,
         `${JSON.stringify(manifest, null, 2)}\n`,
       );
     },
   };
-}
-
-function parseRunLog(text: string): readonly RunEvent[] {
-  return text.split('\n').flatMap((line) => {
-    if (line === '') {
-      return [];
-    }
-
-    // A writer killed mid-line leaves a torn last line; the events before it still hold.
-    const parsed = runEventSchema.safeParse(parseJSONLine(line));
-
-    return parsed.success ? [parsed.data] : [];
-  });
-}
-
-function parseJSONLine(line: string): unknown {
-  try {
-    return JSON.parse(line);
-  } catch {
-    return undefined;
-  }
-}
-
-async function writeFileAtomic(path: string, content: string): Promise<void> {
-  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
-
-  await writeFile(temporary, content);
-  await rename(temporary, path);
 }

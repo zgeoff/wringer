@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
 import { ssh } from './ssh.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-ssh-'));
+  const directory = await createTestFolder(import.meta.dir, 'ssh');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

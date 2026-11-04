@@ -1,4 +1,7 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runProcess } from './run-process.ts';
 
 test('it returns the exit code and output of a command, with stdin passed in', async () => {
@@ -8,6 +11,18 @@ test('it returns the exit code and output of a command, with stdin passed in', a
   });
 
   expect(result).toStrictEqual({ exitCode: 3, stdout: 'select 1;', stderr: 'oops\n' });
+});
+
+test('it finds a relative command in the folder it runs in', async () => {
+  const folder = await createTestFolder(import.meta.dir, 'run-process');
+
+  onTestFinished(() => rm(folder, { recursive: true, force: true }));
+
+  await writeFile(join(folder, 'greet'), '#!/bin/sh\necho hello\n', { mode: 0o755 });
+
+  const result = await runProcess({ argv: ['./greet'], cwd: folder });
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: 'hello\n', stderr: '' });
 });
 
 test('it fails with an environment error for a command that is not on the PATH', () => {

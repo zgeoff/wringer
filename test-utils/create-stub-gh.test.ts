@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createStubGH } from './create-stub-gh.ts';
+import { createTestFolder } from './create-test-folder.ts';
 
 async function setupTest() {
   // Inside the checkout, not the system temp dir: the folder is git-ignored.
-  const directory = await mkdtemp(join(import.meta.dir, '.test-create-stub-gh-'));
+  const directory = await createTestFolder(import.meta.dir, 'create-stub-gh');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

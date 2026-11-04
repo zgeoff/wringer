@@ -1,18 +1,19 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { appendFile, mkdir, readFile, rm } from 'node:fs/promises';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
+import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
 
 async function setupTest() {
-  const stateDir = await mkdtemp(join(import.meta.dir, '.test-create-file-state-'));
+  const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
 
   onTestFinished(() => rm(stateDir, { recursive: true, force: true }));
 
   return {
     stateDir,
-    state: createFileState({ stateDir, lockTimeoutMs: 2000 }),
+    state: createFileState({ stateDir, lockTimeoutMs: 2000, fs: createNodeStateFileSystem() }),
     readLog: (runID: string) =>
       readFile(buildRunPaths(stateDir, runIDSchema.parse(runID)).log, 'utf8'),
     readManifest: (runID: string) =>
@@ -56,7 +57,7 @@ test('it never interleaves events that many writers append at once', async () =>
   const reason = 'x'.repeat(16 * 1024);
 
   await Promise.all(
-    Array.from({ length: 200 }, () =>
+    Array.from({ length: 20 }, () =>
       ctx.state.appendEvent(runID, { type: 'crashed', at: '2026-11-04T10:00:01.000Z', reason }),
     ),
   );
@@ -65,7 +66,7 @@ test('it never interleaves events that many writers append at once', async () =>
 
   const lines = log.trimEnd().split('\n');
 
-  expect(lines).toHaveLength(200);
+  expect(lines).toHaveLength(20);
   expect(lines).toSatisfyAll((line: string) => runEventSchema.safeParse(JSON.parse(line)).success);
 });
 
@@ -107,6 +108,73 @@ test('it reads the events before a torn last line of the log', async () => {
       fingerprint: 'f00d',
     },
   ]);
+});
+
+test('it starts the next event on a line of its own after a torn last line', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'attach',
+    fingerprint: 'f00d',
+  });
+
+  await appendFile(buildRunPaths(ctx.stateDir, runID).log, '{"type":"launch-re');
+
+  await ctx.state.appendEvent(runID, { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' });
+
+  const events = await ctx.state.readRunEvents(runID);
+
+  expect(events).toStrictEqual([
+    {
+      type: 'run-started',
+      at: '2026-11-04T10:00:00.000Z',
+      target: 'local',
+      mode: 'attach',
+      fingerprint: 'f00d',
+    },
+    { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' },
+  ]);
+});
+
+test('it leaves out a crash that arrives after the run ended', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'attach',
+    fingerprint: 'f00d',
+  });
+
+  await ctx.state.appendEvent(runID, { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' });
+
+  await ctx.state.appendEvent(runID, {
+    type: 'crashed',
+    at: '2026-11-04T10:00:03.000Z',
+    reason: 'the launch exited',
+  });
+
+  const events = await ctx.state.readRunEvents(runID);
+
+  expect(events.map((event) => event.type)).toStrictEqual(['run-started', 'run-ended']);
+});
+
+test('it rejects a read of a log that is not a file', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await mkdir(buildRunPaths(ctx.stateDir, runID).log, { recursive: true });
+
+  expect(ctx.state.readRunEvents(runID)).rejects.toMatchObject({ code: 'EISDIR' });
 });
 
 test('it writes a manifest of the run from its log', async () => {

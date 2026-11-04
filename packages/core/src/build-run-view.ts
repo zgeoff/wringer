@@ -1,8 +1,8 @@
 import { match } from 'ts-pattern';
 import type { Envelope } from './envelope.ts';
 import type { CheckResult, Endpoints, Mode, RunEvent, RunID } from './run-events.ts';
-import { canMoveRunStatus, findRunStatusMove } from './run-status.ts';
-import type { RunStatus } from './run-status.ts';
+import { canMoveRunStatus, findRunStatusMove } from './run-log.ts';
+import type { RunStatus } from './run-log.ts';
 
 export type DoctorState = 'none' | 'passed' | 'failed';
 

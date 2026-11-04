@@ -5,6 +5,8 @@ export { buildRunPaths, buildStatePaths } from './build-state-paths.ts';
 export type { RunPaths, StatePaths } from './build-state-paths.ts';
 export { createFileState, eventSizeCapBytes, pointersSchema } from './create-file-state.ts';
 export type { FileStateOptions, Pointers, StatePort } from './create-file-state.ts';
+export { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+export type { StateFileSystem } from './create-node-state-file-system.ts';
 
 export {
   envelopeErrorSchema,
@@ -32,7 +34,7 @@ export {
 
 export type { CheckResult, Endpoints, Mode, RunEvent, RunID } from './run-events.ts';
 export type { ProcessResult } from './run-process.ts';
-export type { RunStatus } from './run-status.ts';
+export type { RunStatus } from './run-log.ts';
 export { ssh } from './ssh.ts';
 export type { PrefixLayer, SSHOptions } from './ssh.ts';
 export { WringerError } from './wringer-error.ts';

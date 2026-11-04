@@ -1,10 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { withFileLock } from './with-file-lock.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-with-file-lock-'));
+  const directory = await createTestFolder(import.meta.dir, 'with-file-lock');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

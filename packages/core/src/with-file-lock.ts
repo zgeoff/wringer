@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { Stats } from 'node:fs';
 import { link, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { isErrorCode } from './is-error-code.ts';
@@ -138,10 +139,22 @@ const claimStaleMs = 10_000;
 // A caller that dies while it holds a claim leaves the claim behind; one older than any removal takes
 // is abandoned.
 async function removeAbandonedClaim(claim: string): Promise<void> {
-  const info = await stat(claim).catch(() => null);
+  const info = await readClaimInfo(claim);
 
   if (info !== null && Date.now() - info.ctimeMs > claimStaleMs) {
     await rm(claim, { force: true });
+  }
+}
+
+async function readClaimInfo(claim: string): Promise<Stats | null> {
+  try {
+    return await stat(claim);
+  } catch (error) {
+    if (isErrorCode(error, 'ENOENT')) {
+      return null;
+    }
+
+    throw error;
   }
 }
 

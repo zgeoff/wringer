@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from './create-test-folder.ts';
 import { writeTreeFiles } from './write-tree-files.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(tmpdir(), 'write-tree-files-'));
+  const directory = await createTestFolder(import.meta.dir, 'write-tree-files');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

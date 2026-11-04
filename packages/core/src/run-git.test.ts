@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runGit } from './run-git.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-run-git-'));
+  const directory = await createTestFolder(import.meta.dir, 'run-git');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
 import { runGit } from './run-git.ts';
 
 async function setupTest() {
-  const repo = await mkdtemp(join(import.meta.dir, '.test-read-fingerprint-'));
+  const repo = await createTestFolder(import.meta.dir, 'read-fingerprint');
 
   onTestFinished(() => rm(repo, { recursive: true, force: true }));
 

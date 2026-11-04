@@ -1,15 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { StubNPMAnswer } from '../../test-utils/create-stub-npm.ts';
 import { createStubNPM } from '../../test-utils/create-stub-npm.ts';
+import { createTestFolder } from '../../test-utils/create-test-folder.ts';
 import { writeTreeFiles } from '../../test-utils/write-tree-files.ts';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { publishPackages } from './publish-packages.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-publish-packages-'));
+  const directory = await createTestFolder(import.meta.dir, 'publish-packages');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
