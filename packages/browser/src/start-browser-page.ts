@@ -1,7 +1,6 @@
 import { WringerError } from '@wringer/core';
 import type { ServiceInstance } from '@wringer/core';
-import { chromium } from 'playwright-core';
-import type { Locator, Page } from 'playwright-core';
+import type { Browser, Locator, Page } from 'playwright-core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
 import { browserPageMachine } from './browser-page-machine.ts';
@@ -9,7 +8,7 @@ import type { PageActionResult } from './browser-page-machine.ts';
 import { findSnapshotElement } from './find-snapshot-element.ts';
 
 export interface BrowserPageOptions {
-  readonly executablePath?: string | undefined;
+  readonly launchBrowser: () => Promise<Browser>;
   readonly actionTimeoutMs: number;
 }
 
@@ -23,10 +22,7 @@ const typeSchema = z.strictObject({ element: elementSchema, value: z.string() })
 // state between commands. `describe` reads the last snapshot, because a new snapshot renumbers
 // every ref, so it skips the command queue.
 export async function startBrowserPage(options: BrowserPageOptions): Promise<ServiceInstance> {
-  const browser = await chromium.launch({
-    headless: true,
-    ...(options.executablePath === undefined ? {} : { executablePath: options.executablePath }),
-  });
+  const browser = await options.launchBrowser();
 
   // `browser.newPage` gives each page a context of its own, which dies with the page; one context
   // per run keeps the cookies and storage of a page that a timeout replaced.

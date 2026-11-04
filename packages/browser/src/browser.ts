@@ -1,5 +1,6 @@
 import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
+import { chromium } from 'playwright-core';
 import { z } from 'zod';
 import { buildAppURL } from './build-app-url.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
@@ -89,7 +90,13 @@ export const browser = defineDriver({
     page: {
       start: (ctx) =>
         startBrowserPage({
-          executablePath: ctx.options.executablePath,
+          launchBrowser: () =>
+            chromium.launch({
+              headless: true,
+              ...(ctx.options.executablePath === undefined
+                ? {}
+                : { executablePath: ctx.options.executablePath }),
+            }),
           actionTimeoutMs: ctx.options.actionTimeoutMs,
         }),
     },
