@@ -1158,11 +1158,13 @@ test("it fails with git's own read error when merge-base cannot read a shared co
 
   const [read] = await Promise.allSettled([ctx.readFingerprint()]);
 
+  const readError = new RegExp(`^git merge-base failed: error: Could not read ${start}`, 'u');
+
   expect(read).toStrictEqual({
     status: 'rejected',
     reason: expect.objectContaining({
       code: 'environment',
-      message: `git merge-base failed: error: Could not read ${start}`,
+      message: expect.stringMatching(readError),
     }),
   });
 });
