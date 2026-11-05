@@ -6,16 +6,22 @@ import { createTestPostgres } from '../test-utils/create-test-postgres.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 import type { SqliteMode } from './run-sql-query.ts';
 
+// One stack frees what each test took, in the reverse of the order it took it: the client, then
+// the container.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const postgres = await createTestPostgres();
 
-  onTestFinished(() => {
+  stack.defer(() => {
     postgres.remove();
   });
 
   const admin = new SQL(postgres.url);
 
-  onTestFinished(() => admin.close());
+  stack.defer(() => admin.close());
 
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),

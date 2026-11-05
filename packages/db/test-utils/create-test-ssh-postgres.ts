@@ -6,6 +6,7 @@ export interface TestSSHPostgres {
   readonly url: string;
   readonly sshBinary: string;
   readonly destination: string;
+  readonly containerID: string;
   readonly remove: () => void;
 }
 
@@ -62,7 +63,8 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
   const id = started.stdout.toString().trim();
 
   const remove = (): void => {
-    Bun.spawnSync(['docker', 'rm', '--force', id]);
+    // A forced removal keeps the image's anonymous data volume unless it names `--volumes`.
+    Bun.spawnSync(['docker', 'rm', '--force', '--volumes', id]);
   };
 
   try {
@@ -101,6 +103,7 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
       url: `postgres://shop:shop@127.0.0.1:${readPort('5432/tcp')}/shop`,
       sshBinary,
       destination: 'shop@127.0.0.1',
+      containerID: id,
       remove,
     };
   } catch (error) {

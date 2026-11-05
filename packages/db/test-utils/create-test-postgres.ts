@@ -2,6 +2,7 @@ import { waitFor } from '../../core/test-utils/wait-for.ts';
 
 export interface TestPostgres {
   readonly url: string;
+  readonly containerID: string;
   readonly remove: () => void;
 }
 
@@ -29,7 +30,8 @@ export async function createTestPostgres(): Promise<TestPostgres> {
   const id = started.stdout.toString().trim();
 
   const remove = (): void => {
-    Bun.spawnSync(['docker', 'rm', '--force', id]);
+    // A forced removal keeps the image's anonymous data volume unless it names `--volumes`.
+    Bun.spawnSync(['docker', 'rm', '--force', '--volumes', id]);
   };
 
   try {
@@ -45,7 +47,7 @@ export async function createTestPostgres(): Promise<TestPostgres> {
       { timeoutMs: 10_000 },
     );
 
-    return { url: `postgres://shop:shop@127.0.0.1:${port}/shop`, remove };
+    return { url: `postgres://shop:shop@127.0.0.1:${port}/shop`, containerID: id, remove };
   } catch (error) {
     remove();
     throw error;
