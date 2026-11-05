@@ -6,6 +6,7 @@ import type { ProcessResult } from './run-process.ts';
 
 export interface FingerprintHost {
   readonly runGit: (request: GitRequest) => Promise<ProcessResult>;
+  readonly runGitBytes: (request: GitRequest) => Promise<Uint8Array>;
   readonly removeFile: (path: string) => Promise<void>;
 }
 
@@ -37,14 +38,16 @@ export async function readFingerprint(
   host: FingerprintHost,
   request: FingerprintRequest,
 ): Promise<string> {
+  const root = await readRepoRoot(host, request.cwd);
+
   const mergeBaseResult = await host.runGit({
-    cwd: request.cwd,
+    cwd: root,
     args: ['merge-base', 'HEAD', request.base],
   });
 
   const mergeBase = mergeBaseResult.stdout.trim();
 
-  const indexPath = await readTemporaryIndexPath(host, request.cwd);
+  const indexPath = await readTemporaryIndexPath(host, root);
 
   // git lets GIT_DIFF_OPTS override `--unified`, and the pathspec variables change what `:(top)` and
   // each exclusion match, so a caller's values would change the diff.
@@ -60,24 +63,23 @@ export async function readFingerprint(
   try {
     // The temporary index starts as a copy of the repo's own, so a file staged past an ignore rule
     // counts as a commit would count it. `--index-info` takes the lines `ls-files --stage` prints.
-    const staged = await host.runGit({ cwd: request.cwd, args: ['ls-files', '--stage', '-z'] });
+    const staged = await host.runGitBytes({ cwd: root, args: ['ls-files', '--stage', '-z'] });
 
     await host.runGit({
-      cwd: request.cwd,
+      cwd: root,
       args: ['update-index', '-z', '--index-info'],
-      stdin: staged.stdout,
+      stdin: staged,
       env,
     });
 
-    await host.runGit({ cwd: request.cwd, args: ['add', '--all'], env });
+    await host.runGit({ cwd: root, args: ['add', '--all'], env });
 
-    await addSubmodules(host, request.cwd, env);
+    await addSubmodules(host, root, env);
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
-    // and a committed change to an excluded path reaches the index from the repo's own anyway. The
-    // root pathspecs and `--no-relative` make a call from a subfolder see the whole tree.
-    const diff = await host.runGit({
-      cwd: request.cwd,
+    // and a committed change to an excluded path reaches the index from the repo's own anyway.
+    const diff = await host.runGitBytes({
+      cwd: root,
       args: [
         ...pinnedDiffConfig,
         'diff',
@@ -97,12 +99,12 @@ export async function readFingerprint(
     });
 
     const patchID = await host.runGit({
-      cwd: request.cwd,
+      cwd: root,
 
       // `--verbatim` hashes with the stable algorithm and keeps whitespace, so `"a b"` and `"ab"`
       // differ; `--stable` alone drops it, and git refuses the two flags together.
       args: ['patch-id', '--verbatim'],
-      stdin: diff.stdout,
+      stdin: diff,
     });
 
     const [fingerprint = ''] = patchID.stdout.trim().split(' ');
@@ -113,25 +115,33 @@ export async function readFingerprint(
   }
 }
 
-// git resolves a relative GIT_INDEX_FILE against the folder it runs in, so a path built on a
-// relative `cwd` would take that `cwd` twice. The path goes to git absolute.
-async function readTemporaryIndexPath(host: FingerprintHost, cwd: string): Promise<string> {
-  const result = await host.runGit({
-    cwd,
-    args: ['rev-parse', '--git-path', `wringer-index-${randomUUID()}`],
-  });
+// From a subfolder, `ls-files` lists only that folder, with paths relative to it, so every index
+// step runs from the root.
+async function readRepoRoot(host: FingerprintHost, cwd: string): Promise<string> {
+  const result = await host.runGit({ cwd, args: ['rev-parse', '--show-toplevel'] });
 
   return resolve(cwd, result.stdout.trim());
 }
 
+// git resolves a relative GIT_INDEX_FILE against the folder it runs in. The path goes to git
+// absolute.
+async function readTemporaryIndexPath(host: FingerprintHost, root: string): Promise<string> {
+  const result = await host.runGit({
+    cwd: root,
+    args: ['rev-parse', '--git-path', `wringer-index-${randomUUID()}`],
+  });
+
+  return resolve(root, result.stdout.trim());
+}
+
 async function addSubmodules(
   host: FingerprintHost,
-  cwd: string,
+  root: string,
   env: Readonly<Record<string, string>>,
 ): Promise<void> {
-  const staged = await host.runGit({ cwd, args: ['ls-files', '--stage', '-z'], env });
+  const staged = await host.runGitBytes({ cwd: root, args: ['ls-files', '--stage', '-z'], env });
 
-  for (const request of buildSubmoduleAdds({ cwd, env, stagedEntries: staged.stdout })) {
+  for (const request of buildSubmoduleAdds({ root, env, stagedEntries: staged })) {
     await host.runGit(request);
   }
 }

@@ -6,7 +6,7 @@ export interface ProcessRequest {
   readonly argv: readonly string[];
   readonly cwd?: string | undefined;
   readonly env?: Readonly<Record<string, string>> | undefined;
-  readonly stdin?: string | undefined;
+  readonly stdin?: string | Uint8Array | undefined;
   readonly signal?: AbortSignal | undefined;
 }
 
@@ -17,6 +17,19 @@ export interface ProcessResult {
 }
 
 export async function runProcess(request: ProcessRequest): Promise<ProcessResult> {
+  const result = await runProcessBytes(request);
+
+  return { ...result, stdout: new TextDecoder().decode(result.stdout) };
+}
+
+export interface ProcessBytesResult {
+  readonly exitCode: number;
+  readonly stdout: Uint8Array;
+  readonly stderr: string;
+}
+
+// Keeps stdout as the bytes the command wrote, for output that must reach another command unchanged.
+export async function runProcessBytes(request: ProcessRequest): Promise<ProcessBytesResult> {
   const env = { ...process.env, ...request.env };
   const cwd = request.cwd ?? process.cwd();
   const [command] = request.argv;
@@ -41,7 +54,7 @@ export async function runProcess(request: ProcessRequest): Promise<ProcessResult
   request.signal?.addEventListener('abort', killGroup, { once: true });
 
   const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
+    new Response(child.stdout).bytes(),
     new Response(child.stderr).text(),
     child.exited,
   ]);
@@ -118,7 +131,7 @@ function hasAborted(signal: AbortSignal | undefined): boolean {
 interface StartOptions {
   readonly cwd: string;
   readonly env: Readonly<Record<string, string | undefined>>;
-  readonly stdin?: string | undefined;
+  readonly stdin?: string | Uint8Array | undefined;
 }
 
 // The command runs in a process group of its own, so the deadline also stops a child it started,
@@ -141,10 +154,10 @@ function startProcess(plan: ProcessPlan, options: StartOptions) {
 interface ProcessOutcomeInput {
   readonly command: string;
   readonly aborted: boolean;
-  readonly result: ProcessResult;
+  readonly result: ProcessBytesResult;
 }
 
-function pickProcessOutcome(input: ProcessOutcomeInput): ProcessResult | WringerError {
+function pickProcessOutcome(input: ProcessOutcomeInput): ProcessBytesResult | WringerError {
   if (input.aborted) {
     return new WringerError('timeout', {
       message: `${input.command} ran past its deadline and was stopped.`,
