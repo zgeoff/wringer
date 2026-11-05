@@ -121,7 +121,7 @@ async function sendRequest(
 
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
 
-  const fetched = await sendFetch(transport, plan.url, { ...plan.init, signal });
+  const fetched = await sendFetch(transport, plan.url, plan.init, signal);
 
   const result: HttpResponse = {
     status: fetched.response.status,
@@ -150,14 +150,15 @@ async function sendFetch(
   transport: HttpTransport,
   url: URL,
   init: RequestInit,
+  signal: AbortSignal,
 ): Promise<FetchedResponse> {
   try {
-    const response = await transport(url, init);
-    const body = await response.text();
+    const response = await transport(url, { ...init, signal });
+    const body = await readBodyText(response, signal);
 
     return { response, body };
   } catch (error) {
-    if (init.signal?.aborted === true) {
+    if (signal.aborted) {
       throw new WringerError('timeout', {
         message: `${init.method ?? 'GET'} ${url.href} timed out.`,
       });
@@ -167,6 +168,38 @@ async function sendFetch(
       message: `${init.method ?? 'GET'} ${url.href} failed: ${String(error)}`,
       hint: 'Check that the app is up, then run `status`.',
     });
+  }
+}
+
+// A transport may hand back a body that never sees the request's abort, so `text()` would wait past
+// the deadline. Cancelling the reader ends a pending read at once.
+async function readBodyText(response: Response, signal: AbortSignal): Promise<string> {
+  signal.throwIfAborted();
+
+  const reader = response.body?.pipeThrough(new TextDecoderStream()).getReader();
+
+  if (reader === undefined) {
+    return '';
+  }
+
+  const cancel = (): void => {
+    void reader.cancel(signal.reason);
+  };
+
+  signal.addEventListener('abort', cancel, { once: true });
+
+  try {
+    let text = '';
+
+    for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
+      text += chunk.value;
+    }
+
+    signal.throwIfAborted();
+
+    return text;
+  } finally {
+    signal.removeEventListener('abort', cancel);
   }
 }
 
