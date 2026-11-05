@@ -146,7 +146,7 @@ export async function dispatch(
     target: settled?.targetName ?? null,
     instance: run?.runID ?? null,
     feature,
-    sha: await readHeadSHA(session.root),
+    sha: await readHeadSHA(session.repoHost, session.root),
     durationMs: performance.now() - startedMs,
     driveEvidence: trace.evidence.flat(),
     payload,

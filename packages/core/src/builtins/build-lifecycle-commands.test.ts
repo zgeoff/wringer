@@ -21,9 +21,12 @@ async function setupTest() {
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
 
-    // Each git call of the fingerprint read waits for `gate`, so the deadline passes mid-read.
-    runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) =>
-      dispatch(
+    // The fingerprint read's first git call, `merge-base`, waits for `gate`, so the deadline passes
+    // mid-read. The envelope's SHA read never waits.
+    runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) => {
+      const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate };
+
+      return dispatch(
         wringer,
         ['up'],
         {},
@@ -34,13 +37,14 @@ async function setupTest() {
           repoHost: {
             ...shop.session.repoHost,
             runGit: async (request) => {
-              await gate;
+              await gitGates[request.args[0] ?? ''];
 
               return runGit(request);
             },
           },
         },
-      ),
+      );
+    },
     waitForTargetLock: (target: string) =>
       shop.state.withTargetLock(target, () => Promise.resolve()),
 
