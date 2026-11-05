@@ -84,6 +84,28 @@ test('it stops the remote command and every process it started when the run time
   expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
 });
 
+test('it stops a background process that outlived the remote command when the run times out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const pidPath = join(ctx.directory, 'remote.pid');
+
+  const running = host.run({
+    argv: ['sh', '-c', 'sleep 30 & echo $! > "$0"', pidPath],
+    access: 'read-write',
+    signal: AbortSignal.timeout(1000),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+  const pidText = await readFile(pidPath, 'utf8');
+
+  const pid = Number(pidText);
+
+  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+
+  expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
+});
+
 test('it kills a remote command that ignores SIGINT and SIGTERM when the run times out', async () => {
   const ctx = await setupTest();
 
