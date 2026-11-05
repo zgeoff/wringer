@@ -6,6 +6,7 @@ import { buildGunshiArgs } from './build-gunshi-args.ts';
 import type { GunshiArgs } from './build-gunshi-args.ts';
 import { buildPositionalArgs } from './build-positional-args.ts';
 import { buildRawArgs } from './build-raw-args.ts';
+import { collectBooleanFlagsWithValue } from './collect-boolean-flags-with-value.ts';
 import { collectFlagsWithoutValue } from './collect-flags-without-value.ts';
 import { keepFlagText } from './keep-flag-text.ts';
 
@@ -116,6 +117,15 @@ function toGunshiCommand(
         throw new WringerError('usage', {
           message: `Give a value after ${bareFlags.join(', ')}.`,
           hint: "Write `''` after a flag to pass an empty value.",
+        });
+      }
+
+      const valuedBooleans = collectBooleanFlagsWithValue(ctx.tokens, args);
+
+      if (valuedBooleans.length > 0) {
+        throw new WringerError('usage', {
+          message: `${valuedBooleans.join(', ')} takes no value.`,
+          hint: 'Write the flag alone to turn it on, or `--no-<flag>` to turn it off.',
         });
       }
 

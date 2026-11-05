@@ -11,6 +11,7 @@ import { pickOutputMode } from './pick-output-mode.ts';
 import type { OutputMode } from './pick-output-mode.ts';
 import { renderEnvelope } from './render-envelope.ts';
 import { renderHumanEvent } from './render-human-event.ts';
+import { toInlineNegativeValues } from './to-inline-negative-values.ts';
 
 interface RepoPorts {
   readonly state: StatePort;
@@ -40,13 +41,15 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
     return 0;
   }
 
+  const argv = toInlineNegativeValues(ports.argv);
+
   const mode = pickOutputMode({
-    tokens: parseArgs([...ports.argv]),
+    tokens: parseArgs(argv),
     isTTY: ports.isTTY,
     isAgent: ports.isAgent,
   });
 
-  const parsed = await readInvocation(wringer, ports);
+  const parsed = await readInvocation(wringer, { ...ports, argv });
 
   const outcome = pickCLIOutcome(parsed, mode);
 
