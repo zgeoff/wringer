@@ -21,7 +21,8 @@ export { defaultMessageFor, errorCodes, exitCodeFor } from './error-codes.ts';
 export type { ErrorCode, ExitCode } from './error-codes.ts';
 export type { Access, Host, HostRequest } from './host.ts';
 export { local } from './local.ts';
-export { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
+export { emptyFingerprint } from './parse-patch-id.ts';
+export { readFingerprint } from './read-fingerprint.ts';
 export type { FingerprintHost, FingerprintRequest } from './read-fingerprint.ts';
 
 export {
