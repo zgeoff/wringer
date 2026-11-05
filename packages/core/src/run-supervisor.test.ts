@@ -1,5 +1,5 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
-import { mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
@@ -123,11 +123,33 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  // Its service's stop records the last line of the app's log.
+  const scribe = defineDriver({
+    name: 'scribe',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {
+      ledger: {
+        start: (ctx) =>
+          Promise.resolve({
+            methods: {},
+            stop: async () => {
+              const log = await readFile(ctx.run.childLog('app').path, 'utf8');
+
+              stopCalls.push(`ledger read ${log.trimEnd().split('\n').at(-1) ?? ''}`);
+            },
+          }),
+      },
+    },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(leaky({}))
     .use(tardy({}))
     .use(tidy({}))
     .use(brittle({}))
+    .use(scribe({}))
     .target('box', {
       mode: 'attach',
       access: 'read-write',
@@ -151,6 +173,20 @@ async function setupTest() {
       access: 'read-write',
       host: local(),
       drivers: { brittle: () => ({}), tidy: () => ({}) },
+    })
+    .target('scribe-box', {
+      mode: 'launch',
+      access: 'read-write',
+      host: local(),
+      launch: () => ({
+        command: [
+          'sh',
+          '-c',
+          `trap 'echo closing; exit 0' TERM; echo '{"port":4300}'; while :; do sleep 0.05; done`,
+        ],
+        ready: (line) => (line['port'] === 4300 ? { web: 'http://127.0.0.1:4300' } : null),
+      }),
+      drivers: { scribe: () => ({}) },
     })
     .build();
 
@@ -401,6 +437,24 @@ test('#runSupervisor ends the run as crashed and still stops the other services 
     status: 'crashed',
     stopCalls: ['shelf exited 0'],
   });
+});
+
+test('#runSupervisor stops the app before the services, so a service sees what the app logged as it stopped', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', undefined, 'scribe-box');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  await Promise.all([ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'), supervising]);
+
+  expect(ctx.stopCalls).toStrictEqual(['ledger read closing']);
 });
 
 test('#runSupervisor lets a service run a command from its stop', async () => {

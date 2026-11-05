@@ -91,6 +91,31 @@ test('it stops a server that the app started when the run stops', async () => {
   expect(exited).toBeTrue();
 });
 
+test('it ends a stop only once the lines the app printed as it stopped are in its log', async () => {
+  const ctx = await setupTest();
+
+  const launch = await ctx.startApp({
+    plan: {
+      command: [
+        'sh',
+        '-c',
+        `trap 'seq 1 20000; exit 0' TERM; echo '{"port":4100}'; while :; do sleep 0.05; done`,
+      ],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  await launch.stop();
+
+  const log = await readFile(ctx.logPath, 'utf8');
+
+  expect(log.trimEnd().split('\n').at(-1)).toBe('20000');
+});
+
 test('it runs the plan’s stop command, then stops the app and its server when that command fails', async () => {
   const ctx = await setupTest();
 
