@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { browserPageMachine } from './browser-page-machine.ts';
 import type { PageActionResult } from './browser-page-machine.ts';
 import { findSnapshotElement } from './find-snapshot-element.ts';
+import { pickReopenURL } from './pick-reopen-url.ts';
 
 export interface BrowserPageOptions {
   readonly launchBrowser: () => Promise<Browser>;
@@ -138,7 +139,7 @@ async function openRunPage(browser: Browser, actionTimeoutMs: number): Promise<R
 }
 
 async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
-  const url = stale.url();
+  const url = pickReopenURL(stale.url());
 
   // The stale page closes first, so its action cannot land while the new page opens.
   await stale.close();
@@ -147,7 +148,7 @@ async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<P
 
   // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
   // itself must still come back, or every later command would fail.
-  if (url !== 'about:blank') {
+  if (url !== null) {
     await page.goto(url).catch(() => null);
   }
 
