@@ -26,6 +26,7 @@ const pinnedDiffOptions = [
   '--inter-hunk-context=0',
   '--no-renames',
   '--diff-algorithm=myers',
+  '--indent-heuristic',
   '--src-prefix=a/',
   '--dst-prefix=b/',
   '--ignore-submodules=none',

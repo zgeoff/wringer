@@ -165,6 +165,7 @@ test.each([
   ['diff.algorithm', 'histogram'],
   ['diff.suppressBlankEmpty', 'true'],
   ['core.quotePath', 'false'],
+  ['diff.indentHeuristic', 'false'],
 ])('it gives the same fingerprint whatever the repo sets %s to', async (key, value) => {
   const ctx = await setupTest();
 
@@ -174,12 +175,14 @@ test.each([
   await writeFile(join(ctx.repo, 'moved.ts'), 'export const moved = true;\n'.repeat(8));
   await writeFile(join(ctx.repo, 'letters.txt'), 'a\nb\nc\na\nb\nb\na\n');
   await writeFile(join(ctx.repo, 'café.txt'), 'espresso\n');
+  await writeFile(join(ctx.repo, 'blocks.txt'), '1\n2\na\n\nb\n3\n4\n');
 
   await ctx.git('add', '.');
   await ctx.git('commit', '--quiet', '-m', 'start');
 
   await writeFile(join(ctx.repo, 'letters.txt'), 'c\nb\na\nb\na\nc\n');
   await writeFile(join(ctx.repo, 'café.txt'), 'flat white\n');
+  await writeFile(join(ctx.repo, 'blocks.txt'), '1\n2\na\n\nb\na\n\nb\n3\n4\n');
 
   await writeFile(
     join(ctx.repo, 'rows.txt'),
