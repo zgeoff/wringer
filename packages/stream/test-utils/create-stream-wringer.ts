@@ -5,7 +5,7 @@ import { stream } from '../src/stream.ts';
 
 // A verify CLI for the stream tests: `local` launches an app that logs `booted`, then `order placed`
 // per `order` file in `triggerDirectory`; `box` records commands, one in a stream named for an
-// inherited key; `dead` records a command that exits at once.
+// inherited key; `bulk` records 1,000 order lines; `dead` records a command that exits at once.
 export function createStreamWringer(triggerDirectory: string): Wringer {
   const shop = bindDrivers([stream({})] as const);
   const trigger = join(triggerDirectory, 'order');
@@ -43,6 +43,27 @@ export function createStreamWringer(triggerDirectory: string): Wringer {
             sources: {
               jobs: { command: ['sh', '-c', 'echo job 1 done; exec sleep 60'] },
               constructor: { command: ['sh', '-c', 'echo shelf built; exec sleep 60'] },
+            },
+          }),
+        },
+      }),
+    )
+    .target(
+      'bulk',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-only',
+        host: local(),
+        drivers: {
+          stream: () => ({
+            sources: {
+              orders: {
+                command: [
+                  'sh',
+                  '-c',
+                  'for i in $(seq 1 1000); do echo "order $i placed for the spring catalogue: two mugs and a teapot"; done; exec sleep 60',
+                ],
+              },
             },
           }),
         },
