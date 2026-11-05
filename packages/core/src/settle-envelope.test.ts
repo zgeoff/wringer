@@ -33,18 +33,18 @@ test('it builds the envelope input from the payload and what the cap left', () =
 test.each([
   {
     name: 'the payload’s failure ahead of the cap’s',
-    payload: 'timeout',
-    cap: 'environment',
+    payload: new WringerError('timeout'),
+    cap: new WringerError('environment'),
     code: 'timeout',
   },
   {
     name: 'the cap’s failure after a command that worked',
     payload: null,
-    cap: 'environment',
+    cap: new WringerError('environment'),
     code: 'environment',
   },
   { name: 'no failure when both worked', payload: null, cap: null, code: null },
-] as const)('it settles on $name', (row) => {
+])('it settles on $name', (row) => {
   const input = settleEnvelope({
     command: 'notes.add',
     target: null,
@@ -55,14 +55,14 @@ test.each([
     driveEvidence: [],
     payload: {
       data: null,
-      failure: row.payload === null ? null : new WringerError(row.payload),
+      failure: row.payload,
       cursors: {},
     },
     capped: {
       data: null,
       evidence: [],
       truncatedPath: null,
-      failure: row.cap === null ? null : new WringerError(row.cap),
+      failure: row.cap,
     },
   });
 
