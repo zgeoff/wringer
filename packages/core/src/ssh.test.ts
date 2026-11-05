@@ -9,10 +9,15 @@ import { ssh } from './ssh.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'ssh');
+  const fake = await createFakeSSH(directory);
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  onTestFinished(async () => {
+    await fake.stopGroups();
 
-  return { directory, fake: await createFakeSSH(directory) };
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  return { directory, fake };
 }
 
 test('it quotes the argv once per shell layer of a three-layer prefix', async () => {
