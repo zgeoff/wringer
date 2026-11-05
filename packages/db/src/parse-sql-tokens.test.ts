@@ -94,42 +94,52 @@ test.each([
 test.each([
   {
     dialect: 'postgres',
-    newline: 'LF',
+    name: 'a line comment that ends at LF',
     sql: '-- note\ndelete',
     tokens: [{ kind: 'word', text: 'delete' }],
   },
   {
     dialect: 'postgres',
-    newline: 'CRLF',
+    name: 'a line comment that ends at CRLF',
     sql: '-- note\r\ndelete',
     tokens: [{ kind: 'word', text: 'delete' }],
   },
   {
     dialect: 'postgres',
-    newline: 'CR',
+    name: 'a line comment that ends at CR',
     sql: '-- note\rdelete',
     tokens: [{ kind: 'word', text: 'delete' }],
   },
-  { dialect: 'postgres', newline: 'no newline', sql: '-- note delete', tokens: [] },
+  {
+    dialect: 'postgres',
+    name: 'a line comment with no newline to the end',
+    sql: '-- note delete',
+    tokens: [],
+  },
   {
     dialect: 'sqlite',
-    newline: 'LF',
+    name: 'a line comment that ends at LF',
     sql: '-- note\ndelete',
     tokens: [{ kind: 'word', text: 'delete' }],
   },
   {
     dialect: 'sqlite',
-    newline: 'CRLF',
+    name: 'a line comment that ends at CRLF',
     sql: '-- note\r\ndelete',
     tokens: [{ kind: 'word', text: 'delete' }],
   },
-  { dialect: 'sqlite', newline: 'CR', sql: '-- note\rdelete', tokens: [] },
-  { dialect: 'sqlite', newline: 'no newline', sql: '-- note delete', tokens: [] },
-] as const)('it ends a line comment on $dialect at $newline as the database does', (row) => {
-  expect(parseSQLTokens(row.dialect, row.sql)).toStrictEqual({ tokens: row.tokens, closed: true });
-});
-
-test.each([
+  {
+    dialect: 'sqlite',
+    name: 'a line comment that runs on past a CR',
+    sql: '-- note\rdelete',
+    tokens: [],
+  },
+  {
+    dialect: 'sqlite',
+    name: 'a line comment with no newline to the end',
+    sql: '-- note delete',
+    tokens: [],
+  },
   {
     dialect: 'postgres',
     name: 'a line comment marker and a CR inside a string',
