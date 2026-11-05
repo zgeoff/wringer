@@ -1,8 +1,10 @@
+import { dirname } from 'node:path';
+import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { match } from 'ts-pattern';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
+import { getLockValue } from './get-lock-value.ts';
 import { runEventSchema } from './run-events.ts';
 import type { RunEvent, RunEventType } from './run-events.ts';
-import { withStateLock } from './with-state-lock.ts';
 
 export type RunStatus = 'starting' | 'running' | 'crashed' | 'ended';
 
@@ -46,22 +48,30 @@ export interface AppendRunEventRequest {
 }
 
 // The only writer of a run's log, under the run's lock. Resolves whether it wrote.
-export function appendRunEvent(request: AppendRunEventRequest): Promise<boolean> {
-  return withStateLock(request.lockPath, request.lockTimeoutMs, async () => {
-    const read = await request.fs.readText(request.logPath);
+export async function appendRunEvent(request: AppendRunEventRequest): Promise<boolean> {
+  await request.fs.createDirectory(dirname(request.lockPath));
 
-    const plan = pickLogAppend(read ?? '', request.event);
+  const result = await withFileLock(
+    request.lockPath,
+    async () => {
+      const read = await request.fs.readText(request.logPath);
 
-    if (plan.truncateBytes !== null) {
-      await request.fs.truncateFile(request.logPath, plan.truncateBytes);
-    }
+      const plan = pickLogAppend(read ?? '', request.event);
 
-    if (plan.append) {
-      await request.fs.appendText(request.logPath, request.line);
-    }
+      if (plan.truncateBytes !== null) {
+        await request.fs.truncateFile(request.logPath, plan.truncateBytes);
+      }
 
-    return plan.append;
-  });
+      if (plan.append) {
+        await request.fs.appendText(request.logPath, request.line);
+      }
+
+      return plan.append;
+    },
+    { waitMs: request.lockTimeoutMs },
+  );
+
+  return getLockValue(request.lockPath, result);
 }
 
 export interface LogAppendPlan {

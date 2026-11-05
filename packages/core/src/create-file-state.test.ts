@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
-import { withStateLock } from './with-state-lock.ts';
 
 async function setupTest() {
   const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
@@ -22,8 +22,11 @@ async function setupTest() {
   return {
     stateDir,
     state,
-    holdRunLock: (runID: string, work: () => Promise<void>) =>
-      withStateLock(join(state.paths.locks, `run-${runID}.lock`), 2000, work),
+    holdRunLock: async (runID: string, work: () => Promise<void>) => {
+      await mkdir(state.paths.locks, { recursive: true });
+
+      return withFileLock(join(state.paths.locks, `run-${runID}.lock`), work);
+    },
     readLog: (runID: string) =>
       readFile(buildRunPaths(stateDir, runIDSchema.parse(runID)).log, 'utf8'),
     readManifest: (runID: string) =>

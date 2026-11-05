@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+import { killProcessGroup } from './kill-process-group.ts';
 import type { RunEvent } from './run-events.ts';
 import {
   appendRunEvent,
@@ -12,25 +13,67 @@ import {
   pickLogAppend,
 } from './run-log.ts';
 
+// The stack kills each process that holds the lock before it removes the folder the lock sits in.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'run-log');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const logPath = join(directory, 'events.jsonl');
+  const lockPath = join(directory, 'locks', 'run.lock');
 
   return {
     logPath,
-    append: (event: RunEvent) =>
+    append: (event: RunEvent, lockTimeoutMs = 2000) =>
       appendRunEvent({
         fs: createNodeStateFileSystem(),
         logPath,
-        lockPath: join(directory, 'run.lock'),
-        lockTimeoutMs: 2000,
+        lockPath,
+        lockTimeoutMs,
         line: `${JSON.stringify(event)}\n`,
         event,
       }),
     readLog: () => readFile(logPath, 'utf8'),
+
+    // A process group of its own takes the lock and keeps it until the group is killed.
+    holdInOtherProcess: async () => {
+      await mkdir(dirname(lockPath), { recursive: true });
+
+      const script = [
+        "import { withFileLock } from '@zgeoff/std/with-file-lock';",
+        `await withFileLock(${JSON.stringify(lockPath)}, async () => {`,
+        "  console.log('held');",
+        '  await Bun.sleep(60_000);',
+        '});',
+      ].join('\n');
+
+      const holder = Bun.spawn([process.execPath, '-e', script], {
+        cwd: join(import.meta.dir, '..'),
+        stdout: 'pipe',
+        detached: true,
+      });
+
+      stack.defer(async () => {
+        killProcessGroup(holder.pid);
+
+        await holder.exited;
+      });
+
+      const first = await holder.stdout.getReader().read();
+
+      return {
+        held: !first.done,
+        kill: async () => {
+          killProcessGroup(holder.pid);
+
+          await holder.exited;
+        },
+      };
+    },
   };
 }
 
@@ -42,6 +85,31 @@ test('#appendRunEvent writes the first event of a log that does not exist', asyn
     wrote: true,
     log: '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n',
   });
+});
+
+test('#appendRunEvent refuses with an environment error while another process holds the run lock', async () => {
+  const ctx = await setupTest();
+  const holding = await ctx.holdInOtherProcess();
+
+  const [appended] = await Promise.allSettled([
+    ctx.append({ type: 'run-ended', at: '2026-11-04T10:00:00.000Z' }, 50),
+  ]);
+
+  expect({ held: holding.held, appended }).toStrictEqual({
+    held: true,
+    appended: { status: 'rejected', reason: expect.objectContaining({ code: 'environment' }) },
+  });
+});
+
+test('#appendRunEvent writes once the process that held the run lock is killed', async () => {
+  const ctx = await setupTest();
+  const holding = await ctx.holdInOtherProcess();
+
+  await holding.kill();
+
+  const wrote = await ctx.append({ type: 'run-ended', at: '2026-11-04T10:00:00.000Z' });
+
+  expect({ held: holding.held, wrote }).toStrictEqual({ held: true, wrote: true });
 });
 
 test('#appendRunEvent cuts a torn last line before it writes', async () => {

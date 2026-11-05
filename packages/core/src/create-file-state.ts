@@ -1,14 +1,16 @@
 import { basename, join } from 'node:path';
+import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { z } from 'zod';
+import { buildManifestWrite } from './build-manifest-write.ts';
 import { buildRunView } from './build-run-view.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths, buildStatePaths } from './build-state-paths.ts';
 import type { StatePaths } from './build-state-paths.ts';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
+import { getLockValue } from './get-lock-value.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
 import type { RunEvent, RunID } from './run-events.ts';
 import { appendRunEvent, parseRunLog } from './run-log.ts';
-import { withStateLock } from './with-state-lock.ts';
 import { WringerError } from './wringer-error.ts';
 
 export const pointersSchema = z.strictObject({
@@ -46,8 +48,15 @@ export function createFileState(options: FileStateOptions): StatePort {
   const paths = buildStatePaths(options.stateDir);
   const fs = options.fs;
 
-  const withLock = <T>(name: string, work: () => Promise<T>): Promise<T> =>
-    withStateLock(join(paths.locks, name), options.lockTimeoutMs, work);
+  const withLock = async <T>(name: string, work: () => Promise<T>): Promise<T> => {
+    const path = join(paths.locks, name);
+
+    await fs.createDirectory(paths.locks);
+
+    const result = await withFileLock(path, work, { waitMs: options.lockTimeoutMs });
+
+    return getLockValue(path, result);
+  };
 
   const readPointers = async (): Promise<Pointers> => {
     const text = await fs.readText(paths.state);
@@ -128,14 +137,11 @@ export function createFileState(options: FileStateOptions): StatePort {
       withLock(`run-${runID}.lock`, async () => {
         const view = await readRun(runID);
 
-        if (view === undefined) {
-          return;
-        }
+        const plan = buildManifestWrite(buildRunPaths(options.stateDir, runID).manifest, view);
 
-        await fs.writeTextAtomic(
-          buildRunPaths(options.stateDir, runID).manifest,
-          `${JSON.stringify(buildManifest(view), null, 2)}\n`,
-        );
+        if (plan !== null) {
+          await fs.writeTextAtomic(plan.path, plan.text);
+        }
       }),
 
     // A cursor is a byte offset into a stream's NDJSON file, so reading the cursors costs one size
@@ -157,18 +163,5 @@ export function createFileState(options: FileStateOptions): StatePort {
 
       return Object.fromEntries(sizes);
     },
-  };
-}
-
-function buildManifest(view: RunView): Readonly<Record<string, unknown>> {
-  return {
-    target: view.target,
-    instance: view.runID,
-    mode: view.mode,
-    fingerprint: view.fingerprint,
-    status: view.status,
-    doctor: { state: view.doctor, results: view.doctorResults },
-    startedAt: view.startedAt,
-    endedAt: view.endedAt,
   };
 }
