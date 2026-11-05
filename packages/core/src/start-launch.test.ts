@@ -3,6 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
+import { killProcessGroup } from './kill-process-group.ts';
 import { probeProcess } from './probe-process.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 import type { LaunchHost } from './read-launch-host.ts';
@@ -45,6 +46,18 @@ async function setupTest() {
       return Number(text);
     },
     waitForExit: (pid: number) => waitFor(() => (probeProcess(pid) ? null : true)),
+
+    // A process the app started in a session of its own outlives the app's group, so the test
+    // stops it before the folder goes.
+    stopOutputHolder: async (pidPath: string) => {
+      const pidText = await readFile(pidPath, 'utf8');
+
+      const pid = Number(pidText);
+
+      stack.defer(() => {
+        killProcessGroup(pid);
+      });
+    },
   };
 }
 
@@ -61,6 +74,7 @@ test('it resolves the endpoints from the first ready line', async () => {
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launch.endpoints).toStrictEqual({ web: 'http://127.0.0.1:4100' });
@@ -81,6 +95,7 @@ test('it stops a server that the app started when the run stops', async () => {
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   await launch.stop();
@@ -110,6 +125,7 @@ test('it ends a stop only once the lines the app printed as it stopped are in it
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   await launch.stop();
@@ -122,27 +138,17 @@ test('it ends a stop only once the lines the app printed as it stopped are in it
 test('it fails a stop with an environment error when a process outside the app holds its output open', async () => {
   const ctx = await setupTest();
 
-  const real = readLaunchHost();
-
-  // The app's stderr stays open after the app exits, as when another process holds it.
-  const host: LaunchHost = {
-    ...real,
-    spawnApp: (argv, options) => {
-      const app = real.spawnApp(argv, options);
-
-      return {
-        pid: app.pid,
-        stdout: app.stdout,
-        stderr: new ReadableStream<Uint8Array>(),
-        exited: app.exited,
-      };
-    },
-  };
+  const pidPath = join(ctx.directory, 'holder.pid');
 
   const launch = await startLaunch({
-    host,
+    host: readLaunchHost(),
     plan: {
-      command: ['sh', '-c', 'echo \'{"port":4100}\'; exec sleep 60'],
+      command: [
+        'sh',
+        '-c',
+        `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
+        pidPath,
+      ],
       ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
     },
     logPath: ctx.logPath,
@@ -150,82 +156,165 @@ test('it fails a stop with an environment error when a process outside the app h
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
-  expect(launch.stop()).rejects.toMatchObject({ code: 'environment' });
+  await ctx.stopOutputHolder(pidPath);
+
+  const [stopped] = await Promise.allSettled([launch.stop()]);
+
+  expect(stopped).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringContaining("The app's output still had not reached its log"),
+    }),
+  });
 });
 
 test('it keeps the startup failure and adds the failed stop when an app that never got ready cannot be stopped cleanly', async () => {
   const ctx = await setupTest();
 
-  const real = readLaunchHost();
+  const pidPath = join(ctx.directory, 'holder.pid');
 
-  // The app's stderr stays open after the app exits, as when another process holds it.
-  const host: LaunchHost = {
-    ...real,
-    spawnApp: (argv, options) => {
-      const app = real.spawnApp(argv, options);
+  const [launched] = await Promise.allSettled([
+    startLaunch({
+      host: readLaunchHost(),
+      plan: {
+        command: [
+          'sh',
+          '-c',
+          `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
+          pidPath,
+        ],
+        ready: () => null,
+      },
+      logPath: ctx.logPath,
+      readyTimeoutMs: 200,
+      signal: new AbortController().signal,
+      onCrash: mock<(reason: string) => void>(),
+      onStopFailed: mock<(reason: string) => void>(),
+      stopGraceMs: 5000,
+    }),
+  ]);
 
-      return {
-        pid: app.pid,
-        stdout: app.stdout,
-        stderr: new ReadableStream<Uint8Array>(),
-        exited: app.exited,
-      };
-    },
-  };
+  await ctx.stopOutputHolder(pidPath);
 
-  const launching = startLaunch({
-    host,
-    plan: { command: ['sh', '-c', 'exec sleep 60'], ready: () => null },
-    logPath: ctx.logPath,
-    readyTimeoutMs: 200,
-    signal: new AbortController().signal,
-    onCrash: mock<(reason: string) => void>(),
-    onStopFailed: mock<(reason: string) => void>(),
-  });
-
-  expect(launching).rejects.toMatchObject({
-    code: 'timeout',
-    message: expect.stringContaining("The app's output still had not reached its log"),
+  expect(launched).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'timeout',
+      message: expect.stringContaining("The app's output still had not reached its log"),
+    }),
   });
 });
 
 test('it reports the failed stop of an app that never got ready to its caller', async () => {
   const ctx = await setupTest();
 
-  const real = readLaunchHost();
+  const pidPath = join(ctx.directory, 'holder.pid');
   const onStopFailed = mock<(reason: string) => void>();
-
-  const host: LaunchHost = {
-    ...real,
-    spawnApp: (argv, options) => {
-      const app = real.spawnApp(argv, options);
-
-      return {
-        pid: app.pid,
-        stdout: app.stdout,
-        stderr: new ReadableStream<Uint8Array>(),
-        exited: app.exited,
-      };
-    },
-  };
 
   await Promise.allSettled([
     startLaunch({
-      host,
-      plan: { command: ['sh', '-c', 'exec sleep 60'], ready: () => null },
+      host: readLaunchHost(),
+      plan: {
+        command: [
+          'sh',
+          '-c',
+          `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
+          pidPath,
+        ],
+        ready: () => null,
+      },
       logPath: ctx.logPath,
       readyTimeoutMs: 200,
       signal: new AbortController().signal,
       onCrash: mock<(reason: string) => void>(),
       onStopFailed,
+      stopGraceMs: 5000,
     }),
   ]);
+
+  await ctx.stopOutputHolder(pidPath);
 
   expect(onStopFailed.mock.calls).toStrictEqual([
     [expect.stringContaining("The app's output still had not reached its log")],
   ]);
+});
+
+test('it fails a stop with the log failure that came while the app stopped', async () => {
+  const ctx = await setupTest();
+
+  const real = readLaunchHost();
+
+  const host: LaunchHost = {
+    ...real,
+    appendLog: (path, text) =>
+      text.includes('closing')
+        ? Promise.reject(new Error('the disk is full'))
+        : real.appendLog(path, text),
+  };
+
+  const launch = await startLaunch({
+    host,
+    plan: {
+      command: [
+        'sh',
+        '-c',
+        `trap 'echo closing; exit 0' TERM; echo '{"port":4100}'; while :; do sleep 0.05; done`,
+      ],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
+  });
+
+  const [stopped] = await Promise.allSettled([launch.stop()]);
+
+  expect(stopped).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringMatching(/^The app's output could not be logged: .*the disk is full$/u),
+    }),
+  });
+});
+
+test('it signals the app once a stop command that never ends has had its grace', async () => {
+  const ctx = await setupTest();
+
+  const host: LaunchHost = {
+    ...readLaunchHost(),
+    runProcess: () => Promise.withResolvers<never>().promise,
+  };
+
+  const pidPath = join(ctx.directory, 'app.pid');
+
+  const launch = await startLaunch({
+    host,
+    plan: {
+      command: ['sh', '-c', `echo $$ > "$0"; echo '{"port":4100}'; exec sleep 60`, pidPath],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+      stop: ['shop-stop'],
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 200,
+  });
+
+  await launch.stop();
+
+  const pid = await ctx.readPID(pidPath);
+
+  expect(probeProcess(pid)).toBeFalse();
 });
 
 test('it runs the plan’s stop command, then stops the app and its server when that command fails', async () => {
@@ -245,6 +334,7 @@ test('it runs the plan’s stop command, then stops the app and its server when 
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   await launch.stop();
@@ -279,6 +369,7 @@ test('it stops the app when the run stops before the app is ready', async () => 
     signal: controller.signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   const [settled] = await Promise.allSettled([launching]);
@@ -309,6 +400,7 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
     signal: new AbortController().signal,
     onCrash,
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   await Bun.write(exitPath, '');
@@ -347,6 +439,7 @@ test('it starts the app in the host folder with the host environment and the pla
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
@@ -376,6 +469,7 @@ test('it creates the log folder, runs the stop command and signals the app throu
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   await launch.stop();
@@ -405,6 +499,7 @@ test('it refuses with an environment error when the app cannot start', async () 
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
@@ -420,6 +515,7 @@ test('it refuses to start the app of a run that stopped already', async () => {
     signal: AbortSignal.abort(),
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launching).rejects.toThrowWithMessage(
@@ -440,6 +536,7 @@ test('it refuses a log folder it cannot create before it tries to start the app'
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launching).rejects.toThrowWithMessage(
@@ -463,6 +560,7 @@ test('it refuses with an environment error when the app log cannot be written', 
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
     onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });

@@ -1,4 +1,9 @@
 import { dirname } from 'node:path';
+import { match } from 'ts-pattern';
+import type { Actor } from 'xstate';
+import { createActor, waitFor } from 'xstate';
+import type { AppStart } from './app-machine.ts';
+import { appMachine } from './app-machine.ts';
 import { buildSpawnError } from './build-spawn-error.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
@@ -18,22 +23,23 @@ export interface LaunchRequest {
 
   // Takes why the stop of an app that never got ready failed, as the app may still be up.
   readonly onStopFailed: (reason: string) => void;
+
+  // How long the stop command, then the app after SIGTERM, each get before the next step.
+  readonly stopGraceMs: number;
 }
 
 export interface Launch {
   readonly endpoints: Endpoints;
+
+  // Rejects when a part of the app may still be up, or when its output missed its log.
   readonly stop: () => Promise<void>;
 }
 
-const stopGraceMs = 5000;
-const logDrainMs = 2000;
-
-// The longest a stop takes: the stop command's grace, the app's grace before SIGKILL, then the
-// drain of its log.
-export const appStopLimitMs = 2 * stopGraceMs + logDrainMs;
+export const appStopGraceMs = 5000;
 
 // The app runs in a process group of its own, and every stop signals the whole group, so a server
-// that a shell or a script runner started stops with it.
+// that a shell or a script runner started stops with it. The app machine decides each move; this
+// function starts the process and feeds the machine what the process and its log do.
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const cwd = request.plan.cwd ?? request.host.cwd;
 
@@ -49,32 +55,31 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     env: { ...request.host.env, ...request.plan.env },
   });
 
-  const ready = Promise.withResolvers<Endpoints>();
-  let stopping = false;
+  const logs = Promise.withResolvers<unknown>();
 
-  // Each failure after the start, the app's exit or a lost log, ends the run once.
-  const crash = (reason: string): void => {
-    ready.reject(new WringerError('environment', { message: reason }));
+  const app = createActor(appMachine, {
+    input: {
+      readyTimeoutMs: request.readyTimeoutMs,
+      reportCrash: request.onCrash,
+      killGroup: () => {
+        request.host.killProcessGroup(child.pid);
+      },
+      stopApp: () =>
+        stopApp({
+          host: request.host,
+          plan: request.plan,
+          cwd,
+          child,
+          logged: logs.promise,
+          stopGraceMs: request.stopGraceMs,
+        }),
+    },
+  });
 
-    if (!stopping) {
-      stopping = true;
-
-      request.onCrash(reason);
-    }
-  };
-
-  const timer = setTimeout(() => {
-    ready.reject(
-      new WringerError('timeout', {
-        message: `The app printed no ready line within ${request.readyTimeoutMs} ms.`,
-      }),
-    );
-  }, request.readyTimeoutMs);
+  app.start();
 
   const onAbort = (): void => {
-    ready.reject(
-      new WringerError('environment', { message: 'The run stopped before the app was ready.' }),
-    );
+    app.send({ type: 'abort' });
   };
 
   request.signal.addEventListener('abort', onAbort, { once: true });
@@ -86,94 +91,61 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     try {
       await pipeLines(request.host, stream, request.logPath, onLine);
     } catch (error) {
-      crash(`The app's output could not be logged: ${toWringerError(error).message}`);
+      app.send({ type: 'log.failed', reason: toWringerError(error).message });
     }
   };
 
-  const stdoutLogged = pumpLog(child.stdout, (line) => {
-    const endpoints = request.plan.ready(parseLogLine(line));
+  logs.resolve(
+    Promise.all([
+      pumpLog(child.stdout, (line) => {
+        const endpoints = request.plan.ready(parseLogLine(line));
 
-    if (endpoints !== null) {
-      ready.resolve(endpoints);
-    }
-  });
-
-  const stderrLogged = pumpLog(child.stderr, () => {
-    // The log keeps stderr; only stdout carries the ready line.
-  });
-
-  const logged = Promise.all([stdoutLogged, stderrLogged]);
+        if (endpoints !== null) {
+          app.send({ type: 'ready', endpoints });
+        }
+      }),
+      pumpLog(child.stderr, () => {
+        // The log keeps stderr; only stdout carries the ready line.
+      }),
+    ]),
+  );
 
   const watchExit = async (): Promise<void> => {
     const exitCode = await child.exited;
 
-    // A child the app started may outlive it; nothing else would stop it.
-    request.host.killProcessGroup(child.pid);
-
-    crash(`The app exited with code ${exitCode}.`);
+    app.send({ type: 'exited', exitCode });
   };
 
   void watchExit();
 
-  const stop = async (): Promise<void> => {
-    stopping = true;
+  const started = await waitForStart(app, request.signal, onAbort);
 
-    if (request.plan.stop !== undefined) {
-      await runStopCommand(request.host, request.plan.stop, cwd);
-    }
+  const endpoints = match(started.start)
+    .with({ kind: 'ready' }, (ready) => ready.endpoints)
+    .with({ kind: 'failed' }, (failed) => {
+      throw buildStartFailure(failed.failure, started.stopFailure, request.onStopFailed);
+    })
+    .with({ kind: 'pending' }, () => {
+      throw new WringerError('internal', { message: 'The app settled before its start did.' });
+    })
+    .exhaustive();
 
-    request.host.killProcessGroup(child.pid, 'SIGTERM');
+  return {
+    endpoints,
+    stop: async () => {
+      app.send({ type: 'stop' });
 
-    const forced = setTimeout(() => {
-      request.host.killProcessGroup(child.pid);
-    }, stopGraceMs);
-
-    await child.exited;
-
-    clearTimeout(forced);
-
-    request.host.killProcessGroup(child.pid);
-
-    // The stop ends once the app's last lines are in its log, so a reader of the log after the stop
-    // sees them. A process outside the group can hold the pipes open, so the wait has a bound.
-    const [drained] = await Promise.allSettled([
-      raceDeadline(logged, AbortSignal.timeout(logDrainMs)),
-    ]);
-
-    if (drained.status === 'rejected') {
-      throw new WringerError('environment', {
-        message: `The app's output still had not reached its log ${logDrainMs} ms after it exited.`,
-        hint: 'A process the app started outside its process group may still hold its output open.',
+      const done = await waitFor(app, (snapshot) => snapshot.hasTag('done'), {
+        timeout: Infinity,
       });
-    }
+
+      const failure = pickStopFailure(done.context);
+
+      if (failure !== null) {
+        throw failure;
+      }
+    },
   };
-
-  try {
-    const endpoints = await ready.promise;
-
-    return { endpoints, stop };
-  } catch (error) {
-    const [stopped] = await Promise.allSettled([stop()]);
-
-    if (stopped.status === 'fulfilled') {
-      throw error;
-    }
-
-    // The startup failure stays the error; the failed stop adds what may still hold the app.
-    const cause = toWringerError(error);
-    const stopFailure = toWringerError(stopped.reason).message;
-
-    request.onStopFailed(stopFailure);
-
-    throw new WringerError(cause.code, {
-      message: `${cause.message} ${stopFailure}`,
-      ...(cause.hint === undefined ? {} : { hint: cause.hint }),
-    });
-  } finally {
-    request.signal.removeEventListener('abort', onAbort);
-
-    clearTimeout(timer);
-  }
 }
 
 async function createLogFolder(host: LaunchHost, logPath: string): Promise<void> {
@@ -191,6 +163,73 @@ function spawnApp(host: LaunchHost, argv: readonly string[], options: AppSpawnOp
     return host.spawnApp(argv, options);
   } catch (error) {
     throw buildSpawnError(argv.join(' '), error);
+  }
+}
+
+interface AppStop {
+  readonly host: LaunchHost;
+  readonly plan: LaunchPlan;
+  readonly cwd: string;
+  readonly child: AppProcess;
+  readonly logged: Promise<unknown>;
+  readonly stopGraceMs: number;
+}
+
+const logDrainMs = 2000;
+
+// The longest a stop takes: the stop command's grace, the app's grace before SIGKILL, then the
+// drain of its log.
+export const appStopLimitMs = 2 * appStopGraceMs + logDrainMs;
+
+// A hung stop command gives way to SIGTERM after the grace, and SIGKILL another grace later. The
+// stop ends once the app's last lines reach its log; a process outside the group can hold the
+// pipes open, so that wait has a bound.
+async function stopApp(stop: AppStop): Promise<void> {
+  if (stop.plan.stop !== undefined) {
+    await Promise.allSettled([
+      raceDeadline(
+        runStopCommand(stop.host, stop.plan.stop, stop.cwd, stop.stopGraceMs),
+        AbortSignal.timeout(stop.stopGraceMs),
+      ),
+    ]);
+  }
+
+  stop.host.killProcessGroup(stop.child.pid, 'SIGTERM');
+
+  const forced = setTimeout(() => {
+    stop.host.killProcessGroup(stop.child.pid);
+  }, stop.stopGraceMs);
+
+  await stop.child.exited;
+
+  clearTimeout(forced);
+
+  stop.host.killProcessGroup(stop.child.pid);
+
+  const [drained] = await Promise.allSettled([
+    raceDeadline(stop.logged, AbortSignal.timeout(logDrainMs)),
+  ]);
+
+  if (drained.status === 'rejected') {
+    throw new WringerError('environment', {
+      message: `The app's output still had not reached its log ${logDrainMs} ms after it exited.`,
+      hint: 'A process the app started outside its process group may still hold its output open.',
+    });
+  }
+}
+
+// A failed stop command must not keep the app alive, so its failure is dropped: the SIGTERM and
+// SIGKILL that follow end the app whatever it did.
+async function runStopCommand(
+  host: LaunchHost,
+  argv: readonly string[],
+  cwd: string,
+  graceMs: number,
+): Promise<void> {
+  try {
+    await host.runProcess({ argv, cwd, signal: AbortSignal.timeout(graceMs) });
+  } catch {
+    // Dropped on purpose; see above.
   }
 }
 
@@ -223,16 +262,61 @@ function parseLogLine(line: string): Readonly<Record<string, unknown>> {
   }
 }
 
-// A stop command that fails or hangs must not keep the app alive, so it gets the grace period and
-// its failure is dropped: the SIGTERM and SIGKILL that follow end the app whatever it did.
-async function runStopCommand(
-  host: LaunchHost,
-  argv: readonly string[],
-  cwd: string,
-): Promise<void> {
+interface StartedApp {
+  readonly start: AppStart;
+  readonly stopFailure: WringerError | null;
+}
+
+async function waitForStart(
+  app: Actor<typeof appMachine>,
+  signal: AbortSignal,
+  onAbort: () => void,
+): Promise<StartedApp> {
   try {
-    await host.runProcess({ argv, cwd, signal: AbortSignal.timeout(stopGraceMs) });
-  } catch {
-    // Dropped on purpose; see above.
+    const started = await waitFor(app, (snapshot) => snapshot.hasTag('settled'), {
+      timeout: Infinity,
+    });
+
+    return started.context;
+  } finally {
+    signal.removeEventListener('abort', onAbort);
   }
+}
+
+// The startup failure stays the error; a failed stop adds what may still hold the app, and goes to
+// the caller on its own too.
+function buildStartFailure(
+  startFailure: WringerError,
+  stopFailure: WringerError | null,
+  onStopFailed: (reason: string) => void,
+): WringerError {
+  if (stopFailure === null) {
+    return startFailure;
+  }
+
+  onStopFailed(stopFailure.message);
+
+  return new WringerError(startFailure.code, {
+    message: `${startFailure.message} ${stopFailure.message}`,
+  });
+}
+
+interface StopOutcome {
+  readonly logFailure: string | null;
+  readonly stopFailure: WringerError | null;
+}
+
+// A failed stop names what may still be up; with none, output that missed the log still fails it.
+function pickStopFailure(outcome: StopOutcome): WringerError | null {
+  if (outcome.stopFailure !== null) {
+    return outcome.stopFailure;
+  }
+
+  if (outcome.logFailure !== null) {
+    return new WringerError('environment', {
+      message: `The app's output could not be logged: ${outcome.logFailure}`,
+    });
+  }
+
+  return null;
 }
