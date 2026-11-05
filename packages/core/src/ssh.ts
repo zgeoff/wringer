@@ -88,21 +88,18 @@ export function ssh(options: SSHOptions): Host {
       }
 
       if (ran.value.exitCode === sshConnectionFailedExitCode) {
-        throw new WringerError('environment', {
-          message: `ssh could not reach ${options.destination}: ${ran.value.stderr.trim()}`,
-          hint: 'Check that the host is up and that ssh logs in without a prompt.',
-        });
+        throw buildConnectionError(options.destination, ran.value.stderr);
       }
 
       return ran.value;
     },
-    follow: (request) => {
+    follow: async (request) => {
       const user = request.access === 'read-only' ? options.readOnlyUser : undefined;
 
       // Killing the local ssh leaves a plain remote command running, and an idle `tail -f` never
       // notices. A forced terminal makes sshd hang it up; the terminal ends each line with `\r`,
       // and merges stderr into stdout, so the remote shell drops stderr before the terminal.
-      return followProcess({
+      const followed = await followProcess({
         argv: buildSSHArgv({
           binary: options.binary ?? 'ssh',
           destination: options.destination,
@@ -115,6 +112,13 @@ export function ssh(options: SSHOptions): Host {
           request.onLine(line.replace(/\r$/u, ''));
         },
       });
+
+      // Only ssh's own diagnostics reach its stderr, since the terminal carries the remote's.
+      if (followed.exitCode === sshConnectionFailedExitCode && !request.signal.aborted) {
+        throw buildConnectionError(options.destination, followed.stderr);
+      }
+
+      return followed.exitCode;
     },
   };
 }
@@ -197,4 +201,11 @@ const groupedScript = [
 
 function buildGroupedArgv(argv: readonly string[], groupFile: string): readonly string[] {
   return ['sh', '-c', groupedScript, 'wringer', groupFile, joinShellWords(argv)];
+}
+
+function buildConnectionError(destination: string, stderr: string): WringerError {
+  return new WringerError('environment', {
+    message: `ssh could not reach ${destination}: ${stderr.trim()}`,
+    hint: 'Check that the host is up and that ssh logs in without a prompt.',
+  });
 }

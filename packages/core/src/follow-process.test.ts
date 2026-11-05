@@ -27,7 +27,7 @@ test('it hands each stdout line to onLine and resolves with the exit code', asyn
 
   const lines: string[] = [];
 
-  const exitCode = await ctx.followProcess({
+  const followed = await ctx.followProcess({
     argv: ['sh', '-c', String.raw`printf "first\nsecond\n"; exit 3`],
     signal: new AbortController().signal,
     onLine: (line) => {
@@ -35,7 +35,22 @@ test('it hands each stdout line to onLine and resolves with the exit code', asyn
     },
   });
 
-  expect({ exitCode, lines }).toStrictEqual({ exitCode: 3, lines: ['first', 'second'] });
+  expect({ followed, lines }).toStrictEqual({
+    followed: { exitCode: 3, stderr: '' },
+    lines: ['first', 'second'],
+  });
+});
+
+test('it keeps only the last 4096 characters of the command stderr', async () => {
+  const ctx = await setupTest();
+
+  const followed = await ctx.followProcess({
+    argv: ['sh', '-c', String.raw`head -c 5000 /dev/zero | tr "\0" a >&2; printf "%s" "-last" >&2`],
+    signal: new AbortController().signal,
+    onLine: mock<(line: string) => void>(),
+  });
+
+  expect(followed.stderr).toBe(`${'a'.repeat(4091)}-last`);
 });
 
 test('it stops a command that never ends when the signal fires', async () => {
@@ -53,7 +68,7 @@ test('it stops a command that never ends when the signal fires', async () => {
     onLine,
   });
 
-  expect(followed).resolves.toBeNumber();
+  expect(followed).resolves.toMatchObject({ exitCode: expect.any(Number) });
 });
 
 test('it stops a child the command started when the signal fires', async () => {
@@ -85,7 +100,7 @@ test('it stops a command that closed its stdout and runs on when the signal fire
     onLine: mock<(line: string) => void>(),
   });
 
-  expect(followed).resolves.toBeNumber();
+  expect(followed).resolves.toMatchObject({ exitCode: expect.any(Number) });
 });
 
 test('it ends when the command exits, though a child it left running holds stdout', async () => {
