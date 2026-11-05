@@ -1,8 +1,11 @@
 import { Database } from 'bun:sqlite';
-import { z } from 'zod';
+import { OpenAPIHandler } from '@orpc/openapi/fetch';
+import { implement } from '@orpc/server';
+import { ordersSchema, placedOrderSchema, shopContract } from './shop-contract.ts';
+import type { Order, PlacedOrder } from './shop-contract.ts';
 
-// The example shop app that the journey test launches: a page with a Place order button, an orders
-// API over a SQLite file at SHOP_DB, and one log line per order. It prints its ready line once it
+// The example shop app that the journey test launches: a page with a Place order button, the orders
+// API of the shop contract over a SQLite file at SHOP_DB, and one log line per order. It prints its ready line once it
 // listens, as a launch target expects.
 const database = new Database(process.env['SHOP_DB'] ?? ':memory:', { create: true });
 
@@ -20,17 +23,8 @@ const page = `<!doctype html>
   }
 </script>`;
 
-const orderSchema = z.strictObject({ id: z.number().int(), item: z.string() });
-const placedOrderSchema = orderSchema.pick({ id: true });
-
-type Order = z.infer<typeof orderSchema>;
-
-type PlacedOrder = z.infer<typeof placedOrderSchema>;
-
 function readOrders(): Order[] {
-  return z
-    .array(orderSchema)
-    .parse(database.query('select id, item from orders order by id').all());
+  return ordersSchema.parse(database.query('select id, item from orders order by id').all());
 }
 
 function writeOrder(): PlacedOrder {
@@ -42,13 +36,25 @@ function writeOrder(): PlacedOrder {
   return order;
 }
 
+const shop = implement(shopContract);
+
+const ordersAPI = new OpenAPIHandler(
+  shop.router({
+    orders: {
+      list: shop.orders.list.handler(() => readOrders()),
+      place: shop.orders.place.handler(() => writeOrder()),
+    },
+  }),
+);
+
 const server = Bun.serve({
   port: 0,
   hostname: '127.0.0.1',
   routes: {
-    '/api/orders': {
-      GET: () => Response.json(readOrders()),
-      POST: () => Response.json(writeOrder()),
+    '/api/*': async (request) => {
+      const answered = await ordersAPI.handle(request);
+
+      return answered.matched ? answered.response : new Response('Not found', { status: 404 });
     },
     '/': new Response(page, { headers: { 'content-type': 'text/html' } }),
   },
