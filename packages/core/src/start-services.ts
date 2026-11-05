@@ -16,6 +16,9 @@ export interface ServicesRequest {
   // Ends the commands a service runs through its exec. It outlives `signal`, so a service's stop
   // can still run a command after the startup was cancelled.
   readonly commandSignal: AbortSignal;
+
+  // Also ends the commands a service runs while it starts, once the stop gives up on the startup.
+  readonly startupCommandSignal: AbortSignal;
   readonly started: Map<string, ServiceInstance>;
   readonly onReady: (key: string) => Promise<void>;
 }
@@ -28,24 +31,28 @@ export async function startServices(request: ServicesRequest): Promise<void> {
     run: request.run,
   });
 
-  const exec = makeDriverExec({
-    host: request.target.host,
-    access: request.target.access,
-    hint: request.hint,
-    signal: request.commandSignal,
-  });
-
   for (const entry of entries) {
     for (const service of entry.serviceNames) {
-      const instance = await entry.configured.startService(service, {
-        target: request.targetName,
-        access: request.target.access,
-        endpoints: request.endpoints,
-        run: request.run,
+      const commands = makeServiceCommands(request);
+
+      const exec = makeDriverExec({
         host: request.target.host,
-        exec,
-        signal: request.signal,
+        access: request.target.access,
+        hint: request.hint,
+        signal: commands.signal,
       });
+
+      const instance = await entry.configured
+        .startService(service, {
+          target: request.targetName,
+          access: request.target.access,
+          endpoints: request.endpoints,
+          run: request.run,
+          host: request.target.host,
+          exec,
+          signal: request.signal,
+        })
+        .finally(commands.endStartup);
 
       const key = buildServiceKey(entry.name, service);
 
@@ -56,4 +63,34 @@ export async function startServices(request: ServicesRequest): Promise<void> {
       await request.onReady(key);
     }
   }
+}
+
+interface ServiceCommands {
+  readonly signal: AbortSignal;
+
+  // Detaches the startup signal once the service's start settles.
+  readonly endStartup: () => void;
+}
+
+function makeServiceCommands(request: ServicesRequest): ServiceCommands {
+  const commands = new AbortController();
+
+  const end = (): void => {
+    commands.abort();
+  };
+
+  for (const signal of [request.commandSignal, request.startupCommandSignal]) {
+    signal.addEventListener('abort', end, { once: true });
+  }
+
+  if (request.commandSignal.aborted || request.startupCommandSignal.aborted) {
+    end();
+  }
+
+  return {
+    signal: commands.signal,
+    endStartup: () => {
+      request.startupCommandSignal.removeEventListener('abort', end);
+    },
+  };
 }

@@ -35,6 +35,10 @@ export interface StandInServices {
 
   // Its `hold` method records itself and settles only once the hold gate opens.
   readonly counter: StandInService;
+
+  // Its start runs `sleep 30` through its exec, whatever the abort says, and records how the
+  // command settled.
+  readonly press: StandInService;
 }
 
 // Services that each stand for one way a real service can behave at a run's start and stop.
@@ -115,6 +119,15 @@ export function buildStandInServices(gates: StandInGates): StandInServices {
           },
           stop: () => Promise.resolve(),
         }),
+    },
+    press: {
+      start: async (ctx) => {
+        const [command] = await Promise.allSettled([ctx.exec(['sleep', '30'], 'read')]);
+
+        calls.push(`press command ${command.status}`);
+
+        return { methods: {}, stop: () => Promise.resolve() };
+      },
     },
   };
 }

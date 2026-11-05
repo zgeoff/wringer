@@ -13,6 +13,8 @@ export interface ShutDownFacts {
 }
 
 export interface ShutDownSteps {
+  // Ends the commands the startup still runs, so a startup the stop gave up on stops early.
+  readonly abortStartupCommands: boolean;
   readonly abortCommands: boolean;
   readonly events: readonly RunEvent[];
 
@@ -20,14 +22,18 @@ export interface ShutDownSteps {
   readonly failure: WringerError | null;
 }
 
-// A cleanup the deadline gave up on can leave its command running, so the commands end only once
-// every part that will ever stop has stopped. A cleanup that failed makes the stop a crash, so the
-// log names what may still run.
+const unfinishedStartup = 'the startup had not finished when the stop stopped waiting for it';
+
+// A cleanup the deadline gave up on can leave its command running, so the commands of the parts
+// that came up end only once every such part has stopped. A failed cleanup, or a startup the stop
+// gave up on, makes the stop a crash, so the log and the stop's caller name what may still run.
 export function buildShutDownSteps(facts: ShutDownFacts): ShutDownSteps {
-  const reasons = [
-    ...(facts.crashReason === null ? [] : [facts.crashReason]),
+  const leftovers = [
+    ...(facts.gaveUpOnStartup ? [unfinishedStartup] : []),
     ...(facts.failures.length === 0 ? [] : [`cleanup failed for ${facts.failures.join('; ')}`]),
   ];
+
+  const reasons = [...(facts.crashReason === null ? [] : [facts.crashReason]), ...leftovers];
 
   const event: RunEvent =
     reasons.length === 0
@@ -35,12 +41,17 @@ export function buildShutDownSteps(facts: ShutDownFacts): ShutDownSteps {
       : { type: 'crashed', at: facts.at, reason: reasons.join('; ') };
 
   const failure =
-    facts.failures.length === 0
+    leftovers.length === 0
       ? null
       : new WringerError('environment', {
-          message: `The run ended, and a part may still be up. Cleanup failed for ${facts.failures.join('; ')}`,
+          message: `The run ended, and a part may still be up: ${leftovers.join('; ')}.`,
           hint: 'Stop each part the message names by hand before the next `up`.',
         });
 
-  return { abortCommands: !facts.gaveUpOnStartup, events: [event], failure };
+  return {
+    abortStartupCommands: facts.gaveUpOnStartup,
+    abortCommands: !facts.gaveUpOnStartup,
+    events: [event],
+    failure,
+  };
 }

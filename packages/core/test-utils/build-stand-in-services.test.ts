@@ -25,6 +25,10 @@ async function setupTest() {
       exec: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
       run,
     },
+    stoppedContext: {
+      exec: () => Promise.reject(new Error('The command was stopped.')),
+      run,
+    },
     openStopGate: () => {
       stop.resolve(undefined);
     },
@@ -108,4 +112,20 @@ test('it settles the counter hold once the hold gate opens, and records the call
   const held = await holding;
 
   expect({ held, calls: ctx.services.calls }).toStrictEqual({ held: null, calls: ['hold'] });
+});
+
+test('it starts the press once its command finishes, and records that it finished', async () => {
+  const ctx = await setupTest();
+
+  await ctx.services.press.start(ctx.context);
+
+  expect(ctx.services.calls).toStrictEqual(['press command fulfilled']);
+});
+
+test('it starts the press after its command is stopped, and records the stop', async () => {
+  const ctx = await setupTest();
+
+  await ctx.services.press.start(ctx.stoppedContext);
+
+  expect(ctx.services.calls).toStrictEqual(['press command rejected']);
 });
