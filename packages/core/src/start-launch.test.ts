@@ -12,7 +12,8 @@ import { startLaunch } from './start-launch.ts';
 import type { LaunchRequest } from './start-launch.ts';
 import { WringerError } from './wringer-error.ts';
 
-// The stack stops each app before it removes the folder the app logs into.
+// The stack stops each app before it removes the folder the app logs into. A second stop repeats
+// the first one's failure, which a test that stops the app has asserted already.
 async function setupTest() {
   const stack = new AsyncDisposableStack();
 
@@ -22,25 +23,21 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const host = readLaunchHost();
+  const startAppOn = async (launchHost: LaunchHost, request: Omit<LaunchRequest, 'host'>) => {
+    const launch = await startLaunch({ host: launchHost, ...request });
+
+    stack.defer(async () => {
+      await Promise.allSettled([launch.stop()]);
+    });
+
+    return launch;
+  };
 
   return {
     directory,
     logPath: join(directory, 'app.log'),
-    startApp: async (request: Omit<LaunchRequest, 'host'>) => {
-      const launch = await startLaunch({ host, ...request });
-
-      stack.defer(() => launch.stop());
-
-      return launch;
-    },
-    startAppOn: async (launchHost: LaunchHost, request: Omit<LaunchRequest, 'host'>) => {
-      const launch = await startLaunch({ host: launchHost, ...request });
-
-      stack.defer(() => launch.stop());
-
-      return launch;
-    },
+    startApp: (request: Omit<LaunchRequest, 'host'>) => startAppOn(readLaunchHost(), request),
+    startAppOn,
     readPID: async (path: string) => {
       const text = await readFile(path, 'utf8');
 
@@ -146,8 +143,7 @@ test('it fails a stop with an environment error when a process outside the app h
 
   const pidPath = join(ctx.directory, 'holder.pid');
 
-  const launch = await startLaunch({
-    host: readLaunchHost(),
+  const launch = await ctx.startApp({
     plan: {
       command: [
         'sh',
@@ -184,8 +180,7 @@ test('it keeps the startup failure and adds the failed stop when an app that nev
   const pidPath = join(ctx.directory, 'holder.pid');
 
   const [launched] = await Promise.allSettled([
-    startLaunch({
-      host: readLaunchHost(),
+    ctx.startApp({
       plan: {
         command: [
           'sh',
@@ -222,8 +217,7 @@ test('it reports the failed stop of an app that never got ready to its caller', 
   const onStopFailed = mock<(reason: string) => void>();
 
   await Promise.allSettled([
-    startLaunch({
-      host: readLaunchHost(),
+    ctx.startApp({
       plan: {
         command: [
           'sh',
@@ -249,11 +243,51 @@ test('it reports the failed stop of an app that never got ready to its caller', 
   ]);
 });
 
+test('it reports the log failure of an app that never got ready to its caller as it stops', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const onStopFailed = mock<(reason: string) => void>();
+  const notLogged = expect.stringMatching(/^The app's output could not be logged: .*EISDIR/u);
+
+  const launching = ctx.startApp({
+    plan: {
+      command: [
+        'sh',
+        '-c',
+        `trap 'echo closing; exit 0' TERM; echo booting; while :; do sleep 0.05; done`,
+      ],
+      ready: () => null,
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: controller.signal,
+    onCrash: mock<(reason: string) => void>(),
+    onStopFailed,
+    stopGraceMs: 5000,
+  });
+
+  await waitFor(async () => {
+    const log = await readFile(ctx.logPath, 'utf8');
+
+    invariant(log === 'booting\n', 'The app has not logged its first line yet.');
+  });
+
+  await rm(ctx.logPath);
+  await mkdir(ctx.logPath);
+
+  controller.abort();
+
+  await Promise.allSettled([launching]);
+
+  expect(onStopFailed.mock.calls).toStrictEqual([[notLogged]]);
+});
+
 test('it fails a stop with the log failure that came while the app stopped', async () => {
   const ctx = await setupTest();
 
-  const launch = await startLaunch({
-    host: readLaunchHost(),
+  const launch = await ctx.startApp({
     plan: {
       command: [
         'sh',
@@ -294,8 +328,7 @@ test('it signals the app once a stop command that never ends has had its grace',
 
   const pidPath = join(ctx.directory, 'app.pid');
 
-  const launch = await startLaunch({
-    host,
+  const launch = await ctx.startAppOn(host, {
     plan: {
       command: ['sh', '-c', `echo $$ > "$0"; echo '{"port":4100}'; exec sleep 60`, pidPath],
       ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
@@ -492,8 +525,7 @@ test('it creates the log folder, runs the stop command and signals the app throu
     killProcessGroup: mock(real.killProcessGroup),
   };
 
-  const launch = await startLaunch({
-    host,
+  const launch = await ctx.startAppOn(host, {
     plan: {
       command: ['sh', '-c', 'echo \'{"port":4100}\'; exec sleep 60'],
       stop: ['true'],
@@ -599,4 +631,29 @@ test('it refuses with an environment error when the app log cannot be written', 
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
+});
+
+test('it reports no failed stop when the log failure that failed the start is the only one', async () => {
+  const ctx = await setupTest();
+
+  const onStopFailed = mock<(reason: string) => void>();
+
+  await mkdir(ctx.logPath);
+
+  await Promise.allSettled([
+    ctx.startApp({
+      plan: {
+        command: ['sh', '-c', 'echo booting; exec sleep 60'],
+        ready: () => null,
+      },
+      logPath: ctx.logPath,
+      readyTimeoutMs: 10_000,
+      signal: new AbortController().signal,
+      onCrash: mock<(reason: string) => void>(),
+      onStopFailed,
+      stopGraceMs: 5000,
+    }),
+  ]);
+
+  expect(onStopFailed.mock.calls).toStrictEqual([]);
 });

@@ -102,10 +102,9 @@ export const appMachine = setup({
       on: {
         ready: { target: 'running', actions: 'keepEndpoints' },
         exited: { target: 'failingStart', actions: ['killGroup', 'failStart', 'reportCrash'] },
-        'log.failed': {
-          target: 'failingStart',
-          actions: ['keepLogFailure', 'failStart', 'reportCrash'],
-        },
+
+        // The start failure names this log failure; only a later one fails the stop as well.
+        'log.failed': { target: 'failingStart', actions: ['failStart', 'reportCrash'] },
         abort: { target: 'failingStart', actions: 'failStart' },
       },
     },
