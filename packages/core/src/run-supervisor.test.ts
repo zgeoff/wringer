@@ -583,6 +583,55 @@ test('#runSupervisor ends a connection that sent no request when the run stops',
   expect(idle.closed).toBeTrue();
 });
 
+test('#runSupervisor ends a connection whose client keeps its side open after the answer when the run stops', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const socket = ready.supervisor?.socket ?? '';
+  const lingering = createConnection({ path: socket, allowHalfOpen: true });
+  const writeErrors: unknown[] = [];
+
+  onTestFinished(() => {
+    lingering.destroy();
+  });
+
+  lingering.on('error', (error) => {
+    writeErrors.push(error);
+  });
+
+  await once(lingering, 'connect');
+
+  lingering.write(
+    `${JSON.stringify({ service: supervisorServiceName, method: 'status', args: null })}\n`,
+  );
+
+  lingering.resume();
+
+  await once(lingering, 'end');
+
+  ctx.openStopGate();
+
+  await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
+
+  // The client learns that the supervisor closed its end only when it writes to it.
+  const closed = await waitFor(() => {
+    lingering.write('ping\n');
+
+    return lingering.closed ? true : null;
+  });
+
+  expect(closed).toBeTrue();
+});
+
 test('#runSupervisor ends the run and frees its socket when a service call never settles', async () => {
   const ctx = await setupTest();
 
