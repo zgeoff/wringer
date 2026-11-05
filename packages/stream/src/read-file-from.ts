@@ -28,9 +28,10 @@ export async function readFileFrom(path: string, from: number): Promise<FileChun
 
     const bytes = new Uint8Array(stats.size - start);
 
-    await handle.read(bytes, 0, bytes.length, start);
+    // A file truncated after the stat yields fewer bytes than the buffer holds.
+    const read = await handle.read(bytes, 0, bytes.length, start);
 
-    return { start, bytes };
+    return { start, bytes: bytes.subarray(0, read.bytesRead) };
   } finally {
     await handle.close();
   }
