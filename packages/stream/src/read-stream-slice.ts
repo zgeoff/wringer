@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises';
-import { isErrorCode } from '@wringer/core';
+import { WringerError, isErrorCode } from '@wringer/core';
 import { buildStreamSlice } from './build-stream-slice.ts';
 import type { StreamSlice } from './build-stream-slice.ts';
 
@@ -9,10 +9,21 @@ export interface StreamSliceRequest {
   readonly maxBytes: number;
 }
 
-// Reads whole records from the byte offset `from`, up to `maxBytes`. The recorder caps each record
-// well under the smallest slice, so a full slice always ends on a line end. A cursor past the end
-// of the file comes from an older run, so the read starts over at 0.
+// Reads whole records from the byte offset `from`, up to `maxBytes`. A file the machine refuses to
+// read, such as a folder at the stream's path, is a fault of the environment, not of wringer.
 export async function readStreamSlice(request: StreamSliceRequest): Promise<StreamSlice> {
+  try {
+    return await readSlice(request);
+  } catch (error) {
+    throw new WringerError('environment', {
+      message: `The stream file ${request.path} could not be read: ${String(error)}`,
+    });
+  }
+}
+
+// The recorder caps each record well under the smallest slice, so a full slice always ends on a
+// line end. A cursor past the end of the file comes from an older run, so the read starts over at 0.
+async function readSlice(request: StreamSliceRequest): Promise<StreamSlice> {
   const handle = await openStreamFile(request.path);
 
   if (handle === null) {

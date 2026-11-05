@@ -31,12 +31,12 @@ test('it reads nothing from a stream that has no file yet', async () => {
   expect(slice).toStrictEqual({ records: [], cursor: 0, more: false });
 });
 
-test('it rejects a stream path that is a folder', async () => {
+test('it rejects a stream path that is a folder with an environment error', async () => {
   const ctx = await setupTest();
 
   await mkdir(ctx.path);
 
-  expect(ctx.read(0)).rejects.toMatchObject({ code: 'EISDIR' });
+  expect(ctx.read(0)).rejects.toMatchObject({ code: 'environment' });
 });
 
 test('it reads every record and returns the end of the file as the cursor', async () => {
