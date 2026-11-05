@@ -6,7 +6,9 @@ import { z } from 'zod';
 import { browserPageMachine } from './browser-page-machine.ts';
 import type { PageActionResult } from './browser-page-machine.ts';
 import { findSnapshotElement } from './find-snapshot-element.ts';
+import type { ElementTarget, PageResult } from './page-service-contract.ts';
 import { pickReopenURL } from './pick-reopen-url.ts';
+import { toPageServiceMethods } from './to-page-service-methods.ts';
 
 export interface BrowserPageOptions {
   readonly launchBrowser: () => Promise<Browser>;
@@ -14,11 +16,9 @@ export interface BrowserPageOptions {
   readonly reportError: (message: string) => void;
 }
 
-const refSchema = z.strictObject({ ref: z.string().min(1) });
-const roleSchema = z.strictObject({ role: z.string().min(1), name: z.string() });
-const elementSchema = z.union([refSchema, roleSchema]);
-const gotoSchema = z.strictObject({ url: z.url({ protocol: /^https?$/v }) });
-const typeSchema = z.strictObject({ element: elementSchema, value: z.string() });
+interface TypedPageActionResult<Data> extends PageActionResult {
+  readonly data: Data;
+}
 
 // One headless browser and one page per run, held by the run's supervisor so the page keeps its
 // state between commands. `describe` reads the last snapshot, because a new snapshot renumbers
@@ -36,24 +36,39 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
   pageActor.start();
 
-  const runPageAction = (
+  // The machine's queue holds actions of every result type, so the typed result comes back
+  // through the action's own closure once the machine settles the command.
+  const runPageAction = async <Data>(
     signal: AbortSignal,
-    action: (page: Page) => Promise<PageActionResult>,
-  ): Promise<unknown> => {
+    action: (page: Page) => Promise<TypedPageActionResult<Data>>,
+  ): Promise<Data> => {
     const settle = Promise.withResolvers<unknown>();
+    const typed = Promise.withResolvers<Data>();
 
-    pageActor.send({ type: 'run', command: { action, signal, settle } });
+    const command = {
+      action: async (page: Page) => {
+        const result = await action(page);
 
-    return settle.promise;
+        typed.resolve(result.data);
+
+        return result;
+      },
+      signal,
+      settle,
+    };
+
+    pageActor.send({ type: 'run', command });
+
+    await settle.promise;
+
+    return typed.promise;
   };
 
   return {
-    methods: {
+    methods: toPageServiceMethods({
       goto: (args, signal) =>
         runPageAction(signal, async (page) => {
-          const parsed = gotoSchema.parse(args);
-
-          await page.goto(parsed.url);
+          await page.goto(args.url);
 
           return { data: await readPageState(page) };
         }),
@@ -65,32 +80,29 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
           return { data: { ...state, snapshot }, snapshot };
         }),
       describe: (args) => {
-        const parsed = refSchema.parse(args);
         const lastSnapshot = pageActor.getSnapshot().context.snapshot;
-        const element = findSnapshotElement(lastSnapshot, parsed.ref);
+        const element = findSnapshotElement(lastSnapshot, args.ref);
 
         if (element === null) {
           return Promise.reject(
             new WringerError('usage', {
-              message: `The last snapshot has no element ${parsed.ref}.`,
+              message: `The last snapshot has no element ${args.ref}.`,
               hint: 'Run `browser snapshot`, then use a ref it printed.',
             }),
           );
         }
 
-        return Promise.resolve({ ref: parsed.ref, ...element });
+        return Promise.resolve({ ref: args.ref, ...element });
       },
       click: (args, signal) =>
         runPageAction(signal, async (page) => {
-          await locateElement(page, elementSchema.parse(args)).click();
+          await locateElement(page, args).click();
 
           return { data: await readPageState(page) };
         }),
       type: (args, signal) =>
         runPageAction(signal, async (page) => {
-          const parsed = typeSchema.parse(args);
-
-          await locateElement(page, parsed.element).fill(parsed.value);
+          await locateElement(page, args.element).fill(args.value);
 
           return { data: await readPageState(page) };
         }),
@@ -101,7 +113,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
           return { data: { png: png.toString('base64') } };
         }),
       status: () => Promise.resolve({ connected: browser.isConnected() }),
-    },
+    }),
     stop: async () => {
       pageActor.send({ type: 'stop' });
 
@@ -162,24 +174,11 @@ async function reopenPage(
   return page;
 }
 
-export const pageStateSchema = z.strictObject({
-  url: z.string(),
-  title: z.string(),
-});
-
-async function readPageState(page: Page): Promise<z.infer<typeof pageStateSchema>> {
+async function readPageState(page: Page): Promise<PageResult<'goto'>> {
   const title = await page.title();
 
   return { url: page.url(), title };
 }
-
-export const snapshotSchema = z.strictObject({
-  url: z.string(),
-  title: z.string(),
-  snapshot: z.string(),
-});
-
-export type ElementTarget = z.infer<typeof elementSchema>;
 
 function locateElement(page: Page, element: ElementTarget): Locator {
   if ('ref' in element) {

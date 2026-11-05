@@ -5,7 +5,7 @@ import { createTestSession } from '../../core/test-utils/create-test-session.ts'
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createBrowserWringer } from '../test-utils/create-browser-wringer.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
-import { snapshotSchema } from './start-browser-page.ts';
+import { snapshotSchema } from './page-service-contract.ts';
 
 async function setupTest() {
   const server = createShopPageServer();

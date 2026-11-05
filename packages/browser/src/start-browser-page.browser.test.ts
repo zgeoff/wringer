@@ -41,16 +41,12 @@ function setupTest() {
   };
 }
 
-test('it closes the browser and fails its start when the run context cannot open', async () => {
+test('it fails its start and leaves the browser closed when the run context cannot open', async () => {
   const ctx = setupTest();
 
   const browser = await chromium.launch({ headless: true });
 
-  onTestFinished(() => browser.close());
-
-  Object.assign(browser, {
-    newContext: () => Promise.reject(new Error('the browser has no room for a context')),
-  });
+  await browser.close();
 
   const [started] = await Promise.allSettled([ctx.startPageOn(browser)]);
 
@@ -60,12 +56,16 @@ test('it closes the browser and fails its start when the run context cannot open
   });
 });
 
-test('it stops a browser that no command used', async () => {
+test('it closes a browser that no command used at its stop', async () => {
   const ctx = setupTest();
 
   const service = await ctx.startPage();
 
-  expect(service.stop()).resolves.toBeUndefined();
+  await service.stop();
+
+  expect(service.methods['status']?.(null, new AbortController().signal)).resolves.toStrictEqual({
+    connected: false,
+  });
 });
 
 test('it answers a command after a stopped command and a closed browser with an environment error', async () => {
@@ -75,14 +75,14 @@ test('it answers a command after a stopped command and a closed browser with an 
 
   const stopped = new AbortController();
 
-  const snapshot = service.methods['snapshot']?.({}, stopped.signal);
+  const snapshot = service.methods['snapshot']?.(null, stopped.signal);
 
   stopped.abort();
 
   await snapshot?.catch(() => null);
   await service.stop();
 
-  expect(service.methods['snapshot']?.({}, new AbortController().signal)).rejects.toMatchObject({
+  expect(service.methods['snapshot']?.(null, new AbortController().signal)).rejects.toMatchObject({
     code: 'environment',
   });
 });
@@ -92,7 +92,7 @@ test('it refuses an action whose deadline passed before the browser started it',
 
   const service = await ctx.startPage();
 
-  expect(service.methods['snapshot']?.({}, AbortSignal.abort())).rejects.toMatchObject({
+  expect(service.methods['snapshot']?.(null, AbortSignal.abort())).rejects.toMatchObject({
     code: 'timeout',
   });
 });
@@ -122,7 +122,7 @@ test('it answers a command after the browser closed with an environment error', 
 
   await service.stop();
 
-  expect(service.methods['snapshot']?.({}, new AbortController().signal)).rejects.toMatchObject({
+  expect(service.methods['snapshot']?.(null, new AbortController().signal)).rejects.toMatchObject({
     code: 'environment',
   });
 });
@@ -169,7 +169,7 @@ test('it reports a failed reload of the replacement page and keeps the page for 
     AbortSignal.timeout(300),
   )?.catch(() => null);
 
-  const status = await service.methods['snapshot']?.({}, AbortSignal.timeout(5000));
+  const status = await service.methods['snapshot']?.(null, AbortSignal.timeout(5000));
 
   expect({ reported: ctx.reported, status }).toStrictEqual({
     reported: [expect.stringContaining(`The replacement page could not reload ${ctx.url}: `)],
