@@ -3,9 +3,10 @@ import { appendFile, mkdir, open, rename, rm, writeFile } from 'node:fs/promises
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
 import { readOptionalText } from '@zgeoff/std';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
 import { readFileFrom } from './read-file-from.ts';
 import type { FilePosition } from './read-file-from.ts';
@@ -51,7 +52,10 @@ async function setupTest() {
 
     // Resolves once the recorder has finished its first read of a file source.
     firstFileRead: async () => {
-      await waitFor(() => readFileCalls.mock.results[0] ?? null);
+      await waitFor(() => {
+        invariant(readFileCalls.mock.results[0], 'The recorder has not read the file yet.');
+      });
+
       await readFileCalls.mock.results[0]?.value;
     },
     streamPath: (name: string) => join(streams, `${name}.ndjson`),
@@ -100,7 +104,9 @@ test('it records each line of a command source with the time it arrived', async 
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted', 'ready'] } });
 
-  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'exited', 'The source has not exited yet.');
+  });
 
   await recorder.stop();
 
@@ -127,7 +133,9 @@ test('it records the lines appended to a file source', async () => {
   const recorded = await waitFor(async () => {
     const text = await ctx.readStream('app');
 
-    return text.includes('order 7 placed') ? text : null;
+    invariant(text.includes('order 7 placed'), 'The stream has not recorded order 7 yet.');
+
+    return text;
   });
 
   expect(recorded).toBe(
@@ -234,7 +242,9 @@ test('it caps a long line at 4096 characters', async () => {
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
 
-  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'exited', 'The source has not exited yet.');
+  });
 
   await recorder.stop();
 
@@ -252,7 +262,9 @@ test('it drops the lines past the pending limit and records how many it dropped'
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', ...lines] } }, 2);
 
-  await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'exited', 'The source has not exited yet.');
+  });
 
   await recorder.stop();
 
@@ -276,7 +288,9 @@ test('it reports a running source, an exited source and a failed source', async 
     const current = recorder.status();
     const settled = current.filter((status) => status.state !== 'running');
 
-    return settled.length === 2 ? current : null;
+    invariant(settled.length === 2, 'Both sources have not settled yet.');
+
+    return current;
   });
 
   expect(statuses).toStrictEqual([
@@ -297,7 +311,9 @@ test('it fails its stop with an environment error when records never reach the d
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted'] } });
 
-  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'failed', 'The source has not failed yet.');
+  });
 
   expect(recorder.stop()).rejects.toMatchObject({ code: 'environment' });
 });
@@ -323,7 +339,10 @@ test('it keeps a batch that failed to write and writes it once the disk recovers
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted'] } });
 
-  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'failed', 'The source has not failed yet.');
+  });
+
   await rm(ctx.streamPath('app'), { recursive: true });
 
   await recorder.stop();
@@ -342,13 +361,18 @@ test('it reports a source as running again once a write succeeds after one that 
     app: { command: ['sh', '-c', 'while true; do echo tick; sleep 0.1; done'] },
   });
 
-  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+  await waitFor(() => {
+    invariant(recorder.status()[0]?.state === 'failed', 'The source has not failed yet.');
+  });
+
   await rm(ctx.streamPath('app'), { recursive: true });
 
   const status = await waitFor(() => {
     const [current] = recorder.status();
 
-    return current?.state === 'running' ? current : null;
+    invariant(current?.state === 'running', 'The source is not running again yet.');
+
+    return current;
   });
 
   expect(status).toStrictEqual({ name: 'app', state: 'running', detail: null });

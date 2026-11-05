@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createTestSSHPostgres } from '../../db/test-utils/create-test-ssh-postgres.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { ssh } from './ssh.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the container, then
@@ -37,8 +38,7 @@ async function setupTest() {
 
   return {
     host: ssh({ destination: remote.destination, binary: remote.sshBinary }),
-    probeSleepRunning: () => (countRemote('[s]leep 300') > 0 ? true : null),
-    probeSleepGone: () => (countRemote('[s]leep 300') === 0 ? true : null),
+    probeSleepRunning: () => countRemote('[s]leep 300') > 0,
   };
 }
 
@@ -54,13 +54,25 @@ test('#follow ends the remote command over a real terminal when its signal abort
     onLine: () => {},
   });
 
-  await waitFor(ctx.probeSleepRunning, { timeoutMs: 10_000 });
+  await waitFor(
+    () => {
+      invariant(ctx.probeSleepRunning(), 'The remote sleep has not started yet.');
+    },
+    { timeoutMs: 10_000 },
+  );
 
   controller.abort();
 
   await Promise.allSettled([following]);
 
-  const gone = await waitFor(ctx.probeSleepGone, { timeoutMs: 5000 });
+  const gone = await waitFor(
+    () => {
+      invariant(!ctx.probeSleepRunning(), 'The remote sleep still runs.');
+
+      return true;
+    },
+    { timeoutMs: 5000 },
+  );
 
   expect(gone).toBeTrue();
 });

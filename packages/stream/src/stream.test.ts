@@ -2,9 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { open, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildRunPaths, dispatch } from '@wringer/core';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createStreamWringer } from '../test-utils/create-stream-wringer.ts';
 import { readStreamSlice } from './read-stream-slice.ts';
 import { streamSliceSchema } from './stream.ts';
@@ -49,7 +50,9 @@ test('it reads the lines the launched app logged', async () => {
     const slice = streamSliceSchema.parse(result.envelope.data);
     const read = slice.records.map((record) => record.line);
 
-    return read.includes('booted') ? read : null;
+    invariant(read.includes('booted'), 'The stream has no booted line yet.');
+
+    return read;
   });
 
   expect(lines).toStrictEqual(['{"event":"listening","port":4000}', 'booted']);
@@ -66,7 +69,10 @@ test('it reads from the cursor that use marked when the read gives no from', asy
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.some((record) => record.line === 'booted') ? true : null;
+    invariant(
+      slice.records.some((record) => record.line === 'booted'),
+      'The stream has no booted line yet.',
+    );
   });
 
   await ctx.run('local', ['use'], { feature: undefined });
@@ -77,7 +83,9 @@ test('it reads from the cursor that use marked when the read gives no from', asy
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+    invariant(slice.records.length > 0, 'The stream has no record yet.');
+
+    return slice.records.map((record) => record.line);
   });
 
   expect(lines).toStrictEqual(['order placed']);
@@ -94,7 +102,10 @@ test('it reads a new run from its start when use marked cursors in an older run'
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.some((record) => record.line === 'booted') ? true : null;
+    invariant(
+      slice.records.some((record) => record.line === 'booted'),
+      'The stream has no booted line yet.',
+    );
   });
 
   await ctx.run('local', ['use'], { feature: undefined });
@@ -108,7 +119,9 @@ test('it reads a new run from its start when use marked cursors in an older run'
     const slice = streamSliceSchema.parse(result.envelope.data);
     const read = slice.records.map((record) => record.line);
 
-    return read.includes('booted') ? read : null;
+    invariant(read.includes('booted'), 'The stream has no booted line yet.');
+
+    return read;
   });
 
   expect(lines).toStrictEqual(['{"event":"listening","port":4000}', 'booted']);
@@ -125,7 +138,10 @@ test('it records the lines the launched app logged as it stopped', async () => {
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.some((record) => record.line === 'booted') ? true : null;
+    invariant(
+      slice.records.some((record) => record.line === 'booted'),
+      'The stream has no booted line yet.',
+    );
   });
 
   const down = await ctx.run('local', ['down']);
@@ -146,7 +162,9 @@ test('it records a command source on an attach target', async () => {
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+    invariant(slice.records.length > 0, 'The stream has no record yet.');
+
+    return slice.records.map((record) => record.line);
   });
 
   expect(lines).toStrictEqual(['job 1 done']);
@@ -163,7 +181,9 @@ test('it reads a stream named after an inherited key from its start when use mar
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+    invariant(slice.records.length > 0, 'The stream has no record yet.');
+
+    return slice.records.map((record) => record.line);
   });
 
   expect(lines).toStrictEqual(['shelf built']);
@@ -212,7 +232,10 @@ test('it reads at most the configured 64 KiB of whole records when a read asks f
 
     const slice = streamSliceSchema.parse(result.envelope.data);
 
-    return slice.records.at(-1)?.line.startsWith('order 1000 ') === true ? true : null;
+    invariant(
+      slice.records.at(-1)?.line.startsWith('order 1000 ') === true,
+      'The stream has not recorded the last order yet.',
+    );
   });
 
   const result = await ctx.run('bulk', ['stream', 'read'], {
@@ -249,7 +272,9 @@ test('it fails the doctor when a source stopped recording', async () => {
   const result = await waitFor(async () => {
     const doctor = await ctx.run('dead', ['doctor']);
 
-    return doctor.exitCode === 0 ? null : doctor;
+    invariant(doctor.exitCode !== 0, 'The doctor still passes.');
+
+    return doctor;
   });
 
   expect(result.envelope.data).toStrictEqual(

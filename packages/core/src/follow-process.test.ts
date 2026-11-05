@@ -1,8 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { followProcess } from './follow-process.ts';
 import { probeProcess } from './probe-process.ts';
 
@@ -129,7 +130,11 @@ test('it stops a child the command left running when the command exits', async (
   const pid = await ctx.readPID(ctx.pidPath);
 
   // The killed child lingers until init reaps it, so the test waits for it to go.
-  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The command is still running.');
+
+    return true;
+  });
 
   expect(exited).toBeTrue();
 });

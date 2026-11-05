@@ -32,11 +32,13 @@
       "version": "0.0.0",
       "dependencies": {
         "playwright-core": "catalog:",
+        "tiny-invariant": "catalog:",
         "xstate": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
+        "@zgeoff/testing": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
@@ -112,6 +114,8 @@
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/std": "catalog:",
+        "@zgeoff/testing": "catalog:",
+        "tiny-invariant": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",

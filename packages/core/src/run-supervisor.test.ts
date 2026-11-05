@@ -675,7 +675,9 @@ test('#runSupervisor cancels a service call a second before its deadline while t
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const deadlineAt = Date.now() + 1500;
