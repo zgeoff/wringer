@@ -73,7 +73,7 @@ test('it sends a JSON body with its content type', async () => {
   await ctx.run('local', ['http', 'request'], {
     method: 'POST',
     path: '/api/orders',
-    json: { item: 'mug', count: 2 },
+    body: { item: 'mug', count: 2 },
   });
 
   expect(received).toHaveBeenCalledExactlyOnceWith({ item: 'mug', count: 2 }, 'application/json');
@@ -99,7 +99,7 @@ test('it sends a JSON body with the content type the caller set, in any letter c
     method: 'POST',
     path: '/api/orders',
     header: ['Content-Type: application/vnd.api+json'],
-    json: { item: 'mug' },
+    body: { item: 'mug' },
   });
 
   expect(received).toHaveBeenCalledExactlyOnceWith('application/vnd.api+json');
@@ -163,7 +163,7 @@ test('it sends a POST the read-only target grants', async () => {
   const result = await ctx.run('prod', ['http', 'request'], {
     method: 'POST',
     path: '/api/search',
-    json: { query: 'mug' },
+    body: { query: 'mug' },
   });
 
   expect({ exitCode: result.exitCode, request: shopRequests.at(-1) }).toStrictEqual({
@@ -181,7 +181,7 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
   const result = await ctx.run('prod', ['http', 'request'], {
     method: 'POST',
     path: '//127.0.0.1:9/api/search',
-    json: { query: 'mug' },
+    body: { query: 'mug' },
   });
 
   expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
@@ -241,7 +241,7 @@ test.each(['GET', 'HEAD'])('it refuses a JSON body on a %s with a usage error', 
   const result = await ctx.run('local', ['http', 'request'], {
     method,
     path: '/api/cart',
-    json: { item: 'mug' },
+    body: { item: 'mug' },
   });
 
   expect({

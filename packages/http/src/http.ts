@@ -44,7 +44,9 @@ const requestArgsSchema = z.strictObject({
   method: methodSchema.default('GET'),
   path: z.string().startsWith('/'),
   header: headerArgsSchema,
-  json: z.unknown().optional(),
+
+  // The CLI's global `--json` picks the output, so the command takes its JSON body as `--body`.
+  body: z.unknown().optional(),
 });
 
 // Requests the target's app over HTTP. GET, HEAD and OPTIONS are reads; any other method is a write,
@@ -75,7 +77,7 @@ export const http = defineDriver({
           method: args.method,
           path: args.path,
           headers: Object.fromEntries(args.header.map((header) => splitHeader(header))),
-          json: args.json,
+          json: args.body,
         }),
     }),
   ],
