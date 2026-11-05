@@ -28,9 +28,7 @@ async function setupTest() {
         },
       });
 
-      stack.defer(() => {
-        server.close();
-      });
+      stack.defer(() => server.close());
     },
     call: (method: string, signal: AbortSignal) =>
       callSupervisor({ socket, request: { service: 'shelf', method, args: null }, signal }),
