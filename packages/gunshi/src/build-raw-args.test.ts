@@ -65,6 +65,23 @@ test.each([
   expect(result).toStrictEqual({ ok: true, raw: { argv: row.words } });
 });
 
+test.each([
+  { argv: ['mug', 'cup'] },
+  { argv: ['--', 'mug', 'cup'] },
+  { argv: ['mug', '--', 'cup'] },
+])('it gives every word of $argv to a list declared before a scalar positional', (row) => {
+  const args = {
+    items: { type: 'positional', required: false, multiple: true },
+    suffix: { type: 'positional', required: false },
+    [extraWordsArg]: { type: 'positional', required: false, multiple: true },
+  } as const;
+
+  const tokens = parseArgs([...row.argv]);
+  const result = buildRawArgs(args, { ...resolveArgs(args, tokens), tokens });
+
+  expect(result).toStrictEqual({ ok: true, raw: { items: ['mug', 'cup'] } });
+});
+
 test('it gives an empty word after `--` to the next unset scalar positional in its place', () => {
   const args = {
     host: { type: 'positional' },

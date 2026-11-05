@@ -41,30 +41,29 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): RawArgsRe
     ([name, schema]) => name !== extraWordsArg && schema.type === 'positional',
   );
 
-  const unsetScalars = positionals.filter(
-    ([name, schema]) => schema.multiple !== true && !Object.hasOwn(raw, name),
-  );
-
+  // The words after `--` go on where the words before it stopped, in the declared order: an unset
+  // scalar takes one word, and a list takes every word left, as gunshi fills them before `--`.
   const restWords = [...afterTerminator];
 
-  for (const [name, schema] of unsetScalars) {
-    const word = restWords.shift();
+  for (const [name, schema] of positionals) {
+    const [word] = restWords;
 
-    if (word !== undefined) {
+    if (word === undefined) {
+      break;
+    }
+
+    if (schema.multiple === true) {
+      const restValues = restWords.splice(0).map((restWord) => parseWord(schema, restWord));
+
+      raw[name] = [...toWords(raw[name]), ...restValues];
+    } else if (!Object.hasOwn(raw, name)) {
+      restWords.shift();
+
       raw[name] = parseWord(schema, word);
     }
   }
 
-  const list = positionals.find(([, schema]) => schema.multiple === true);
-
-  if (list !== undefined && restWords.length > 0) {
-    const [name, schema] = list;
-    const restValues = restWords.map((word) => parseWord(schema, word));
-
-    raw[name] = [...toWords(raw[name]), ...restValues];
-  }
-
-  const leftover = list === undefined ? [...extra, ...restWords] : extra;
+  const leftover = [...extra, ...restWords];
 
   if (leftover.length > 0) {
     return {
