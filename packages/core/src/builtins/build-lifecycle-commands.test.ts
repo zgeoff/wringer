@@ -6,6 +6,8 @@ import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorStarter } from '../make-process-supervisor-starter.ts';
+import { removeFile } from '../remove-file.ts';
+import { runGit } from '../run-git.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -19,6 +21,29 @@ async function setupTest() {
       dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
+
+    // Each git call of the fingerprint read waits for `gate`, so the deadline passes mid-read.
+    runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) =>
+      dispatch(
+        wringer,
+        ['up'],
+        {},
+        {
+          ...shop.session,
+          target,
+          timeoutMs,
+          fingerprintHost: {
+            runGit: async (request) => {
+              await gate;
+
+              return runGit(request);
+            },
+            removeFile,
+          },
+        },
+      ),
+    waitForTargetLock: (target: string) =>
+      shop.state.withTargetLock(target, () => Promise.resolve()),
 
     // The supervisor's command names no program on this machine, so its spawn fails.
     runWithMissingSupervisor: (target: string, path: readonly string[]) =>
@@ -67,7 +92,11 @@ test('#up keeps a live run and its pointer when its supervisor answers the ping 
   const socket = join(ctx.root, 'late.sock');
   const answer = Promise.withResolvers<null>();
 
-  const server = await listenSupervisorSocket(socket, () => answer.promise);
+  const server = await listenSupervisorSocket({
+    path: socket,
+    answerRequest: () => answer.promise,
+    onTransportError: () => null,
+  });
 
   onTestFinished(() => {
     answer.resolve(null);
@@ -187,6 +216,26 @@ test('#up stops a run that becomes ready only after the command missed its deadl
   expect(status).toBe('ended');
 });
 
+test('#up starts no run when its deadline passes while it reads the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  const gate = Promise.withResolvers<undefined>();
+
+  onTestFinished(() => {
+    gate.resolve(undefined);
+  });
+
+  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
+
+  gate.resolve(undefined);
+
+  await ctx.waitForTargetLock('local');
+
+  const pointers = await ctx.state.readPointers();
+
+  expect(pointers.currentRun['local']).toBeUndefined();
+});
+
 test('#up marks the new run crashed when its supervisor cannot start', async () => {
   const ctx = await setupTest();
   const result = await ctx.runWithMissingSupervisor('local', ['up']);
@@ -271,7 +320,11 @@ test('#down keeps a live run and its pointer when its supervisor answers too lat
   const socket = join(ctx.root, 'late.sock');
   const answer = Promise.withResolvers<null>();
 
-  const server = await listenSupervisorSocket(socket, () => answer.promise);
+  const server = await listenSupervisorSocket({
+    path: socket,
+    answerRequest: () => answer.promise,
+    onTransportError: () => null,
+  });
 
   onTestFinished(() => {
     answer.resolve(null);
