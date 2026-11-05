@@ -2,6 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildStubClock } from '../test-utils/build-stub-clock.ts';
+import type { StubClock } from '../test-utils/build-stub-clock.ts';
 import { createNodeLockHost } from './create-node-lock-host.ts';
 import { formatLockOwner } from './format-lock-owner.ts';
 import { makeFileLock } from './with-file-lock.ts';
@@ -19,20 +21,7 @@ async function setupTest() {
     namespace: host.namespace,
     lock: makeFileLock(host),
 
-    // A lock whose clock moves on 1 s at each sleep, so a timeout passes without waiting for it.
-    makeFastClockLock: () => {
-      let nowMs = 0;
-
-      return makeFileLock({
-        ...host,
-        nowMs: () => nowMs,
-        sleep: (durationMs: number) => {
-          nowMs += 1000 + durationMs;
-
-          return Promise.resolve();
-        },
-      });
-    },
+    makeStubClockLock: (clock: StubClock) => makeFileLock({ ...host, ...clock }),
     claimPathOf: (lockPath: string, staleContent: string) =>
       `${lockPath}.${Bun.hash(staleContent).toString(36)}.claim`,
   };
@@ -58,8 +47,10 @@ test('it keeps a second caller out while the first holds the lock', async () => 
 
   await firstIn.promise;
 
+  const lock = ctx.makeStubClockLock(buildStubClock(1_000_000));
+
   expect(
-    ctx.lock({ path: ctx.lockPath, timeoutMs: 100 }, () => Promise.resolve('second in')),
+    lock({ path: ctx.lockPath, timeoutMs: 500 }, () => Promise.resolve('second in')),
   ).rejects.toMatchObject({ code: 'environment' });
 });
 
@@ -96,7 +87,9 @@ test('it leaves the lock of an owner in another PID namespace in place', async (
 
   await writeFile(path, formatLockOwner({ pid: dead, namespace: 'elsewhere', token: 'owner' }));
 
-  expect(ctx.lock({ path, timeoutMs: 100 }, () => Promise.resolve('held'))).rejects.toMatchObject({
+  const lock = ctx.makeStubClockLock(buildStubClock(1_000_000));
+
+  expect(lock({ path, timeoutMs: 500 }, () => Promise.resolve('held'))).rejects.toMatchObject({
     code: 'environment',
   });
 });
@@ -160,7 +153,9 @@ test('it leaves the claim of a live caller in place, however old', async () => {
     formatLockOwner({ pid: process.pid, namespace: ctx.namespace, token: 'claimant' }),
   );
 
-  expect(ctx.lock({ path, timeoutMs: 100 }, () => Promise.resolve('held'))).rejects.toMatchObject({
+  const lock = ctx.makeStubClockLock(buildStubClock(1_000_000));
+
+  expect(lock({ path, timeoutMs: 500 }, () => Promise.resolve('held'))).rejects.toMatchObject({
     code: 'environment',
   });
 });
@@ -187,12 +182,14 @@ test('it fails with an environment error when a live owner keeps the lock past t
     formatLockOwner({ pid: process.pid, namespace: ctx.namespace, token: 'owner' }),
   );
 
-  expect(ctx.lock({ path, timeoutMs: 50 }, () => Promise.resolve('held'))).rejects.toMatchObject({
+  const lock = ctx.makeStubClockLock(buildStubClock(1_000_000));
+
+  expect(lock({ path, timeoutMs: 500 }, () => Promise.resolve('held'))).rejects.toMatchObject({
     code: 'environment',
   });
 });
 
-test('it gives up on a live owner once its own clock passes the timeout', async () => {
+test('it gives up on a live owner within one retry of the timeout', async () => {
   const ctx = await setupTest();
 
   const path = join(ctx.directory, 'live.lock');
@@ -202,9 +199,9 @@ test('it gives up on a live owner once its own clock passes the timeout', async 
     formatLockOwner({ pid: process.pid, namespace: ctx.namespace, token: 'owner' }),
   );
 
-  const lock = ctx.makeFastClockLock();
+  const clock = buildStubClock(1_000_000);
+  const lock = ctx.makeStubClockLock(clock);
 
-  expect(lock({ path, timeoutMs: 60_000 }, () => Promise.resolve('held'))).rejects.toMatchObject({
-    code: 'environment',
-  });
+  expect(lock({ path, timeoutMs: 500 }, () => Promise.resolve('held'))).rejects.toThrow();
+  expect(clock.nowMs()).toBeWithin(1_000_500, 1_000_521);
 });
