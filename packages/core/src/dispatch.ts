@@ -5,7 +5,6 @@ import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
-import { decideGuard } from './decide-guard.ts';
 import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
 import { exitCodeFor } from './error-codes.ts';
@@ -17,8 +16,9 @@ import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
+import { pickCommandNeeds } from './pick-command-needs.ts';
+import { pickCommandPlan } from './pick-command-plan.ts';
 import { pickContextTarget } from './pick-context-target.ts';
-import { pickDriveKind } from './pick-drive-kind.ts';
 import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
@@ -276,42 +276,40 @@ interface CommandRequest {
   readonly trace: DriveTrace;
 }
 
+// Reads the facts, leaves each decision to the pure planners, and carries out the plan.
 async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   const info = request.command.info;
   const context = request.context;
-  const needsRun = info.needsRun ?? request.command.kind !== 'builtin';
-  const needsDoctor = info.needsDoctor ?? request.command.kind !== 'builtin';
 
-  const fingerprintChanged = await probeFingerprintChanged(request, needsDoctor);
+  const needs = pickCommandNeeds({
+    isBuiltin: request.command.kind === 'builtin',
+    needsRun: info.needsRun,
+    needsDoctor: info.needsDoctor,
+    mode: context.target.mode,
+    doctor: context.run?.doctor,
+  });
 
-  const refusal = decideGuard({
-    needsRun,
-    needsDoctor,
+  const fingerprintChanged = needs.readsFingerprint
+    ? await probeFingerprintChanged(request)
+    : false;
+
+  const plan = pickCommandPlan({
+    needsRun: needs.needsRun,
+    needsDoctor: needs.needsDoctor,
+    isRepoCommand: request.command.kind === 'repo',
     run: context.run,
     targetName: context.targetName,
     mode: context.target.mode,
     fingerprintChanged,
+    deadlinePassed: request.deadline.aborted,
   });
 
-  if (refusal !== null) {
-    throw refusal;
-  }
-
-  // The envelope answers at the deadline without waiting for this function, so a body that would
-  // start after it never starts.
-  if (request.deadline.aborted) {
-    throw new WringerError('timeout');
+  if (plan.kind === 'refuse') {
+    throw plan.failure;
   }
 
   const hint = context.target.refusalHint ?? defaultRefusalHint;
-
-  const driveKind = pickDriveKind({
-    runStatus: context.run?.status ?? null,
-    needsRun,
-    isRepoCommand: request.command.kind === 'repo',
-  });
-
-  const drive = openCommandDrive(request, driveKind, hint);
+  const drive = openCommandDrive(request, plan.driveKind, hint);
   const prepared = prepareCommand(request, drive, hint);
 
   const accessRefusal = pickAccessRefusal({
@@ -332,8 +330,8 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     request.trace.evidence.push(drive.evidence);
   }
 
-  request.trace.drive = needsRun && needsDoctor;
-  request.trace.ranOnRun = driveKind === 'run';
+  request.trace.drive = plan.drive;
+  request.trace.ranOnRun = plan.driveKind === 'run';
 
   const data = await prepared.run();
 
@@ -349,17 +347,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   return { data: output.data };
 }
 
-// A launched app runs this worktree's code, so a drive on it needs the tree unchanged since launch.
-async function probeFingerprintChanged(
-  request: CommandRequest,
-  needsDoctor: boolean,
-): Promise<boolean> {
-  const run = request.context.run;
-
-  if (!needsDoctor || request.context.target.mode !== 'launch' || run?.doctor !== 'passed') {
-    return false;
-  }
-
+async function probeFingerprintChanged(request: CommandRequest): Promise<boolean> {
   const base = await readDefaultBase(request.session.repoHost, request.session.root);
 
   const fingerprint = await readFingerprint(request.session.repoHost, {
@@ -368,7 +356,7 @@ async function probeFingerprintChanged(
     exclude: [request.wringer.stateDir],
   });
 
-  return fingerprint !== run.fingerprint;
+  return fingerprint !== request.context.run?.fingerprint;
 }
 
 function openCommandDrive(
