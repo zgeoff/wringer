@@ -1,5 +1,6 @@
 import { open } from 'node:fs/promises';
 import { isErrorCode } from '@wringer/core';
+import { pickFileRead } from './pick-file-read.ts';
 
 // Where a reader left a file: the byte offset, and the device and inode of the file it read, or
 // null before it read one.
@@ -16,8 +17,7 @@ export interface FileChunk {
 }
 
 // Up to `limitBytes` of a file from `from`. A file that does not exist yet reads as empty, as
-// `tail -F` treats it; a file that shrank, such as a log rotated in place, or a new file at the
-// path, such as a log rotated by rename, reads from 0.
+// `tail -F` treats it.
 export async function readFileFrom(
   path: string,
   from: FilePosition,
@@ -39,15 +39,14 @@ export async function readFileFrom(
     const stats = await handle.stat();
 
     const identity = `${stats.dev}:${stats.ino}`;
-    const replaced = from.identity !== null && from.identity !== identity;
-    const start = replaced || stats.size < from.offset ? 0 : from.offset;
+    const plan = pickFileRead({ size: stats.size, identity }, from, limitBytes);
 
-    const bytes = new Uint8Array(Math.min(stats.size - start, limitBytes));
+    const bytes = new Uint8Array(plan.length);
 
     // A file truncated after the stat yields fewer bytes than the buffer holds.
-    const read = await handle.read(bytes, 0, bytes.length, start);
+    const read = await handle.read(bytes, 0, bytes.length, plan.start);
 
-    return { start, identity, bytes: bytes.subarray(0, read.bytesRead) };
+    return { start: plan.start, identity, bytes: bytes.subarray(0, read.bytesRead) };
   } finally {
     await handle.close();
   }

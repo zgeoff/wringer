@@ -1,24 +1,13 @@
 import { open } from 'node:fs/promises';
 import { isErrorCode } from '@wringer/core';
-import { z } from 'zod';
-
-export const streamRecordSchema = z.strictObject({ at: z.string(), line: z.string() });
-
-export type StreamRecord = z.infer<typeof streamRecordSchema>;
+import { buildStreamSlice } from './build-stream-slice.ts';
+import type { StreamSlice } from './build-stream-slice.ts';
 
 export interface StreamSliceRequest {
   readonly path: string;
   readonly from: number;
   readonly maxBytes: number;
 }
-
-export interface StreamSlice {
-  readonly records: readonly StreamRecord[];
-  readonly cursor: number;
-  readonly more: boolean;
-}
-
-const newline = 0x0a;
 
 // Reads whole records from the byte offset `from`, up to `maxBytes`. The recorder caps each record
 // well under the smallest slice, so a full slice always ends on a line end. A cursor past the end
@@ -43,16 +32,7 @@ export async function readStreamSlice(request: StreamSliceRequest): Promise<Stre
 
     await handle.read(buffer, 0, length, from);
 
-    const end = buffer.lastIndexOf(newline) + 1;
-
-    const records = buffer
-      .subarray(0, end)
-      .toString('utf8')
-      .split('\n')
-      .filter((line) => line !== '')
-      .map((line) => parseRecord(line));
-
-    return { records, cursor: from + end, more: from + end < size };
+    return buildStreamSlice(buffer, from, size);
   } finally {
     await handle.close();
   }
@@ -73,6 +53,8 @@ async function openStreamFile(path: string): Promise<FileHandle | null> {
   }
 }
 
+const newline = 0x0a;
+
 // A cursor a caller typed may land inside a record; the read then starts at the next one.
 async function readLineStart(handle: FileHandle, from: number, size: number): Promise<number> {
   if (from === 0) {
@@ -86,10 +68,4 @@ async function readLineStart(handle: FileHandle, from: number, size: number): Pr
   const index = buffer.indexOf(newline);
 
   return index === -1 ? size : from + index;
-}
-
-function parseRecord(line: string): StreamRecord {
-  const parsed: unknown = JSON.parse(line);
-
-  return streamRecordSchema.parse(parsed);
 }
