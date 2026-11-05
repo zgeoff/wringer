@@ -187,14 +187,15 @@ export function createShopWringer(): Wringer {
     .action(
       shop.defineAction({
         name: 'linger',
-        summary: 'Run past the timeout, then fail to clean up',
+        summary: 'Run past the timeout, report its cleanup, then fail it',
         effect: 'read',
         timeoutMs: 50,
         input: emptySchema,
         data: emptySchema,
-        run: async () => {
+        run: async (_input, ctx) => {
           await Bun.sleep(200);
 
+          ctx.emit('cleanup', { step: 'remote work' });
           throw new Error('The cleanup could not stop the remote work.');
         },
       }),

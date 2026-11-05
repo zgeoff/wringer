@@ -70,6 +70,9 @@ interface DriveTrace {
   ranOnRun: boolean;
   boundRun: RunID | null;
   readonly late: Promise<void>[];
+
+  // Set once the command's outcome is settled, so the work's later events never follow the answer.
+  answered: boolean;
 }
 
 // Every command, built-in, driver, repo or action, ends here and yields exactly one envelope.
@@ -100,6 +103,7 @@ export async function dispatch(
     ranOnRun: false,
     boundRun: null,
     late: [],
+    answered: false,
   };
 
   try {
@@ -144,6 +148,8 @@ export async function dispatch(
       pending = null;
     }
   }
+
+  trace.answered = true;
 
   const after = await readContext(wringer, path, state, session).catch(() => before);
   const bound = await readBoundRun(state, trace.boundRun);
@@ -389,7 +395,7 @@ function openCommandDrive(
       feature: request.context.feature,
       signal: request.deadline,
       now: request.now,
-      emit: makeEmit(request.session),
+      emit: makeEmit(request.session, request.trace),
       files: request.session.repoHost,
     });
   }
@@ -418,14 +424,18 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     signal: options.deadline?.signal ?? request.deadline,
     deadlineAt: options.deadline?.at ?? request.deadlineAt,
     now: request.now,
-    emit: makeEmit(request.session),
+    emit: makeEmit(request.session, request.trace),
     files: request.session.repoHost,
     callSupervisor: request.session.supervisor.call,
   });
 }
 
-function makeEmit(session: Session): Emit {
+function makeEmit(session: Session, trace: Readonly<DriveTrace>): Emit {
   return (event, data) => {
+    if (trace.answered) {
+      return;
+    }
+
     session.output.writeLine(JSON.stringify({ wringer: envelopeVersion, event, data }));
   };
 }
@@ -470,7 +480,7 @@ function prepareCommand(
 
       return {
         effect: prepared.effect,
-        run: () => prepared.run(request.context.feature, makeEmit(request.session)),
+        run: () => prepared.run(request.context.feature, makeEmit(request.session, request.trace)),
       };
     })
     .exhaustive();
@@ -497,7 +507,7 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     signal: request.deadline,
     deadlineAt: request.deadlineAt,
     now: request.now,
-    emit: makeEmit(request.session),
+    emit: makeEmit(request.session, request.trace),
     openDrive: (access, deadline) => {
       const drive = openRunDrive(request, {
         run: getRunningRun(request.context.run),
