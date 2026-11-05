@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { runAppendUnderSizeLimit } from '../test-utils/run-append-under-size-limit.ts';
 import { appendWholeText } from './append-whole-text.ts';
 
 async function setupTest() {
@@ -10,34 +11,11 @@ async function setupTest() {
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   const path = join(directory, 'app.ndjson');
-  const modulePath = join(import.meta.dir, 'append-whole-text.ts');
 
   return {
     path,
     appendWholeText,
-
-    // `ulimit -f 2` caps the file at 2 KiB, so an append past it writes part of its text and fails.
-    appendUnderSizeLimit: (text: string) => {
-      const child = Bun.spawn(
-        [
-          'sh',
-          '-c',
-          'ulimit -f 2; exec "$0" -e "$1" "$2" "$3" "$4"',
-          process.execPath,
-          'const [module, path, text] = process.argv.slice(1); const { appendWholeText } = await import(module); await appendWholeText(path, text).catch(() => process.exit(3));',
-          modulePath,
-          path,
-          text,
-        ],
-        { stdout: 'ignore', stderr: 'ignore' },
-      );
-
-      onTestFinished(() => {
-        child.kill();
-      });
-
-      return child.exited;
-    },
+    appendUnderSizeLimit: (text: string) => runAppendUnderSizeLimit(path, text),
     readText: () => readFile(path, 'utf8'),
     writeText: (text: string) => writeFile(path, text),
   };
