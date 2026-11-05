@@ -6,6 +6,7 @@ import { findOwnValue } from '../find-own-value.ts';
 import { unassignedFeature } from '../open-drive.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
+import { buildUsePointers } from './build-use-pointers.ts';
 
 const statusDataSchema = z.strictObject({
   target: z.string(),
@@ -115,15 +116,14 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
       const runID = findOwnValue(before.currentRun, args.target ?? ctx.targetName);
       const cursors = runID === undefined ? {} : await ctx.state.readCursors(runID);
 
-      const pointers = await ctx.state.writePointers((current) => ({
-        currentRun: current.currentRun,
-        ...(current.target === undefined ? {} : { target: current.target }),
-        ...(current.feature === undefined ? {} : { feature: current.feature }),
-        ...(args.feature === undefined ? {} : { feature: args.feature }),
-        ...(args.target === undefined ? {} : { target: args.target }),
-        cursors,
-        ...(runID === undefined ? {} : { cursorsRun: runID }),
-      }));
+      const pointers = await ctx.state.writePointers((current) =>
+        buildUsePointers(current, {
+          target: args.target,
+          feature: args.feature,
+          cursors,
+          runID,
+        }),
+      );
 
       return { target: pointers.target ?? null, feature: pointers.feature ?? null, cursors };
     },

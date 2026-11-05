@@ -1,4 +1,5 @@
 import { appendFile } from 'node:fs/promises';
+import { buildLaunchGuard } from './build-launch-guard.ts';
 import { createDirectory } from './create-directory.ts';
 import { createSocketFolder } from './create-socket-folder.ts';
 import { killProcessGroup } from './kill-process-group.ts';
@@ -37,14 +38,10 @@ export interface LaunchHost {
   readonly runProcess: (request: ProcessRequest) => Promise<ProcessResult>;
 }
 
-// setpriv asks the kernel to kill the app when the supervisor dies; hosts without setpriv, such as
-// macOS, run the app without that guard. The app gets a process group of its own, so a stop can
-// signal every process it started.
+// The app gets a process group of its own, so a stop can signal every process it started.
 export function readLaunchHost(): LaunchHost {
-  const guard = Bun.which('setpriv') === null ? [] : ['setpriv', '--pdeathsig', 'KILL', '--'];
-
   return {
-    guard,
+    guard: buildLaunchGuard(Bun.which('setpriv')),
     cwd: process.cwd(),
     env: { ...process.env },
     spawnApp: (argv, options) =>
