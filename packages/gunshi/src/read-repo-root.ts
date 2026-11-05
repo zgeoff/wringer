@@ -16,7 +16,8 @@ export async function readRepoRoot(cwd: string): Promise<string | WringerError> 
     });
   }
 
-  return result.stdout.trim();
+  // A folder name may end in a space, so only git's own line end goes.
+  return result.stdout.replace(/\n$/u, '');
 }
 
 // A git that fails to start, or a folder that does not exist, fails the run with an environment
