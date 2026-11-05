@@ -60,6 +60,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const stopping = new Set<string>();
 
+  // Each part a failed startup tried to stop and could not. The startup's error never reaches the
+  // stop that cancelled it, so the stop takes these from here.
+  const startupLeftovers: string[] = [];
+
   // Names each part whose stop failed. A part is marked before its stop starts, so two calls never
   // stop the same part.
   const stopStarted = async (): Promise<readonly string[]> => {
@@ -88,19 +92,21 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     const appFailures = await runCleanups(appCleanups, options.stopWaitMs);
     const serviceFailures = await runCleanups(serviceCleanups, options.stopWaitMs);
 
-    return [...appFailures, ...serviceFailures];
+    return [...startupLeftovers.splice(0), ...appFailures, ...serviceFailures];
   };
 
   // Every cleanup runs, even after one fails, and the supervisor ends even when the final log write
   // fails. A failed cleanup or log write goes to the stop's caller, as a part may still be up.
   const shutDown = async (plan: ShutDownPlan): Promise<WringerError | null> => {
+    // The commands of a startup the stop gave up on end before the cleanups, so that startup settles
+    // early. A service that came up has left this signal, so its stop can still run a command.
+    if (plan.gaveUpOnStartup) {
+      startupCommands.abort();
+    }
+
     const failures = await stopStarted();
 
     const steps = buildShutDownSteps({ ...plan, failures, at: at() });
-
-    if (steps.abortStartupCommands) {
-      startupCommands.abort();
-    }
 
     if (steps.abortCommands) {
       serviceCommands.abort();
@@ -146,6 +152,9 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       signal: lifetime.signal,
       onCrash: (reason) => {
         void stop(reason);
+      },
+      onStopFailed: (reason) => {
+        startupLeftovers.push(`app: ${reason}`);
       },
     });
 
@@ -272,6 +281,7 @@ interface TargetStart {
   readonly readyTimeoutMs: number;
   readonly signal: AbortSignal;
   readonly onCrash: (reason: string) => void;
+  readonly onStopFailed: (reason: string) => void;
 }
 
 async function startTarget(target: TargetDefinition, start: TargetStart): Promise<Launch> {
@@ -283,6 +293,7 @@ async function startTarget(target: TargetDefinition, start: TargetStart): Promis
       readyTimeoutMs: start.readyTimeoutMs,
       signal: start.signal,
       onCrash: start.onCrash,
+      onStopFailed: start.onStopFailed,
     });
   }
 

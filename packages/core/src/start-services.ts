@@ -1,8 +1,10 @@
 import { buildServiceKey } from './build-service-key.ts';
 import { collectDriverConfigs } from './collect-driver-configs.ts';
+import { findCollidingServiceKey } from './find-colliding-service-key.ts';
 import { makeDriverExec } from './make-fenced-exec.ts';
 import type { Endpoints } from './run-events.ts';
 import type { RunHandle, ServiceInstance, TargetDefinition, Wringer } from './types.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface ServicesRequest {
   readonly wringer: Wringer;
@@ -30,6 +32,16 @@ export async function startServices(request: ServicesRequest): Promise<void> {
     endpoints: request.endpoints,
     run: request.run,
   });
+
+  // A second service under one key would replace the first in `started`, so no stop reaches it.
+  const collision = findCollidingServiceKey(entries);
+
+  if (collision !== null) {
+    throw new WringerError('usage', {
+      message: `Two driver services share the key ${collision}.`,
+      hint: 'Rename a driver or a service, so each `<driver>/<service>` key names one service.',
+    });
+  }
 
   for (const entry of entries) {
     for (const service of entry.serviceNames) {

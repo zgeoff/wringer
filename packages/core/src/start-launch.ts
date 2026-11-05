@@ -15,6 +15,9 @@ export interface LaunchRequest {
   readonly readyTimeoutMs: number;
   readonly signal: AbortSignal;
   readonly onCrash: (reason: string) => void;
+
+  // Takes why the stop of an app that never got ready failed, as the app may still be up.
+  readonly onStopFailed: (reason: string) => void;
 }
 
 export interface Launch {
@@ -158,9 +161,12 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
     // The startup failure stays the error; the failed stop adds what may still hold the app.
     const cause = toWringerError(error);
+    const stopFailure = toWringerError(stopped.reason).message;
+
+    request.onStopFailed(stopFailure);
 
     throw new WringerError(cause.code, {
-      message: `${cause.message} ${toWringerError(stopped.reason).message}`,
+      message: `${cause.message} ${stopFailure}`,
       ...(cause.hint === undefined ? {} : { hint: cause.hint }),
     });
   } finally {

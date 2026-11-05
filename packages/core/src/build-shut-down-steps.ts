@@ -13,8 +13,6 @@ export interface ShutDownFacts {
 }
 
 export interface ShutDownSteps {
-  // Ends the commands the startup still runs, so a startup the stop gave up on stops early.
-  readonly abortStartupCommands: boolean;
   readonly abortCommands: boolean;
   readonly events: readonly RunEvent[];
 
@@ -49,7 +47,6 @@ export function buildShutDownSteps(facts: ShutDownFacts): ShutDownSteps {
         });
 
   return {
-    abortStartupCommands: facts.gaveUpOnStartup,
     abortCommands: !facts.gaveUpOnStartup,
     events: [event],
     failure,

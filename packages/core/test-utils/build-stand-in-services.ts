@@ -1,11 +1,11 @@
-import { readFile } from 'node:fs/promises';
 import type { ServiceContext, ServiceInstance } from '../src/types.ts';
 import { WringerError } from '../src/wringer-error.ts';
 
-export interface StandInGates {
+export interface StandInDependencies {
   readonly stop: Promise<unknown>;
   readonly start: Promise<unknown>;
   readonly hold: Promise<unknown>;
+  readonly readLog: (path: string) => Promise<string>;
 }
 
 type StandInContext = Pick<ServiceContext<unknown, unknown>, 'exec' | 'run'>;
@@ -42,7 +42,7 @@ export interface StandInServices {
 }
 
 // Services that each stand for one way a real service can behave at a run's start and stop.
-export function buildStandInServices(gates: StandInGates): StandInServices {
+export function buildStandInServices(dependencies: StandInDependencies): StandInServices {
   const calls: string[] = [];
 
   return {
@@ -54,7 +54,7 @@ export function buildStandInServices(gates: StandInGates): StandInServices {
           stop: async () => {
             calls.push('store');
 
-            await gates.stop;
+            await dependencies.stop;
 
             throw new WringerError('environment', { message: 'The store kept its lock.' });
           },
@@ -62,7 +62,7 @@ export function buildStandInServices(gates: StandInGates): StandInServices {
     },
     queue: {
       start: async () => {
-        await gates.start;
+        await dependencies.start;
 
         return {
           methods: {},
@@ -99,7 +99,7 @@ export function buildStandInServices(gates: StandInGates): StandInServices {
         Promise.resolve({
           methods: {},
           stop: async () => {
-            const log = await readFile(ctx.run.childLog('app').path, 'utf8');
+            const log = await dependencies.readLog(ctx.run.childLog('app').path);
 
             calls.push(...log.trimEnd().split('\n'));
           },
@@ -112,7 +112,7 @@ export function buildStandInServices(gates: StandInGates): StandInServices {
             hold: async () => {
               calls.push('hold');
 
-              await gates.hold;
+              await dependencies.hold;
 
               return null;
             },
