@@ -17,6 +17,7 @@ import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
+import { pickContextTarget } from './pick-context-target.ts';
 import { pickDriveKind } from './pick-drive-kind.ts';
 import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
@@ -82,7 +83,7 @@ export async function dispatch(
   const stateDir = join(session.root, wringer.stateDir);
   const state = session.state;
 
-  const read = await readContext(wringer, state, session).catch((error: unknown) =>
+  const read = await readContext(wringer, path, state, session).catch((error: unknown) =>
     toWringerError(error),
   );
 
@@ -135,7 +136,7 @@ export async function dispatch(
     }
   }
 
-  const after = await readContext(wringer, state, session).catch(() => before);
+  const after = await readContext(wringer, path, state, session).catch(() => before);
   const bound = await readBoundRun(state, trace.boundRun);
 
   const settled = pickEnvelopeContext(before, after, trace.ranOnRun);
@@ -212,6 +213,7 @@ interface CommandContext {
 
 async function readContext(
   wringer: Wringer,
+  path: readonly string[],
   state: StatePort,
   session: Session,
 ): Promise<CommandContext> {
@@ -229,8 +231,13 @@ async function readContext(
 
   const pointers = await state.readPointers();
 
-  const [firstTarget = ''] = wringer.targets.keys();
-  const targetName = session.target ?? pointers.target ?? firstTarget;
+  const targetName = pickContextTarget({
+    targetNames: [...wringer.targets.keys()],
+    sessionTarget: session.target,
+    savedTarget: pointers.target,
+    commandKey: path.join(' '),
+  });
+
   const target = getTarget(wringer, targetName);
   const runID = findOwnValue(pointers.currentRun, targetName);
   const run = runID === undefined ? undefined : await state.readRun(runID);
