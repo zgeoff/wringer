@@ -1,4 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { once } from 'node:events';
+import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
@@ -7,12 +9,28 @@ import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { runGit } from '../run-git.ts';
-import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
+
+  // It closes each connection once the request arrives, as a supervisor that dies mid-call does.
+  const brokenSocket = join(shop.repo.root, 'broken.sock');
+
+  const broken = createServer((connection) => {
+    connection.once('data', () => {
+      connection.destroy();
+    });
+  });
+
+  broken.listen(brokenSocket);
+
+  onTestFinished(() => {
+    broken.close();
+  });
+
+  await once(broken, 'listening');
 
   return {
     root: shop.repo.root,
@@ -49,8 +67,8 @@ async function setupTest() {
     runWithClock: (target: string, path: readonly string[], now: () => Date) =>
       dispatch(wringer, path, {}, { ...shop.session, target, now }),
 
-    // The supervisor's own stop fails as if its socket broke mid-call, while every other call and
-    // the start go through.
+    // The supervisor's own stop goes to the socket that closes mid-call, while every other call
+    // and the start reach the run's supervisor.
     runWithFailingStop: (target: string, path: readonly string[], timeoutMs: number) =>
       dispatch(
         wringer,
@@ -62,10 +80,12 @@ async function setupTest() {
           timeoutMs,
           supervisor: {
             start: shop.session.supervisor.start,
-            call: (call) =>
-              call.request.method === 'stop'
-                ? Promise.reject(new WringerError('environment', { message: 'The socket broke.' }))
-                : shop.session.supervisor.call(call),
+            call: (call) => {
+              const routed =
+                call.request.method === 'stop' ? { ...call, socket: brokenSocket } : call;
+
+              return shop.session.supervisor.call(routed);
+            },
           },
         },
       ),
@@ -289,7 +309,7 @@ test('#up logs a failed stop of the run it abandoned at its deadline to the run'
     at: expect.any(String),
     command: 'up',
     code: 'environment',
-    message: 'The socket broke.',
+    message: 'The supervisor closed the socket.',
   });
 });
 
