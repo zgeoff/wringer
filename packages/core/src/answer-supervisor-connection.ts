@@ -1,5 +1,6 @@
 import { createInterface } from 'node:readline';
 import type { Duplex } from 'node:stream';
+import { finished } from 'node:stream/promises';
 import { supervisorRequestSchema } from './supervisor-protocol.ts';
 import type { SupervisorRequest, SupervisorResponse } from './supervisor-protocol.ts';
 import { toWringerError } from './to-wringer-error.ts';
@@ -13,11 +14,13 @@ export interface SupervisorConnectionOptions {
   readonly onTransportError: (error: unknown) => void;
 }
 
-// Answers the first line, then ends the connection. The caller never awaits it, so every failure
-// is caught here.
+// Answers the first line, then ends the connection, and settles once the answer has flushed. Every
+// failure is caught here. When `closing` aborts, a connection that sent no request yet ends at once,
+// so it cannot keep the process alive.
 export async function answerSupervisorConnection(
   connection: Duplex,
   options: SupervisorConnectionOptions,
+  closing: AbortSignal,
 ): Promise<void> {
   let reported: unknown = null;
 
@@ -35,21 +38,44 @@ export async function answerSupervisorConnection(
   // A connection error with no listener is thrown, and would end the supervisor.
   connection.on('error', fail);
 
+  const lines = createInterface({ input: connection });
+
+  // readline re-emits the connection's errors, also after the loop below has stopped listening,
+  // such as an EPIPE once the caller left.
+  lines.on('error', fail);
+
+  let answering = false;
+
+  // A destroyed connection never ends the line loop, so the reader closes too.
+  const endIdle = (): void => {
+    if (!answering) {
+      lines.close();
+      connection.destroy();
+    }
+  };
+
+  closing.addEventListener('abort', endIdle, { once: true });
+
+  if (closing.aborted) {
+    endIdle();
+  }
+
   try {
-    const lines = createInterface({ input: connection });
-
-    // readline re-emits the connection's errors, also after the loop below has stopped listening,
-    // such as an EPIPE once the caller left.
-    lines.on('error', fail);
-
     for await (const line of lines) {
+      answering = true;
+
       const response = await answerLine(line, options.answerRequest);
 
       connection.end(`${response}\n`);
+
+      await finished(connection, { readable: false });
+
       break;
     }
   } catch (error) {
     fail(error);
+  } finally {
+    closing.removeEventListener('abort', endIdle);
   }
 }
 

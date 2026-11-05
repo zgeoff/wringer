@@ -1,10 +1,9 @@
 import { appendFile } from 'node:fs/promises';
-import type { Server } from 'node:net';
 import { createDirectory } from './create-directory.ts';
 import { createSocketFolder } from './create-socket-folder.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
-import type { SupervisorSocketOptions } from './listen-supervisor-socket.ts';
+import type { SupervisorSocket, SupervisorSocketOptions } from './listen-supervisor-socket.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runProcess } from './run-process.ts';
 import type { ProcessRequest, ProcessResult } from './run-process.ts';
@@ -33,7 +32,7 @@ export interface LaunchHost {
   // Returns the socket's path, in the temp folder when the preferred path is too long for a socket.
   readonly createSocketFolder: (preferredSocket: string) => Promise<string>;
   readonly removeDirectory: (path: string) => Promise<void>;
-  readonly listenSupervisorSocket: (options: SupervisorSocketOptions) => Promise<Server>;
+  readonly listenSupervisorSocket: (options: SupervisorSocketOptions) => Promise<SupervisorSocket>;
   readonly killProcessGroup: (pid: number, signal?: NodeJS.Signals) => void;
   readonly runProcess: (request: ProcessRequest) => Promise<ProcessResult>;
 }
