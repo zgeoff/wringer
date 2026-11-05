@@ -45,11 +45,7 @@ async function setupTest() {
         ...lines.slice(0, -1).flatMap((line) => parsePublishedEvent(line).errors),
         ...parsePublishedEnvelope(last).errors,
       ],
-      kinds: lines.map((line) => {
-        const parsed = eventLineSchema.safeParse(JSON.parse(line));
-
-        return parsed.success ? parsed.data.event : 'envelope';
-      }),
+      events: lines.slice(0, -1).map((line) => eventLineSchema.parse(JSON.parse(line)).event),
       envelope: envelopeSchema.parse(JSON.parse(last)),
     };
   };
@@ -140,8 +136,9 @@ test("it streams the doctor's check event before its envelope, each in the publi
 
   const result = await ctx.run('doctor', '--target', 'prod');
 
-  expect({ kinds: result.kinds, errors: result.errors }).toStrictEqual({
-    kinds: ['check', 'envelope'],
-    errors: [],
-  });
+  expect({
+    events: result.events,
+    last: result.envelope.command,
+    errors: result.errors,
+  }).toStrictEqual({ events: ['check'], last: 'doctor', errors: [] });
 });
