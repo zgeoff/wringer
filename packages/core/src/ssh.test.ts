@@ -249,3 +249,21 @@ test('it follows a remote command on a terminal as the read-only user, line by l
     logins: 'app_ro@app-host tty\n',
   });
 });
+
+test('it follows only the stdout of a remote command, though a terminal merges its stderr', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const lines: string[] = [];
+
+  await host.follow({
+    argv: ['sh', '-c', 'echo listening; echo "disk is slow" >&2; echo ready'],
+    access: 'read-write',
+    signal: new AbortController().signal,
+    onLine: (line) => {
+      lines.push(line);
+    },
+  });
+
+  expect(lines).toStrictEqual(['listening', 'ready']);
+});

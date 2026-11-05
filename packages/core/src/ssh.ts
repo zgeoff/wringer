@@ -100,14 +100,15 @@ export function ssh(options: SSHOptions): Host {
       const user = request.access === 'read-only' ? options.readOnlyUser : undefined;
 
       // Killing the local ssh leaves a plain remote command running, and an idle `tail -f` never
-      // notices. A forced terminal makes sshd hang it up; the terminal ends each line with `\r`.
+      // notices. A forced terminal makes sshd hang it up; the terminal ends each line with `\r`,
+      // and merges stderr into stdout, so the remote shell drops stderr before the terminal.
       return followProcess({
         argv: buildSSHArgv({
           binary: options.binary ?? 'ssh',
           destination: options.destination,
           user,
           terminal: true,
-          remote: buildRemoteCommand(request.argv, options.prefix ?? []),
+          remote: `${buildRemoteCommand(request.argv, options.prefix ?? [])} 2>/dev/null`,
         }),
         signal: request.signal,
         onLine: (line) => {
