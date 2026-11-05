@@ -119,6 +119,22 @@ test('it reads Postgres rows with their columns and their count', async () => {
   });
 });
 
+test.each([
+  { name: 'returns no rows', sql: 'select 1 as "2", 2 as "1" where false', rowCount: 0 },
+  { name: 'returns a row', sql: 'select 1 as "2", 2 as "1"', rowCount: 1 },
+])(
+  'it keeps the order of Postgres columns named like numbers in a read that $name',
+  async (row) => {
+    const ctx = await setupTest();
+    const result = await ctx.runQuery(row.sql);
+
+    expect({ columns: result.columns, rowCount: result.rowCount }).toStrictEqual({
+      columns: ['2', '1'],
+      rowCount: row.rowCount,
+    });
+  },
+);
+
 test('it names the columns of a Postgres read with a parameter that returns no rows', async () => {
   const ctx = await setupTest();
 
