@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { runProcess } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFakeSqlite3 } from './create-fake-sqlite3.ts';
 
@@ -27,25 +28,8 @@ async function setupTest() {
         database.run('insert into notes values (?)', [text]);
       }
     },
-    run: async (args: readonly string[], sql: string) => {
-      const child = Bun.spawn([program, ...args], {
-        stdin: Buffer.from(sql),
-        stdout: 'pipe',
-        stderr: 'pipe',
-      });
-
-      onTestFinished(() => {
-        child.kill();
-      });
-
-      const [stdout, stderr, exitCode] = await Promise.all([
-        new Response(child.stdout).text(),
-        new Response(child.stderr).text(),
-        child.exited,
-      ]);
-
-      return { exitCode, stdout, stderr };
-    },
+    run: (args: readonly string[], sql: string) =>
+      runProcess({ argv: [program, ...args], stdin: sql }),
   };
 }
 
