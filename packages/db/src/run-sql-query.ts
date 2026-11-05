@@ -4,13 +4,15 @@ import { WringerError } from '@wringer/core';
 import type { SQL } from 'bun';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import { buildPostgresResult } from './build-postgres-result.ts';
 import { rowSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
 import { initialCancelState, pickCancelStep } from './pick-cancel-step.ts';
 import type { CancelEvent } from './pick-cancel-step.ts';
+import { pickStatementTimeoutStep } from './pick-statement-timeout-step.ts';
 
 // A write opens an existing file read-write, so a mistyped path fails, never makes a new database.
-export type SqliteMode = 'readonly' | 'readwrite';
+type SqliteMode = 'readonly' | 'readwrite';
 
 // The database clients, and the clock and timer the driver reads its deadlines and retries from.
 export interface SQLClients {
@@ -104,8 +106,7 @@ interface QueryProgress {
 }
 
 // A Postgres query the deadline cuts off is cancelled in the database, so a write that timed out
-// can never commit after the caller has moved on. Bun.SQL reports no column names for an empty
-// result, so the columns come from the first row.
+// can never commit after the caller has moved on.
 async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Promise<DbResult> {
   const sessionName = `wringer-${randomUUID()}`;
   const client = clients.openPostgres(input.url, sessionName);
@@ -120,30 +121,29 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
     // it, so the deadline is checked once the connection is up, and the cancel listens from then.
     await client.connect();
 
-    const leftMs = Math.floor(input.timeLeftMs());
+    input.signal.addEventListener('abort', cancel, { once: true });
 
-    if (input.signal.aborted || leftMs < 1) {
+    // A cancel needs a second connection, which a role's connection limit refuses while this one
+    // runs, so the database also stops the statement at the deadline on this connection.
+    let step = pickStatementTimeoutStep(null, input.signal.aborted, input.timeLeftMs());
+
+    while (step.kind === 'set') {
+      await client.unsafe("select set_config('statement_timeout', $1, false)", [
+        String(step.timeoutMs),
+      ]);
+
+      step = pickStatementTimeoutStep(step.timeoutMs, input.signal.aborted, input.timeLeftMs());
+    }
+
+    if (step.kind === 'expired') {
       throw new WringerError('timeout', {
         message: 'The query ran past its deadline before it started.',
       });
     }
 
-    input.signal.addEventListener('abort', cancel, { once: true });
-
-    // A cancel needs a second connection, which a role's connection limit refuses while this one
-    // runs, so the database also stops the statement at the deadline on this connection.
-    await client.unsafe("select set_config('statement_timeout', $1, false)", [String(leftMs)]);
-
     const result: unknown = await runPostgresStatement(client, input);
 
-    const rows = rowsSchema.parse(result);
-    const count = readAffectedCount(result);
-
-    return {
-      columns: Object.keys(rows[0] ?? {}),
-      rows,
-      rowCount: input.write && count !== null ? count : rows.length,
-    };
+    return buildPostgresResult(result, input.write);
   } finally {
     progress.settled = true;
 
@@ -254,12 +254,4 @@ function runPostgresStatement(client: SQL, input: SQLQueryInput): Promise<unknow
   }
 
   return client.begin('read only', (transaction) => start(transaction));
-}
-
-// Bun.SQL puts the count of rows a write changed on the result array as `count`.
-function readAffectedCount(result: unknown): number | null {
-  const count: unknown =
-    typeof result === 'object' && result !== null ? Reflect.get(result, 'count') : null;
-
-  return typeof count === 'number' ? count : null;
 }

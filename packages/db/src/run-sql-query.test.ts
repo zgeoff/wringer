@@ -6,8 +6,9 @@ import { SQL } from 'bun';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
+import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
-import type { SqliteMode } from './run-sql-query.ts';
+import type { SQLClients } from './run-sql-query.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-sql-query');
@@ -32,19 +33,24 @@ async function setupTest() {
   const waits: number[] = [];
 
   // The cancel loop's waits end at once, so a retry takes no real time.
-  const clients = {
-    openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
-    openPostgres: (url: string, sessionName: string) =>
-      new SQL(url, { max: 1, connection: { application_name: sessionName } }),
-    reportCancelFailure: (message: string) => {
+  const clients: SQLClients = {
+    ...createSQLClients(),
+    reportCancelFailure: (message) => {
       cancelFailures.push(message);
     },
-    now: () => Date.now(),
-    wait: (delayMs: number) => {
+    wait: (delayMs) => {
       waits.push(delayMs);
 
       return Promise.resolve();
     },
+  };
+
+  // The fake records a statement at its Parse message, which Bun.SQL skips for a statement it has
+  // prepared already, so this client prepares none and a repeated statement shows each time.
+  const unpreparedClients: SQLClients = {
+    ...clients,
+    openPostgres: (url, sessionName) =>
+      new SQL(url, { max: 1, prepare: false, connection: { application_name: sessionName } }),
   };
 
   return {
@@ -60,7 +66,7 @@ async function setupTest() {
         params?: readonly unknown[];
         write?: boolean;
         signal?: AbortSignal;
-        timeLeftMs?: number;
+        timeLeftMs?: () => number;
       } = {},
     ) =>
       runSQLQuery(
@@ -71,9 +77,22 @@ async function setupTest() {
           params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
-          timeLeftMs: () => options.timeLeftMs ?? 60_000,
+          timeLeftMs: options.timeLeftMs ?? (() => 60_000),
         },
         clients,
+      ),
+    runUnpreparedPostgresWrite: (sql: string, timeLeftMs: () => number) =>
+      runSQLQuery(
+        {
+          adapter: 'postgres',
+          url: postgres.url,
+          sql,
+          params: [],
+          write: true,
+          signal: new AbortController().signal,
+          timeLeftMs,
+        },
+        unpreparedClients,
       ),
     runOnRefusingPostgres: (sql: string, signal: AbortSignal) =>
       runSQLQuery(
@@ -166,13 +185,53 @@ test('it refuses a Postgres write that has no time left once its connection is u
   const ctx = await setupTest();
 
   const failure = await ctx
-    .runPostgresQuery("insert into notes (text) values ('late')", { write: true, timeLeftMs: 0 })
+    .runPostgresQuery("insert into notes (text) values ('late')", {
+      write: true,
+      timeLeftMs: () => 0,
+    })
     .catch((error: unknown) => error);
 
   expect({ failure, statements: ctx.postgresStatements }).toStrictEqual({
     failure: expect.objectContaining({ code: 'timeout' }),
     statements: [],
   });
+});
+
+test('it refuses a Postgres write whose deadline passed while its timeout was set, and sends only the timeout', async () => {
+  const ctx = await setupTest();
+
+  const timesLeftMs = [60_000, 0];
+
+  const failure = await ctx
+    .runPostgresQuery("insert into notes (text) values ('late')", {
+      write: true,
+      timeLeftMs: () => timesLeftMs.shift() ?? 0,
+    })
+    .catch((error: unknown) => error);
+
+  expect({ failure, statements: ctx.postgresStatements }).toStrictEqual({
+    failure: expect.objectContaining({ code: 'timeout' }),
+    statements: [
+      { protocol: 'extended', sql: "select set_config('statement_timeout', $1, false)" },
+    ],
+  });
+});
+
+test('it sets the Postgres timeout again from the time left after a slow round trip', async () => {
+  const ctx = await setupTest();
+
+  const timesLeftMs = [60_000, 1000, 1000];
+
+  await ctx.runUnpreparedPostgresWrite(
+    "insert into notes (text) values ('late')",
+    () => timesLeftMs.shift() ?? 0,
+  );
+
+  expect(ctx.postgresStatements).toStrictEqual([
+    { protocol: 'extended', sql: "select set_config('statement_timeout', $1, false)" },
+    { protocol: 'extended', sql: "select set_config('statement_timeout', $1, false)" },
+    { protocol: 'extended', sql: "insert into notes (text) values ('late')" },
+  ]);
 });
 
 test.each([
