@@ -8,6 +8,9 @@ export const supervisorRequestSchema = z.strictObject({
   service: z.string(),
   method: z.string(),
   args: z.unknown(),
+
+  // The caller's deadline, in ms since the epoch. A call to the supervisor itself has none.
+  deadlineAt: z.number().optional(),
 });
 
 export type SupervisorRequest = z.infer<typeof supervisorRequestSchema>;

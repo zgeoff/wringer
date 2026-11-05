@@ -86,7 +86,12 @@ export function openDrive(request: DriveRequest): Drive {
           call: (method, args) =>
             request.callSupervisor({
               socket: getSocket(request.run),
-              request: { service: buildServiceKey(entry.name, service), method, args },
+              request: {
+                service: buildServiceKey(entry.name, service),
+                method,
+                args,
+                deadlineAt: request.deadlineAt,
+              },
               signal: request.signal,
             }),
         }),

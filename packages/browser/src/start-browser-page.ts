@@ -30,6 +30,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
   const pageActor = createActor(browserPageMachine, {
     input: {
       page: runPage.firstPage,
+      closePage: (stale: Page) => stale.close(),
       reopen: (stale: Page) => reopenPage(stale, runPage.openPage, options.reportError),
     },
   });
@@ -157,9 +158,6 @@ async function reopenPage(
   reportError: (message: string) => void,
 ): Promise<Page> {
   const url = pickReopenURL(stale.url());
-
-  // The stale page closes first, so its action cannot land while the new page opens.
-  await stale.close();
 
   const page = await openPage();
 

@@ -3,6 +3,7 @@ import { chromium } from 'playwright-core';
 import type { Browser } from 'playwright-core';
 import { createContextRefusingBrowser } from '../test-utils/create-context-refusing-browser.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
+import { createSlowClosingBrowser } from '../test-utils/create-slow-closing-browser.ts';
 import { startBrowserPage } from './start-browser-page.ts';
 
 function setupTest() {
@@ -154,6 +155,27 @@ test('it runs a command queued behind a timed-out click on the reopened page', a
   expect({ status: clicked.status, posts: ctx.posts }).toStrictEqual({
     status: 'fulfilled',
     posts: ['/api/restock'],
+  });
+});
+
+test('it fails a cancelled command only once its page has closed', async () => {
+  const ctx = setupTest();
+
+  const launched = await createSlowClosingBrowser(500);
+
+  onTestFinished(() => launched.browser.close());
+
+  const service = await ctx.startPageOn(launched.slow);
+
+  await service.methods['goto']?.({ url: ctx.url }, new AbortController().signal);
+
+  const [clicked] = await Promise.allSettled([
+    service.methods['click']?.({ role: 'button', name: 'Restock' }, AbortSignal.timeout(300)),
+  ]);
+
+  expect({ clicked, staleClosed: launched.pages[0]?.isClosed() }).toStrictEqual({
+    clicked: { status: 'rejected', reason: expect.objectContaining({ code: 'timeout' }) },
+    staleClosed: true,
   });
 });
 

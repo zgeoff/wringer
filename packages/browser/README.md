@@ -52,9 +52,9 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 
 The doctor check `browser.launched` fails when the browser has closed.
 
-When a command's deadline passes during a browser action, the driver closes the page under the
-action, so a late click never lands. The next command finds a new page at the same URL, without the
-input the old page held.
+One second before a command's deadline, the driver closes the page under a browser action that is
+still running, and the command fails only once the page has closed, so a late click never lands. The
+next command finds a new page at the same URL, without the input the old page held.
 
 ## Snapshots and refs
 

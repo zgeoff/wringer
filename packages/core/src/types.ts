@@ -101,8 +101,8 @@ export interface ServiceContext<Options, TargetConfig> {
   readonly signal: AbortSignal;
 }
 
-// A method's signal aborts when the caller stops waiting, such as at its deadline, so the method can
-// stop work that would otherwise land after the caller reported a timeout.
+// A method's signal aborts one second before the caller's deadline, or when the caller stops
+// waiting, so the method can stop its work before the caller reports a timeout.
 export type ServiceMethod = (args: unknown, signal: AbortSignal) => Promise<unknown>;
 
 export interface ServiceInstance {

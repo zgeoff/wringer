@@ -16,6 +16,9 @@ export interface PageCommand {
 
 interface PageInput {
   readonly page: Page;
+  readonly closePage: (stale: Page) => Promise<void>;
+
+  // Opens a new page at the stale page's URL.
   readonly reopen: (stale: Page) => Promise<Page>;
 }
 
@@ -33,8 +36,8 @@ type PageEvent =
 const pageTypes: { context?: PageContext; events?: PageEvent; input?: PageInput } = {};
 
 // One page serves every command of a run, one command at a time. Playwright cannot cancel one
-// action, so a command whose caller stops waiting gets its page closed and replaced at the same URL
-// before the next command starts; a command whose deadline passed in the queue never starts.
+// action, so a cancelled command fails only once its page has closed, and a new page at the same
+// URL opens before the next command starts; a command cancelled in the queue never starts.
 export const browserPageMachine = setup({
   types: pageTypes,
   actors: {
@@ -51,6 +54,11 @@ export const browserPageMachine = setup({
       return () => {
         args.input.signal.removeEventListener('abort', onAbort);
       };
+    }),
+    closePage: fromPromise<null, Pick<PageInput, 'page' | 'closePage'>>(async (args) => {
+      await args.input.closePage(args.input.page);
+
+      return null;
     }),
     reopenPage: fromPromise<Page, Pick<PageInput, 'page' | 'reopen'>>((args) =>
       args.input.reopen(args.input.page),
@@ -141,9 +149,22 @@ export const browserPageMachine = setup({
       ],
       on: {
         run: { actions: 'enqueue' },
-        abort: { target: 'reopening', actions: ['abandonHead', 'dequeue'] },
+        abort: 'closing',
         stop: 'stopped',
       },
+    },
+    closing: {
+      invoke: {
+        // oxlint-disable-next-line zgeoff/no-abbreviated-names -- xstate names this key `src`
+        src: 'closePage',
+        input: (args) => ({ page: args.context.page, closePage: args.context.closePage }),
+        onDone: { target: 'reopening', actions: ['abandonHead', 'dequeue'] },
+        onError: {
+          target: 'broken',
+          actions: assign({ failure: (args) => toCloseFailure(args.event.error) }),
+        },
+      },
+      on: { run: { actions: 'enqueue' }, stop: 'stopped' },
     },
     reopening: {
       invoke: {
@@ -186,6 +207,13 @@ function getHead(context: PageContext): PageCommand {
   }
 
   return head;
+}
+
+function toCloseFailure(error: unknown): WringerError {
+  return new WringerError('environment', {
+    message: `The browser could not close the page of a cancelled command: ${String(error)}`,
+    hint: 'Run `up --restart` to start a new browser.',
+  });
 }
 
 function toReopenFailure(error: unknown): WringerError {

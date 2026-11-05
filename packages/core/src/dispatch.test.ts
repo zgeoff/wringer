@@ -598,11 +598,19 @@ test("it reaches a driver's service through the session's supervisor port", asyn
 
   await ctx.run('local', ['up']);
   await ctx.run('local', ['doctor']);
+
+  const calledAtMs = Date.now();
+
   await ctx.runRecordingCalls(['shelf']);
 
   expect(ctx.supervisorCalls).toHaveBeenCalledWith(
     expect.objectContaining({
-      request: { service: 'notes/store', method: 'list', args: null },
+      request: {
+        service: 'notes/store',
+        method: 'list',
+        args: null,
+        deadlineAt: expect.toBeWithin(calledAtMs, calledAtMs + 3_600_000),
+      },
     }),
   );
 });
