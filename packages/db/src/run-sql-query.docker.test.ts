@@ -47,13 +47,16 @@ async function setupTest() {
 
       return rows.length > 0 ? true : null;
     },
-    runQuery: (sql: string, options: { write?: boolean; signal?: AbortSignal } = {}) =>
+    runQuery: (
+      sql: string,
+      options: { write?: boolean; signal?: AbortSignal; params?: readonly unknown[] } = {},
+    ) =>
       runSQLQuery(
         {
           adapter: 'postgres',
           url: postgres.url,
           sql,
-          params: [],
+          params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
         },
@@ -74,6 +77,13 @@ test('it reads Postgres rows with their columns and their count', async () => {
     rows: [{ id: 2, text: 'ship' }],
     rowCount: 1,
   });
+});
+
+test('it binds a parameter into a Postgres read', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runQuery('select $1::text as label', { params: ['parcel'] });
+
+  expect(result).toStrictEqual({ columns: ['label'], rows: [{ label: 'parcel' }], rowCount: 1 });
 });
 
 test('it counts the rows a Postgres write changed', async () => {
