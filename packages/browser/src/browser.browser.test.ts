@@ -223,13 +223,22 @@ test('it refuses typing on a read-only target with exit code 3 and the target hi
     value: 'buyer@shop.example',
   });
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+  const after = await ctx.run('prod', ['browser', 'snapshot']);
+
+  expect({
+    exitCode: result.exitCode,
+    error: result.envelope.error,
+    after: after.envelope.data,
+  }).toStrictEqual({
     exitCode: 3,
     error: {
       code: 'read-only',
       message: '`browser type` is a write, and target prod is read-only.',
       hint: 'prod is read-only: place the order on local.',
     },
+    after: expect.objectContaining({
+      snapshot: expect.stringMatching(/textbox "Email"[^\n]*\[ref=e\d+\]$/mu),
+    }),
   });
 });
 
@@ -240,14 +249,22 @@ test('it refuses typing inside an action that declared a read, at the client cal
   await ctx.run('prod', ['doctor']);
 
   const result = await ctx.run('prod', ['action', 'sneak-email']);
+  const after = await ctx.run('prod', ['browser', 'snapshot']);
 
-  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+  expect({
+    exitCode: result.exitCode,
+    error: result.envelope.error,
+    after: after.envelope.data,
+  }).toStrictEqual({
     exitCode: 3,
     error: {
       code: 'read-only',
       message: 'type on textbox "Email" is a write, and the target is read-only.',
       hint: 'prod is read-only: place the order on local.',
     },
+    after: expect.objectContaining({
+      snapshot: expect.stringMatching(/textbox "Email"[^\n]*\[ref=e\d+\]$/mu),
+    }),
   });
 });
 
