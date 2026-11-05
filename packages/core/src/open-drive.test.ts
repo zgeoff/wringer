@@ -8,6 +8,12 @@ import { dispatch } from './dispatch.ts';
 import { local } from './local.ts';
 
 async function setupTest() {
+  let nowMs = Date.parse('2026-11-05T09:00:00.000Z');
+
+  const advanceClock = (stepMs: number): void => {
+    nowMs += stepMs;
+  };
+
   // Its client reports the time its session has left.
   const clock = defineDriver({
     name: 'clock',
@@ -17,8 +23,10 @@ async function setupTest() {
   });
 
   const bound = bindDrivers([clock({})] as const);
-  const leftSchema = z.strictObject({ leftMs: z.number() });
+  const readingsSchema = z.strictObject({ leftMs: z.array(z.number()) });
 
+  // The action reads the time left, moves the clock 2 s, reads again, then moves it past the
+  // deadline and reads once more.
   const wringer = createWringer({ name: 'shop' })
     .use(...bound.drivers)
     .target(
@@ -33,11 +41,23 @@ async function setupTest() {
     .action(
       bound.defineAction({
         name: 'left',
-        summary: 'Report the time left',
+        summary: 'Report the time left as the clock moves',
         effect: 'read',
         input: z.strictObject({}),
-        data: leftSchema,
-        run: async (_input, ctx) => ({ leftMs: await ctx.drivers.clock.readTimeLeft() }),
+        data: readingsSchema,
+        run: async (_input, ctx) => {
+          const first = await ctx.drivers.clock.readTimeLeft();
+
+          advanceClock(2000);
+
+          const second = await ctx.drivers.clock.readTimeLeft();
+
+          advanceClock(4000);
+
+          const third = await ctx.drivers.clock.readTimeLeft();
+
+          return { leftMs: [first, second, third] };
+        },
       }),
     )
     .build();
@@ -46,12 +66,17 @@ async function setupTest() {
 
   return {
     run: (path: readonly string[], timeoutMs?: number) =>
-      dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
-    parseLeft: (data: unknown) => leftSchema.parse(data).leftMs,
+      dispatch(
+        wringer,
+        path,
+        {},
+        { ...shop.session, target: 'box', timeoutMs, now: () => new Date(nowMs) },
+      ),
+    parseReadings: (data: unknown) => readingsSchema.parse(data).leftMs,
   };
 }
 
-test('it gives a driver session the time left before the command deadline', async () => {
+test('it gives a driver session the time left before the deadline, down to zero past it', async () => {
   const ctx = await setupTest();
 
   await ctx.run(['attach']);
@@ -59,5 +84,5 @@ test('it gives a driver session the time left before the command deadline', asyn
 
   const result = await ctx.run(['action', 'left'], 5000);
 
-  expect(ctx.parseLeft(result.envelope.data)).toBeWithin(4000, 5001);
+  expect(ctx.parseReadings(result.envelope.data)).toStrictEqual([5000, 3000, 0]);
 });
