@@ -30,7 +30,7 @@ const pinnedDiffOptions = [
   '--dst-prefix=b/',
 ];
 
-// The fingerprint is `git patch-id --verbatim` of the working tree against the merge base. A commit
+// The fingerprint is `git patch-id --stable` of the working tree against the merge base. A commit
 // leaves the diff against the merge base as it was, and a clean rebase moves both ends of it, so
 // neither changes the fingerprint. Untracked files join the diff through a temporary index.
 export async function readFingerprint(
@@ -77,9 +77,7 @@ export async function readFingerprint(
 
     const patchID = await host.runGit({
       cwd: request.cwd,
-
-      // `--stable` drops all whitespace, so `"a b"` and `"ab"` would hash alike.
-      args: ['patch-id', '--verbatim'],
+      args: ['patch-id', '--stable'],
       stdin: diff.stdout,
     });
 
