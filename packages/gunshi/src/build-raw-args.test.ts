@@ -1,55 +1,50 @@
 import { expect, test } from 'bun:test';
+import { extraWordsArg } from './build-positional-args.ts';
 import { buildRawArgs } from './build-raw-args.ts';
 
-test('it passes only the flags the caller gave, so the schema defaults fill the rest', () => {
-  const raw = buildRawArgs({ sku: { type: 'string' }, count: { type: 'number', default: 1 } }, [], {
-    values: { sku: 'mug', count: 1 },
-    explicit: { sku: true, count: false },
-    words: [],
-  });
+test('it passes only the arguments the caller gave, so the schema defaults fill the rest', () => {
+  const raw = buildRawArgs(
+    { sku: { type: 'string' }, count: { type: 'number', default: 1 } },
+    { values: { sku: 'mug', count: 1 }, explicit: { sku: true, count: false }, rest: [] },
+  );
 
   expect(raw).toStrictEqual({ sku: 'mug' });
 });
 
-test('it fills the positionals in declared order, the list taking the words left', () => {
+test('it adds the words after `--` to the list positional', () => {
   const raw = buildRawArgs(
-    {},
-    [
-      { name: 'host', type: 'string', list: false },
-      { name: 'argv', type: 'string', list: true },
-    ],
-    { values: {}, explicit: {}, words: ['web-1', 'ls', '-la', '/srv'] },
+    {
+      host: { type: 'positional' },
+      argv: { type: 'positional', multiple: true },
+      [extraWordsArg]: { type: 'positional', multiple: true },
+    },
+    {
+      values: { host: 'web-1', argv: ['ls'] },
+      explicit: { host: true, argv: true },
+      rest: ['-la', '/srv'],
+    },
   );
 
   expect(raw).toStrictEqual({ host: 'web-1', argv: ['ls', '-la', '/srv'] });
 });
 
-test('it converts the words of number and boolean positionals', () => {
+test('it gives the words after `--` to a list positional that took no other word', () => {
   const raw = buildRawArgs(
-    {},
-    [
-      { name: 'count', type: 'integer', list: false },
-      { name: 'force', type: 'boolean', list: false },
-      { name: 'sizes', type: 'number', list: true },
-    ],
-    { values: {}, explicit: {}, words: ['3', 'true', '1.5', 'large'] },
+    { argv: { type: 'positional', multiple: true } },
+    { values: {}, explicit: {}, rest: ['tool', '--human'] },
   );
 
-  expect(raw).toStrictEqual({ count: 3, force: true, sizes: [1.5, 'large'] });
+  expect(raw).toStrictEqual({ argv: ['tool', '--human'] });
 });
 
-test('it leaves a positional with no word out, for the schema to require or default', () => {
-  const raw = buildRawArgs({}, [{ name: 'file', type: 'string', list: false }], {
-    values: {},
-    explicit: {},
-    words: [],
-  });
-
-  expect(raw).toStrictEqual({});
-});
-
-test('it refuses a word no positional takes', () => {
-  expect(() => buildRawArgs({}, [], { values: {}, explicit: {}, words: ['prod'] })).toThrow(
-    expect.objectContaining({ code: 'usage' }),
-  );
+test.each([
+  { name: 'a word no positional takes', values: { [extraWordsArg]: ['prod'] }, rest: [] },
+  { name: 'a word after `--` with no list positional', values: {}, rest: ['prod'] },
+])('it refuses $name', (row) => {
+  expect(() =>
+    buildRawArgs(
+      { [extraWordsArg]: { type: 'positional', multiple: true } },
+      { values: row.values, explicit: {}, rest: row.rest },
+    ),
+  ).toThrow(expect.objectContaining({ code: 'usage' }));
 });

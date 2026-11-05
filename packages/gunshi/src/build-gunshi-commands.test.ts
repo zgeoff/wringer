@@ -2,6 +2,7 @@ import { expect, mock, test } from 'bun:test';
 import { createDemoWringer } from '../test-utils/create-demo-wringer.ts';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
+import { extraWordsArg } from './build-positional-args.ts';
 
 test('it nests each command under the words of its path', () => {
   const commands = buildGunshiCommands(
@@ -32,7 +33,7 @@ test('it marks a command that decides its effect by its arguments as a read or a
   expect(commands['ship']?.description).toBe('Ship an order by post or for pickup [read or write]');
 });
 
-test('it gives every command the global flags', () => {
+test('it gives every command the global flags and a hidden home for extra words', () => {
   const commands = buildGunshiCommands(
     createDemoWringer(),
     mock<(invocation: Invocation) => void>(),
@@ -44,5 +45,19 @@ test('it gives every command the global flags', () => {
     'timeoutMs',
     'human',
     'json',
+    extraWordsArg,
   ]);
+});
+
+test('it declares a command’s positionals to gunshi in order', () => {
+  const commands = buildGunshiCommands(
+    createDemoWringer(),
+    mock<(invocation: Invocation) => void>(),
+  );
+
+  const positionals = Object.entries(commands['label']?.args ?? {}).flatMap(([name, schema]) =>
+    schema.type === 'positional' && schema.hidden !== true ? [name] : [],
+  );
+
+  expect(positionals).toStrictEqual(['shelf', 'item']);
 });

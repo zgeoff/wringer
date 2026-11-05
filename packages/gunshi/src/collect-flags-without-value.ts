@@ -11,7 +11,7 @@ export function collectFlagsWithoutValue(
 ): readonly string[] {
   const valueFlags = new Set(
     Object.entries(args).flatMap(([name, schema]) =>
-      schema.type === 'boolean' ? [] : [`--${kebabnize(name)}`],
+      schema.type === 'boolean' || schema.type === 'positional' ? [] : [`--${kebabnize(name)}`],
     ),
   );
 

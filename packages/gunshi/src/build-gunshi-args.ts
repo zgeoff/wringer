@@ -8,7 +8,7 @@ export type GunshiArgs = Readonly<Record<string, ArgSchema>>;
 
 // gunshi only types each flag; the command's zod schema still checks the whole object in dispatch,
 // so a required flag, a range or a refinement fails there, with a usage error and its path. The
-// positionals are left out: the adapter assigns the words itself, in the order the command declares.
+// positionals are left out, for gunshi to take as positionals.
 export function buildGunshiArgs(info: CommandInfo): GunshiArgs {
   const positionals = new Set(info.positionals);
 

@@ -4,7 +4,7 @@ import type { Command, CommandContext } from 'gunshi';
 import { z } from 'zod';
 import { buildGunshiArgs } from './build-gunshi-args.ts';
 import type { GunshiArgs } from './build-gunshi-args.ts';
-import { buildPositionals } from './build-positionals.ts';
+import { buildPositionalArgs } from './build-positional-args.ts';
 import { buildRawArgs } from './build-raw-args.ts';
 import { collectFlagsWithoutValue } from './collect-flags-without-value.ts';
 import { keepFlagText } from './keep-flag-text.ts';
@@ -89,8 +89,11 @@ function toGunshiCommand(
   node: CommandNode,
   onInvoke: (invocation: Invocation) => void,
 ): Command {
-  const commandArgs = node.info === null ? {} : buildGunshiArgs(node.info);
-  const positionals = node.info === null ? [] : buildPositionals(node.info);
+  const commandArgs: GunshiArgs = {
+    ...(node.info === null ? {} : buildGunshiArgs(node.info)),
+    ...buildPositionalArgs(node.info),
+  };
+
   const args: GunshiArgs = { ...globalArgs, ...commandArgs };
 
   const subCommands = Object.fromEntries(
@@ -116,15 +119,12 @@ function toGunshiCommand(
         });
       }
 
-      // gunshi's positionals start with the words of the command's path.
-      const words = [...ctx.positionals.slice(path.length), ...ctx.rest];
-
       onInvoke({
         path,
-        raw: buildRawArgs(commandArgs, positionals, {
+        raw: buildRawArgs(commandArgs, {
           values: ctx.values,
           explicit: ctx.explicit,
-          words,
+          rest: ctx.rest,
         }),
         globals: parseGlobalFlags(commandArgs, ctx),
       });
