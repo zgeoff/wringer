@@ -186,6 +186,21 @@ export function createShopWringer(): Wringer {
     )
     .action(
       shop.defineAction({
+        name: 'linger',
+        summary: 'Run past the timeout, then fail to clean up',
+        effect: 'read',
+        timeoutMs: 50,
+        input: emptySchema,
+        data: emptySchema,
+        run: async () => {
+          await Bun.sleep(200);
+
+          throw new Error('The cleanup could not stop the remote work.');
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
         name: 'receipt',
         summary: 'Keep the receipt as evidence',
         effect: 'read',

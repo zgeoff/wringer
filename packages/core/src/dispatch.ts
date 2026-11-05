@@ -42,10 +42,16 @@ import type {
   Wringer,
 } from './types.ts';
 import { WringerError } from './wringer-error.ts';
+import { writeEnvelopeLog } from './write-envelope-log.ts';
+import { writeLateFailure } from './write-late-failure.ts';
 
 export interface DispatchResult {
   readonly envelope: Envelope;
   readonly exitCode: ExitCode;
+
+  // Settles once a command that timed out has finished its own work, with any failure of that work
+  // in the run's log.
+  readonly late: Promise<void>;
 }
 
 export const defaultTimeoutMs = 120_000;
@@ -83,6 +89,7 @@ export async function dispatch(
   const before = read instanceof WringerError ? null : read;
   let outcome: CommandOutcome | null = null;
   let failure: WringerError | null = null;
+  let pending: Promise<CommandOutcome> | null = null;
   const trace: DriveTrace = { evidence: [], drive: false, ranOnRun: false, boundRun: null };
 
   try {
@@ -114,9 +121,18 @@ export async function dispatch(
       trace,
     });
 
+    pending = work;
+
     outcome = await raceDeadline(work, deadline);
+
+    pending = null;
   } catch (error) {
     failure = toWringerError(error);
+
+    // Only a timeout leaves the work running; any other failure is the work's own, and it is over.
+    if (failure.code !== 'timeout') {
+      pending = null;
+    }
   }
 
   const after = await readContext(wringer, state, session).catch(() => before);
@@ -156,6 +172,17 @@ export async function dispatch(
 
   const envelope = buildEnvelope(input);
 
+  const late =
+    pending === null || run === undefined
+      ? Promise.resolve()
+      : writeLateFailure(pending, {
+          state,
+          runID: run.runID,
+          command: envelope.command,
+          answered: failure,
+          now,
+        });
+
   const logFailure =
     run === undefined
       ? null
@@ -169,10 +196,11 @@ export async function dispatch(
     return {
       envelope: buildEnvelope({ ...input, data: null, truncatedPath: null, error: logFailure }),
       exitCode: exitCodeFor[logFailure.code],
+      late,
     };
   }
 
-  return { envelope, exitCode: input.error === null ? 0 : exitCodeFor[input.error.code] };
+  return { envelope, exitCode: input.error === null ? 0 : exitCodeFor[input.error.code], late };
 }
 
 interface CommandContext {
@@ -510,68 +538,4 @@ async function readEnvelopeCursors(
   } catch (error) {
     return toWringerError(error);
   }
-}
-
-interface LogRequest {
-  readonly drive: boolean;
-  readonly failure: WringerError | null;
-  readonly now: () => Date;
-}
-
-// The command has already run, so a log write that fails, such as an event over the log's cap,
-// still yields an envelope, one that carries the failure.
-async function writeEnvelopeLog(
-  state: StatePort,
-  run: RunView,
-  envelope: Envelope,
-  request: LogRequest,
-): Promise<WringerError | null> {
-  try {
-    await logEnvelope(state, run, envelope, request);
-
-    return null;
-  } catch (error) {
-    return toWringerError(error);
-  }
-}
-
-async function logEnvelope(
-  state: StatePort,
-  run: RunView,
-  envelope: Envelope,
-  request: LogRequest,
-): Promise<void> {
-  const at = request.now().toISOString();
-
-  if (request.failure?.code === 'internal') {
-    await state.appendEvent(run.runID, {
-      type: 'internal-error',
-      at,
-      command: envelope.command,
-      stack: parseStack(request.failure.data),
-    });
-  }
-
-  await state.appendEvent(run.runID, {
-    type: 'envelope',
-    at,
-    drive: request.drive && envelope.ok,
-    envelope,
-  });
-}
-
-// A stack this long is a runaway, and the log refuses an event past its cap.
-const stackCapChars = 16 * 1024;
-
-function parseStack(data: unknown): string {
-  if (
-    typeof data === 'object' &&
-    data !== null &&
-    'stack' in data &&
-    typeof data.stack === 'string'
-  ) {
-    return data.stack.slice(0, stackCapChars);
-  }
-
-  return '';
 }

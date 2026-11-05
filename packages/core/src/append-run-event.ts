@@ -94,6 +94,7 @@ export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
       'doctor-failed',
       'envelope',
       'internal-error',
+      'late-failure',
       () => null,
     )
     .exhaustive();

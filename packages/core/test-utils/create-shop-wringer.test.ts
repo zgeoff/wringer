@@ -33,6 +33,7 @@ test('it registers the shop actions under `action`', () => {
     'action sneak',
     'action local-only',
     'action hang',
+    'action linger',
     'action receipt',
     'action crash',
     'action hoard',

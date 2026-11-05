@@ -99,7 +99,13 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
     .with({ type: 'run-ended' }, (ended) =>
       moved === view ? view : { ...moved, endedAt: ended.at },
     )
-    .with({ type: 'run-started' }, { type: 'run-ready' }, { type: 'internal-error' }, () => moved)
+    .with(
+      { type: 'run-started' },
+      { type: 'run-ready' },
+      { type: 'internal-error' },
+      { type: 'late-failure' },
+      () => moved,
+    )
     .exhaustive();
 }
 
