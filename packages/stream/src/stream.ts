@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WringerError, createDirectory, defineDriver, local } from '@wringer/core';
+import { WringerError, createDirectory, defineDriver, findOwnValue, local } from '@wringer/core';
 import type { RunHandle } from '@wringer/core';
 import { z } from 'zod';
 import { appendWholeText } from './append-whole-text.ts';
@@ -98,7 +98,7 @@ export const stream = defineDriver({
 
         const slice = await readStreamSlice({
           path: join(session.run.paths.streams, `${parsed.name}.ndjson`),
-          from: parsed.from ?? session.cursors[parsed.name] ?? 0,
+          from: parsed.from ?? findOwnValue(session.cursors, parsed.name) ?? 0,
           maxBytes: Math.min(parsed.maxBytes ?? session.options.maxBytes, session.options.maxBytes),
         });
 
