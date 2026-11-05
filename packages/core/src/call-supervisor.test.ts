@@ -2,9 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import type { SupervisorRequestHandler } from './answer-supervisor-connection.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
-import type { SupervisorRequestHandler } from './listen-supervisor-socket.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'call-supervisor');
@@ -14,7 +14,13 @@ async function setupTest() {
   const socket = join(directory, 'supervisor.sock');
   const handle = mock<SupervisorRequestHandler>(() => Promise.resolve({ notes: 2 }));
 
-  const server = await listenSupervisorSocket(socket, handle);
+  const server = await listenSupervisorSocket({
+    path: socket,
+    answerRequest: handle,
+    onTransportError: (error) => {
+      throw error;
+    },
+  });
 
   onTestFinished(() => {
     server.close();
