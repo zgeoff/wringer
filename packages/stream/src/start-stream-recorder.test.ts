@@ -279,6 +279,18 @@ test('it fails its stop with an environment error when records never reach the d
   expect(recorder.stop()).rejects.toMatchObject({ code: 'environment' });
 });
 
+test('it fails its stop with an environment error when a file source cannot be read', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  await mkdir(log);
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  expect(recorder.stop()).rejects.toMatchObject({ code: 'environment' });
+});
+
 test('it keeps a batch that failed to write and writes it once the disk recovers', async () => {
   const ctx = await setupTest();
 
