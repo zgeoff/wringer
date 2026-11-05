@@ -21,15 +21,17 @@ const propertyJSONSchema = z.looseObject({
 export type ArgProperty = z.infer<typeof propertyJSONSchema>;
 
 // A schema with an `id` in its metadata sits under `$defs`, and its place holds a `$ref` to it.
-const defsJSONSchema = z.looseObject({ $defs: z.record(z.string(), z.unknown()).default({}) });
+const definitionsJSONSchema = z.looseObject({
+  $defs: z.record(z.string(), z.unknown()).default({}),
+});
 
 // The JSON Schema of a command's arguments gives each field's type without walking zod's internals.
 // A union's fields all become flags, and the command's own schema then checks which branch matched.
 export function parseArgProperties(info: CommandInfo): Readonly<Record<string, ArgProperty>> {
   const jsonSchema = z.toJSONSchema(info.args, { io: 'input', unrepresentable: 'any' });
-  const defs = defsJSONSchema.parse(jsonSchema).$defs;
+  const definitions = definitionsJSONSchema.parse(jsonSchema).$defs;
 
-  return collectProperties(jsonSchema, defs);
+  return collectProperties(jsonSchema, definitions);
 }
 
 // A union of objects, such as a discriminated union, puts its fields under `oneOf` or `anyOf`.
@@ -43,21 +45,21 @@ const objectJSONSchema = z.looseObject({
 // value parses. Two enums of one type join their choices.
 function collectProperties(
   jsonSchema: unknown,
-  defs: Readonly<Record<string, unknown>>,
+  definitions: Readonly<Record<string, unknown>>,
 ): Record<string, ArgProperty> {
-  const parsed = objectJSONSchema.safeParse(findReferenced(jsonSchema, defs));
+  const parsed = objectJSONSchema.safeParse(findReferenced(jsonSchema, definitions));
 
   if (!parsed.success) {
     return {};
   }
 
   const branches = [...parsed.data.oneOf, ...parsed.data.anyOf].map((branch) =>
-    collectProperties(branch, defs),
+    collectProperties(branch, definitions),
   );
 
   const own = Object.fromEntries(
     Object.entries(parsed.data.properties).flatMap(([name, property]) => {
-      const typed = propertyJSONSchema.safeParse(findReferenced(property, defs));
+      const typed = propertyJSONSchema.safeParse(findReferenced(property, definitions));
 
       return typed.success ? [[name, typed.data] as const] : [];
     }),
@@ -78,17 +80,23 @@ function collectProperties(
   return Object.fromEntries(collected);
 }
 
-const refJSONSchema = z.looseObject({ $ref: z.string().startsWith('#/$defs/') });
+const referenceJSONSchema = z.looseObject({ $ref: z.string().startsWith('#/$defs/') });
 
 // The schema a local `$ref` names, or the schema itself when it holds no such reference.
-function findReferenced(jsonSchema: unknown, defs: Readonly<Record<string, unknown>>): unknown {
-  const ref = refJSONSchema.safeParse(jsonSchema);
+function findReferenced(
+  jsonSchema: unknown,
+  definitions: Readonly<Record<string, unknown>>,
+): unknown {
+  const reference = referenceJSONSchema.safeParse(jsonSchema);
 
-  if (!ref.success) {
+  if (!reference.success) {
     return jsonSchema;
   }
 
-  return findOwnValue(defs, toPointerSegment(ref.data.$ref.slice('#/$defs/'.length))) ?? jsonSchema;
+  return (
+    findOwnValue(definitions, toPointerSegment(reference.data.$ref.slice('#/$defs/'.length))) ??
+    jsonSchema
+  );
 }
 
 // A JSON Pointer escapes `/` as `~1` and `~` as `~0`; decoding `~1` first keeps `~01` as `~1`.
