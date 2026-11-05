@@ -1,7 +1,7 @@
 import {
   createNodeRepoHost,
   createRepoState,
-  makeProcessSupervisorStarter,
+  makeProcessSupervisorPort,
   runSupervisorProcess,
 } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
@@ -28,7 +28,7 @@ export async function runVerify(wringer: Wringer): Promise<void> {
     openRepo: (root) => ({
       state: createRepoState(root, wringer.stateDir),
       repoHost: createNodeRepoHost(),
-      supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
+      supervisor: makeProcessSupervisorPort({ selfCommand, root, stateDir: wringer.stateDir }),
     }),
     runSupervisor: runSupervisorProcess,
   });

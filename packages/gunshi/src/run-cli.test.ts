@@ -4,7 +4,7 @@ import {
   createNodeRepoHost,
   createRepoState,
   envelopeSchema,
-  makeProcessSupervisorStarter,
+  makeProcessSupervisorPort,
   supervisorCommandName,
 } from '@wringer/core';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
@@ -36,7 +36,7 @@ async function setupTest() {
       openRepo: (root) => ({
         state: createRepoState(root, wringer.stateDir),
         repoHost: createNodeRepoHost(),
-        supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
+        supervisor: makeProcessSupervisorPort({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
       runSupervisor: (_wringer, supervisorArgv) => {
         supervised.push(supervisorArgv);
