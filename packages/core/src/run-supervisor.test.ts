@@ -205,8 +205,16 @@ async function setupTest() {
       mode: 'launch',
       access: 'read-write',
       host: local(),
-      launch: () => ({
-        command: ['sh', '-c', 'setsid sleep 3 & while :; do sleep 0.05; done'],
+
+      // The holder marks itself once it has its own session, so a stop never catches it in the
+      // app's group.
+      launch: (launch) => ({
+        command: [
+          'sh',
+          '-c',
+          `setsid sh -c ': > "$1"; exec sleep 3' holder "$0" & while [ ! -e "$0" ]; do sleep 0.01; done; while :; do sleep 0.05; done`,
+          join(launch.runDirectory, 'holder-ready'),
+        ],
         ready: () => null,
       }),
       drivers: {},

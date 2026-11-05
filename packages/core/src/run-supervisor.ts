@@ -10,7 +10,7 @@ import { pickPendingCleanups } from './pick-pending-cleanups.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { LaunchHost } from './read-launch-host.ts';
 import type { Endpoints, RunEvent } from './run-events.ts';
-import { startLaunch } from './start-launch.ts';
+import { appStopGraceMs, startLaunch } from './start-launch.ts';
 import type { Launch } from './start-launch.ts';
 import { startServices } from './start-services.ts';
 import { supervisorMachine } from './supervisor-machine.ts';
@@ -294,6 +294,7 @@ async function startTarget(target: TargetDefinition, start: TargetStart): Promis
       signal: start.signal,
       onCrash: start.onCrash,
       onStopFailed: start.onStopFailed,
+      stopGraceMs: appStopGraceMs,
     });
   }
 
