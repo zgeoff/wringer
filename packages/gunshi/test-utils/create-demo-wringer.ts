@@ -29,10 +29,11 @@ const tiltArgsSchema = z.strictObject({
 });
 
 const leanArgsSchema = z.strictObject({ degrees: z.number() });
+const moveArgsSchema = z.strictObject({ item: z.string().min(1), target: z.string().min(1) });
 
 // A repo's verify CLI for the adapter's tests: targets `local` and read-only `prod`, an action with
-// every flag type, commands with positionals, union arguments or signed numbers, a command that
-// never finishes, and a doctor check that passes.
+// every flag type, commands with positionals, union arguments or signed numbers, a positional named
+// after a global flag, a command that never finishes, and a doctor check that passes.
 export function createDemoWringer(): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -102,6 +103,17 @@ export function createDemoWringer(): Wringer {
       args: leanArgsSchema,
       positionals: ['degrees'],
       data: leanArgsSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve(args),
+    })
+    .command({
+      path: ['move'],
+      summary: 'Move an item to a target shelf',
+      args: moveArgsSchema,
+      positionals: ['item', 'target'],
+      data: moveArgsSchema,
       effect: 'read',
       needsRun: false,
       needsDoctor: false,

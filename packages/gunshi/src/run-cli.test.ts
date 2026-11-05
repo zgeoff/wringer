@@ -89,6 +89,18 @@ test('it assigns the words after the command to its positionals in order', async
   });
 });
 
+test('it assigns the words in order to positionals when one is named after a global flag', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['move', 'apple', 'shelf-b']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { item: 'apple', target: 'shelf-b' },
+  });
+});
+
 test('it passes an empty string flag to the command as an empty string', async () => {
   const ctx = await setupTest();
   const result = await ctx.run(['label', 'shelf-a', 'apple', '--label', '']);

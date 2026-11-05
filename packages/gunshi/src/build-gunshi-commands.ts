@@ -99,7 +99,14 @@ function toGunshiCommand(
     ...buildPositionalArgs(node.info),
   };
 
-  const args: GunshiArgs = { ...globalArgs, ...commandArgs };
+  // gunshi assigns positionals in key order, and a spread keeps an overridden key where it first
+  // appeared, so a command's own `target` drops the global one rather than taking its place.
+  const args: GunshiArgs = {
+    ...Object.fromEntries(
+      Object.entries(globalArgs).filter(([name]) => !Object.hasOwn(commandArgs, name)),
+    ),
+    ...commandArgs,
+  };
 
   const subCommands = Object.fromEntries(
     [...node.children].map(([name, child]) => [
