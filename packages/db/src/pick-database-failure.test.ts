@@ -68,6 +68,24 @@ test.each([
     failure: 'statement',
   },
   { name: 'a Postgres syntax error', code: '42601', message: '', failure: 'statement' },
+  {
+    name: 'the Postgres statement timeout SQLSTATE',
+    code: '57014',
+    message: '',
+    failure: 'timeout',
+  },
+  {
+    name: 'the psql statement timeout message',
+    code: null,
+    message: 'ERROR:  canceling statement due to statement timeout',
+    failure: 'timeout',
+  },
+  {
+    name: "the psql message of the driver's deadline check",
+    code: null,
+    message: "ERROR:  The command's deadline passed before the statement started.",
+    failure: 'timeout',
+  },
 ])('it reads $name as $failure', (row) => {
   expect(pickDatabaseFailure(row.code, row.message)).toBe(row.failure);
 });
