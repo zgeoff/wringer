@@ -12,10 +12,13 @@ import type { CancelEvent } from './pick-cancel-step.ts';
 // A write opens an existing file read-write, so a mistyped path fails, never makes a new database.
 export type SqliteMode = 'readonly' | 'readwrite';
 
+// The database clients, and the clock and timer the driver reads its deadlines and retries from.
 export interface SQLClients {
   readonly openSqlite: (file: string, mode: SqliteMode) => Database;
   readonly openPostgres: (url: string, sessionName: string) => SQL;
   readonly reportCancelFailure: (message: string) => void;
+  readonly now: () => number;
+  readonly wait: (delayMs: number) => Promise<void>;
 }
 
 export interface SQLQueryInput {
@@ -25,6 +28,7 @@ export interface SQLQueryInput {
   readonly params: readonly unknown[];
   readonly write: boolean;
   readonly signal: AbortSignal;
+  readonly timeLeftMs: () => number;
 }
 
 // A read opens SQLite read-only with `query_only` on, and runs on Postgres in a read-only
@@ -116,13 +120,19 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
     // it, so the deadline is checked once the connection is up, and the cancel listens from then.
     await client.connect();
 
-    if (input.signal.aborted) {
+    const leftMs = Math.floor(input.timeLeftMs());
+
+    if (input.signal.aborted || leftMs < 1) {
       throw new WringerError('timeout', {
         message: 'The query ran past its deadline before it started.',
       });
     }
 
     input.signal.addEventListener('abort', cancel, { once: true });
+
+    // A cancel needs a second connection, which a role's connection limit refuses while this one
+    // runs, so the database also stops the statement at the deadline on this connection.
+    await client.unsafe("select set_config('statement_timeout', $1, false)", [String(leftMs)]);
 
     const result: unknown = await runPostgresStatement(client, input);
 
@@ -182,7 +192,7 @@ async function runCancelLoop(
           return null;
         })
         .with({ kind: 'wait' }, async (): Promise<CancelEvent> => {
-          await Bun.sleep(cancelRetryMs);
+          await clients.wait(cancelRetryMs);
 
           return { kind: 'tick', settled: progress.settled };
         })

@@ -29,7 +29,9 @@ async function setupTest() {
   });
 
   const cancelFailures: string[] = [];
+  const waits: number[] = [];
 
+  // The cancel loop's waits end at once, so a retry takes no real time.
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
     openPostgres: (url: string, sessionName: string) =>
@@ -37,17 +39,29 @@ async function setupTest() {
     reportCancelFailure: (message: string) => {
       cancelFailures.push(message);
     },
+    now: () => Date.now(),
+    wait: (delayMs: number) => {
+      waits.push(delayMs);
+
+      return Promise.resolve();
+    },
   };
 
   return {
     directory,
     file,
     cancelFailures,
+    waits,
     postgresStatements: postgres.statements,
     refusingPostgresStatements: refusingPostgres.statements,
     runPostgresQuery: (
       sql: string,
-      options: { params?: readonly unknown[]; write?: boolean; signal?: AbortSignal } = {},
+      options: {
+        params?: readonly unknown[];
+        write?: boolean;
+        signal?: AbortSignal;
+        timeLeftMs?: number;
+      } = {},
     ) =>
       runSQLQuery(
         {
@@ -57,12 +71,21 @@ async function setupTest() {
           params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
+          timeLeftMs: () => options.timeLeftMs ?? 60_000,
         },
         clients,
       ),
     runOnRefusingPostgres: (sql: string, signal: AbortSignal) =>
       runSQLQuery(
-        { adapter: 'postgres', url: refusingPostgres.url, sql, params: [], write: true, signal },
+        {
+          adapter: 'postgres',
+          url: refusingPostgres.url,
+          sql,
+          params: [],
+          write: true,
+          signal,
+          timeLeftMs: () => 60_000,
+        },
         clients,
       ),
 
@@ -88,6 +111,7 @@ async function setupTest() {
           params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
+          timeLeftMs: () => 60_000,
         },
         clients,
       ),
@@ -120,6 +144,7 @@ test('it sends a Postgres read with no parameters as one extended-protocol state
   await ctx.runPostgresQuery('COMMIT; DELETE FROM notes');
 
   expect(ctx.postgresStatements).toStrictEqual([
+    { protocol: 'extended', sql: "select set_config('statement_timeout', $1, false)" },
     { protocol: 'simple', sql: 'BEGIN read only' },
     { protocol: 'extended', sql: 'COMMIT; DELETE FROM notes' },
     { protocol: 'simple', sql: 'COMMIT' },
@@ -132,8 +157,22 @@ test('it sends a Postgres write with no parameters as one extended-protocol stat
   await ctx.runPostgresQuery('DELETE FROM notes; DROP TABLE notes', { write: true });
 
   expect(ctx.postgresStatements).toStrictEqual([
+    { protocol: 'extended', sql: "select set_config('statement_timeout', $1, false)" },
     { protocol: 'extended', sql: 'DELETE FROM notes; DROP TABLE notes' },
   ]);
+});
+
+test('it refuses a Postgres write that has no time left once its connection is up, and sends nothing', async () => {
+  const ctx = await setupTest();
+
+  const failure = await ctx
+    .runPostgresQuery("insert into notes (text) values ('late')", { write: true, timeLeftMs: 0 })
+    .catch((error: unknown) => error);
+
+  expect({ failure, statements: ctx.postgresStatements }).toStrictEqual({
+    failure: expect.objectContaining({ code: 'timeout' }),
+    statements: [],
+  });
 });
 
 test.each([
@@ -177,9 +216,10 @@ test('it reports a refused cancel once, then cancels the Postgres write on a new
 
   const failure = await running.catch((error: unknown) => error);
 
-  expect({ failure, reports: ctx.cancelFailures }).toStrictEqual({
+  expect({ failure, reports: ctx.cancelFailures, waits: ctx.waits }).toStrictEqual({
     failure: expect.objectContaining({ errno: '57014' }),
     reports: [expect.stringContaining('sorry, too many clients already')],
+    waits: [100, 100],
   });
 });
 
