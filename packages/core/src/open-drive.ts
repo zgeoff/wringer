@@ -29,6 +29,9 @@ export interface DriveRequest {
   readonly run: RunView;
   readonly feature: string | null;
   readonly signal: AbortSignal;
+
+  // When `signal` fires, in ms since the epoch on the `now` clock.
+  readonly deadlineAt: number;
   readonly now: () => Date;
   readonly emit: Emit;
   readonly files: EvidenceFiles;
@@ -74,6 +77,7 @@ export function openDrive(request: DriveRequest): Drive {
         exec: makeDriverExec(execOptions),
         evidence: evidence.writer,
         signal: request.signal,
+        timeLeftMs: () => Math.max(0, request.deadlineAt - request.now().getTime()),
         fence,
         service: (service) => ({
           call: (method, args) =>

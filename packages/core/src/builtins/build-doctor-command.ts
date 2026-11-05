@@ -105,6 +105,7 @@ function runDriverCheck(
 async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<CheckResult> {
   const started = performance.now();
   const deadline = AbortSignal.any([ctx.signal, AbortSignal.timeout(check.timeoutMs)]);
+  const deadlineAt = Math.min(ctx.deadlineAt, ctx.now().getTime() + check.timeoutMs);
   const timedOut = Promise.withResolvers<never>();
 
   // An abort listener added to a signal that already fired never runs, so the check would run on.
@@ -127,7 +128,10 @@ async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<Check
   deadline.addEventListener('abort', onAbort, { once: true });
 
   try {
-    await Promise.race([check.run(ctx.openDrive('read-only', deadline)), timedOut.promise]);
+    await Promise.race([
+      check.run(ctx.openDrive('read-only', { signal: deadline, at: deadlineAt })),
+      timedOut.promise,
+    ]);
 
     return {
       name: check.name,

@@ -66,6 +66,10 @@ export interface DriverSession<Options, TargetConfig> {
   readonly exec: DriverExec;
   readonly evidence: EvidenceWriter;
   readonly signal: AbortSignal;
+
+  // The ms left before `signal` fires, for work that runs where the signal cannot reach, such as a
+  // database server that a client program talks to.
+  readonly timeLeftMs: () => number;
   readonly service: (name: string) => ServiceCaller;
 }
 
@@ -172,6 +176,7 @@ export interface SessionParts {
   readonly exec: DriverExec;
   readonly evidence: EvidenceWriter;
   readonly signal: AbortSignal;
+  readonly timeLeftMs: () => number;
   readonly fence: Fence;
   readonly service: (name: string) => ServiceCaller;
 }
@@ -341,6 +346,12 @@ export interface Drive {
   readonly evidence: readonly Evidence[];
 }
 
+// A deadline shorter than the command's, such as a doctor check's: the signal fires at `at`.
+export interface Deadline {
+  readonly signal: AbortSignal;
+  readonly at: number;
+}
+
 export interface BuiltinContext {
   readonly wringer: Wringer;
   readonly state: StatePort;
@@ -351,9 +362,12 @@ export interface BuiltinContext {
   readonly run: RunView | undefined;
   readonly feature: string | null;
   readonly signal: AbortSignal;
+
+  // The command's deadline, in ms since the epoch on the `now` clock.
+  readonly deadlineAt: number;
   readonly now: () => Date;
   readonly emit: Emit;
-  readonly openDrive: (access: Access, signal?: AbortSignal) => Drive;
+  readonly openDrive: (access: Access, deadline?: Deadline) => Drive;
 
   // A lifecycle command names the run it started, reused or stopped while it holds the target's
   // lock, and its envelope belongs to that run, whatever the pointers say once the lock is free.

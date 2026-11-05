@@ -32,6 +32,7 @@ import { toWringerError } from './to-wringer-error.ts';
 import type {
   ArgsResult,
   BuiltinContext,
+  Deadline,
   Drive,
   Effect,
   Emit,
@@ -96,9 +97,8 @@ export async function dispatch(
       throw new WringerError('usage', { message: `There is no command \`${path.join(' ')}\`.` });
     }
 
-    const deadline = AbortSignal.timeout(
-      session.timeoutMs ?? command.info.timeoutMs ?? defaultTimeoutMs,
-    );
+    const timeoutMs = session.timeoutMs ?? command.info.timeoutMs ?? defaultTimeoutMs;
+    const deadline = AbortSignal.timeout(timeoutMs);
 
     const work = runCommand({
       wringer,
@@ -110,6 +110,7 @@ export async function dispatch(
       context,
       now,
       deadline,
+      deadlineAt: now().getTime() + timeoutMs,
       trace,
     });
 
@@ -219,6 +220,7 @@ interface CommandRequest {
   readonly context: CommandContext;
   readonly now: () => Date;
   readonly deadline: AbortSignal;
+  readonly deadlineAt: number;
   readonly trace: DriveTrace;
 }
 
@@ -353,7 +355,7 @@ interface RunDriveOptions {
   readonly run: RunView;
   readonly access: Access;
   readonly hint: string;
-  readonly signal?: AbortSignal | undefined;
+  readonly deadline?: Deadline | undefined;
 }
 
 function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive {
@@ -367,7 +369,8 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     hint: options.hint,
     run: options.run,
     feature: request.context.feature,
-    signal: options.signal ?? request.deadline,
+    signal: options.deadline?.signal ?? request.deadline,
+    deadlineAt: options.deadline?.at ?? request.deadlineAt,
     now: request.now,
     emit: makeEmit(request.session),
     files: request.session.repoHost,
@@ -445,14 +448,15 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     run: request.context.run,
     feature: request.context.feature,
     signal: request.deadline,
+    deadlineAt: request.deadlineAt,
     now: request.now,
     emit: makeEmit(request.session),
-    openDrive: (access, signal) => {
+    openDrive: (access, deadline) => {
       const drive = openRunDrive(request, {
         run: getRunningRun(request.context.run),
         access,
         hint,
-        signal,
+        deadline,
       });
 
       request.trace.evidence.push(drive.evidence);
