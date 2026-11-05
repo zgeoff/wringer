@@ -146,14 +146,13 @@ function buildGroupStopArgv(groupFile: string): readonly string[] {
   return ['sh', '-c', groupStopScript, 'wringer', groupFile];
 }
 
-// Killing the local ssh leaves the remote command running, so a timed-out write could still
-// commit. The command runs in a process group of its own under `setsid`, which needs no terminal,
-// and records the group in `groupFile` for the stop; stdin reaches it through fd 3.
+// Killing the local ssh leaves the remote command running, so the command runs in a group of its
+// own under `setsid`, which needs no terminal. The group's own shell records it in `groupFile`, so
+// a stop that finds the file finds a group that exists. stdin reaches the command through fd 3.
 const groupedScript = [
   'exec 3<&0',
-  'setsid sh -c "$2" <&3 3<&- & child=$!',
+  `setsid sh -c 'echo "$$" > "$1"; exec sh -c "$2"' wringer "$1" "$2" <&3 3<&- & child=$!`,
   'exec 3<&-',
-  'echo "$child" > "$1"',
   'wait "$child"',
   'status=$?',
 

@@ -51,6 +51,19 @@ test.each([
   expect(result.exitCode).toBe(code);
 });
 
+test('it runs setsid through a stand-in that records its process ID on the slow-setsid destination', async () => {
+  const ctx = await setupTest();
+
+  const result = Bun.spawnSync([ctx.fake.binary, '--', 'slow-setsid', 'setsid sh -c "echo ran"']);
+
+  const recorded = await readFile(ctx.fake.setsidPIDPath, 'utf8');
+
+  expect({ stdout: result.stdout.toString(), recorded }).toStrictEqual({
+    stdout: 'ran\n',
+    recorded: expect.stringMatching(/^\d+\n$/u),
+  });
+});
+
 test('it refuses more than one command word, as a caller that skips quoting would send', async () => {
   const ctx = await setupTest();
 

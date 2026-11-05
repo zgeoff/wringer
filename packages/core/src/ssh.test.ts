@@ -84,6 +84,31 @@ test('it stops the remote command and every process it started when the run time
   expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
 });
 
+test('it stops a remote command whose process group starts only after the run timed out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'slow-setsid', binary: ctx.fake.binary });
+  const latePath = join(ctx.directory, 'late.txt');
+
+  await Promise.allSettled([
+    host.run({
+      argv: ['sh', '-c', 'sleep 3; echo late > "$0"', latePath],
+      access: 'read-write',
+      signal: AbortSignal.timeout(150),
+    }),
+  ]);
+
+  const leaderText = await waitFor(() => readFile(ctx.fake.setsidPIDPath, 'utf8'));
+
+  const leader = Number(leaderText);
+
+  await waitFor(() => (probeProcess(leader) ? null : true), { timeoutMs: 8000 });
+
+  const late = await readFile(latePath, 'utf8').catch(() => null);
+
+  expect(late).toBeNull();
+});
+
 test('it stops a background process that outlived the remote command when the run times out', async () => {
   const ctx = await setupTest();
 
