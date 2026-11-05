@@ -3,7 +3,6 @@ import { buildRunHandle } from './build-run-handle.ts';
 import type { StatePort } from './create-file-state.ts';
 import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
-import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { LaunchHost } from './read-launch-host.ts';
@@ -155,7 +154,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     return method(request.args);
   };
 
-  const server = await listenSupervisorSocket({
+  const server = await options.launchHost.listenSupervisorSocket({
     path: socket,
     answerRequest,
     onTransportError: (error) => {

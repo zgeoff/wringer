@@ -158,6 +158,7 @@ async function setupTest() {
   const appendEvent = spyOn(state, 'appendEvent');
   const launchHost = readLaunchHost();
   const removeDirectory = spyOn(launchHost, 'removeDirectory');
+  const listenSocket = spyOn(launchHost, 'listenSupervisorSocket');
 
   return {
     stopCalls,
@@ -189,6 +190,7 @@ async function setupTest() {
     runFolder: (runID: string) => buildRunPaths(state.paths.root, runID).directory,
     appendEvent,
     removeDirectory,
+    listenSocket,
     seedRun: (runID: string) =>
       state.appendEvent(runID, {
         type: 'run-started',
@@ -445,6 +447,24 @@ test('#runSupervisor removes its socket folder through the launch host once the 
   await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
 
   expect(ctx.removeDirectory).toHaveBeenCalledExactlyOnceWith(dirname(socket));
+});
+
+test('#runSupervisor listens on its socket through the launch host', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  void ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  expect(ctx.listenSocket).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ path: ready.supervisor?.socket }),
+  );
 });
 
 test('#runSupervisor lets only its owner reach the socket, whatever the umask', async () => {
