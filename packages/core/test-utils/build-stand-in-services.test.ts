@@ -1,6 +1,5 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { expect, mock, onTestFinished, test } from 'bun:test';
+import { rm } from 'node:fs/promises';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunHandle } from '../src/build-run-handle.ts';
 import { buildStandInServices } from './build-stand-in-services.ts';
@@ -14,12 +13,15 @@ async function setupTest() {
   const start = Promise.withResolvers<undefined>();
   const hold = Promise.withResolvers<undefined>();
   const run = buildRunHandle(directory, 'mf3k2a-7q1z');
+  const readLog = mock<(path: string) => Promise<string>>();
 
   return {
+    readLog,
     services: buildStandInServices({
       stop: stop.promise,
       start: start.promise,
       hold: hold.promise,
+      readLog,
     }),
     context: {
       exec: () => Promise.resolve({ exitCode: 0, stdout: '', stderr: '' }),
@@ -38,12 +40,7 @@ async function setupTest() {
     openHoldGate: () => {
       hold.resolve(undefined);
     },
-    writeAppLog: async (text: string) => {
-      const path = run.childLog('app').path;
-
-      await mkdir(dirname(path), { recursive: true });
-      await writeFile(path, text);
-    },
+    appLogPath: run.childLog('app').path,
   };
 }
 
@@ -91,14 +88,18 @@ test('it throws from the till stop before it returns a promise', async () => {
   expect(() => till.stop()).toThrow(expect.objectContaining({ code: 'environment' }));
 });
 
-test('it records each line of the app log when the ledger stops', async () => {
+test('it records each line of the app log, read through its log reader, when the ledger stops', async () => {
   const ctx = await setupTest();
   const ledger = await ctx.services.ledger.start(ctx.context);
 
-  await ctx.writeAppLog('started\nclosing\n');
+  ctx.readLog.mockResolvedValue('started\nclosing\n');
+
   await ledger.stop();
 
-  expect(ctx.services.calls).toStrictEqual(['started', 'closing']);
+  expect({ calls: ctx.services.calls, read: ctx.readLog.mock.calls }).toStrictEqual({
+    calls: ['started', 'closing'],
+    read: [[ctx.appLogPath]],
+  });
 });
 
 test('it settles the counter hold once the hold gate opens, and records the call', async () => {

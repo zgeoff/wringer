@@ -98,10 +98,10 @@ test('#buildShutDownSteps answers a clean stop with no failure', () => {
 });
 
 test.each([
-  { gaveUpOnStartup: false, abortStartupCommands: false, abortCommands: true },
-  { gaveUpOnStartup: true, abortStartupCommands: true, abortCommands: false },
+  { gaveUpOnStartup: false, abortCommands: true },
+  { gaveUpOnStartup: true, abortCommands: false },
 ])(
-  '#buildShutDownSteps aborts the startup commands: $abortStartupCommands and the service commands: $abortCommands, after giving up on startup: $gaveUpOnStartup',
+  '#buildShutDownSteps aborts the service commands: $abortCommands, after giving up on startup: $gaveUpOnStartup',
   (row) => {
     const steps = buildShutDownSteps({
       crashReason: null,
@@ -110,12 +110,6 @@ test.each([
       at: '2026-11-04T10:00:00.000Z',
     });
 
-    expect({
-      abortStartupCommands: steps.abortStartupCommands,
-      abortCommands: steps.abortCommands,
-    }).toStrictEqual({
-      abortStartupCommands: row.abortStartupCommands,
-      abortCommands: row.abortCommands,
-    });
+    expect(steps.abortCommands).toBe(row.abortCommands);
   },
 );

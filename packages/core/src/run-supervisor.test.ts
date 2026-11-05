@@ -1,6 +1,6 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
 import { once } from 'node:events';
-import { mkdir, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
@@ -45,6 +45,7 @@ async function setupTest() {
     stop: stopGate.promise,
     start: startGate.promise,
     hold: holdGate.promise,
+    readLog: (path) => readFile(path, 'utf8'),
   });
 
   const leaky = defineDriver({
@@ -68,6 +69,14 @@ async function setupTest() {
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
     services: { shelf: services.shelf },
+    client: () => ({}),
+  });
+
+  const lagging = defineDriver({
+    name: 'lagging',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: { queue: services.queue },
     client: () => ({}),
   });
 
@@ -103,11 +112,30 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  const cacheMain = defineDriver({
+    name: 'cache/main',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: { store: services.shelf },
+    client: () => ({}),
+  });
+
+  const cache = defineDriver({
+    name: 'cache',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: { 'main/store': services.shelf },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
+    .use(cacheMain({}))
+    .use(cache({}))
     .use(leaky({}))
     .use(stuck({}))
     .use(tardy({}))
     .use(tidy({}))
+    .use(lagging({}))
     .use(brittle({}))
     .use(scribe({}))
     .use(busy({}))
@@ -161,6 +189,28 @@ async function setupTest() {
       }),
       drivers: { scribe: () => ({}) },
     })
+    .target('mixed-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { tidy: () => ({}), lagging: () => ({}) },
+    })
+    .target('clash-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { 'cache/main': () => ({}), cache: () => ({}) },
+    })
+    .target('held-box', {
+      mode: 'launch',
+      access: 'read-write',
+      host: local(),
+      launch: () => ({
+        command: ['sh', '-c', 'setsid sleep 3 & while :; do sleep 0.05; done'],
+        ready: () => null,
+      }),
+      drivers: {},
+    })
     .build();
 
   const state = createRepoState(directory, wringer.stateDir);
@@ -210,6 +260,7 @@ async function setupTest() {
       startGate.resolve(undefined);
     },
     readRun: (runID: string) => state.readRun(runID),
+    readRunEvents: (runID: string) => state.readRunEvents(runID),
     runFolder: (runID: string) => buildRunPaths(state.paths.root, runID).directory,
     appendEvent,
     removeDirectory,
@@ -222,7 +273,12 @@ async function setupTest() {
         mode: 'attach',
         fingerprint: 'empty',
       }),
-    runSupervisor: (runID: string, signal: AbortSignal = teardown.signal, target = 'box') => {
+    runSupervisor: (
+      runID: string,
+      signal: AbortSignal = teardown.signal,
+      target = 'box',
+      stopWaitMs = 1000,
+    ) => {
       const supervising = runSupervisor({
         wringer,
         launchHost,
@@ -230,7 +286,7 @@ async function setupTest() {
         runID,
         target,
         readyTimeoutMs: 5000,
-        stopWaitMs: 1000,
+        stopWaitMs,
         now: () => new Date(),
         reportError: (message) => {
           reports.push(message);
@@ -686,6 +742,70 @@ test('#runSupervisor ends a command the startup runs once the stop stops waiting
   });
 
   expect(calls).toStrictEqual(['press command rejected']);
+});
+
+test('#runSupervisor logs and answers the failed stop of an app that the stop cancelled before it got ready', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('held-run');
+
+  const supervising = ctx.runSupervisor('held-run', undefined, 'held-box', 4000);
+
+  const supervisor = await waitFor(async () => {
+    const view = await ctx.readRun('held-run');
+
+    return view?.supervisor ?? null;
+  });
+
+  const [answer] = await Promise.allSettled([ctx.callStop(supervisor.socket), supervising]);
+  const ended = await ctx.readRun('held-run');
+
+  expect({ answer, reason: ended?.crashReason }).toStrictEqual({
+    answer: {
+      status: 'rejected',
+      reason: expect.objectContaining({
+        code: 'environment',
+        message: expect.stringContaining("app: The app's output still had not reached its log"),
+      }),
+    },
+    reason: expect.stringContaining("cleanup failed for app: The app's output still had not"),
+  });
+});
+
+test('#runSupervisor lets a service that came up run a command from its stop after the stop gave up on a later startup', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('mixed-run');
+
+  const teardown = new AbortController();
+
+  const supervising = ctx.runSupervisor('mixed-run', teardown.signal, 'mixed-box');
+
+  await waitFor(async () => {
+    const events = await ctx.readRunEvents('mixed-run');
+
+    return events.some((event) => event.type === 'service-ready') ? true : null;
+  });
+
+  teardown.abort();
+
+  await supervising;
+
+  expect(ctx.stopCalls).toStrictEqual(['shelf exited 0']);
+});
+
+test('#runSupervisor starts no service and ends the run when two driver services share a key', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('clash-run');
+  await ctx.runSupervisor('clash-run', undefined, 'clash-box');
+
+  const ended = await ctx.readRun('clash-run');
+
+  expect({ reason: ended?.crashReason, stopCalls: ctx.stopCalls }).toStrictEqual({
+    reason: 'Two driver services share the key cache/main/store.',
+    stopCalls: [],
+  });
 });
 
 test('#runSupervisor starts nothing and ends the run when its stop signal fired already', async () => {

@@ -60,6 +60,7 @@ test('it resolves the endpoints from the first ready line', async () => {
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launch.endpoints).toStrictEqual({ web: 'http://127.0.0.1:4100' });
@@ -79,6 +80,7 @@ test('it stops a server that the app started when the run stops', async () => {
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   await launch.stop();
@@ -107,6 +109,7 @@ test('it ends a stop only once the lines the app printed as it stopped are in it
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   await launch.stop();
@@ -146,6 +149,7 @@ test('it fails a stop with an environment error when a process outside the app h
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launch.stop()).rejects.toMatchObject({ code: 'environment' });
@@ -178,12 +182,50 @@ test('it keeps the startup failure and adds the failed stop when an app that nev
     readyTimeoutMs: 200,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launching).rejects.toMatchObject({
     code: 'timeout',
     message: expect.stringContaining("The app's output still had not reached its log"),
   });
+});
+
+test('it reports the failed stop of an app that never got ready to its caller', async () => {
+  const ctx = await setupTest();
+
+  const real = readLaunchHost();
+  const onStopFailed = mock<(reason: string) => void>();
+
+  const host: LaunchHost = {
+    ...real,
+    spawnApp: (argv, options) => {
+      const app = real.spawnApp(argv, options);
+
+      return {
+        pid: app.pid,
+        stdout: app.stdout,
+        stderr: new ReadableStream<Uint8Array>(),
+        exited: app.exited,
+      };
+    },
+  };
+
+  await Promise.allSettled([
+    startLaunch({
+      host,
+      plan: { command: ['sh', '-c', 'exec sleep 60'], ready: () => null },
+      logPath: ctx.logPath,
+      readyTimeoutMs: 200,
+      signal: new AbortController().signal,
+      onCrash: mock<(reason: string) => void>(),
+      onStopFailed,
+    }),
+  ]);
+
+  expect(onStopFailed.mock.calls).toStrictEqual([
+    [expect.stringContaining("The app's output still had not reached its log")],
+  ]);
 });
 
 test('it runs the plan’s stop command, then stops the app and its server when that command fails', async () => {
@@ -202,6 +244,7 @@ test('it runs the plan’s stop command, then stops the app and its server when 
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   await launch.stop();
@@ -235,6 +278,7 @@ test('it stops the app when the run stops before the app is ready', async () => 
     readyTimeoutMs: 10_000,
     signal: controller.signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   const [settled] = await Promise.allSettled([launching]);
@@ -264,6 +308,7 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash,
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   await Bun.write(exitPath, '');
@@ -301,6 +346,7 @@ test('it starts the app in the host folder with the host environment and the pla
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
@@ -329,6 +375,7 @@ test('it creates the log folder, runs the stop command and signals the app throu
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   await launch.stop();
@@ -357,6 +404,7 @@ test('it refuses with an environment error when the app cannot start', async () 
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
@@ -371,6 +419,7 @@ test('it refuses to start the app of a run that stopped already', async () => {
     readyTimeoutMs: 10_000,
     signal: AbortSignal.abort(),
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launching).rejects.toThrowWithMessage(
@@ -390,6 +439,7 @@ test('it refuses a log folder it cannot create before it tries to start the app'
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launching).rejects.toThrowWithMessage(
@@ -412,6 +462,7 @@ test('it refuses with an environment error when the app log cannot be written', 
     readyTimeoutMs: 10_000,
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
   });
 
   expect(launching).rejects.toMatchObject({ code: 'environment' });
