@@ -1,7 +1,7 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { local } from '@wringer/core';
+import { createDirectory, local } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
@@ -20,9 +20,12 @@ async function setupTest() {
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const streams = join(directory, 'streams');
+  const createDirectoryCalls = mock(createDirectory);
 
   return {
     directory,
+    streams,
+    createDirectoryCalls,
     streamPath: (name: string) => join(streams, `${name}.ndjson`),
     start: async (sources: Readonly<Record<string, StreamSource>>, pendingLimit = 10_000) => {
       const recorder = await startStreamRecorder({
@@ -32,6 +35,7 @@ async function setupTest() {
         localHost: local(),
         access: 'read-only',
         now: () => new Date('2026-03-01T09:30:00.000Z'),
+        createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
         pendingLimit,
       });
@@ -53,6 +57,14 @@ async function setupTest() {
     },
   };
 }
+
+test('it creates its folder through the folder creator it is given', async () => {
+  const ctx = await setupTest();
+
+  await ctx.start({});
+
+  expect(ctx.createDirectoryCalls).toHaveBeenCalledExactlyOnceWith(ctx.streams);
+});
 
 test('it records each line of a command source with the time it arrived', async () => {
   const ctx = await setupTest();

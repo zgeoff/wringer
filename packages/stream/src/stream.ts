@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { WringerError, defineDriver, local } from '@wringer/core';
+import { WringerError, createDirectory, defineDriver, local } from '@wringer/core';
 import type { RunHandle } from '@wringer/core';
 import { z } from 'zod';
 import { appendWholeText } from './append-whole-text.ts';
@@ -69,6 +69,7 @@ export const stream = defineDriver({
           localHost: local(),
           access: ctx.access,
           now: () => new Date(),
+          createDirectory,
           appendText: appendWholeText,
           pendingLimit: 10_000,
         });
