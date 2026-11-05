@@ -107,6 +107,18 @@ test('it reads Postgres rows with their columns and their count', async () => {
   });
 });
 
+test('it names the columns of a Postgres read with a parameter that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay']);
+
+  const result = await ctx.runQuery('select id, text as label from notes where text = $1;', {
+    params: ['ship'],
+  });
+
+  expect(result).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
+});
+
 test('it binds a parameter into a Postgres read', async () => {
   const ctx = await setupTest();
   const result = await ctx.runQuery('select $1::text as label', { params: ['parcel'] });

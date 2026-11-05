@@ -6,6 +6,7 @@ import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';
 import { buildExecQuery } from './build-exec-query.ts';
+import { parseExecResult } from './parse-exec-result.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the client, the
 // container, then the folder.
@@ -64,6 +65,25 @@ async function setupTest() {
 
       return host.run({ argv: query.argv, stdin: query.stdin, access: 'read-write', signal });
     },
+    runRead: async (sql: string) => {
+      const query = buildExecQuery({
+        dialect: 'postgres',
+        program: ['psql'],
+        database: 'shop',
+        sql,
+        params: [],
+        write: false,
+        deadlineAtMs: Date.now() + 60_000,
+      });
+
+      const result = await host.run({
+        argv: query.argv,
+        stdin: query.stdin,
+        access: 'read-only',
+      });
+
+      return parseExecResult({ result, output: query.output, write: false });
+    },
     runSlowStartWrite: (sql: string, deadlineAtMs: number) => {
       const query = buildExecQuery({
         dialect: 'postgres',
@@ -79,6 +99,16 @@ async function setupTest() {
     },
   };
 }
+
+test('it names the columns of a psql read over ssh that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes();
+
+  const result = await ctx.runRead('select id, text as label from notes where id < 0');
+
+  expect(result).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
+});
 
 test('it never commits a psql write over ssh that ran past its deadline', async () => {
   const ctx = await setupTest();

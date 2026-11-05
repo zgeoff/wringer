@@ -39,6 +39,21 @@ async function setupTest() {
   };
 }
 
+test('it names the columns of a read through the real sqlite3 client that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], {
+    sql: "select id, text as label from notes where text = 'ship'",
+  });
+
+  expect(result.envelope.data).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
+});
+
 test('it fails a shell command sent to the real sqlite3 client without running it', async () => {
   const ctx = await setupTest();
 
