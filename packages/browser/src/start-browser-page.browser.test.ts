@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { chromium } from 'playwright-core';
+import type { Browser } from 'playwright-core';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { startBrowserPage } from './start-browser-page.ts';
 
@@ -22,8 +23,29 @@ function setupTest() {
 
       return service;
     },
+    startPageOn: (browser: Browser) =>
+      startBrowserPage({ launchBrowser: () => Promise.resolve(browser), actionTimeoutMs: 5000 }),
   };
 }
+
+test('it closes the browser and fails its start when the run context cannot open', async () => {
+  const ctx = setupTest();
+
+  const browser = await chromium.launch({ headless: true });
+
+  onTestFinished(() => browser.close());
+
+  Object.assign(browser, {
+    newContext: () => Promise.reject(new Error('the browser has no room for a context')),
+  });
+
+  const [started] = await Promise.allSettled([ctx.startPageOn(browser)]);
+
+  expect({ status: started.status, connected: browser.isConnected() }).toStrictEqual({
+    status: 'rejected',
+    connected: false,
+  });
+});
 
 test('it stops a browser that no command used', async () => {
   const ctx = setupTest();
