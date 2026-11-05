@@ -100,11 +100,11 @@ interface Follower {
 
 type SourceState = SourceStatus['state'];
 
-// The supervisor sends each source's status to the CLI, so every change goes through this table. A
-// source that exited can still fail, when its last records never reach the disk.
+// The supervisor sends each source's status to the CLI, so every change of the source's own state
+// goes through this table. A failed write shows over that state only until a write succeeds.
 const sourceTransitions: Readonly<Record<SourceState, readonly SourceState[]>> = {
   running: ['exited', 'failed'],
-  exited: ['failed'],
+  exited: [],
   failed: [],
 };
 
@@ -115,6 +115,7 @@ export function canMoveSource(from: SourceState, to: SourceState): boolean {
 function followSource(request: FollowSourceRequest): Follower {
   const path = join(request.directory, `${request.name}.ndjson`);
   let current: SourceStatus = { name: request.name, state: 'running', detail: null };
+  let writeFailure: string | null = null;
 
   const move = (state: SourceState, detail: string): void => {
     if (canMoveSource(current.state, state)) {
@@ -128,7 +129,10 @@ function followSource(request: FollowSourceRequest): Follower {
     appendText: request.appendText,
     pendingLimit: request.pendingLimit,
     onError: (error) => {
-      move('failed', `The recorder could not write: ${String(error)}`);
+      writeFailure = `The recorder could not write: ${String(error)}`;
+    },
+    onRecovered: () => {
+      writeFailure = null;
     },
   });
 
@@ -150,7 +154,12 @@ function followSource(request: FollowSourceRequest): Follower {
     }
   };
 
-  return { status: () => current, done: watch(), drain: writer.drain };
+  return {
+    status: () =>
+      writeFailure === null ? current : { ...current, state: 'failed', detail: writeFailure },
+    done: watch(),
+    drain: writer.drain,
+  };
 }
 
 interface RecordWriterOptions {
@@ -159,6 +168,7 @@ interface RecordWriterOptions {
   readonly appendText: (path: string, text: string) => Promise<void>;
   readonly pendingLimit: number;
   readonly onError: (error: unknown) => void;
+  readonly onRecovered: () => void;
 }
 
 interface RecordWriter {

@@ -7,6 +7,9 @@ interface WriterInput {
   readonly now: () => Date;
   readonly write: (text: string) => Promise<void>;
   readonly onError: (error: unknown) => void;
+
+  // Called when a write succeeds after one that failed.
+  readonly onRecovered: () => void;
 }
 
 interface WriterContext extends WriterInput {
@@ -85,6 +88,11 @@ export const recordWriterMachine = setup({
 
       return { drains: [] };
     }),
+    reportRecovery: (args) => {
+      if (args.context.failure !== null) {
+        args.context.onRecovered();
+      }
+    },
     rejectDrains: assign((args) => {
       const error = new WringerError('environment', {
         message: `${args.context.path} kept ${args.context.pending.length} records the recorder could not write: ${args.context.failure ?? 'the write failed'}`,
@@ -133,9 +141,12 @@ export const recordWriterMachine = setup({
             guard: 'hasPending',
             target: 'writing',
             reenter: true,
-            actions: assign({ batch: [], batchDropped: 0, failure: null }),
+            actions: ['reportRecovery', assign({ batch: [], batchDropped: 0, failure: null })],
           },
-          { target: 'idle', actions: assign({ batch: [], batchDropped: 0, failure: null }) },
+          {
+            target: 'idle',
+            actions: ['reportRecovery', assign({ batch: [], batchDropped: 0, failure: null })],
+          },
         ],
         onError: {
           target: 'stalled',

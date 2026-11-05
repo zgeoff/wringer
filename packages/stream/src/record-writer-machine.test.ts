@@ -12,6 +12,9 @@ function setupTest() {
   const writes: Write[] = [];
   const errors: unknown[] = [];
 
+  // The number of writes started when each recovery was reported.
+  const recoveries: number[] = [];
+
   const writer = createActor(recordWriterMachine, {
     input: {
       path: 'app.ndjson',
@@ -27,6 +30,9 @@ function setupTest() {
       onError: (error) => {
         errors.push(error);
       },
+      onRecovered: () => {
+        recoveries.push(writes.length);
+      },
     },
   });
 
@@ -38,6 +44,7 @@ function setupTest() {
 
   return {
     writes,
+    recoveries,
     add: (record: string) => {
       writer.send({ type: 'add', record });
     },
@@ -52,6 +59,35 @@ function setupTest() {
     waitForErrors: (count: number) => waitFor(() => (errors.length === count ? true : null)),
   };
 }
+
+test('it reports a recovery once, when a write succeeds after one that failed', async () => {
+  const ctx = setupTest();
+
+  ctx.add('pear');
+  ctx.writes[0]?.settle.resolve(undefined);
+  ctx.add('plum');
+
+  await ctx.waitForWrites(2);
+
+  ctx.writes[1]?.settle.reject(new Error('the disk is full'));
+
+  await ctx.waitForErrors(1);
+
+  ctx.add('fig');
+
+  await ctx.waitForWrites(3);
+
+  ctx.writes[2]?.settle.resolve(undefined);
+  ctx.add('kiwi');
+
+  await ctx.waitForWrites(4);
+
+  ctx.writes[3]?.settle.resolve(undefined);
+
+  await ctx.drain();
+
+  expect(ctx.recoveries).toStrictEqual([3]);
+});
 
 test('it keeps the count of dropped lines when the batch that reports them fails to write', async () => {
   const ctx = setupTest();

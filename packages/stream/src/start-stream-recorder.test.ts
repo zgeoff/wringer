@@ -308,10 +308,31 @@ test('it keeps a batch that failed to write and writes it once the disk recovers
   expect(recorded).toBe('{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n');
 });
 
+test('it reports a source as running again once a write succeeds after one that failed', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(ctx.streamPath('app'), { recursive: true });
+
+  const recorder = await ctx.start({
+    app: { command: ['sh', '-c', 'while true; do echo tick; sleep 0.1; done'] },
+  });
+
+  await waitFor(() => (recorder.status()[0]?.state === 'failed' ? true : null));
+  await rm(ctx.streamPath('app'), { recursive: true });
+
+  const status = await waitFor(() => {
+    const [current] = recorder.status();
+
+    return current?.state === 'running' ? current : null;
+  });
+
+  expect(status).toStrictEqual({ name: 'app', state: 'running', detail: null });
+});
+
 test.each([
   { from: 'running', to: 'exited', allowed: true },
   { from: 'running', to: 'failed', allowed: true },
-  { from: 'exited', to: 'failed', allowed: true },
+  { from: 'exited', to: 'failed', allowed: false },
   { from: 'exited', to: 'running', allowed: false },
   { from: 'failed', to: 'exited', allowed: false },
   { from: 'failed', to: 'running', allowed: false },
