@@ -71,7 +71,12 @@ async function setupTest() {
     },
     runQuery: (
       sql: string,
-      options: { write?: boolean; signal?: AbortSignal; params?: readonly unknown[] } = {},
+      options: {
+        write?: boolean;
+        signal?: AbortSignal;
+        params?: readonly unknown[];
+        timeLeftMs?: () => number;
+      } = {},
     ) =>
       runSQLQuery(
         {
@@ -81,7 +86,7 @@ async function setupTest() {
           params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
-          timeLeftMs: () => 60_000,
+          timeLeftMs: options.timeLeftMs ?? (() => 60_000),
         },
         clients,
       ),
@@ -107,6 +112,18 @@ test('it binds a parameter into a Postgres read', async () => {
   const result = await ctx.runQuery('select $1::text as label', { params: ['parcel'] });
 
   expect(result).toStrictEqual({ columns: ['label'], rows: [{ label: 'parcel' }], rowCount: 1 });
+});
+
+test('it runs a Postgres read under a timeout cut by the round trip that setting it took', async () => {
+  const ctx = await setupTest();
+
+  const timesLeftMs = [60_000, 59_000, 58_900];
+
+  const result = await ctx.runQuery("select current_setting('statement_timeout') as timeout", {
+    timeLeftMs: () => timesLeftMs.shift() ?? 0,
+  });
+
+  expect(result.rows).toStrictEqual([{ timeout: '58s' }]);
 });
 
 test('it counts the rows a Postgres write changed', async () => {
