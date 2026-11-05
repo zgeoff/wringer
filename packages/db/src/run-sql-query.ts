@@ -132,7 +132,7 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
         String(step.timeoutMs),
       ]);
 
-      step = pickStatementTimeoutStep(step.timeoutMs, input.signal.aborted, input.timeLeftMs());
+      step = pickStatementTimeoutStep(step, input.signal.aborted, input.timeLeftMs());
     }
 
     if (step.kind === 'expired') {
