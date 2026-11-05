@@ -5,9 +5,11 @@ import { dispatch } from '../packages/core/src/index.ts';
 import type { DispatchResult } from '../packages/core/src/index.ts';
 import { createTestSession } from '../packages/core/test-utils/create-test-session.ts';
 import { waitFor } from '../packages/core/test-utils/wait-for.ts';
+import { httpResponseSchema } from '../packages/http/src/index.ts';
 import { parsePublishedEnvelope } from '../test-utils/parse-published-envelope.ts';
 import type { PublishedEnvelopeResult } from '../test-utils/parse-published-envelope.ts';
 import { createShopRegistry } from './create-shop-registry.ts';
+import { ordersSchema } from './shop-contract.ts';
 
 async function setupTest() {
   const registry = createShopRegistry();
@@ -44,7 +46,9 @@ test('it drives a page, an http call, a stream read and a db query, then reports
   const orders = await waitFor(async () => {
     const result = await ctx.run(['http', 'request'], { path: '/api/orders' });
 
-    return JSON.stringify(result.envelope.data).includes('"item":"mug"') ? result : null;
+    const listed = ordersSchema.parse(httpResponseSchema.parse(result.envelope.data).json);
+
+    return listed.length > 0 ? listed : null;
   });
 
   const logged = await waitFor(async () => {
@@ -60,13 +64,13 @@ test('it drives a page, an http call, a stream read and a db query, then reports
   const checkout = expect.objectContaining({ name: 'checkout', status: 'verified' });
 
   expect({
-    orders: orders.exitCode,
+    orders,
     logged: logged.exitCode,
     counted: counted.envelope.data,
     done: done.envelope.data,
     report: report.envelope.data,
   }).toStrictEqual({
-    orders: 0,
+    orders: [{ id: 1, item: 'mug' }],
     logged: 0,
     counted: { columns: ['orders'], rows: [{ orders: 1 }], rowCount: 1 },
     done: expect.objectContaining({ feature: 'checkout', run: done.envelope.instance }),
