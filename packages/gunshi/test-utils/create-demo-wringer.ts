@@ -25,7 +25,7 @@ const shipArgsSchema = z.discriminatedUnion('mode', [postSchema, pickupSchema]);
 
 // A repo's verify CLI for the adapter's tests: an app target `local`, a read-only target `prod`, a
 // read action with every flag type, a command with two positionals, a command whose arguments are a
-// union, and a doctor check that passes.
+// union, a command that never finishes, and a doctor check that passes.
 export function createDemoWringer(): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -78,6 +78,16 @@ export function createDemoWringer(): Wringer {
       needsRun: false,
       needsDoctor: false,
       run: (args) => Promise.resolve(args),
+    })
+    .command({
+      path: ['wait'],
+      summary: 'Wait for a delivery that never comes',
+      args: z.strictObject({}),
+      data: z.strictObject({}),
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: () => Promise.withResolvers<never>().promise,
     })
     .check({
       name: 'shelf',
