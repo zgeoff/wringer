@@ -113,7 +113,9 @@ test('it has postgres stop a psql write at its deadline when no abort reaches ps
 
   const notes = await ctx.readNotes();
 
-  expect({ stderr: result.stderr, notes }).toStrictEqual({
+  // psql exits 3 when `ON_ERROR_STOP` ends the script at a failed statement.
+  expect({ exitCode: result.exitCode, stderr: result.stderr, notes }).toStrictEqual({
+    exitCode: 3,
     stderr: expect.stringContaining('canceling statement due to statement timeout'),
     notes: [],
   });
@@ -131,7 +133,8 @@ test('it has postgres stop a psql write at a deadline its transport startup used
 
   const notes = await ctx.readNotes();
 
-  expect({ stderr: result.stderr, notes }).toStrictEqual({
+  expect({ exitCode: result.exitCode, stderr: result.stderr, notes }).toStrictEqual({
+    exitCode: 3,
     stderr: expect.stringContaining('canceling statement due to statement timeout'),
     notes: [],
   });
@@ -150,7 +153,8 @@ test('it has postgres refuse a psql write whose deadline passed while its transp
 
   const notes = await ctx.readNotes();
 
-  expect({ stderr: result.stderr, notes }).toStrictEqual({
+  expect({ exitCode: result.exitCode, stderr: result.stderr, notes }).toStrictEqual({
+    exitCode: 3,
     stderr: expect.stringContaining("The command's deadline passed before the statement started."),
     notes: [],
   });
