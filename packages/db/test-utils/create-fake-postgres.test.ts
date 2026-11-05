@@ -57,14 +57,11 @@ test('it refuses the first connection a cancel loop opens, then lets the next on
   onTestFinished(() => first.close());
   onTestFinished(() => second.close());
 
-  const refused = await first
-    .unsafe('select 1', [])
-    .execute()
-    .catch((error: unknown) => error);
+  const [refused] = await Promise.allSettled([first.unsafe('select 1', []).execute()]);
 
   await second.unsafe('select 1', []);
 
-  expect(refused).toMatchObject({ errno: '53300' });
+  expect(refused).toMatchObject({ status: 'rejected', reason: { errno: '53300' } });
 });
 
 test('it records a simple query as a simple-protocol statement', async () => {
