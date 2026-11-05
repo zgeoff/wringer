@@ -223,10 +223,10 @@ test('it stops the app when the run stops before the app is ready', async () => 
   const launching = ctx.startApp({
     plan: {
       command: ['sh', '-c', 'echo $$ > "$0"; echo booting; exec sleep 60', pidPath],
-      ready: (line) => {
-        if (line['message'] === 'booting') {
-          controller.abort();
-        }
+
+      // The app logs one line, `booting`, so the run stops as the app boots.
+      ready: () => {
+        controller.abort();
 
         return null;
       },
