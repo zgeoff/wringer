@@ -83,9 +83,31 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  // Its service's stop runs a command through the exec the service started with.
+  const tidy = defineDriver({
+    name: 'tidy',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {
+      shelf: {
+        start: (ctx) =>
+          Promise.resolve({
+            methods: {},
+            stop: async () => {
+              const result = await ctx.exec(['true'], 'read');
+
+              stopCalls.push(`shelf exited ${result.exitCode}`);
+            },
+          }),
+      },
+    },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(leaky({}))
     .use(tardy({}))
+    .use(tidy({}))
     .target('box', {
       mode: 'attach',
       access: 'read-write',
@@ -97,6 +119,12 @@ async function setupTest() {
       access: 'read-write',
       host: local(),
       drivers: { tardy: () => ({}) },
+    })
+    .target('tidy-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { tidy: () => ({}) },
     })
     .build();
 
@@ -271,6 +299,30 @@ test('#runSupervisor ends and closes its socket when its first log write fails',
 
   expect(readdir(dirname(socket))).rejects.toMatchObject({ code: 'ENOENT' });
   expect(ctx.callStatus(socket)).rejects.toThrow();
+});
+
+test('#runSupervisor lets a service run a command from its stop', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', undefined, 'tidy-box');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const [ended] = await Promise.all([
+    ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'),
+    supervising,
+  ]);
+
+  expect({ status: ended?.status, stopCalls: ctx.stopCalls }).toStrictEqual({
+    status: 'ended',
+    stopCalls: ['shelf exited 0'],
+  });
 });
 
 test('#runSupervisor removes its socket folder through the launch host once the run ends', async () => {

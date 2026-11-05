@@ -41,6 +41,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   const services = new Map<string, ServiceInstance>();
   const lifetime = new AbortController();
+  const serviceCommands = new AbortController();
 
   const stopped = Promise.withResolvers<undefined>();
 
@@ -96,6 +97,12 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     }
 
     const failures = await stopStarted();
+
+    // A cleanup the deadline gave up on can leave its command running, so the commands end only
+    // once every part that will ever stop has stopped.
+    if (!stopGaveUpOnStartup) {
+      serviceCommands.abort();
+    }
 
     try {
       for (const event of buildStopEvents({ crashReason, failures, at: at() })) {
@@ -189,6 +196,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
         run,
         hint: target.refusalHint ?? defaultRefusalHint,
         signal: lifetime.signal,
+        commandSignal: serviceCommands.signal,
         started: services,
         onReady: (key) => append({ type: 'service-ready', at: at(), service: key }),
       });
@@ -213,6 +221,8 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       for (const failure of await stopStarted()) {
         options.reportError(`A late cleanup failed for ${failure}`);
       }
+
+      serviceCommands.abort();
     }
   };
 
