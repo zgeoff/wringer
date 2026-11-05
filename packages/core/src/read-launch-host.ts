@@ -1,4 +1,4 @@
-import { appendText } from './append-text.ts';
+import { appendFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
 import { createSocketFolder } from './create-socket-folder.ts';
 import { killProcessGroup } from './kill-process-group.ts';
@@ -53,7 +53,7 @@ export function readLaunchHost(): LaunchHost {
         stderr: 'pipe',
         detached: true,
       }),
-    appendLog: appendText,
+    appendLog: appendFile,
     createDirectory,
     createSocketFolder,
     removeDirectory,
