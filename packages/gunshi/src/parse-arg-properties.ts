@@ -47,18 +47,19 @@ function collectProperties(jsonSchema: unknown): Record<string, ArgProperty> {
     collectProperties(branch),
   );
 
-  return [parsed.data.properties, ...branches].reduce<Record<string, ArgProperty>>(
-    (collected, properties) => {
-      for (const [name, property] of Object.entries(properties)) {
-        const seen = collected[name];
+  // A Map holds any argument name, `constructor` included, as its own key.
+  const collected = new Map<string, ArgProperty>();
 
-        collected[name] = seen === undefined ? property : pickMergedProperty(seen, property);
-      }
+  for (const properties of [parsed.data.properties, ...branches]) {
+    for (const [name, property] of Object.entries(properties)) {
+      const seen = collected.get(name);
+      const merged = seen === undefined ? property : pickMergedProperty(seen, property);
 
-      return collected;
-    },
-    {},
-  );
+      collected.set(name, merged);
+    }
+  }
+
+  return Object.fromEntries(collected);
 }
 
 function pickMergedProperty(seen: ArgProperty, property: ArgProperty): ArgProperty {

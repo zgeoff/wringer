@@ -20,6 +20,20 @@ test('it reads the type and description of each argument from its JSON Schema', 
   });
 });
 
+test('it reads an argument named after a key every object inherits', () => {
+  const properties = parseArgProperties({
+    path: ['seed'],
+    summary: 'Seed the shop',
+    args: z.strictObject({ constructor: z.string(), toString: z.number() }),
+    data: z.strictObject({}),
+  });
+
+  expect(properties).toStrictEqual({
+    constructor: { type: 'string' },
+    toString: { type: 'number' },
+  });
+});
+
 test('it reads the fields of every branch of an object union', () => {
   const post = z.strictObject({ mode: z.literal('post'), town: z.string() });
   const pickup = z.strictObject({ mode: z.literal('pickup'), counter: z.number() });
