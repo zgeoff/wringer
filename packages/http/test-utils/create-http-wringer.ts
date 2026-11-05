@@ -7,8 +7,8 @@ const emptySchema = z.strictObject({});
 const statusSchema = z.strictObject({ status: z.number() });
 
 // A verify CLI against the app at `url`, whose requests time out after half a second: `local` may
-// write, read-only `prod` grants POST /api/search, `broken` has a failing health path, and an
-// action claims a read, then posts an order.
+// write, read-only `prod` grants POST /api/search, `broken` has a failing health path, `bare` has
+// no `web` endpoint and no `baseURL`, and an action claims a read, then posts an order.
 export function createHttpWringer(url: string): Wringer {
   const shop = bindDrivers([http({ timeoutMs: 500 })] as const);
 
@@ -45,6 +45,16 @@ export function createHttpWringer(url: string): Wringer {
         host: local(),
         endpoints: () => ({ web: url }),
         drivers: { http: () => ({ healthPath: '/api/broken' }) },
+      }),
+    )
+    .target(
+      'bare',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ admin: url }),
+        drivers: { http: () => ({}) },
       }),
     )
     .action(
