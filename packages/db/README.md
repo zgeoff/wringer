@@ -46,9 +46,8 @@ with `--write` for a statement that writes, and the doctor check `db.connect`.
 ## Connections
 
 - `via: 'sql'` connects from the CLI to the SQLite file in `url` with `bun:sqlite`, or to the
-  Postgres URL in `url` with Bun.SQL. When the command's deadline passes, the driver cancels the
-  Postgres query in the database. A SQLite call through `bun:sqlite` is synchronous, so its
-  statement runs to completion once it starts, and a write can commit after the timeout.
+  Postgres URL in `url` with Bun.SQL. At the deadline, the driver cancels a Postgres query in the
+  database. A `bun:sqlite` call is synchronous, so a SQLite write can commit after the timeout.
 - `via: 'exec'` runs the database's own client on the target's host, with the SQL on stdin:
   `sqlite3 -json`, or `psql` with the rows turned into JSON by `json_agg`. `program` replaces the
   client's command, such as `['docker', 'exec', '-i', 'db', 'psql']`.
@@ -61,13 +60,11 @@ A query through `via: 'exec'` has these limits:
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
   with a usage error, and any other read counts as a write that did not ask to write.
-- When the command's deadline passes, the host stops the client's process group: `local()` kills
-  sqlite3 or psql, and `ssh()` stops the group on the remote host. A client that `program` starts in
-  a container, such as through `docker exec`, is outside that group and runs on. A sqlite3 there
-  runs its statement to completion, so a write can commit after the timeout.
-- psql gets a `statement_timeout` of the time left when it starts, and refuses to start once none is
-  left. Postgres reads the time on the database host's clock, so that clock must agree with the
-  CLI's.
+- At the deadline, the host stops the client's process group, locally or on the `ssh()` host. A
+  client that `program` starts in a container, such as through `docker exec`, runs on, so a sqlite3
+  write there can commit after the timeout.
+- psql gets a `statement_timeout` of the time left when it starts, by the database host's clock,
+  which must agree with the CLI's. It refuses to start once no time is left.
 
 ## Results
 
@@ -80,10 +77,9 @@ A query returns `{ columns, rows, rowCount }`.
 
 ## Reads and writes
 
-- A query is a read unless it passes `write: true`.
-- A read runs read-only in the database. On SQLite, `via: 'sql'` opens the file read-only with
-  `query_only` on, and `via: 'exec'` runs sqlite3 with `-readonly`. Postgres runs a read in a
-  read-only transaction.
+- A query is a read unless it passes `write: true`, and a read runs read-only in the database. On
+  SQLite, `via: 'sql'` opens the file read-only with `query_only` on, and `via: 'exec'` runs sqlite3
+  with `-readonly`. Postgres runs a read in a read-only transaction.
 - A query through `via: 'sql'` holds one statement. Postgres refuses a second one, so a read cannot
   end its read-only transaction with `COMMIT`.
 - On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
@@ -99,7 +95,6 @@ A query returns `{ columns, rows, rowCount }`.
   counts as a write.
 - The driver catches only the statements in this list. Connect a read-only target with a role that
   holds no file or program rights, such as `pg_write_server_files`.
-- A statement that writes without asking fails with a usage error.
-- A read-only target refuses each write with `read-only` and exit code 3, unless `readOnly.allow`
-  lists the statement verbatim.
+- A statement that writes without asking fails with a usage error. A read-only target refuses each
+  write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.
 - A database the driver cannot reach or open fails with an `environment` error and exit code 4.
