@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
+import { isErrorCode } from '../src/is-error-code.ts';
 import { killProcessGroup } from '../src/kill-process-group.ts';
 import { waitFor } from './wait-for.ts';
 
@@ -48,7 +49,7 @@ export async function createGuardedApp(): Promise<GuardedApp> {
     appPID,
     killParent,
     probeRunning: async () => {
-      const stat = await readOptionalText(`/proc/${appPID}/stat`);
+      const stat = await readProcessFile(appPID, 'stat');
 
       // The state follows the command name, which ends with `) `.
       return stat?.split(') ').at(-1)?.startsWith('Z') === false;
@@ -69,10 +70,24 @@ async function readStartedAppPID(stdout: ReadableStream<Uint8Array>): Promise<nu
   const appPID = Number(new TextDecoder().decode(first.value).trim());
 
   await waitFor(async () => {
-    const command = await readOptionalText(`/proc/${appPID}/comm`);
+    const command = await readProcessFile(appPID, 'comm');
 
     return command?.trim() === 'sleep' ? true : null;
   });
 
   return appPID;
+}
+
+// procfs answers a read of a process that is being reaped with ESRCH in place of ENOENT; either
+// way the process is gone.
+async function readProcessFile(pid: number, name: string): Promise<string | undefined> {
+  try {
+    return await readOptionalText(`/proc/${pid}/${name}`);
+  } catch (error) {
+    if (isErrorCode(error, 'ESRCH')) {
+      return undefined;
+    }
+
+    throw error;
+  }
 }
