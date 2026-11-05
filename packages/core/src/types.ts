@@ -4,6 +4,7 @@ import type { RunPaths } from './build-state-paths.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
+import type { FingerprintHost } from './read-fingerprint.ts';
 import type { Endpoints, RunID } from './run-events.ts';
 import type { ProcessResult } from './run-process.ts';
 
@@ -416,6 +417,7 @@ export interface OutputPort {
 export interface Session {
   readonly root: string;
   readonly state: StatePort;
+  readonly fingerprintHost: FingerprintHost;
   readonly target?: string | undefined;
   readonly feature?: string | undefined;
   readonly timeoutMs?: number | undefined;

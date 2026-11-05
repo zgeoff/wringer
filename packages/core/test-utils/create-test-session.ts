@@ -3,6 +3,8 @@ import { callSupervisor } from '../src/call-supervisor.ts';
 import type { StatePort } from '../src/create-file-state.ts';
 import { createRepoState } from '../src/create-repo-state.ts';
 import { readLaunchHost } from '../src/read-launch-host.ts';
+import { removeFile } from '../src/remove-file.ts';
+import { runGit } from '../src/run-git.ts';
 import { runSupervisor } from '../src/run-supervisor.ts';
 import { supervisorServiceName } from '../src/supervisor-protocol.ts';
 import type { Session, Wringer } from '../src/types.ts';
@@ -60,6 +62,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     session: {
       root: repo.root,
       state,
+      fingerprintHost: { runGit, removeFile },
       output: {
         writeLine: (line) => {
           lines.push(line);
