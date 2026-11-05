@@ -4,13 +4,14 @@ import type { Wringer } from '@wringer/core';
 import { stream } from '../src/stream.ts';
 
 // A verify CLI for the stream tests: `local` launches an app that logs `booted`, then `order placed`
-// per `order` file in `triggerDirectory`; `box` records commands, one in a stream named for an
+// per `order` file in `triggerDirectory`, and `closed` 300 ms after a SIGTERM; `box` records commands, one in a stream named for an
 // inherited key; `bulk` records 1,000 order lines; `dead` records a command that exits at once.
 export function createStreamWringer(triggerDirectory: string): Wringer {
   const shop = bindDrivers([stream({})] as const);
   const trigger = join(triggerDirectory, 'order');
 
   const app = [
+    `trap 'sleep 0.3; echo closed; exit 0' TERM`,
     `echo '{"event":"listening","port":4000}'`,
     'echo booted',
     `while true; do if [ -f '${trigger}' ]; then rm '${trigger}'; echo 'order placed'; fi; sleep 0.05; done`,
