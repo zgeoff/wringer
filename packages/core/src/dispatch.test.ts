@@ -1,15 +1,24 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 import { dispatch } from './dispatch.ts';
+import { removeFile } from './remove-file.ts';
+import { runGit } from './run-git.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
+
+  const gate = Promise.withResolvers<undefined>();
+  const guardsDone = Promise.withResolvers<undefined>();
+
+  onTestFinished(() => {
+    gate.resolve(undefined);
+  });
 
   return {
     root: shop.repo.root,
@@ -19,6 +28,36 @@ async function setupTest() {
       dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (timeoutMs: number, path: readonly string[], args: unknown) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local', timeoutMs }),
+
+    // The guards' fingerprint read waits for the gate, and its last step, removing the temporary
+    // index, settles `guardsDone`.
+    runWithGatedGuards: (timeoutMs: number, path: readonly string[]) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target: 'local',
+          timeoutMs,
+          fingerprintHost: {
+            runGit: async (request) => {
+              await gate.promise;
+
+              return runGit(request);
+            },
+            removeFile: async (filePath) => {
+              await removeFile(filePath);
+
+              guardsDone.resolve(undefined);
+            },
+          },
+        },
+      ),
+    openGate: () => {
+      gate.resolve(undefined);
+    },
+    guardsDone: guardsDone.promise,
     runOnPointers: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, shop.session),
     runAsFeature: (feature: string, path: readonly string[], args: unknown) =>
@@ -184,9 +223,14 @@ test('it never runs the body of a command whose deadline passed while its guards
 
   await ctx.run('local', ['up']);
   await ctx.run('local', ['doctor']);
-  await ctx.runWithin(1, ['action', 'receipt'], {});
+  await ctx.runWithGatedGuards(50, ['action', 'receipt']);
 
-  // A later command reads the fingerprint too, so the timed-out one has finished its guards by then.
+  ctx.openGate();
+
+  await ctx.guardsDone;
+
+  // A later command runs its whole path through the drive after the guards are done, so a receipt
+  // body that ran would have written by the time it returns.
   await ctx.run('local', ['action', 'count']);
 
   const receipts = await Array.fromAsync(
