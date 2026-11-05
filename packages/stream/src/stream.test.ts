@@ -93,8 +93,9 @@ test('it reads a new run from its start when use marked cursors in an older run'
     const result = await ctx.run('local', ['stream', 'read'], { name: 'app' });
 
     const slice = streamSliceSchema.parse(result.envelope.data);
+    const read = slice.records.map((record) => record.line);
 
-    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+    return read.includes('booted') ? read : null;
   });
 
   expect(lines).toStrictEqual(['{"event":"listening","port":4000}', 'booted']);
