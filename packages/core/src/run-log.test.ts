@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createLockHolder } from '../test-utils/create-lock-holder.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
-import { killProcessGroup } from './kill-process-group.ts';
 import type { RunEvent } from './run-events.ts';
 import {
   appendRunEvent,
@@ -39,40 +39,12 @@ async function setupTest() {
       }),
     readLog: () => readFile(logPath, 'utf8'),
 
-    // A process group of its own takes the lock and keeps it until the group is killed.
     holdInOtherProcess: async () => {
-      await mkdir(dirname(lockPath), { recursive: true });
+      const holder = await createLockHolder(lockPath);
 
-      const script = [
-        "import { withFileLock } from '@zgeoff/std/with-file-lock';",
-        `await withFileLock(${JSON.stringify(lockPath)}, async () => {`,
-        "  console.log('held');",
-        '  await Bun.sleep(60_000);',
-        '});',
-      ].join('\n');
+      stack.defer(holder.kill);
 
-      const holder = Bun.spawn([process.execPath, '-e', script], {
-        cwd: join(import.meta.dir, '..'),
-        stdout: 'pipe',
-        detached: true,
-      });
-
-      stack.defer(async () => {
-        killProcessGroup(holder.pid);
-
-        await holder.exited;
-      });
-
-      const first = await holder.stdout.getReader().read();
-
-      return {
-        held: !first.done,
-        kill: async () => {
-          killProcessGroup(holder.pid);
-
-          await holder.exited;
-        },
-      };
+      return holder;
     },
   };
 }
