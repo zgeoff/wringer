@@ -1,13 +1,18 @@
 import { expect, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { z } from 'zod';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
+import { readOpenDescriptorCount } from '../../test-utils/read-open-descriptor-count.ts';
+import { waitFor } from '../../test-utils/wait-for.ts';
+import { buildRunPaths } from '../build-state-paths.ts';
 import type { StatePort } from '../create-file-state.ts';
 import { dispatch } from '../dispatch.ts';
 import { readVerdicts } from '../read-verdicts.ts';
 import { reportSchema } from '../report-schema.ts';
+import { runIDSchema } from '../run-events.ts';
 import type { UploadRequest } from '../types.ts';
 
 async function setupTest() {
@@ -29,19 +34,15 @@ async function setupTest() {
     },
   };
 
-  // Another doctor fails after `done` read the run and before its envelope reaches the log.
-  const racedState: StatePort = {
-    ...shop.state,
-    appendEventUnless: async (runID, event, refuse) => {
-      await shop.state.appendEvent(runID, {
-        type: 'doctor-failed',
-        at: '2026-11-05T09:00:00.000Z',
-        results: [
-          { name: 'shop', status: 'failed', durationMs: 4, code: 'check-failed', message: null },
-        ],
-      });
+  // Tells the test when `done` starts to write its envelope, before it waits for the run lock.
+  const writing = Promise.withResolvers<undefined>();
 
-      await shop.state.appendEventUnless(runID, event, refuse);
+  const observedState: StatePort = {
+    ...shop.state,
+    appendEventUnless: (runID, event, refuse) => {
+      writing.resolve(undefined);
+
+      return shop.state.appendEventUnless(runID, event, refuse);
     },
   };
 
@@ -51,8 +52,10 @@ async function setupTest() {
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
-    runWhileDoctorFails: (path: readonly string[]) =>
-      dispatch(wringer, path, {}, { ...shop.session, state: racedState, target: 'local' }),
+    runObservedDone: () =>
+      dispatch(wringer, ['done'], {}, { ...shop.session, state: observedState, target: 'local' }),
+    writing: writing.promise,
+    runPaths: (runID: string) => buildRunPaths(shop.state.paths.root, runID),
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[]) =>
       dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
@@ -119,15 +122,52 @@ test('#done records a verdict with the evidence of the drives since the doctor',
   });
 });
 
-test('#done refuses and records no verdict when another doctor fails before its envelope is logged', async () => {
+test('#done refuses and records no verdict when a doctor fails while it waits for the run lock', async () => {
   const ctx = await setupTest();
+  const up = await ctx.run(['up']);
 
-  await ctx.run(['up']);
   await ctx.run(['doctor']);
   await ctx.run(['use'], { feature: 'checkout' });
   await ctx.run(['action', 'receipt']);
 
-  const result = await ctx.runWhileDoctorFails(['done']);
+  const runPaths = ctx.runPaths(runIDSchema.parse(up.envelope.instance));
+  const held = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
+
+  const holding = withFileLock(
+    runPaths.lock,
+    async () => {
+      held.resolve(undefined);
+
+      await release.promise;
+    },
+    { waitMs: 5000 },
+  );
+
+  await held.promise;
+
+  const done = ctx.runObservedDone();
+
+  await ctx.writing;
+
+  // The writer opens the lock file once it has done everything it does before the lock.
+  await waitFor(async () => {
+    const count = await readOpenDescriptorCount(runPaths.lock);
+
+    return count > 1 ? true : null;
+  });
+
+  // The test holds the run lock, as the log's only writer does, so it appends the failure itself.
+  await appendFile(
+    runPaths.log,
+    `${JSON.stringify({ type: 'doctor-failed', at: '2026-11-05T09:00:00.000Z', results: [] })}\n`,
+  );
+
+  release.resolve(undefined);
+
+  await holding;
+
+  const result = await done;
   const verdicts = await ctx.readVerdicts();
 
   expect({

@@ -116,7 +116,7 @@ export function createFileState(options: FileStateOptions): StatePort {
     await appendRunEvent({
       fs,
       logPath: runPaths.log,
-      lockPath: join(paths.locks, `run-${runID}.lock`),
+      lockPath: runPaths.lock,
       lockTimeoutMs: options.lockTimeoutMs,
       line,
       event: parsed,
@@ -160,7 +160,7 @@ export function createFileState(options: FileStateOptions): StatePort {
 
     // Under the run's lock, so a manifest built from an older read never replaces a newer one.
     writeManifest: (runID) =>
-      withLock(`run-${runID}.lock`, async () => {
+      withLock(basename(buildRunPaths(options.stateDir, runID).lock), async () => {
         const view = await readRun(runID);
 
         const plan = buildManifestWrite(buildRunPaths(options.stateDir, runID).manifest, view);
