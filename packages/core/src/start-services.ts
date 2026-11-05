@@ -45,7 +45,9 @@ export async function startServices(request: ServicesRequest): Promise<void> {
 
       const key = buildServiceKey(entry.name, service);
 
+      // A service that came up after the abort still goes in `started`, so the stop reaches it.
       request.started.set(key, instance);
+      request.signal.throwIfAborted();
 
       await request.onReady(key);
     }

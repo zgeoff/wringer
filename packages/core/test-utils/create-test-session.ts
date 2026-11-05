@@ -80,7 +80,11 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
               runID: request.runID,
               target: request.target,
               readyTimeoutMs: 5000,
+              stopWaitMs: 5000,
               now: () => new Date(),
+              reportError: (message) => {
+                lines.push(message);
+              },
             }),
           );
 
