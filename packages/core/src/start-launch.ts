@@ -2,7 +2,7 @@ import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
-import { readStreamLines } from './read-stream-lines.ts';
+import { readStreamLineBatches } from './read-stream-line-batches.ts';
 import type { Endpoints } from './run-events.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { LaunchPlan } from './types.ts';
@@ -194,10 +194,14 @@ async function pipeLines(
   logPath: string,
   onLine: (line: string) => void,
 ): Promise<void> {
-  for await (const line of readStreamLines(stream)) {
-    await host.appendLog(logPath, `${line}\n`);
+  // One append per chunk: an app that prints many lines as it stops would otherwise pay one
+  // append per line, and miss the bound on the stop's wait for its log.
+  for await (const lines of readStreamLineBatches(stream)) {
+    await host.appendLog(logPath, `${lines.join('\n')}\n`);
 
-    onLine(line);
+    for (const line of lines) {
+      onLine(line);
+    }
   }
 }
 
