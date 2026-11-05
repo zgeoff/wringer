@@ -20,7 +20,7 @@ test('it opens SQLite read-only and in safe mode for a read, and names its colum
   });
 });
 
-test('it sends a SQLite read that no view can hold as it is', () => {
+test('it reads a SQLite pragma through its table-valued function, so its columns come first', () => {
   const query = buildExecQuery({
     dialect: 'sqlite',
     program: ['sqlite3'],
@@ -33,9 +33,39 @@ test('it sends a SQLite read that no view can hold as it is', () => {
 
   expect(query).toStrictEqual({
     argv: ['sqlite3', '-safe', '-json', '-readonly', '/srv/shop.db'],
-    stdin: 'pragma table_info(notes)',
-    output: 'rows',
+    stdin: `create temp view wringer_read as\nselect * from "pragma_table_info" where arg = 'notes'\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('wringer_read');\nselect * from wringer_read;\n`,
+    output: 'columns-then-rows',
   });
+});
+
+test('it names the SQLite view after nothing the read mentions', () => {
+  const query = buildExecQuery({
+    dialect: 'sqlite',
+    program: ['sqlite3'],
+    database: '/srv/shop.db',
+    sql: 'select * from WRINGER_READ join wringer_read_1 using (id)',
+    params: [],
+    write: false,
+    deadlineAtMs: 1_800_000_000_000,
+  });
+
+  expect(query.stdin).toBe(
+    "create temp view wringer_read_2 as\nselect * from WRINGER_READ join wringer_read_1 using (id)\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('wringer_read_2');\nselect * from wringer_read_2;\n",
+  );
+});
+
+test('it refuses a SQLite read of two statements with a usage error', () => {
+  expect(() =>
+    buildExecQuery({
+      dialect: 'sqlite',
+      program: ['sqlite3'],
+      database: '/srv/shop.db',
+      sql: 'select 1; select 2',
+      params: [],
+      write: false,
+      deadlineAtMs: 1_800_000_000_000,
+    }),
+  ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
 
 test('it opens SQLite for writing for a write', () => {

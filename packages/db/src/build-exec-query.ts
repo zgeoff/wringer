@@ -1,7 +1,7 @@
 import { WringerError } from '@wringer/core';
+import { buildSqliteReadSelect } from './build-sqlite-read-select.ts';
 import { findLeadingWord } from './find-leading-word.ts';
 import { findStatementBody } from './find-statement-body.ts';
-import { findWrappableStatement } from './find-wrappable-statement.ts';
 import { parseSQLTokens } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
@@ -50,21 +50,46 @@ export function buildExecQuery(input: ExecQueryInput): ExecQuery {
 // `-safe` turns off the dot-commands that reach past the database, such as `.shell`, and `.open`,
 // which would reopen the file for writing.
 function buildSqliteQuery(input: ExecQueryInput): ExecQuery {
-  const readOnly = input.write ? [] : ['-readonly'];
-  const argv = [...input.program, '-safe', '-json', ...readOnly, input.database];
-  const statement = input.write ? null : findWrappableStatement('sqlite', input.sql);
+  if (input.write) {
+    return {
+      argv: [...input.program, '-safe', '-json', input.database],
+      stdin: input.sql,
+      output: 'rows',
+    };
+  }
+
+  const statement = findStatementBody('sqlite', input.sql);
 
   if (statement === null) {
-    return { argv, stdin: input.sql, output: 'rows' };
+    throw new WringerError('usage', {
+      message: 'A read through sqlite3 runs alone, with no second statement and nothing left open.',
+      hint: 'Split the statements into separate queries.',
+    });
   }
+
+  const select = buildSqliteReadSelect(statement);
+  const view = pickViewName(select);
 
   // sqlite3 prints nothing for a read with no rows, so a temporary view names the columns first.
   // The view lives in the connection's own temporary database, which a read-only file still allows.
   return {
-    argv,
-    stdin: `create temp view wringer_read as\n${statement}\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('wringer_read');\nselect * from wringer_read;\n`,
+    argv: [...input.program, '-safe', '-json', '-readonly', input.database],
+    stdin: `create temp view ${view} as\n${select}\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('${view}');\nselect * from ${view};\n`,
     output: 'columns-then-rows',
   };
+}
+
+// A temporary view hides any table or view of the same name, so the view takes a name the read
+// never mentions.
+function pickViewName(select: string): string {
+  const text = select.toLowerCase();
+  let name = 'wringer_read';
+
+  for (let index = 1; text.includes(name); index += 1) {
+    name = `wringer_read_${index}`;
+  }
+
+  return name;
 }
 
 const unwrappableReadWords = new Set(['show', 'explain']);

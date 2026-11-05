@@ -56,12 +56,12 @@ A query through `via: 'exec'` has these limits:
 
 - It takes no `params`.
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
-- A statement for psql runs alone, with no backslash and no second statement.
+- A statement for psql, or a read for sqlite3, runs alone, and one for psql holds no backslash.
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
-- psql runs a read inside a `select`, so a `show` or `explain` fails with a usage error.
-- At the deadline, the host stops the client's process group, locally or on the `ssh()` host. A
-  client that `program` starts in a container, such as through `docker exec`, runs on, so a sqlite3
-  write there can commit after the timeout.
+- An `explain` read, or a `show` through psql, fails with a usage error. sqlite3 runs a `pragma`
+  read as its table-valued function, with no schema, so run a pragma that sets a value as a write.
+- At the deadline, the host stops the client's process group. A client that `program` starts in a
+  container, such as with `docker exec`, runs on, so a sqlite3 write there can commit after it.
 - psql gets a `statement_timeout` of the time left when it starts, by the database host's clock,
   which must agree with the CLI's. It refuses to start once no time is left.
 
@@ -72,7 +72,7 @@ A query returns `{ columns, rows, rowCount }`.
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
 - `columns` holds a read's columns, also with no rows: from the statement on SQLite `via: 'sql'`,
-  else from a wrapper, or from the first row for a `show`, `explain` or `pragma` read.
+  else from a wrapper, or from the first row for a Postgres `show` or `explain` read.
 
 ## Reads and writes
 
@@ -96,5 +96,5 @@ A query returns `{ columns, rows, rowCount }`.
 - The driver catches only these statements, so give a read-only target a role with no file rights.
 - A statement that writes without asking fails with a usage error. A read-only target refuses each
   write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.
-- A database the driver cannot reach or open fails with an `environment` error and exit code 4. A
-  statement the database stops at the deadline fails with `timeout` and exit code 5.
+- A database the driver cannot reach or open fails with exit code 4 (`environment`), and a statement
+  the database stops at the deadline with exit code 5 (`timeout`).

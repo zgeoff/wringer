@@ -4,7 +4,7 @@ import { findWrappableStatement } from './find-wrappable-statement.ts';
 // left join gives one row of nulls, and `to_json` of that row names each column, in order. A read
 // no subquery can hold, such as SHOW, always returns a row.
 export function buildColumnProbe(sql: string, rowCount: number): string | null {
-  const statement = rowCount === 0 ? findWrappableStatement('postgres', sql) : null;
+  const statement = rowCount === 0 ? findWrappableStatement(sql) : null;
 
   if (statement === null) {
     return null;
