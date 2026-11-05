@@ -71,9 +71,8 @@ A query returns `{ columns, rows, rowCount }`.
 
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
-- `columns` holds a read's columns in the statement's order, also with no rows: from the statement
-  on SQLite `via: 'sql'`, else from a wrapper, or from the first row for a Postgres `show` or
-  `explain` read.
+- `columns` holds a read's columns in order, also with no rows: from the statement on SQLite
+  `via: 'sql'`, else from a wrapper, or from the first row of a Postgres `show` or `explain`.
 
 ## Reads and writes
 
@@ -97,6 +96,5 @@ A query returns `{ columns, rows, rowCount }`.
 - The driver catches only these statements, so give a read-only target a role with no file rights.
 - A statement that writes without asking fails with a usage error. A read-only target refuses each
   write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.
-- A database the driver cannot reach or open, and a database that refuses a write the query
-  declared, such as a replica, fail with exit code 4 (`environment`). A statement the database stops
-  at the deadline fails with exit code 5 (`timeout`).
+- A database that the driver cannot reach or open, or that refuses a declared write, such as a
+  replica, fails with exit code 4 (`environment`). A statement stopped at the deadline exits 5.
