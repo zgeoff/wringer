@@ -14,7 +14,7 @@ async function setupTest() {
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
-  const transport = mock<HttpTransport>(() => Promise.resolve(Response.json({ via: 'transport' })));
+  const transport = mock<HttpTransport>((url, init) => fetch(url, init));
   const transportWringer = createHttpWringer(SHOP_API_URL, transport);
 
   const transportShop = await createTestSession({
@@ -381,9 +381,17 @@ test('it sends each request through the transport the repo passes', async () => 
 
   const result = await ctx.runWithTransport(['http', 'request'], { path: '/api/cart' });
 
-  expect({ data: result.envelope.data, call: ctx.transport.mock.lastCall }).toStrictEqual({
-    data: expect.objectContaining({ status: 200, json: { via: 'transport' } }),
-    call: [new URL(`${SHOP_API_URL}/api/cart`), expect.objectContaining({ method: 'GET' })],
+  expect({
+    data: result.envelope.data,
+    calls: ctx.transport.mock.calls,
+    requests: shopRequests,
+  }).toStrictEqual({
+    data: expect.objectContaining({ status: 200, json: { method: 'GET', path: '/api/cart' } }),
+    calls: [
+      [new URL(`${SHOP_API_URL}/`), expect.objectContaining({ method: 'GET' })],
+      [new URL(`${SHOP_API_URL}/api/cart`), expect.objectContaining({ method: 'GET' })],
+    ],
+    requests: ['GET /', 'GET /api/cart'],
   });
 });
 
