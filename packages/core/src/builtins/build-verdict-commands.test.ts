@@ -1,18 +1,15 @@
-import { expect, test } from 'bun:test';
-import { appendFile, mkdir, writeFile } from 'node:fs/promises';
+import { expect, onTestFinished, test } from 'bun:test';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { z } from 'zod';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
-import { readOpenDescriptorCount } from '../../test-utils/read-open-descriptor-count.ts';
-import { waitFor } from '../../test-utils/wait-for.ts';
-import { buildRunPaths } from '../build-state-paths.ts';
 import type { StatePort } from '../create-file-state.ts';
 import { dispatch } from '../dispatch.ts';
 import { readVerdicts } from '../read-verdicts.ts';
 import { reportSchema } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
+import type { RunEvent } from '../run-events.ts';
 import type { UploadRequest } from '../types.ts';
 
 async function setupTest() {
@@ -34,13 +31,17 @@ async function setupTest() {
     },
   };
 
-  // Tells the test when `done` starts to write its envelope, before it waits for the run lock.
+  // `done` pauses where it hands its envelope to the state, before the state takes the run lock,
+  // until the test releases it.
   const writing = Promise.withResolvers<undefined>();
+  const release = Promise.withResolvers<undefined>();
 
-  const observedState: StatePort = {
+  const pausedState: StatePort = {
     ...shop.state,
-    appendEventUnless: (runID, event, refuse) => {
+    appendEventUnless: async (runID, event, refuse) => {
       writing.resolve(undefined);
+
+      await release.promise;
 
       return shop.state.appendEventUnless(runID, event, refuse);
     },
@@ -52,10 +53,13 @@ async function setupTest() {
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
-    runObservedDone: () =>
-      dispatch(wringer, ['done'], {}, { ...shop.session, state: observedState, target: 'local' }),
+    runPausedDone: () =>
+      dispatch(wringer, ['done'], {}, { ...shop.session, state: pausedState, target: 'local' }),
     writing: writing.promise,
-    runPaths: (runID: string) => buildRunPaths(shop.state.paths.root, runID),
+    releaseDone: () => {
+      release.resolve(undefined);
+    },
+    appendEvent: (runID: string, event: RunEvent) => shop.state.appendEvent(runID, event),
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[]) =>
       dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
@@ -130,42 +134,24 @@ test('#done refuses and records no verdict when a doctor fails while it waits fo
   await ctx.run(['use'], { feature: 'checkout' });
   await ctx.run(['action', 'receipt']);
 
-  const runPaths = ctx.runPaths(runIDSchema.parse(up.envelope.instance));
-  const held = Promise.withResolvers<undefined>();
-  const release = Promise.withResolvers<undefined>();
+  const runID = runIDSchema.parse(up.envelope.instance);
+  const done = ctx.runPausedDone();
 
-  const holding = withFileLock(
-    runPaths.lock,
-    async () => {
-      held.resolve(undefined);
+  onTestFinished(async () => {
+    ctx.releaseDone();
 
-      await release.promise;
-    },
-    { waitMs: 5000 },
-  );
-
-  await held.promise;
-
-  const done = ctx.runObservedDone();
+    await Promise.allSettled([done]);
+  });
 
   await ctx.writing;
 
-  // The writer opens the lock file once it has done everything it does before the lock.
-  await waitFor(async () => {
-    const count = await readOpenDescriptorCount(runPaths.lock);
-
-    return count > 1 ? true : null;
+  await ctx.appendEvent(runID, {
+    type: 'doctor-failed',
+    at: '2026-11-05T09:00:00.000Z',
+    results: [],
   });
 
-  // The test holds the run lock, as the log's only writer does, so it appends the failure itself.
-  await appendFile(
-    runPaths.log,
-    `${JSON.stringify({ type: 'doctor-failed', at: '2026-11-05T09:00:00.000Z', results: [] })}\n`,
-  );
-
-  release.resolve(undefined);
-
-  await holding;
+  ctx.releaseDone();
 
   const result = await done;
   const verdicts = await ctx.readVerdicts();
