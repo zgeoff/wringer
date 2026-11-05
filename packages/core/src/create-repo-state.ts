@@ -1,9 +1,7 @@
 import { join } from 'node:path';
 import { createFileState } from './create-file-state.ts';
 import type { StatePort } from './create-file-state.ts';
-import { createNodeLockHost } from './create-node-lock-host.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
-import { makeFileLock } from './with-file-lock.ts';
 
 const lockTimeoutMs = 30_000;
 
@@ -13,6 +11,5 @@ export function createRepoState(root: string, stateDir: string): StatePort {
     stateDir: join(root, stateDir),
     lockTimeoutMs,
     fs: createNodeStateFileSystem(),
-    lock: makeFileLock(createNodeLockHost()),
   });
 }
