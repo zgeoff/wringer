@@ -30,12 +30,17 @@ export interface RunPaths {
   readonly streams: string;
   readonly children: string;
   readonly features: string;
+
+  // The lock every writer of the run's log and manifest holds.
+  readonly lock: string;
 }
 
 export function buildRunPaths(stateDir: string, runID: RunID): RunPaths {
-  const directory = join(buildStatePaths(stateDir).runs, runID);
+  const statePaths = buildStatePaths(stateDir);
+  const directory = join(statePaths.runs, runID);
 
   return {
+    lock: join(statePaths.locks, `run-${runID}.lock`),
     directory,
     manifest: join(directory, 'manifest.json'),
     log: join(directory, 'log.ndjson'),
