@@ -37,6 +37,8 @@ async function setupTest() {
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+    runWithin: (timeoutMs: number, target: string, path: readonly string[], args: unknown) =>
+      dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
   };
 }
 
@@ -239,6 +241,24 @@ test('it reads rows through the database client on the target host', async () =>
     columns: ['text'],
     rows: [{ text: 'pay' }],
     rowCount: 1,
+  });
+});
+
+test('it answers a read through the database client that runs past the deadline with exit code 5', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.runWithin(300, 'box', ['db', 'query'], {
+    sql: 'with recursive c(x) as (select 1 union all select x + 1 from c where x < 1000000000) select count(*) as total from c',
+  });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 5,
+    code: 'timeout',
   });
 });
 

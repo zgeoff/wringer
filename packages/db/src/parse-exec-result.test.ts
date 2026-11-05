@@ -112,12 +112,20 @@ test('it fails with an environment error on output that is not JSON rows', () =>
   ).toThrow(expect.objectContaining({ code: 'environment' }));
 });
 
-test("it fails with the client's stderr when the client exits non-zero", () => {
+test.each([
+  {
+    name: 'the SQLSTATE psql printed',
+    stderr:
+      'ERROR:  53300: sorry, too many clients already\nLOCATION:  InitProcessPhase2, proc.c:404\n',
+    errno: '53300',
+  },
+  { name: 'no SQLSTATE for sqlite3', stderr: 'Error: no such table: notes\n', errno: null },
+])("it fails with the client's stderr and $name when the client exits non-zero", (row) => {
   expect(() =>
     parseExecResult({
-      result: { exitCode: 1, stdout: '', stderr: 'Error: no such table: notes\n' },
-      output: 'rows',
+      result: { exitCode: 3, stdout: '', stderr: row.stderr },
+      output: 'columns-and-rows',
       write: false,
     }),
-  ).toThrow('Error: no such table: notes');
+  ).toThrow(expect.objectContaining({ message: row.stderr.trim(), errno: row.errno }));
 });

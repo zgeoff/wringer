@@ -56,6 +56,30 @@ test('it runs each statement of a script and prints the rows of each read that h
   expect(result).toStrictEqual({ exitCode: 0, stdout: '[{"total":2}]\n', stderr: '' });
 });
 
+test('it refuses a flag it does not take', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  const result = await ctx.run(['-json', '-bail', ctx.file], 'select text from notes');
+
+  expect({ exitCode: result.exitCode, stdout: result.stdout }).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+  });
+});
+
+test('it refuses a call with no database file', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['-json', '-readonly'], 'select 1');
+
+  expect(result).toStrictEqual({
+    exitCode: 1,
+    stdout: '',
+    stderr: 'Error: pass one database file\n',
+  });
+});
+
 test('it refuses a write with -readonly as sqlite3 does', async () => {
   const ctx = await setupTest();
 

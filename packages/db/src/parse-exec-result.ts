@@ -3,6 +3,7 @@ import type { ProcessResult } from '@wringer/core';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 import type { ExecOutput } from './build-exec-query.ts';
+import { DatabaseClientError } from './database-client-error.ts';
 import { rowSchema } from './db-result-schema.ts';
 import type { DbResult, Row } from './db-result-schema.ts';
 
@@ -17,12 +18,13 @@ const columnsSchema = z.array(z.string());
 const readSchema = z.strictObject({ columns: columnsSchema, rows: rowsSchema });
 const columnLineSchema = z.array(z.strictObject({ wringer_columns: z.string() })).length(1);
 
-// A client that exits non-zero failed the statement; its stderr goes to the caller as a plain
-// error, which the driver then reads as a refusal, a fault of the environment or a bad statement.
+// A client that exits non-zero failed the statement; its stderr and any SQLSTATE in it go to the
+// caller, which reads them as a refusal, a fault of the environment or a bad statement.
 export function parseExecResult(input: ExecResultInput): DbResult {
   if (input.result.exitCode !== 0) {
-    throw new Error(
+    throw new DatabaseClientError(
       input.result.stderr.trim() || `The database client exited with ${input.result.exitCode}.`,
+      parseSQLState(input.result.stderr),
     );
   }
 
@@ -58,6 +60,13 @@ export function parseExecResult(input: ExecResultInput): DbResult {
       };
     })
     .exhaustive();
+}
+
+// psql with `VERBOSITY=verbose` prints `ERROR:  57014: canceling statement …`.
+const sqlStatePattern = /^(?:ERROR|FATAL|PANIC):\s+(?<code>[0-9A-Z]{5}):/mu;
+
+function parseSQLState(stderr: string): string | null {
+  return sqlStatePattern.exec(stderr)?.groups?.['code'] ?? null;
 }
 
 const commandTagPattern = /^(?:INSERT \d+|UPDATE|DELETE|MERGE|SELECT|COPY) (?<count>\d+)$/u;

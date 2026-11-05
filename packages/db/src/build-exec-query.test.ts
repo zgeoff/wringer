@@ -95,6 +95,8 @@ test('it wraps a Postgres read in a read-only transaction that prints its column
       '-A',
       '-v',
       'ON_ERROR_STOP=1',
+      '-v',
+      'VERBOSITY=verbose',
       '-d',
       'postgres://shop@db/shop',
     ],
@@ -166,7 +168,18 @@ test('it sends a Postgres write limited to its deadline and reads its command ta
   });
 
   expect(query).toStrictEqual({
-    argv: ['psql', '-X', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', 'shop'],
+    argv: [
+      'psql',
+      '-X',
+      '-t',
+      '-A',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-v',
+      'VERBOSITY=verbose',
+      '-d',
+      'shop',
+    ],
     stdin:
       "do $wringer$ declare left_ms bigint := 1800000001200 - floor(extract(epoch from clock_timestamp()) * 1000)::bigint; begin if left_ms < 1 then raise exception 'The command''s deadline passed before the statement started.'; end if; perform set_config('statement_timeout', left_ms::text, false); end $wringer$;\ndelete from orders",
     output: 'command-tag',

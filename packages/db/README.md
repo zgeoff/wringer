@@ -56,7 +56,7 @@ A query through `via: 'exec'` has these limits:
 
 - It takes no `params`.
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
-- A statement for psql runs alone, with no backslash and no `;` inside it.
+- A statement for psql runs alone, with no backslash and no second statement.
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - psql runs a read inside a `select`, so a `show` or `explain` fails with a usage error.
 - At the deadline, the host stops the client's process group, locally or on the `ssh()` host. A
@@ -71,8 +71,8 @@ A query returns `{ columns, rows, rowCount }`.
 
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
-- `columns` holds a read's column names, also for an empty result. A read that no subquery or view
-  can hold, such as `pragma`, or that holds a `;`, takes the first row's keys instead.
+- `columns` holds a read's columns, also with no rows: from the statement on SQLite `via: 'sql'`,
+  else from a wrapper, or from the first row for a `show`, `explain` or `pragma` read.
 
 ## Reads and writes
 
