@@ -6,6 +6,8 @@ import { supervisorArgsSchema } from './supervisor-protocol.ts';
 import type { Wringer } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
+const stopWaitMs = 10_000;
+
 // The entry of the supervisor process: argv is what follows the hidden command name. The process
 // exits once its run has stopped.
 export async function runSupervisorProcess(
@@ -35,7 +37,13 @@ export async function runSupervisorProcess(
     runID: parsed.data.runID,
     target: parsed.data.target,
     readyTimeoutMs: launchReadyTimeoutMs,
+    stopWaitMs,
     now: () => new Date(),
+
+    // The process that starts the supervisor sends its stderr to the supervisor's log.
+    reportError: (message) => {
+      process.stderr.write(`${message}\n`);
+    },
     signal: signalled.signal,
   });
 }
