@@ -173,6 +173,43 @@ test('it clicks the element a read-only target grants', async () => {
   });
 });
 
+test('it clicks by its snapshot ref the button a read-only target grants, inside an action', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'click-by-ref'], { button: 'Search' });
+
+  expect({ exitCode: result.exitCode, posts: ctx.posts }).toStrictEqual({
+    exitCode: 0,
+    posts: ['/api/search'],
+  });
+});
+
+test('it refuses a click by snapshot ref on a button a read-only target does not grant, inside an action', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'click-by-ref'], { button: 'Place order' });
+
+  expect({
+    exitCode: result.exitCode,
+    error: result.envelope.error,
+    posts: ctx.posts,
+  }).toStrictEqual({
+    exitCode: 3,
+    error: {
+      code: 'read-only',
+      message: 'click on button "Place order" is a write, and the target is read-only.',
+      hint: 'prod is read-only: place the order on local.',
+    },
+    posts: [],
+  });
+});
+
 test('it refuses typing on a read-only target with exit code 3 and the target hint', async () => {
   const ctx = await setupTest();
 
