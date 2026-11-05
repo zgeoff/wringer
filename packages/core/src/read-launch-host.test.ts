@@ -1,4 +1,6 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
+import { createGuardedApp } from '../test-utils/create-guarded-app.ts';
+import { waitFor } from '../test-utils/wait-for.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 
 test('it reads the launch guard, the folder and the environment of this process', () => {
@@ -18,3 +20,22 @@ test('it reads the launch guard, the folder and the environment of this process'
     runProcess: expect.any(Function),
   });
 });
+
+test.skipIf(Bun.which('setpriv') === null)(
+  'it guards the app so that it exits when the process that launched it is killed',
+  async () => {
+    const app = await createGuardedApp();
+
+    onTestFinished(app.stop);
+
+    await app.killParent();
+
+    const exited = await waitFor(async () => {
+      const running = await app.probeRunning();
+
+      return running ? null : true;
+    });
+
+    expect(exited).toBeTrue();
+  },
+);
