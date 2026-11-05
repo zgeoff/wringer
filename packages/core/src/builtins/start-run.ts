@@ -56,6 +56,14 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
       exclude: [ctx.wringer.stateDir],
     });
 
+    // The caller has its timeout already once the deadline passes, so no run starts after it.
+    if (ctx.signal.aborted) {
+      throw new WringerError('timeout', {
+        message: `The command's deadline passed before run ${runID} started.`,
+        hint: 'Pass a longer `--timeout-ms`, then run `up` again.',
+      });
+    }
+
     await ctx.state.appendEvent(runID, {
       type: 'run-started',
       at: ctx.now().toISOString(),
