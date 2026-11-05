@@ -58,8 +58,7 @@ plus the batch it is writing. It drops the rest, and then writes a record that c
 lines. A batch that fails to write stays queued for the next write, and the source reads as failed
 until a write succeeds. When the run stops with records still unwritten, or with a source it could
 not read, the run ends as crashed, and its crash reason names the stream and the error. The `down`
-or `detach` that stopped the run still succeeds, so read the run's status to learn that records were
-lost.
+or `detach` that stopped the run then fails with an `environment` error that names them too.
 
 ## Cursors
 
