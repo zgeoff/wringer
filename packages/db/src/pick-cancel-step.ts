@@ -14,7 +14,7 @@ export type CancelEvent =
   | { readonly kind: 'failed'; readonly message: string };
 
 // `attempt` opens a cancel session when none is open, then sends the cancel through it.
-export type CancelEffect =
+type CancelEffect =
   | { readonly kind: 'attempt' }
   | { readonly kind: 'report'; readonly message: string }
   | { readonly kind: 'close' }
