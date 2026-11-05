@@ -1,8 +1,9 @@
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { isErrorCode } from '../src/is-error-code.ts';
 import { killProcessGroup } from '../src/kill-process-group.ts';
-import { waitFor } from './wait-for.ts';
 
 export interface GuardedApp {
   readonly appPID: number;
@@ -72,7 +73,7 @@ async function readStartedAppPID(stdout: ReadableStream<Uint8Array>): Promise<nu
   await waitFor(async () => {
     const command = await readProcessFile(appPID, 'comm');
 
-    return command?.trim() === 'sleep' ? true : null;
+    invariant(command?.trim() === 'sleep', 'The app has not started its sleep yet.');
   });
 
   return appPID;

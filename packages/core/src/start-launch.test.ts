@@ -1,8 +1,9 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { probeProcess } from './probe-process.ts';
 import { readLaunchHost } from './read-launch-host.ts';
@@ -45,7 +46,12 @@ async function setupTest() {
 
       return Number(text);
     },
-    waitForExit: (pid: number) => waitFor(() => (probeProcess(pid) ? null : true)),
+    waitForExit: (pid: number) =>
+      waitFor(() => {
+        invariant(!probeProcess(pid), 'The process is still running.');
+
+        return true;
+      }),
 
     // A process the app started in a session of its own outlives the app's group, so the test
     // stops it before the folder goes.
@@ -405,7 +411,9 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
 
   await Bun.write(exitPath, '');
 
-  await waitFor(() => (onCrash.mock.calls.length > 0 ? true : null));
+  await waitFor(() => {
+    invariant(onCrash.mock.calls.length > 0, 'The app has not crashed yet.');
+  });
 
   expect(onCrash.mock.calls).toStrictEqual([['The app exited with code 7.']]);
 });

@@ -2,9 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
-import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
@@ -267,7 +268,9 @@ test('#up stops a run that becomes ready only after the command missed its deadl
   const status = await waitFor(async () => {
     const view = await ctx.state.readRun(runID);
 
-    return view?.status === 'ended' || view?.status === 'crashed' ? view.status : null;
+    invariant(view?.status === 'ended' || view?.status === 'crashed', 'The run has not ended yet.');
+
+    return view.status;
   });
 
   expect(status).toBe('ended');
@@ -323,9 +326,12 @@ test('#up logs a failed stop of the run it abandoned at its deadline to the run'
   const events = await waitFor(async () => {
     const read = await ctx.state.readRunEvents(pointers.currentRun['slow'] ?? '');
 
-    return read.some((event) => event.type === 'late-failure' && event.code === 'environment')
-      ? read
-      : null;
+    invariant(
+      read.some((event) => event.type === 'late-failure' && event.code === 'environment'),
+      'The late failure has not reached the run log yet.',
+    );
+
+    return read;
   });
 
   expect(events).toContainEqual({

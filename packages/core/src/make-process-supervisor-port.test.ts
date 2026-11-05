@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { makeProcessSupervisorPort } from './make-process-supervisor-port.ts';
 
@@ -14,14 +15,8 @@ async function setupTest() {
   return {
     makePort: (selfCommand: readonly string[]) =>
       makeProcessSupervisorPort({ selfCommand, root, stateDir: '.wringer' }),
-    readLog: async (runID: string) => {
-      const text = await readFile(
-        buildRunPaths(join(root, '.wringer'), runID).supervisorLog,
-        'utf8',
-      );
-
-      return text === '' ? null : text;
-    },
+    readLog: (runID: string) =>
+      readFile(buildRunPaths(join(root, '.wringer'), runID).supervisorLog, 'utf8'),
   };
 }
 
@@ -32,7 +27,13 @@ test('it starts the command with the run and target, writing to the run log', as
 
   await port.start({ runID: 'mf3k2a-7q1z', target: 'box' });
 
-  const log = await waitFor(() => ctx.readLog('mf3k2a-7q1z'));
+  const log = await waitFor(async () => {
+    const text = await ctx.readLog('mf3k2a-7q1z');
+
+    invariant(text !== '', 'The run log is still empty.');
+
+    return text;
+  });
 
   expect(log).toBe('mf3k2a-7q1z box\n');
 });

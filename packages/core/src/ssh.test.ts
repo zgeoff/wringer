@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
 
@@ -88,7 +89,11 @@ test('it stops the remote command and every process it started when the run time
 
   const pid = Number(pidText);
 
-  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
 
   expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
 });
@@ -111,7 +116,12 @@ test('it stops a remote command whose process group starts only after the run ti
 
   const leader = Number(leaderText);
 
-  await waitFor(() => (probeProcess(leader) ? null : true), { timeoutMs: 8000 });
+  await waitFor(
+    () => {
+      invariant(!probeProcess(leader), 'The remote process group is still running.');
+    },
+    { timeoutMs: 8000 },
+  );
 
   const late = await readFile(latePath, 'utf8').catch(() => null);
 
@@ -135,7 +145,11 @@ test('it stops a background process that outlived the remote command when the ru
 
   const pid = Number(pidText);
 
-  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
 
   expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
 });
@@ -158,7 +172,11 @@ test('it kills a remote command that ignores SIGINT and SIGTERM when the run tim
 
   const pid = Number(pidText);
 
-  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
 
   expect(exited).toBe(true);
 });
