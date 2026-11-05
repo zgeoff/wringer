@@ -1,4 +1,4 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
@@ -16,13 +16,16 @@ async function setupTest() {
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const socket = join(directory, 'run.sock');
+  const transportErrors: unknown[] = [];
 
   return {
     listen: async (answerRequest: SupervisorRequestHandler) => {
       const server = await listenSupervisorSocket({
         path: socket,
         answerRequest,
-        onTransportError: mock(),
+        onTransportError: (error) => {
+          transportErrors.push(error);
+        },
       });
 
       stack.defer(() => {
