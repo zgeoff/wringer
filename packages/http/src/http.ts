@@ -1,4 +1,4 @@
-import { WringerError, defineDriver } from '@wringer/core';
+import { WringerError, defineDriver, findOwnValue } from '@wringer/core';
 import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
 import { buildRequestPlan } from './build-request-plan.ts';
@@ -112,7 +112,7 @@ async function sendRequest(
   const plan = buildRequestPlan({
     target: session.target,
     endpoint: session.config.endpoint,
-    baseURL: session.config.baseURL ?? session.endpoints[session.config.endpoint],
+    baseURL: session.config.baseURL ?? findOwnValue(session.endpoints, session.config.endpoint),
     method: request.method,
     path: request.path,
     headers: request.headers,
