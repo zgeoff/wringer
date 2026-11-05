@@ -94,6 +94,17 @@ test.each([
     write: false,
   },
   { dialect: 'postgres', via: 'exec', sql: '/* tidy */ insert into notes values (1)', write: true },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "/* /* */ ' */ DO $$ BEGIN EXECUTE 'CO' || 'PY (select 1) TO PROGRAM ''touch /srv/flag'''; END $$ -- '",
+    write: true,
+  },
+  { dialect: 'postgres', via: 'sql', sql: 'select 1 /* copy the orders */', write: false },
+  { dialect: 'postgres', via: 'sql', sql: 'select $$ what to do $$ as note', write: false },
+  { dialect: 'postgres', via: 'sql', sql: 'select 1 /* a /* b */ do', write: true },
+  { dialect: 'postgres', via: 'sql', sql: "select 'unclosed", write: true },
+  { dialect: 'sqlite', via: 'sql', sql: "/* /* */ attach '/srv/other.db' as other", write: true },
 ] as const)('it reads `$sql` on $dialect over $via as a write: $write', (row) => {
   expect(isUndeclaredWrite(row.dialect, row.via, row.sql)).toBe(row.write);
 });

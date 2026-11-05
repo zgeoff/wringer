@@ -1,45 +1,35 @@
 import { findLeadingWord } from './find-leading-word.ts';
-import { toBareSQL } from './to-bare-sql.ts';
+import { parseSQLTokens } from './parse-sql-tokens.ts';
+import type { SQLToken } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
 type Via = 'sql' | 'exec';
 
-const sqliteEscapePattern = /\b(?:attach|vacuum|query_only)\b/iu;
-
-// Postgres runs SQL held in a string, through `EXECUTE` or a function, and a `U&"…"` name can spell
-// any word in escapes, so the search keeps strings and comments and refuses escaped names.
-const postgresEscapePattern = /\b(?:copy|lo_export)\b/iu;
-const escapedNamePattern = /\bu&"/iu;
-
-// A string built at run time, such as `'CO' || 'PY …'`, hides its words from any search. A `DO`
-// block and the `query_to_xml` family run such a string in the session; `dblink` runs it in a
-// session of its own, outside the read-only transaction.
-const postgresStringRunnerPattern = /\b(?:query_to_xml\w*|dblink\w*)\b/iu;
-const doBlockPattern = /\bdo\b/iu;
-
+const sqliteEscapeWords = new Set(['attach', 'vacuum', 'query_only']);
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
-
-const writeWordPattern = /\b(?:insert|update|delete|merge)\b/iu;
+const writeWords = new Set(['insert', 'update', 'delete', 'merge']);
 
 // Read-only SQLite still runs `VACUUM INTO`, and a read-only Postgres transaction still runs
 // `COPY … TO` and `lo_export`: each writes a file. A psql read runs inside a SELECT wrapper, where a
 // write fails as a syntax error before the transaction can refuse it, so its words decide.
 export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): boolean {
-  const bare = toBareSQL(sql);
+  const lex = parseSQLTokens(dialect, sql);
 
-  if (dialect === 'sqlite') {
-    return sqliteEscapePattern.test(bare);
+  // The database refuses SQL whose string or comment never closes; this check refuses it first.
+  if (!lex.closed) {
+    return true;
   }
 
-  const unquoted = sql.replaceAll('"', '');
+  const words = lex.tokens.flatMap((token) =>
+    token.kind === 'word' ? [token.text.toLowerCase()] : [],
+  );
 
-  if (
-    postgresEscapePattern.test(unquoted) ||
-    postgresStringRunnerPattern.test(unquoted) ||
-    doBlockPattern.test(bare) ||
-    escapedNamePattern.test(sql)
-  ) {
+  if (dialect === 'sqlite') {
+    return words.some((word) => sqliteEscapeWords.has(word));
+  }
+
+  if (lex.tokens.some((token) => isPostgresEscape(token))) {
     return true;
   }
 
@@ -47,7 +37,40 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return false;
   }
 
-  const leading = findLeadingWord(sql) ?? '';
+  const leading = findLeadingWord(lex.tokens) ?? '';
 
-  return !postgresReadWords.has(leading) || (leading === 'with' && writeWordPattern.test(bare));
+  return (
+    !postgresReadWords.has(leading) ||
+    (leading === 'with' && words.some((word) => writeWords.has(word)))
+  );
+}
+
+// `COPY … TO` and `lo_export` write a file inside a read-only transaction. A `DO` block, the
+// `query_to_xml` family and `dblink` run SQL held in a string, which a string built at run time,
+// such as `'CO' || 'PY …'`, hides from any search; `dblink` runs it outside the transaction.
+const postgresEscapeWords = new Set(['copy', 'lo_export', 'do']);
+
+const postgresStringRunnerPattern = /^(?:query_to_xml|dblink)/u;
+
+// A function may run the SQL a string holds, so a string that names one of these counts too.
+const postgresStringEscapePattern = /\b(?:copy|lo_export|query_to_xml\w*|dblink\w*)\b/iu;
+
+// A quoted name is the same name as the word, so `"lo_export"` calls `lo_export`, and a `U&"…"`
+// name can spell any word in escapes.
+function isPostgresEscape(token: SQLToken): boolean {
+  if (token.kind === 'string') {
+    return postgresStringEscapePattern.test(token.text);
+  }
+
+  if (token.kind === 'name' && token.escaped) {
+    return true;
+  }
+
+  if (token.kind === 'symbol') {
+    return false;
+  }
+
+  const name = token.text.toLowerCase();
+
+  return postgresEscapeWords.has(name) || postgresStringRunnerPattern.test(name);
 }
