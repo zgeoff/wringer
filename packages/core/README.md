@@ -29,8 +29,11 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
 - The fingerprint: `git patch-id --verbatim` of the working tree against the merge base, which stays
   the same across a commit and across a clean rebase that leaves the 3 lines around each change as
   they were. A rebase that changes those lines changes the fingerprint, because the hash keeps the
-  diff's context. It needs git 2.39 or later. Every git setting that shapes the diff is pinned, so
-  the same change gets the same fingerprint in any clone.
+  diff's context. It needs git 2.39 or later. Only the tracked files and git's defaults shape it:
+  the config, attributes and ignore files of the clone, the user and the system never apply, so the
+  same change gets the same fingerprint in any clone. A clone whose config converts a file as git
+  adds it, such as `core.autocrlf` or a clean filter, can get another fingerprint once the change is
+  committed; the verdict then reads as stale, never as fresh.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer.
 

@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, relative } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
-import { removeFile } from './remove-file.ts';
+import { removeDirectory } from './remove-directory.ts';
 import { runGit, runGitBytes } from './run-git.ts';
 import type { GitRequest } from './run-git.ts';
 
@@ -22,7 +22,7 @@ async function setupTest() {
     git: (...args: readonly string[]) => runGit({ cwd: repo, args }),
     readFingerprint: (cwd = repo) =>
       readFingerprint(
-        { runGit, runGitBytes, removeFile },
+        { runGit, runGitBytes, removeDirectory },
         { cwd, base: 'main', exclude: ['.wringer'] },
       ),
   };
@@ -224,7 +224,7 @@ test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', as
         runGit({ ...request, env: { GIT_DIFF_OPTS: '--unified=0', ...request.env } }),
       runGitBytes: (request) =>
         runGitBytes({ ...request, env: { GIT_DIFF_OPTS: '--unified=0', ...request.env } }),
-      removeFile,
+      removeDirectory,
     },
     { cwd: ctx.repo, base: 'main', exclude: ['.wringer'] },
   );
@@ -276,14 +276,14 @@ test.each([
 
   const request = { cwd: ctx.repo, base: 'main', exclude: ['*.log'] };
 
-  const before = await readFingerprint({ runGit, runGitBytes, removeFile }, request);
+  const before = await readFingerprint({ runGit, runGitBytes, removeDirectory }, request);
 
   const after = await readFingerprint(
     {
       runGit: (gitRequest) => runGit({ ...gitRequest, env: { [name]: '1', ...gitRequest.env } }),
       runGitBytes: (gitRequest) =>
         runGitBytes({ ...gitRequest, env: { [name]: '1', ...gitRequest.env } }),
-      removeFile,
+      removeDirectory,
     },
     request,
   );
@@ -434,7 +434,7 @@ test('it stages a submodule outside the subfolder by its path from the repo root
         return runGit(request);
       },
       runGitBytes,
-      removeFile,
+      removeDirectory,
     },
     { cwd: join(ctx.repo, 'web'), base: 'main', exclude: ['.wringer'] },
   );
@@ -543,6 +543,177 @@ test('it gives the same fingerprint whatever binary setting the repo gives a nam
   expect(after).toBe(before);
 });
 
+test('it gives the same fingerprint whatever attributes file the git config names', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = EUR\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = GBP\n');
+  await writeFile(join(ctx.repo, 'outside.attributes'), '*.txt -diff\n');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'core.attributesFile', join(ctx.repo, 'outside.attributes'));
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test("it gives the same fingerprint whatever the repo's info/attributes file says", async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = EUR\r\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = GBP\r\n');
+
+  const before = await ctx.readFingerprint();
+  const infoAttributes = await ctx.git('rev-parse', '--git-path', 'info/attributes');
+
+  const infoAttributesPath = join(ctx.repo, infoAttributes.stdout.trim());
+
+  await mkdir(dirname(infoAttributesPath), { recursive: true });
+  await writeFile(infoAttributesPath, '*.txt text\n');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test.each([
+  ['core.autocrlf', 'true'],
+  ['core.safecrlf', 'true'],
+])(
+  'it gives the same fingerprint to a file with CRLF line ends whatever the repo sets %s to',
+  async (key, value) => {
+    const ctx = await setupTest();
+
+    await writeFile(join(ctx.repo, 'shop.txt'), 'currency = EUR\n');
+
+    await ctx.git('add', '.');
+    await ctx.git('commit', '--quiet', '-m', 'start');
+
+    await writeFile(join(ctx.repo, 'shop.txt'), 'currency = GBP\r\nlocale = en\n');
+
+    const before = await ctx.readFingerprint();
+
+    await ctx.git('config', 'core.autocrlf', 'true');
+    await ctx.git('config', key, value);
+
+    const after = await ctx.readFingerprint();
+
+    expect(after).toBe(before);
+  },
+);
+
+test('it gives the same fingerprint whatever clean filter the repo configures', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitattributes'), '*.txt filter=upper\n');
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = EUR\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = GBP\n');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'filter.upper.clean', 'tr a-z A-Z');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test('it gives the same fingerprint whatever textconv command the repo gives a diff driver', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitattributes'), '*.txt diff=upper\n');
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = EUR\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.txt'), 'currency = GBP\n');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'diff.upper.textconv', 'tr a-z A-Z');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test('it gives the same fingerprint to a new executable bit whatever the repo sets core.fileMode to', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'deploy.sh'), 'echo deployed\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await chmod(join(ctx.repo, 'deploy.sh'), 0o755);
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'core.fileMode', 'false');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test("it counts an untracked file that only the repo's info/exclude file ignores", async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'notes.txt'), 'call the supplier\n');
+
+  const before = await ctx.readFingerprint();
+  const exclude = await ctx.git('rev-parse', '--git-path', 'info/exclude');
+
+  const excludePath = join(ctx.repo, exclude.stdout.trim());
+
+  await mkdir(dirname(excludePath), { recursive: true });
+  await writeFile(excludePath, 'notes.txt\n');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test('it counts an untracked file that only the ignore file the git config names ignores', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'notes.txt'), 'call the supplier\n');
+  await writeFile(join(ctx.repo, 'outside.ignore'), 'notes.txt\n');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'core.excludesFile', join(ctx.repo, 'outside.ignore'));
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
 test('it gives the same fingerprint to a staged, ignored file whose name is not UTF-8 before and after commit', async () => {
   const ctx = await setupTest();
 
@@ -633,6 +804,27 @@ test('it reads the fingerprint of a repo whose folder name ends in a space', asy
   const ctx = await setupTest();
 
   const shop = join(ctx.repo, 'shop ');
+  const git = (...args: readonly string[]) => runGit({ cwd: shop, args });
+
+  await mkdir(shop);
+  await git('init', '--quiet', '--initial-branch=main');
+  await git('config', 'user.email', 'tester@example.com');
+  await git('config', 'user.name', 'Tester');
+  await git('config', 'commit.gpgsign', 'false');
+  await writeFile(join(shop, 'app.ts'), 'export const port = 3000;\n');
+  await git('add', '.');
+  await git('commit', '--quiet', '-m', 'start');
+  await writeFile(join(shop, 'app.ts'), 'export const port = 4000;\n');
+
+  const fingerprint = await ctx.readFingerprint(shop);
+
+  expect(fingerprint).toMatch(/^[0-9a-f]{40}$/u);
+});
+
+test('it reads the fingerprint of a repo whose folder name holds a colon', async () => {
+  const ctx = await setupTest();
+
+  const shop = join(ctx.repo, 'shop:main');
   const git = (...args: readonly string[]) => runGit({ cwd: shop, args });
 
   await mkdir(shop);
