@@ -40,9 +40,21 @@ test('it gives every command the global flags and a hidden home for extra words'
 test('it declares a command’s positionals to gunshi in order', () => {
   const commands = buildGunshiCommands(createDemoWringer(), mock<(result: InvokeResult) => void>());
 
-  const positionals = Object.entries(commands['label']?.args ?? {}).flatMap(([name, schema]) =>
-    schema.type === 'positional' && schema.hidden !== true ? [name] : [],
-  );
+  const declared = Object.entries(commands['label']?.args ?? {}).map(([name, schema]) => [
+    name,
+    schema.type,
+  ]);
 
-  expect(positionals).toStrictEqual(['shelf', 'item']);
+  expect(declared).toStrictEqual([
+    ['target', 'string'],
+    ['feature', 'string'],
+    ['timeoutMs', 'number'],
+    ['human', 'boolean'],
+    ['json', 'boolean'],
+    ['label', 'string'],
+    ['finish', 'enum'],
+    ['shelf', 'positional'],
+    ['item', 'positional'],
+    [extraWordsArg, 'positional'],
+  ]);
 });
