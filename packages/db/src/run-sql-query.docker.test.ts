@@ -23,7 +23,14 @@ async function setupTest() {
 
   stack.defer(() => admin.close());
 
-  const clients = createSQLClients();
+  const cancelFailures: string[] = [];
+
+  const clients = {
+    ...createSQLClients(),
+    reportCancelFailure: (message: string) => {
+      cancelFailures.push(message);
+    },
+  };
 
   // A role that may hold one connection, so a cancel session cannot open while its query runs.
   const clerkURL = new URL(postgres.url);
@@ -32,10 +39,14 @@ async function setupTest() {
   clerkURL.password = 'clerk';
 
   return {
+    cancelFailures,
     createClerk: async () => {
       await admin`create role clerk login password 'clerk' connection limit 1`;
       await admin`grant select, insert on notes to clerk`;
       await admin`grant usage on sequence notes_id_seq to clerk`;
+    },
+    allowSecondClerkSession: async () => {
+      await admin`alter role clerk connection limit 2`;
     },
     runAsClerk: (sql: string, signal: AbortSignal, timeLeftMs: number) =>
       runSQLQuery(
@@ -243,6 +254,47 @@ test('it stops a Postgres write at its deadline when the role cannot open a canc
   expect({ written, notes }).toStrictEqual({
     written: { status: 'rejected', reason: expect.objectContaining({ errno: '57014' }) },
     notes: ['pay'],
+  });
+});
+
+test('it reports a refused cancel session once, then cancels the Postgres write once a session opens', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay']);
+  await ctx.createClerk();
+
+  const controller = new AbortController();
+
+  const writing = ctx.runAsClerk(
+    "insert into notes (text) select 'late' from pg_sleep(30)",
+    controller.signal,
+    60_000,
+  );
+
+  await waitFor(
+    async () => {
+      const running = await ctx.probeRunning('pg_sleep(30)');
+
+      invariant(running, 'Postgres has not started the sleep yet.');
+    },
+    { timeoutMs: 10_000 },
+  );
+
+  controller.abort();
+
+  await waitFor(() => {
+    invariant(ctx.cancelFailures.length > 0, 'Postgres has not refused a cancel session yet.');
+  });
+
+  await ctx.allowSecondClerkSession();
+
+  const [written] = await Promise.allSettled([writing]);
+  const notes = await ctx.readNotes();
+
+  expect({ written, notes, reports: ctx.cancelFailures }).toStrictEqual({
+    written: { status: 'rejected', reason: expect.objectContaining({ errno: '57014' }) },
+    notes: ['pay'],
+    reports: [expect.stringContaining('too many connections for role "clerk"')],
   });
 });
 
