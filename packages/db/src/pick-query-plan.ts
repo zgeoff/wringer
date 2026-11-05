@@ -33,7 +33,7 @@ export type QueryPlan =
 export function pickQueryPlan(
   config: DbConfig,
   query: PlannedQuery,
-  timeLeftMs: number,
+  deadlineAtMs: number,
 ): QueryPlan {
   const dialect = config.via === 'sql' ? config.adapter : config.dialect;
 
@@ -61,7 +61,7 @@ export function pickQueryPlan(
       sql: query.sql,
       params: query.params,
       write: query.write,
-      timeLeftMs,
+      deadlineAtMs,
     }),
 
     // The client call already checked this statement against the target's grants.

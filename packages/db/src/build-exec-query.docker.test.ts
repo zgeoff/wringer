@@ -7,22 +7,35 @@ import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';
 import { buildExecQuery } from './build-exec-query.ts';
 
+// One stack frees what each test took, in the reverse of the order it took it: the client, the
+// container, then the folder.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'build-exec-query');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const postgres = await createTestSSHPostgres(directory);
 
-  onTestFinished(() => {
+  stack.defer(() => {
     postgres.remove();
   });
 
   const admin = new SQL(postgres.url);
 
-  onTestFinished(() => admin.close());
+  stack.defer(() => admin.close());
 
   const host = ssh({ destination: postgres.destination, binary: postgres.sshBinary });
+
+  // A transport that takes 1 s to start the client, as a container runtime can.
+  const slowHost = ssh({
+    destination: postgres.destination,
+    binary: postgres.sshBinary,
+    prefix: [{ argv: ['sh', '-c', 'sleep 1; exec "$0" "$@"'], shell: false }],
+  });
 
   return {
     createNotes: () => admin`create table notes (id serial primary key, text text not null)`,
@@ -38,7 +51,7 @@ async function setupTest() {
 
       return rows.length === 0 ? true : null;
     },
-    runWrite: (sql: string, signal: AbortSignal, timeLeftMs: number) => {
+    runWrite: (sql: string, signal: AbortSignal, deadlineAtMs: number) => {
       const query = buildExecQuery({
         dialect: 'postgres',
         program: ['psql'],
@@ -46,10 +59,23 @@ async function setupTest() {
         sql,
         params: [],
         write: true,
-        timeLeftMs,
+        deadlineAtMs,
       });
 
       return host.run({ argv: query.argv, stdin: query.stdin, access: 'read-write', signal });
+    },
+    runSlowStartWrite: (sql: string, deadlineAtMs: number) => {
+      const query = buildExecQuery({
+        dialect: 'postgres',
+        program: ['psql'],
+        database: 'shop',
+        sql,
+        params: [],
+        write: true,
+        deadlineAtMs,
+      });
+
+      return slowHost.run({ argv: query.argv, stdin: query.stdin, access: 'read-write' });
     },
   };
 }
@@ -63,7 +89,7 @@ test('it never commits a psql write over ssh that ran past its deadline', async 
     ctx.runWrite(
       "insert into notes (text) select 'late' from pg_sleep(4)",
       AbortSignal.timeout(1500),
-      60_000,
+      Date.now() + 60_000,
     ),
   ]);
 
@@ -74,7 +100,7 @@ test('it never commits a psql write over ssh that ran past its deadline', async 
   expect({ status: written.status, notes }).toStrictEqual({ status: 'rejected', notes: [] });
 });
 
-test('it has postgres stop a psql write at the time left when no abort reaches psql', async () => {
+test('it has postgres stop a psql write at its deadline when no abort reaches psql', async () => {
   const ctx = await setupTest();
 
   await ctx.createNotes();
@@ -82,13 +108,50 @@ test('it has postgres stop a psql write at the time left when no abort reaches p
   const result = await ctx.runWrite(
     "insert into notes (text) select 'late' from pg_sleep(4)",
     new AbortController().signal,
-    1500,
+    Date.now() + 1500,
   );
 
   const notes = await ctx.readNotes();
 
   expect({ stderr: result.stderr, notes }).toStrictEqual({
     stderr: expect.stringContaining('canceling statement due to statement timeout'),
+    notes: [],
+  });
+});
+
+test('it has postgres stop a psql write at a deadline its transport startup used up in part', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes();
+
+  const result = await ctx.runSlowStartWrite(
+    "insert into notes (text) select 'late' from pg_sleep(1)",
+    Date.now() + 1500,
+  );
+
+  const notes = await ctx.readNotes();
+
+  expect({ stderr: result.stderr, notes }).toStrictEqual({
+    stderr: expect.stringContaining('canceling statement due to statement timeout'),
+    notes: [],
+  });
+});
+
+test('it has postgres refuse a psql write whose deadline passed while its transport started', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes();
+
+  const result = await ctx.runWrite(
+    "insert into notes (text) values ('late')",
+    new AbortController().signal,
+    Date.now() - 1,
+  );
+
+  const notes = await ctx.readNotes();
+
+  expect({ stderr: result.stderr, notes }).toStrictEqual({
+    stderr: expect.stringContaining("The command's deadline passed before the statement started."),
     notes: [],
   });
 });
