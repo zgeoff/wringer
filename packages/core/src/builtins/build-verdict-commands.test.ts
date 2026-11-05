@@ -6,6 +6,7 @@ import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { dispatch } from '../dispatch.ts';
 import { reportSchema } from '../report-schema.ts';
+import type { UploadRequest } from '../types.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -13,12 +14,27 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   const reportDataSchema = z.strictObject({ report: reportSchema, markdown: z.string() });
+  const uploads: UploadRequest[] = [];
+
+  const uploading = {
+    ...wringer,
+    hooks: {
+      upload: (file: UploadRequest) => {
+        uploads.push(file);
+
+        return Promise.resolve('https://files.example/receipt');
+      },
+    },
+  };
 
   return {
     root: shop.repo.root,
     git: shop.repo.git,
+    uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
+    runWithUpload: (path: readonly string[]) =>
+      dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
     parseReportData: (data: unknown) => reportDataSchema.parse(data),
 
     // The body sits in the ignored state folder, as CI keeps it outside the checkout, so writing it
@@ -101,6 +117,58 @@ test('#report gives each changed feature its status and embeds the report block'
   expect(data.features.map((feature) => [feature.name, feature.status])).toStrictEqual([
     ['checkout', 'verified'],
     ['search', 'unchanged'],
+  ]);
+});
+
+test('#report uploads the evidence of a verified feature by its absolute path', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+  await ctx.run(['done']);
+  await ctx.runWithUpload(['report']);
+
+  expect(ctx.uploads).toStrictEqual([
+    {
+      kind: 'note',
+      path: expect.stringMatching(
+        new RegExp(`^${ctx.root}/\\.wringer/runs/.+-receipt\\.txt$`, 'u'),
+      ),
+      sha256: expect.any(String),
+    },
+  ]);
+});
+
+test('#report links each uploaded evidence file to the URL the hook returns', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+  await ctx.run(['done']);
+
+  const result = await ctx.runWithUpload(['report']);
+
+  const checkout = ctx
+    .parseReportData(result.envelope.data)
+    .report.features.find((feature) => feature.name === 'checkout');
+
+  expect(checkout?.verdict?.evidence).toStrictEqual([
+    {
+      kind: 'note',
+      path: expect.stringMatching(/^\.wringer\/runs\/.+-receipt\.txt$/u),
+      sha256: expect.any(String),
+      url: 'https://files.example/receipt',
+    },
   ]);
 });
 
