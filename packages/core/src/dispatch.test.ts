@@ -6,7 +6,7 @@ import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { dispatch } from './dispatch.ts';
-import { removeFile } from './remove-file.ts';
+import { removeDirectory } from './remove-directory.ts';
 import { runGit } from './run-git.ts';
 import { writeNewFile } from './write-new-file.ts';
 
@@ -77,8 +77,8 @@ async function setupTest() {
 
               return runGit(request);
             },
-            removeFile: async (filePath) => {
-              await removeFile(filePath);
+            removeDirectory: async (directory) => {
+              await removeDirectory(directory);
 
               guardsDone.resolve(undefined);
             },
