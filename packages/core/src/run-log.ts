@@ -2,7 +2,7 @@ import { match } from 'ts-pattern';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema } from './run-events.ts';
 import type { RunEvent, RunEventType } from './run-events.ts';
-import type { FileLock } from './with-file-lock.ts';
+import { withStateLock } from './with-state-lock.ts';
 
 export type RunStatus = 'starting' | 'running' | 'crashed' | 'ended';
 
@@ -38,7 +38,6 @@ export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
 
 export interface AppendRunEventRequest {
   readonly fs: StateFileSystem;
-  readonly lock: FileLock;
   readonly logPath: string;
   readonly lockPath: string;
   readonly lockTimeoutMs: number;
@@ -48,7 +47,7 @@ export interface AppendRunEventRequest {
 
 // The only writer of a run's log, under the run's lock. Resolves whether it wrote.
 export function appendRunEvent(request: AppendRunEventRequest): Promise<boolean> {
-  return request.lock({ path: request.lockPath, timeoutMs: request.lockTimeoutMs }, async () => {
+  return withStateLock(request.lockPath, request.lockTimeoutMs, async () => {
     const read = await request.fs.readText(request.logPath);
 
     const plan = pickLogAppend(read ?? '', request.event);

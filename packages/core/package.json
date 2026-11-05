@@ -33,6 +33,7 @@
     "schema": "bun scripts/write-envelope-schema.ts"
   },
   "dependencies": {
+    "@zgeoff/std": "catalog:",
     "ts-pattern": "catalog:",
     "zod": "catalog:"
   },

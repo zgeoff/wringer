@@ -2,7 +2,6 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createNodeLockHost } from './create-node-lock-host.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import type { RunEvent } from './run-events.ts';
 import {
@@ -12,7 +11,6 @@ import {
   parseRunLog,
   pickLogAppend,
 } from './run-log.ts';
-import { makeFileLock } from './with-file-lock.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-log');
@@ -26,7 +24,6 @@ async function setupTest() {
     append: (event: RunEvent) =>
       appendRunEvent({
         fs: createNodeStateFileSystem(),
-        lock: makeFileLock(createNodeLockHost()),
         logPath,
         lockPath: join(directory, 'run.lock'),
         lockTimeoutMs: 2000,

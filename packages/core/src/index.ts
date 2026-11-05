@@ -37,8 +37,5 @@ export type { ProcessResult } from './run-process.ts';
 export type { RunStatus } from './run-log.ts';
 export { ssh } from './ssh.ts';
 export type { PrefixLayer, SSHOptions } from './ssh.ts';
-export { createNodeLockHost } from './create-node-lock-host.ts';
-export { makeFileLock } from './with-file-lock.ts';
-export type { FileLock, FileLockOptions, LockHost } from './with-file-lock.ts';
 export { WringerError } from './wringer-error.ts';
 export type { WringerErrorDetails } from './wringer-error.ts';

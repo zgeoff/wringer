@@ -8,7 +8,7 @@ import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { runEventSchema, runIDSchema } from './run-events.ts';
 import type { RunEvent, RunID } from './run-events.ts';
 import { appendRunEvent, parseRunLog } from './run-log.ts';
-import type { FileLock } from './with-file-lock.ts';
+import { withStateLock } from './with-state-lock.ts';
 import { WringerError } from './wringer-error.ts';
 
 export const pointersSchema = z.strictObject({
@@ -38,7 +38,6 @@ export interface FileStateOptions {
   readonly stateDir: string;
   readonly lockTimeoutMs: number;
   readonly fs: StateFileSystem;
-  readonly lock: FileLock;
 }
 
 export const eventSizeCapBytes = 64 * 1024;
@@ -48,7 +47,7 @@ export function createFileState(options: FileStateOptions): StatePort {
   const fs = options.fs;
 
   const withLock = <T>(name: string, work: () => Promise<T>): Promise<T> =>
-    options.lock({ path: join(paths.locks, name), timeoutMs: options.lockTimeoutMs }, work);
+    withStateLock(join(paths.locks, name), options.lockTimeoutMs, work);
 
   const readPointers = async (): Promise<Pointers> => {
     const text = await fs.readText(paths.state);
@@ -105,7 +104,6 @@ export function createFileState(options: FileStateOptions): StatePort {
 
       await appendRunEvent({
         fs,
-        lock: options.lock,
         logPath: runPaths.log,
         lockPath: join(paths.locks, `run-${runID}.lock`),
         lockTimeoutMs: options.lockTimeoutMs,
