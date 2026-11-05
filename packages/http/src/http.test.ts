@@ -190,6 +190,27 @@ test('it refuses a path that leaves the app origin with a usage error', async ()
   });
 });
 
+test('it fails the doctor with a usage error when the target has no endpoint for the client', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('bare', ['attach']);
+
+  const result = await ctx.run('bare', ['doctor']);
+
+  expect(result.envelope.data).toStrictEqual({
+    passed: false,
+    results: [
+      {
+        name: 'http.reachable',
+        status: 'failed',
+        durationMs: expect.any(Number),
+        code: 'usage',
+        message: 'Target bare has no endpoint web.',
+      },
+    ],
+  });
+});
+
 test.each(['GET', 'HEAD'])('it refuses a JSON body on a %s with a usage error', async (method) => {
   const ctx = await setupTest();
 
