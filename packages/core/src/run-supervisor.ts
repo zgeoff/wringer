@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 import { createActor, waitFor } from 'xstate';
 import { buildRunHandle } from './build-run-handle.ts';
+import { buildShutDownSteps } from './build-shut-down-steps.ts';
 import type { StatePort } from './create-file-state.ts';
 import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
@@ -89,14 +90,14 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const shutDown = async (plan: ShutDownPlan): Promise<WringerError | null> => {
     const failures = await stopStarted();
 
-    // A cleanup the deadline gave up on can leave its command running, so the commands end only
-    // once every part that will ever stop has stopped.
-    if (!plan.gaveUpOnStartup) {
+    const steps = buildShutDownSteps({ ...plan, failures, at: at() });
+
+    if (steps.abortCommands) {
       serviceCommands.abort();
     }
 
     try {
-      for (const event of buildStopEvents({ crashReason: plan.crashReason, failures, at: at() })) {
+      for (const event of steps.events) {
         await append(event);
       }
 
@@ -110,14 +111,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       return failure;
     }
 
-    if (failures.length > 0) {
-      return new WringerError('environment', {
-        message: `The run ended, and a part may still be up. Cleanup failed for ${failures.join('; ')}`,
-        hint: 'Stop each part the message names by hand before the next `up`.',
-      });
-    }
-
-    return null;
+    return steps.failure;
   };
 
   // The run's log is already closed, so a late part's failure goes to the supervisor's own log.
@@ -257,26 +251,6 @@ async function runCleanups(cleanups: readonly Cleanup[], stopWaitMs: number): Pr
       ? [`${cleanups[index]?.[0] ?? 'unknown'}: ${toWringerError(result.reason).message}`]
       : [],
   );
-}
-
-interface StopOutcome {
-  readonly crashReason: string | null;
-  readonly failures: readonly string[];
-  readonly at: string;
-}
-
-// A cleanup that failed makes the stop a crash, so the log names what may still run.
-export function buildStopEvents(outcome: StopOutcome): readonly RunEvent[] {
-  const reasons = [
-    ...(outcome.crashReason === null ? [] : [outcome.crashReason]),
-    ...(outcome.failures.length === 0 ? [] : [`cleanup failed for ${outcome.failures.join('; ')}`]),
-  ];
-
-  if (reasons.length === 0) {
-    return [{ type: 'run-ended', at: outcome.at }];
-  }
-
-  return [{ type: 'crashed', at: outcome.at, reason: reasons.join('; ') }];
 }
 
 interface TargetStart {
