@@ -22,6 +22,7 @@ async function setupTest() {
   });
 
   const evidenceWrites = mock(writeNewFile);
+  const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate.promise };
 
   return {
     evidenceWrites,
@@ -44,8 +45,8 @@ async function setupTest() {
     runWithin: (timeoutMs: number, path: readonly string[], args: unknown) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local', timeoutMs }),
 
-    // The guards' fingerprint read waits for the gate, and its last step, removing the temporary
-    // index, settles `guardsDone`.
+    // The guards' fingerprint read waits for the gate at its first step, `merge-base`, and its last
+    // step, removing the temporary index, settles `guardsDone`. The envelope's SHA read never waits.
     runWithGatedGuards: (timeoutMs: number, path: readonly string[]) =>
       dispatch(
         wringer,
@@ -58,7 +59,7 @@ async function setupTest() {
           repoHost: {
             ...shop.session.repoHost,
             runGit: async (request) => {
-              await gate.promise;
+              await gitGates[request.args[0] ?? ''];
 
               return runGit(request);
             },
