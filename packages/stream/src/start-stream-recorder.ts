@@ -1,4 +1,3 @@
-import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
@@ -20,6 +19,7 @@ export interface RecorderRequest {
   readonly localHost: Host;
   readonly access: Access;
   readonly now: () => Date;
+  readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
 
   // At most this many records wait for the disk; a source that logs faster loses the excess, and
@@ -43,7 +43,7 @@ export interface StreamRecorder {
 // Follows each source for the whole run and appends each line to `<name>.ndjson` as `{ at, line }`.
 // A `command` source runs on the target's host; a `file` source is tailed where the run lives.
 export async function startStreamRecorder(request: RecorderRequest): Promise<StreamRecorder> {
-  await mkdir(request.directory, { recursive: true });
+  await request.createDirectory(request.directory);
 
   const lifetime = new AbortController();
 

@@ -7,6 +7,7 @@ export { buildRunView } from './build-run-view.ts';
 export type { DoctorState, RunView, SupervisorInfo } from './build-run-view.ts';
 export { buildRunPaths, buildStatePaths } from './build-state-paths.ts';
 export type { RunPaths, StatePaths } from './build-state-paths.ts';
+export { createDirectory } from './create-directory.ts';
 export { createFileState, eventSizeCapBytes, pointersSchema } from './create-file-state.ts';
 export type { FileStateOptions, Pointers, StatePort } from './create-file-state.ts';
 export { createNodeStateFileSystem } from './create-node-state-file-system.ts';
