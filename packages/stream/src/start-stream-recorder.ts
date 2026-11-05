@@ -4,7 +4,7 @@ import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
-import type { FileChunk } from './read-file-from.ts';
+import type { FileChunk, FilePosition } from './read-file-from.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
@@ -22,7 +22,11 @@ export interface RecorderRequest {
   readonly now: () => Date;
   readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
-  readonly readFileFrom: (path: string, from: number, limitBytes: number) => Promise<FileChunk>;
+  readonly readFileFrom: (
+    path: string,
+    from: FilePosition,
+    limitBytes: number,
+  ) => Promise<FileChunk>;
 
   // At most this many records wait for the disk; a source that logs faster loses the excess, and
   // the stream says how many lines it lost.
@@ -210,23 +214,29 @@ async function followFile(
   path: string,
   onLine: (line: string) => void,
 ): Promise<number> {
-  const decoder = new TextDecoder();
+  let decoder = new TextDecoder();
 
-  let offset = 0;
+  let position: FilePosition = { offset: 0, identity: null };
   let carry = '';
 
   const readNew = async (): Promise<void> => {
     let readBytes = fileReadLimitBytes;
 
     while (readBytes === fileReadLimitBytes) {
-      const chunk = await request.readFileFrom(path, offset, fileReadLimitBytes);
+      const chunk = await request.readFileFrom(path, position, fileReadLimitBytes);
 
-      const kept = chunk.start < offset ? '' : carry;
+      // A file that shrank or was replaced starts over, so the old file's unfinished line and
+      // unfinished character never join the new file's text.
+      if (chunk.start < position.offset) {
+        decoder = new TextDecoder();
 
-      offset = chunk.start + chunk.bytes.length;
+        carry = '';
+      }
+
+      position = { offset: chunk.start + chunk.bytes.length, identity: chunk.identity };
       readBytes = chunk.bytes.length;
 
-      const split = collectLines(kept, decoder.decode(chunk.bytes, { stream: true }));
+      const split = collectLines(carry, decoder.decode(chunk.bytes, { stream: true }));
 
       carry = split.carry;
 
