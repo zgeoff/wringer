@@ -116,6 +116,76 @@ test('it ends a stop only once the lines the app printed as it stopped are in it
   expect(log.trimEnd().split('\n').at(-1)).toBe('20000');
 });
 
+test('it fails a stop with an environment error when a process outside the app holds its output open', async () => {
+  const ctx = await setupTest();
+
+  const real = readLaunchHost();
+
+  // The app's stderr stays open after the app exits, as when another process holds it.
+  const host: LaunchHost = {
+    ...real,
+    spawnApp: (argv, options) => {
+      const app = real.spawnApp(argv, options);
+
+      return {
+        pid: app.pid,
+        stdout: app.stdout,
+        stderr: new ReadableStream<Uint8Array>(),
+        exited: app.exited,
+      };
+    },
+  };
+
+  const launch = await startLaunch({
+    host,
+    plan: {
+      command: ['sh', '-c', 'echo \'{"port":4100}\'; exec sleep 60'],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  expect(launch.stop()).rejects.toMatchObject({ code: 'environment' });
+});
+
+test('it keeps the startup failure and adds the failed stop when an app that never got ready cannot be stopped cleanly', async () => {
+  const ctx = await setupTest();
+
+  const real = readLaunchHost();
+
+  // The app's stderr stays open after the app exits, as when another process holds it.
+  const host: LaunchHost = {
+    ...real,
+    spawnApp: (argv, options) => {
+      const app = real.spawnApp(argv, options);
+
+      return {
+        pid: app.pid,
+        stdout: app.stdout,
+        stderr: new ReadableStream<Uint8Array>(),
+        exited: app.exited,
+      };
+    },
+  };
+
+  const launching = startLaunch({
+    host,
+    plan: { command: ['sh', '-c', 'exec sleep 60'], ready: () => null },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 200,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  expect(launching).rejects.toMatchObject({
+    code: 'timeout',
+    message: expect.stringContaining("The app's output still had not reached its log"),
+  });
+});
+
 test('it runs the plan’s stop command, then stops the app and its server when that command fails', async () => {
   const ctx = await setupTest();
 

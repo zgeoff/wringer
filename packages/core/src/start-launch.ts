@@ -24,6 +24,9 @@ export interface Launch {
 
 const stopGraceMs = 5000;
 
+// The grace and this drain together stay under the supervisor's wait for one cleanup.
+const logDrainMs = 2000;
+
 // The app runs in a process group of its own, and every stop signals the whole group, so a server
 // that a shell or a script runner started stops with it.
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
@@ -128,7 +131,16 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
     // The stop ends once the app's last lines are in its log, so a reader of the log after the stop
     // sees them. A process outside the group can hold the pipes open, so the wait has a bound.
-    await raceDeadline(logged, AbortSignal.timeout(stopGraceMs)).catch(() => null);
+    const [drained] = await Promise.allSettled([
+      raceDeadline(logged, AbortSignal.timeout(logDrainMs)),
+    ]);
+
+    if (drained.status === 'rejected') {
+      throw new WringerError('environment', {
+        message: `The app's output still had not reached its log ${logDrainMs} ms after it exited.`,
+        hint: 'A process the app started outside its process group may still hold its output open.',
+      });
+    }
   };
 
   try {
@@ -136,9 +148,19 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
     return { endpoints, stop };
   } catch (error) {
-    await stop();
+    const [stopped] = await Promise.allSettled([stop()]);
 
-    throw error;
+    if (stopped.status === 'fulfilled') {
+      throw error;
+    }
+
+    // The startup failure stays the error; the failed stop adds what may still hold the app.
+    const cause = toWringerError(error);
+
+    throw new WringerError(cause.code, {
+      message: `${cause.message} ${toWringerError(stopped.reason).message}`,
+      ...(cause.hint === undefined ? {} : { hint: cause.hint }),
+    });
   } finally {
     request.signal.removeEventListener('abort', onAbort);
 
