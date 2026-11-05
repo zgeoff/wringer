@@ -5,7 +5,7 @@ import { WringerError } from './wringer-error.ts';
 export interface ProcessRequest {
   readonly argv: readonly string[];
   readonly cwd?: string | undefined;
-  readonly env?: Readonly<Record<string, string>> | undefined;
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
   readonly stdin?: string | Uint8Array | undefined;
   readonly signal?: AbortSignal | undefined;
 }

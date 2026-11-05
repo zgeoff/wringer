@@ -9,6 +9,7 @@ import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
 import { readStreamLineBatches } from './read-stream-line-batches.ts';
 import type { Endpoints } from './run-events.ts';
+import type { ProcessRequest } from './run-process.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { LaunchPlan } from './types.ts';
 import { WringerError } from './wringer-error.ts';
@@ -42,6 +43,7 @@ export const appStopGraceMs = 5000;
 // function starts the process and feeds the machine what the process and its log do.
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const cwd = request.plan.cwd ?? request.host.cwd;
+  const env = { ...request.host.env, ...request.plan.env };
 
   await createLogFolder(request.host, request.logPath);
 
@@ -52,7 +54,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
 
   const child = spawnApp(request.host, [...request.host.guard, ...request.plan.command], {
     cwd,
-    env: { ...request.host.env, ...request.plan.env },
+    env,
   });
 
   const logs = Promise.withResolvers<unknown>();
@@ -69,6 +71,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
           host: request.host,
           plan: request.plan,
           cwd,
+          env,
           child,
           logged: logs.promise,
           stopGraceMs: request.stopGraceMs,
@@ -170,6 +173,7 @@ interface AppStop {
   readonly host: LaunchHost;
   readonly plan: LaunchPlan;
   readonly cwd: string;
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly child: AppProcess;
   readonly logged: Promise<unknown>;
   readonly stopGraceMs: number;
@@ -186,12 +190,14 @@ export const appStopLimitMs = 2 * appStopGraceMs + logDrainMs;
 // pipes open, so that wait has a bound.
 async function stopApp(stop: AppStop): Promise<void> {
   if (stop.plan.stop !== undefined) {
-    await Promise.allSettled([
-      raceDeadline(
-        runStopCommand(stop.host, stop.plan.stop, stop.cwd, stop.stopGraceMs),
-        AbortSignal.timeout(stop.stopGraceMs),
-      ),
-    ]);
+    const stopping = runStopCommand(stop.host, {
+      argv: stop.plan.stop,
+      cwd: stop.cwd,
+      env: stop.env,
+      signal: AbortSignal.timeout(stop.stopGraceMs),
+    });
+
+    await Promise.allSettled([raceDeadline(stopping, AbortSignal.timeout(stop.stopGraceMs))]);
   }
 
   stop.host.killProcessGroup(stop.child.pid, 'SIGTERM');
@@ -220,14 +226,9 @@ async function stopApp(stop: AppStop): Promise<void> {
 
 // A failed stop command must not keep the app alive, so its failure is dropped: the SIGTERM and
 // SIGKILL that follow end the app whatever it did.
-async function runStopCommand(
-  host: LaunchHost,
-  argv: readonly string[],
-  cwd: string,
-  graceMs: number,
-): Promise<void> {
+async function runStopCommand(host: LaunchHost, request: ProcessRequest): Promise<void> {
   try {
-    await host.runProcess({ argv, cwd, signal: AbortSignal.timeout(graceMs) });
+    await host.runProcess(request);
   } catch {
     // Dropped on purpose; see above.
   }
