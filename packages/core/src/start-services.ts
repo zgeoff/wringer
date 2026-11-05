@@ -12,6 +12,10 @@ export interface ServicesRequest {
   readonly run: RunHandle;
   readonly hint: string;
   readonly signal: AbortSignal;
+
+  // Ends the commands a service runs through its exec. It outlives `signal`, so a service's stop
+  // can still run a command after the startup was cancelled.
+  readonly commandSignal: AbortSignal;
   readonly started: Map<string, ServiceInstance>;
   readonly onReady: (key: string) => Promise<void>;
 }
@@ -28,7 +32,7 @@ export async function startServices(request: ServicesRequest): Promise<void> {
     host: request.target.host,
     access: request.target.access,
     hint: request.hint,
-    signal: request.signal,
+    signal: request.commandSignal,
   });
 
   for (const entry of entries) {
