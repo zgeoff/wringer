@@ -37,6 +37,40 @@ test('it gives the words after `--` to a list positional that took no other word
   expect(raw).toStrictEqual({ argv: ['tool', '--human'] });
 });
 
+test('it converts the list words before and after `--` with the list parser', () => {
+  const raw = buildRawArgs(
+    { sizes: { type: 'positional', multiple: true, parse: Number } },
+    { values: { sizes: [1] }, explicit: { sizes: true }, rest: ['2'] },
+  );
+
+  expect(raw).toStrictEqual({ sizes: [1, 2] });
+});
+
+test('it gives a word after `--` to an unset scalar positional, converted by its parser', () => {
+  const raw = buildRawArgs(
+    {
+      degrees: { type: 'positional', parse: Number },
+      [extraWordsArg]: { type: 'positional', multiple: true },
+    },
+    { values: {}, explicit: {}, rest: ['-15'] },
+  );
+
+  expect(raw).toStrictEqual({ degrees: -15 });
+});
+
+test('it fills the unset scalar positionals in order before the list takes the other words', () => {
+  const raw = buildRawArgs(
+    {
+      host: { type: 'positional' },
+      argv: { type: 'positional', multiple: true },
+      [extraWordsArg]: { type: 'positional', multiple: true },
+    },
+    { values: {}, explicit: {}, rest: ['-web-1', '-la', '/srv'] },
+  );
+
+  expect(raw).toStrictEqual({ host: '-web-1', argv: ['-la', '/srv'] });
+});
+
 test.each([
   { name: 'a word no positional takes', values: { [extraWordsArg]: ['prod'] }, rest: [] },
   { name: 'a word after `--` with no list positional', values: {}, rest: ['prod'] },
