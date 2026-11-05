@@ -345,6 +345,33 @@ test('it answers a response that stalls past the request timeout with a timeout 
   });
 });
 
+test('it answers a body that stalls after the headers past the request timeout with a timeout error', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/cart`, () => {
+      const body = new ReadableStream({
+        start: (controller) => {
+          controller.enqueue(new TextEncoder().encode('{"items":['));
+        },
+      });
+
+      return new HttpResponse(body, { headers: { 'content-type': 'application/json' } });
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+
+  expect(result.envelope.error).toStrictEqual({
+    code: 'timeout',
+    message: 'GET https://shop.example/api/cart timed out.',
+    hint: null,
+  });
+});
+
 test('it answers a body that breaks off mid-read with an environment error', async () => {
   const ctx = await setupTest();
 
