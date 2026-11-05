@@ -20,7 +20,10 @@ async function setupTest() {
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
     openPostgres: (url: string, sessionName: string) =>
-      new SQL(url, { connection: { application_name: sessionName } }),
+      new SQL(url, { max: 1, connection: { application_name: sessionName } }),
+    reportCancelFailure: (message: string) => {
+      throw new Error(message);
+    },
   };
 
   return {
@@ -58,6 +61,30 @@ async function setupTest() {
       ),
   };
 }
+
+test('it reads Postgres rows with their columns and their count', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay', 'ship']);
+
+  const result = await ctx.runQuery("select id, text from notes where text = 'ship'");
+
+  expect(result).toStrictEqual({
+    columns: ['id', 'text'],
+    rows: [{ id: 2, text: 'ship' }],
+    rowCount: 1,
+  });
+});
+
+test('it counts the rows a Postgres write changed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay', 'ship', 'pack']);
+
+  const result = await ctx.runQuery("delete from notes where text <> 'pay'", { write: true });
+
+  expect(result).toStrictEqual({ columns: [], rows: [], rowCount: 2 });
+});
 
 test('it refuses a Postgres read that holds a second statement, and changes nothing', async () => {
   const ctx = await setupTest();
