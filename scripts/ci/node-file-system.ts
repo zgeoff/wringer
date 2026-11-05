@@ -1,5 +1,6 @@
-import { appendFile, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { appendText } from '../../packages/core/src/append-text.ts';
 import { createDirectory } from '../../packages/core/src/create-directory.ts';
 import { isErrorCode } from '../../packages/core/src/is-error-code.ts';
 import type { FileSystem } from './file-system.ts';
@@ -21,7 +22,7 @@ export const nodeFileSystem: FileSystem = {
     await createDirectory(dirname(path));
     await writeFile(path, text);
   },
-  appendText: (path, text) => appendFile(path, text),
+  appendText,
   createDirectory,
   removePath: (path) => rm(path, { recursive: true, force: true }),
   probePath: async (path) => {

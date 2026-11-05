@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { appendFile, readFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
+import { readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
+import { appendText } from './append-text.ts';
 import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
+import { readOptionalText } from './read-optional-text.ts';
 
 // The file operations the run state needs. A missing file or folder reads as null or as no names;
 // every other failure, such as EACCES or EIO, rejects.
@@ -17,17 +19,7 @@ export interface StateFileSystem {
 
 export function createNodeStateFileSystem(): StateFileSystem {
   return {
-    readText: async (path) => {
-      try {
-        return await readFile(path, 'utf8');
-      } catch (error) {
-        if (isErrorCode(error, 'ENOENT')) {
-          return null;
-        }
-
-        throw error;
-      }
-    },
+    readText: readOptionalText,
     listNames: async (directory) => {
       try {
         return await readdir(directory);
@@ -40,10 +32,7 @@ export function createNodeStateFileSystem(): StateFileSystem {
       }
     },
     createDirectory,
-
-    // `appendFile` writes on until the whole text is in the file, and the caller holds the run lock,
-    // so no other append lands between two of its writes.
-    appendText: (path, text) => appendFile(path, text),
+    appendText,
     readFileSize: async (path) => {
       const info = await stat(path);
 

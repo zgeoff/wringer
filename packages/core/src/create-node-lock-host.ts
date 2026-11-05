@@ -1,8 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { link, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { link, writeFile } from 'node:fs/promises';
+import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
 import { probeProcess } from './probe-process.ts';
+import { readOptionalText } from './read-optional-text.ts';
 import { readPIDNamespace } from './read-pid-namespace.ts';
+import { removeFile } from './remove-file.ts';
 import type { LockHost } from './with-file-lock.ts';
 
 // The lock's view of this process and its disk.
@@ -14,12 +17,10 @@ export function createNodeLockHost(): LockHost {
     nowMs: () => Date.now(),
     sleep: (durationMs) => Bun.sleep(durationMs),
     probeProcess,
-    createDirectory: async (path) => {
-      await mkdir(path, { recursive: true });
-    },
+    createDirectory,
     createFileOnce,
-    readText,
-    removeFile: (path) => rm(path, { force: true }),
+    readText: readOptionalText,
+    removeFile,
   };
 }
 
@@ -41,18 +42,6 @@ async function createFileOnce(path: string, content: string): Promise<boolean> {
 
     throw error;
   } finally {
-    await rm(draft, { force: true });
-  }
-}
-
-async function readText(path: string): Promise<string | null> {
-  try {
-    return await readFile(path, 'utf8');
-  } catch (error) {
-    if (isErrorCode(error, 'ENOENT')) {
-      return null;
-    }
-
-    throw error;
+    await removeFile(draft);
   }
 }
