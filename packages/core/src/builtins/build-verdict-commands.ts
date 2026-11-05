@@ -141,7 +141,11 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 }
 
 function readCurrentFingerprint(ctx: BuiltinContext, base: string): Promise<string> {
-  return readFingerprint({ cwd: ctx.session.root, base, exclude: [ctx.wringer.stateDir] });
+  return readFingerprint(ctx.session.fingerprintHost, {
+    cwd: ctx.session.root,
+    base,
+    exclude: [ctx.wringer.stateDir],
+  });
 }
 
 async function readReport(ctx: BuiltinContext, givenBase: string | undefined): Promise<Report> {

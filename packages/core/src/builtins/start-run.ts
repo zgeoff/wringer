@@ -50,7 +50,7 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     const base = await readDefaultBase(ctx.session.root);
 
-    const fingerprint = await readFingerprint({
+    const fingerprint = await readFingerprint(ctx.session.fingerprintHost, {
       cwd: ctx.session.root,
       base,
       exclude: [ctx.wringer.stateDir],
