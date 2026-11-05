@@ -24,6 +24,7 @@ test.each([
     write: false,
   },
   { dialect: 'postgres', via: 'exec', sql: 'delete from orders', write: true },
+  { dialect: 'postgres', via: 'exec', sql: '-- tidy up\rdelete from orders', write: true },
   {
     dialect: 'postgres',
     via: 'sql',

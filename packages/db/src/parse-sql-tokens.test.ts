@@ -92,6 +92,82 @@ test.each([
 });
 
 test.each([
+  {
+    dialect: 'postgres',
+    newline: 'LF',
+    sql: '-- note\ndelete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  {
+    dialect: 'postgres',
+    newline: 'CRLF',
+    sql: '-- note\r\ndelete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  {
+    dialect: 'postgres',
+    newline: 'CR',
+    sql: '-- note\rdelete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  { dialect: 'postgres', newline: 'no newline', sql: '-- note delete', tokens: [] },
+  {
+    dialect: 'sqlite',
+    newline: 'LF',
+    sql: '-- note\ndelete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  {
+    dialect: 'sqlite',
+    newline: 'CRLF',
+    sql: '-- note\r\ndelete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  { dialect: 'sqlite', newline: 'CR', sql: '-- note\rdelete', tokens: [] },
+  { dialect: 'sqlite', newline: 'no newline', sql: '-- note delete', tokens: [] },
+] as const)('it ends a line comment on $dialect at $newline as the database does', (row) => {
+  expect(parseSQLTokens(row.dialect, row.sql)).toStrictEqual({ tokens: row.tokens, closed: true });
+});
+
+test.each([
+  {
+    dialect: 'postgres',
+    name: 'a line comment marker and a CR inside a string',
+    sql: "'-- x\r' delete",
+    tokens: [
+      { kind: 'string', text: '-- x\r' },
+      { kind: 'word', text: 'delete' },
+    ],
+  },
+  {
+    dialect: 'postgres',
+    name: 'a line comment marker and a CR inside a dollar-quoted body',
+    sql: '$$-- x\r$$ delete',
+    tokens: [
+      { kind: 'string', text: '-- x\r' },
+      { kind: 'word', text: 'delete' },
+    ],
+  },
+  {
+    dialect: 'postgres',
+    name: 'a CR inside a nested block comment',
+    sql: '/* a /* -- \r */ b */ delete',
+    tokens: [{ kind: 'word', text: 'delete' }],
+  },
+  {
+    dialect: 'sqlite',
+    name: 'a line comment marker inside a bracket name',
+    sql: '[-- x] delete',
+    tokens: [
+      { kind: 'name', text: '-- x', escaped: false },
+      { kind: 'word', text: 'delete' },
+    ],
+  },
+] as const)('it reads $name on $dialect', (row) => {
+  expect(parseSQLTokens(row.dialect, row.sql)).toStrictEqual({ tokens: row.tokens, closed: true });
+});
+
+test.each([
   { dialect: 'postgres', sql: "select 'unclosed" },
   { dialect: 'postgres', sql: 'select /* a /* b */ still open' },
   { dialect: 'postgres', sql: 'select $$ body' },
