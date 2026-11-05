@@ -96,6 +96,18 @@ test('it starts the app under a supervisor process with `up`, and stops it with 
   });
 });
 
+test('it exits with code 2 and a usage envelope for an unknown command', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('restock-everything');
+
+  expect({
+    exitCode: result.exitCode,
+    ok: result.envelope.ok,
+    code: result.envelope.error?.code,
+    errors: result.errors,
+  }).toStrictEqual({ exitCode: 2, ok: false, code: 'usage', errors: [] });
+});
+
 test('it drives an action with each flag type on an attached target', async () => {
   const ctx = await setupTest();
 
