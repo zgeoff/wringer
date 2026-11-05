@@ -23,6 +23,7 @@ import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
+import { pickEnvelopeTarget } from './pick-envelope-target.ts';
 import { raceDeadline } from './race-deadline.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
@@ -161,7 +162,7 @@ export async function dispatch(
 
   const input = settleEnvelope({
     command: path.join('.'),
-    target: settled?.targetName ?? null,
+    target: pickEnvelopeTarget(settled, bound),
     instance: run?.runID ?? null,
     feature,
     sha: await readHeadSHA(session.repoHost, session.root),
