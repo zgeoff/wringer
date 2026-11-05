@@ -1,4 +1,11 @@
-export type DatabaseFailure = 'read-only' | 'environment' | 'statement';
+export type DatabaseFailure = 'read-only' | 'timeout' | 'environment' | 'statement';
+
+// Postgres cancels a statement past its `statement_timeout` with SQLSTATE 57014, and psql prints only
+// the message. The driver's own deadline check raises the second message before the statement runs.
+const timeoutCode = '57014';
+
+const timeoutMessagePattern =
+  /canceling statement due to statement timeout|deadline passed before the statement started/iu;
 
 const readOnlyCodes = new Set(['SQLITE_READONLY', '25006']);
 
@@ -25,12 +32,16 @@ const readOnlyMessagePattern = /attempt to write a readonly database|read-only t
 const environmentMessagePattern =
   /unable to open database|database is locked|file is not a database|disk I\/O error|database or disk is full|access permission denied|could not connect|connection to server|connection refused|no such file|password authentication failed|database "[^"]*" does not exist/iu;
 
-// SQLite and Postgres each report a failure with their own code, from a driver, or text, from the
-// database's own client. A refused write in a read-only session is the target's to answer; a
-// failure to reach or open the database is the environment's; anything else is the statement's.
+// A failure arrives as a driver's code or the text of the database's own client. A refused write
+// in a read-only session is the target's to answer, a statement stopped at the deadline is a
+// timeout, a database it cannot reach or open is the environment's, and the rest the statement's.
 export function pickDatabaseFailure(code: string | null, message: string): DatabaseFailure {
   if ((code !== null && readOnlyCodes.has(code)) || readOnlyMessagePattern.test(message)) {
     return 'read-only';
+  }
+
+  if (code === timeoutCode || timeoutMessagePattern.test(message)) {
+    return 'timeout';
   }
 
   const environmentCode =
