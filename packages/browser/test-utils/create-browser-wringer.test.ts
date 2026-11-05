@@ -16,6 +16,11 @@ test('it builds the local and prod targets with the browser driver and the sneak
   }).toStrictEqual({
     targets: ['local', 'prod'],
     access: ['read-write', 'read-only'],
-    actions: ['action sneak-order', 'action sneak-email', 'action script-order'],
+    actions: [
+      'action sneak-order',
+      'action sneak-email',
+      'action click-by-ref',
+      'action script-order',
+    ],
   });
 });
