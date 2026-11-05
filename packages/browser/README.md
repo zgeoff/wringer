@@ -52,9 +52,14 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 
 The doctor check `browser.launched` fails when the browser has closed.
 
-One second before a command's deadline, the driver closes the page under a browser action that is
-still running, and the command fails only once the page has closed, so a late click never lands. The
-next command finds a new page at the same URL, without the input the old page held.
+One second before a command's deadline, the driver starts to close the page under a browser action
+that is still running. When the page closes within half a second, the command fails with a timeout,
+and the next command finds a new page at the same URL, without the input the old page held. When the
+page does not close in that time, the action may still land: the command fails with an environment
+error, and the browser refuses every later command until `up --restart`.
+
+The command's deadline can still pass before the page has closed, such as on a host too busy to run
+the close in time. The caller then reports a timeout while the late action may still land.
 
 ## Snapshots and refs
 
