@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
+import { readText } from './read-text.ts';
 import { removeFile } from './remove-file.ts';
 import { runGit } from './run-git.ts';
 import type { RepoHost } from './types.ts';
@@ -10,7 +11,7 @@ export function createNodeRepoHost(): RepoHost {
   return {
     runGit,
     removeFile,
-    readText: (path) => readFile(path, 'utf8'),
+    readText,
     createDirectory,
     writeNewFile,
     readBytes: readFile,
