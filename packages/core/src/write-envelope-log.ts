@@ -1,5 +1,5 @@
 import type { RunView } from './build-run-view.ts';
-import type { StatePort } from './create-file-state.ts';
+import type { RunViewRefusal, StatePort } from './create-file-state.ts';
 import type { Envelope } from './envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { WringerError } from './wringer-error.ts';
@@ -8,6 +8,10 @@ export interface LogRequest {
   readonly drive: boolean;
   readonly failure: WringerError | null;
   readonly now: () => Date;
+
+  // Checked against the run as its log stands under the run's lock; a refusal keeps the envelope
+  // out of the log and becomes the envelope's failure.
+  readonly refuse: RunViewRefusal | null;
 }
 
 // The command has already run, so a log write that fails, such as an event over the log's cap,
@@ -44,12 +48,11 @@ async function logEnvelope(
     });
   }
 
-  await state.appendEvent(run.runID, {
-    type: 'envelope',
-    at,
-    drive: request.drive && envelope.ok,
-    envelope,
-  });
+  const event = { type: 'envelope', at, drive: request.drive && envelope.ok, envelope } as const;
+
+  await (request.refuse === null
+    ? state.appendEvent(run.runID, event)
+    : state.appendEventUnless(run.runID, event, request.refuse));
 }
 
 // A stack this long is a runaway, and the log refuses an event past its cap.

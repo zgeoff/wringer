@@ -10,6 +10,7 @@ import type { Envelope, Evidence } from './envelope.ts';
 import { exitCodeFor } from './error-codes.ts';
 import type { ExitCode } from './error-codes.ts';
 import { findOwnValue } from './find-own-value.ts';
+import { findVerdictRefusal } from './find-verdict-refusal.ts';
 import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
@@ -28,6 +29,7 @@ import { raceDeadline } from './race-deadline.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
+import { doneCommand } from './read-verdicts.ts';
 import type { RunID } from './run-events.ts';
 import { settleEnvelope } from './settle-envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
@@ -208,6 +210,10 @@ export async function dispatch(
           drive: trace.drive,
           failure: input.error,
           now,
+          refuse:
+            envelope.command === doneCommand && envelope.ok
+              ? (current) => findVerdictRefusal(before?.run, current)
+              : null,
         });
 
   if (logFailure !== null) {

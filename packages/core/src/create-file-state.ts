@@ -24,12 +24,22 @@ export const pointersSchema = z.strictObject({
 
 export type Pointers = z.infer<typeof pointersSchema>;
 
+export type RunViewRefusal = (run: RunView | undefined) => WringerError | null;
+
 export interface StatePort {
   readonly paths: StatePaths;
   readonly readPointers: () => Promise<Pointers>;
   readonly withTargetLock: <T>(target: string, work: () => Promise<T>) => Promise<T>;
   readonly writePointers: (change: (current: Pointers) => Pointers) => Promise<Pointers>;
   readonly appendEvent: (runID: RunID, event: RunEvent) => Promise<void>;
+
+  // Rejects with the refusal, and writes nothing, when `refuse` returns one for the run as its log
+  // stands under the run's lock.
+  readonly appendEventUnless: (
+    runID: RunID,
+    event: RunEvent,
+    refuse: RunViewRefusal,
+  ) => Promise<void>;
   readonly appendLateFailure: (event: LateFailureEvent) => Promise<void>;
   readonly readRunEvents: (runID: RunID) => Promise<readonly RunEvent[]>;
   readonly readRun: (runID: RunID) => Promise<RunView | undefined>;
@@ -84,6 +94,36 @@ export function createFileState(options: FileStateOptions): StatePort {
     return buildRunView({ runID, events });
   };
 
+  const appendCheckedEvent = async (
+    runID: RunID,
+    event: RunEvent,
+    refuse: RunViewRefusal | null,
+  ): Promise<void> => {
+    const parsed = runEventSchema.parse(event);
+    const line = `${JSON.stringify(parsed)}\n`;
+    const lineBytes = Buffer.byteLength(line);
+
+    if (lineBytes > eventSizeCapBytes) {
+      throw new WringerError('internal', {
+        message: `A ${event.type} event of ${lineBytes} bytes is over the log's cap of ${eventSizeCapBytes} bytes.`,
+      });
+    }
+
+    const runPaths = buildRunPaths(options.stateDir, runID);
+
+    await fs.createDirectory(runPaths.directory);
+
+    await appendRunEvent({
+      fs,
+      logPath: runPaths.log,
+      lockPath: join(paths.locks, `run-${runID}.lock`),
+      lockTimeoutMs: options.lockTimeoutMs,
+      line,
+      event: parsed,
+      refuse: refuse === null ? null : (events) => refuse(buildRunView({ runID, events })),
+    });
+  };
+
   return {
     paths,
     readPointers,
@@ -98,30 +138,8 @@ export function createFileState(options: FileStateOptions): StatePort {
 
         return next;
       }),
-    appendEvent: async (runID, event) => {
-      const parsed = runEventSchema.parse(event);
-      const line = `${JSON.stringify(parsed)}\n`;
-      const lineBytes = Buffer.byteLength(line);
-
-      if (lineBytes > eventSizeCapBytes) {
-        throw new WringerError('internal', {
-          message: `A ${event.type} event of ${lineBytes} bytes is over the log's cap of ${eventSizeCapBytes} bytes.`,
-        });
-      }
-
-      const runPaths = buildRunPaths(options.stateDir, runID);
-
-      await fs.createDirectory(runPaths.directory);
-
-      await appendRunEvent({
-        fs,
-        logPath: runPaths.log,
-        lockPath: join(paths.locks, `run-${runID}.lock`),
-        lockTimeoutMs: options.lockTimeoutMs,
-        line,
-        event: parsed,
-      });
-    },
+    appendEvent: (runID, event) => appendCheckedEvent(runID, event, null),
+    appendEventUnless: (runID, event, refuse) => appendCheckedEvent(runID, event, refuse),
     appendLateFailure: (event) =>
       withLock('late-failures.lock', async () => {
         const parsed = lateFailureEventSchema.parse(event);

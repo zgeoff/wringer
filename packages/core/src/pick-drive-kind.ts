@@ -1,4 +1,4 @@
-import type { RunStatus } from './run-log.ts';
+import type { RunStatus } from './append-run-event.ts';
 
 export interface DriveFacts {
   readonly runStatus: RunStatus | null;

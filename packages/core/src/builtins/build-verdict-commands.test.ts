@@ -4,7 +4,9 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
+import type { StatePort } from '../create-file-state.ts';
 import { dispatch } from '../dispatch.ts';
+import { readVerdicts } from '../read-verdicts.ts';
 import { reportSchema } from '../report-schema.ts';
 import type { UploadRequest } from '../types.ts';
 
@@ -27,12 +29,31 @@ async function setupTest() {
     },
   };
 
+  // Another doctor fails after `done` read the run and before its envelope reaches the log.
+  const racedState: StatePort = {
+    ...shop.state,
+    appendEventUnless: async (runID, event, refuse) => {
+      await shop.state.appendEvent(runID, {
+        type: 'doctor-failed',
+        at: '2026-11-05T09:00:00.000Z',
+        results: [
+          { name: 'shop', status: 'failed', durationMs: 4, code: 'check-failed', message: null },
+        ],
+      });
+
+      await shop.state.appendEventUnless(runID, event, refuse);
+    },
+  };
+
   return {
     root: shop.repo.root,
     git: shop.repo.git,
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
+    runWhileDoctorFails: (path: readonly string[]) =>
+      dispatch(wringer, path, {}, { ...shop.session, state: racedState, target: 'local' }),
+    readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[]) =>
       dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
     parseReportData: (data: unknown) => reportDataSchema.parse(data),
@@ -96,6 +117,24 @@ test('#done records a verdict with the evidence of the drives since the doctor',
       { kind: 'note', path: expect.stringMatching(/receipt\.txt$/u), sha256: expect.any(String) },
     ],
   });
+});
+
+test('#done refuses and records no verdict when another doctor fails before its envelope is logged', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+
+  const result = await ctx.runWhileDoctorFails(['done']);
+  const verdicts = await ctx.readVerdicts();
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    verdicts: [...verdicts.keys()],
+  }).toStrictEqual({ exitCode: 3, code: 'doctor-required', verdicts: [] });
 });
 
 test('#report gives each changed feature its status and embeds the report block', async () => {
