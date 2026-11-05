@@ -152,6 +152,33 @@ test.each([
   expect(after).toBe(before);
 });
 
+test('it keeps a moved submodule in the fingerprint when the repo ignores submodules', async () => {
+  const ctx = await setupTest();
+
+  const lib = ['-C', 'lib', '-c', 'user.email=tester@example.com', '-c', 'user.name=Tester'];
+
+  await mkdir(join(ctx.repo, 'lib'));
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
+  await ctx.git(...lib, 'add', '.');
+  await ctx.git(...lib, 'commit', '--quiet', '-m', 'start');
+  await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 7;\n');
+
+  await ctx.git(...lib, 'commit', '--quiet', '-am', 'raise');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'diff.ignoreSubmodules', 'all');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
 test('it gives a subfolder of the repo the fingerprint of the whole repo', async () => {
   const ctx = await setupTest();
 

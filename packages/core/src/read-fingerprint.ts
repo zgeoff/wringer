@@ -28,6 +28,7 @@ const pinnedDiffOptions = [
   '--diff-algorithm=myers',
   '--src-prefix=a/',
   '--dst-prefix=b/',
+  '--ignore-submodules=none',
 ];
 
 // The fingerprint is `git patch-id --stable` of the working tree against the merge base. A commit
