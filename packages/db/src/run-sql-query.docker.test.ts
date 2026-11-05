@@ -1,10 +1,9 @@
-import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import { SQL } from 'bun';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createTestPostgres } from '../test-utils/create-test-postgres.ts';
+import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
-import type { SqliteMode } from './run-sql-query.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the client, then
 // the container.
@@ -23,16 +22,33 @@ async function setupTest() {
 
   stack.defer(() => admin.close());
 
-  const clients = {
-    openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
-    openPostgres: (url: string, sessionName: string) =>
-      new SQL(url, { max: 1, connection: { application_name: sessionName } }),
-    reportCancelFailure: (message: string) => {
-      throw new Error(message);
-    },
-  };
+  const clients = createSQLClients();
+
+  // A role that may hold one connection, so a cancel session cannot open while its query runs.
+  const clerkURL = new URL(postgres.url);
+
+  clerkURL.username = 'clerk';
+  clerkURL.password = 'clerk';
 
   return {
+    createClerk: async () => {
+      await admin`create role clerk login password 'clerk' connection limit 1`;
+      await admin`grant select, insert on notes to clerk`;
+      await admin`grant usage on sequence notes_id_seq to clerk`;
+    },
+    runAsClerk: (sql: string, signal: AbortSignal, timeLeftMs: number) =>
+      runSQLQuery(
+        {
+          adapter: 'postgres',
+          url: clerkURL.href,
+          sql,
+          params: [],
+          write: true,
+          signal,
+          timeLeftMs: () => timeLeftMs,
+        },
+        clients,
+      ),
     createNotes: (texts: readonly string[]) =>
       admin.begin(async (transaction) => {
         await transaction`create table notes (id serial primary key, text text not null)`;
@@ -65,6 +81,7 @@ async function setupTest() {
           params: options.params ?? [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
+          timeLeftMs: () => 60_000,
         },
         clients,
       ),
@@ -149,6 +166,28 @@ test('it never sends a Postgres write whose signal aborts while its connection o
 
   expect({ written, notes }).toStrictEqual({
     written: { status: 'rejected', reason: expect.objectContaining({ code: 'timeout' }) },
+    notes: ['pay'],
+  });
+});
+
+test('it stops a Postgres write at its deadline when the role cannot open a cancel session', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay']);
+  await ctx.createClerk();
+
+  const [written] = await Promise.allSettled([
+    ctx.runAsClerk(
+      "insert into notes (text) select 'late' from pg_sleep(4)",
+      AbortSignal.timeout(1500),
+      1500,
+    ),
+  ]);
+
+  const notes = await ctx.readNotes();
+
+  expect({ written, notes }).toStrictEqual({
+    written: { status: 'rejected', reason: expect.objectContaining({ errno: '57014' }) },
     notes: ['pay'],
   });
 });

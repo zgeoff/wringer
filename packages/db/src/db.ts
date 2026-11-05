@@ -1,9 +1,8 @@
-import { Database } from 'bun:sqlite';
 import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession, Fence } from '@wringer/core';
-import { SQL } from 'bun';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import { createSQLClients } from './create-sql-clients.ts';
 import { dbResultSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
 import { parseExecResult } from './parse-exec-result.ts';
@@ -39,19 +38,7 @@ export const db = defineDriver({
   options: z.strictObject({}),
   targetConfig: dbConfigSchema,
   client: (session, fence): DbClient => {
-    const clients: SQLClients = {
-      openSqlite: (file, mode) => new Database(file, { [mode]: true }),
-
-      // Each session runs one statement or one transaction, so it needs one connection. With more,
-      // Bun.SQL retries a refused connection on each spare slot before the call fails.
-      openPostgres: (url, sessionName) =>
-        new SQL(url, { max: 1, connection: { application_name: sessionName } }),
-
-      // The command's envelope has gone to stdout by the time a late cancel fails.
-      reportCancelFailure: (message) => {
-        process.stderr.write(`${message}\n`);
-      },
-    };
+    const clients = createSQLClients();
 
     return {
       query: fence({
@@ -100,7 +87,7 @@ async function runQuery(
   clients: SQLClients,
   query: ParsedQuery,
 ): Promise<DbResult> {
-  const plan = pickQueryPlan(session.config, query, Date.now() + session.timeLeftMs());
+  const plan = pickQueryPlan(session.config, query, clients.now() + session.timeLeftMs());
 
   if (plan.kind === 'undeclared-write') {
     return rejectUndeclaredWrite(fence, query.sql);
@@ -138,7 +125,10 @@ async function readResult(
   plan: RunnablePlan,
 ): Promise<DbResult> {
   if (plan.kind === 'sql') {
-    return runSQLQuery({ ...plan, signal: session.signal }, clients);
+    return runSQLQuery(
+      { ...plan, signal: session.signal, timeLeftMs: session.timeLeftMs },
+      clients,
+    );
   }
 
   const result = await session.exec(plan.exec.argv, plan.effect, { stdin: plan.exec.stdin });
@@ -174,8 +164,18 @@ function pickErrorCode(error: unknown): string | null {
   return sqlState ?? named;
 }
 
-function buildDatabaseError(failure: 'environment' | 'statement', message: string): WringerError {
+function buildDatabaseError(
+  failure: 'timeout' | 'environment' | 'statement',
+  message: string,
+): WringerError {
   return match(failure)
+    .with(
+      'timeout',
+      () =>
+        new WringerError('timeout', {
+          message: `The database stopped the statement at the command's deadline: ${message}`,
+        }),
+    )
     .with(
       'environment',
       () =>
