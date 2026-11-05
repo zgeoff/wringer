@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
@@ -140,6 +140,31 @@ test('it records the lines a file source gained just before the recorder stopped
 
   expect(recorded).toBe(
     '{"at":"2026-03-01T09:30:00.000Z","line":"shutting down"}\n{"at":"2026-03-01T09:30:00.000Z","line":"bye"}\n',
+  );
+});
+
+test('it records a longer file that replaced a file source from its start, without the old unfinished line', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+  const replacement = join(ctx.directory, 'app.log.new');
+
+  // The old file ends inside the two bytes of `é`.
+  await writeFile(log, new Uint8Array([...new TextEncoder().encode('booted\nhalf a caf'), 0xc3]));
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  await ctx.firstFileRead();
+
+  await writeFile(replacement, 'rotated, and now serving orders\n');
+  await rename(replacement, log);
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(
+    '{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n{"at":"2026-03-01T09:30:00.000Z","line":"rotated, and now serving orders"}\n',
   );
 });
 
