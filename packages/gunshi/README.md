@@ -41,6 +41,9 @@ Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
 - An unknown flag, a flag of the wrong type or arguments that fail the command's schema end in a
   `usage` envelope and exit code 2. So does a flag with no value after it; write `--label ''` to
   pass an empty one.
+- Write a negative value with `=`, as in `--degrees=-15`. The parser reads `--degrees -15` as two
+  short options, and the usage envelope's hint gives the joined form. Put a negative positional
+  after `--`, as in `lean -- -15`.
 - A flag of an object or a list of objects takes JSON text, such as `--address '{"town":"Hollin"}'`.
 - When a command's arguments are a union of objects, each branch's fields are flags, and the
   command's schema picks the branch.

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import {
-  createNodeFingerprintHost,
+  createNodeRepoHost,
   createRepoState,
   envelopeSchema,
   makeProcessSupervisorStarter,
@@ -35,7 +35,7 @@ async function setupTest() {
       readRepoRoot,
       openRepo: (root) => ({
         state: createRepoState(root, wringer.stateDir),
-        fingerprintHost: createNodeFingerprintHost(),
+        repoHost: createNodeRepoHost(),
         supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
       runSupervisor: (_wringer, supervisorArgv) => {
@@ -182,24 +182,20 @@ test.each([
   });
 });
 
-test.each([
-  {
-    argv: ['tilt', '--degrees', '-15'],
-    data: { degrees: -15, steps: [] },
-  },
-  {
-    argv: ['tilt', '--degrees', '-0.5', '--steps', '-5', '--steps', '10', '--steps', '-.25'],
-    data: { degrees: -0.5, steps: [-5, 10, -0.25] },
-  },
-])('it passes the negative numbers in $argv to the command', async (row) => {
+test('it answers a negative value given apart from its flag with a hint to join them', async () => {
   const ctx = await setupTest();
-  const result = await ctx.run(row.argv);
+  const result = await ctx.run(['tilt', '--degrees', '-15']);
 
   const envelope = ctx.parseEnvelope(result.stdout);
 
-  expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
-    exitCode: 0,
-    data: row.data,
+  expect({
+    exitCode: result.exitCode,
+    code: envelope.error?.code,
+    hint: envelope.error?.hint,
+  }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+    hint: 'Join a negative value to its flag with `=`: `--degrees=-15`.',
   });
 });
 
@@ -244,6 +240,18 @@ test('it answers malformed JSON in an object flag with one usage envelope and ex
 
 test.each([
   {
+    argv: ['tilt', '--degrees=-15'],
+    data: { degrees: -15, steps: [] },
+  },
+  {
+    argv: ['tilt', '--degrees=-0.5', '--steps=-5', '--steps', '10', '--steps=-.25'],
+    data: { degrees: -0.5, steps: [-5, 10, -0.25] },
+  },
+  {
+    argv: ['lean', '--', '-15'],
+    data: { degrees: -15 },
+  },
+  {
     argv: ['ship', '--mode', 'post', '--address', '{"street":"Elm Row","town":"Hollin"}'],
     data: { mode: 'post', address: { street: 'Elm Row', town: 'Hollin' } },
   },
@@ -251,7 +259,7 @@ test.each([
     argv: ['ship', '--mode', 'pickup', '--counter', 'east'],
     data: { mode: 'pickup', counter: 'east' },
   },
-])('it passes the flags of the union branch in $argv to the command', async (row) => {
+])('it passes the values in $argv to the command', async (row) => {
   const ctx = await setupTest();
   const result = await ctx.run(row.argv);
 
@@ -325,6 +333,13 @@ test('it runs a command against the target --target names', async () => {
       cursors: {},
     },
   });
+});
+
+test('it runs a command for the feature --feature names', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['status', '--feature', 'greeting']);
+
+  expect(ctx.parseEnvelope(result.stdout).feature).toBe('greeting');
 });
 
 test('it answers a --timeout-ms of 0 with a usage envelope and exit code 2', async () => {

@@ -1,8 +1,11 @@
 import { WringerError, dispatch, supervisorCommandName } from '@wringer/core';
-import type { FingerprintHost, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
+import type { RepoHost, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
 import { cli, parseArgs } from 'gunshi';
+import type { ArgToken } from 'gunshi';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
+import { findSignedValueFlag } from './find-signed-value-flag.ts';
+import type { SignedValueFlag } from './find-signed-value-flag.ts';
 import { pickCLIOutcome } from './pick-cli-outcome.ts';
 import type { ParsedInvocation } from './pick-cli-outcome.ts';
 import { pickCommandName } from './pick-command-name.ts';
@@ -11,11 +14,10 @@ import { pickOutputMode } from './pick-output-mode.ts';
 import type { OutputMode } from './pick-output-mode.ts';
 import { renderEnvelope } from './render-envelope.ts';
 import { renderHumanEvent } from './render-human-event.ts';
-import { toInlineNegativeValues } from './to-inline-negative-values.ts';
 
 interface RepoPorts {
   readonly state: StatePort;
-  readonly fingerprintHost: FingerprintHost;
+  readonly repoHost: RepoHost;
   readonly supervisor: SupervisorStarter;
 }
 
@@ -41,15 +43,10 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
     return 0;
   }
 
-  const argv = toInlineNegativeValues(ports.argv);
+  const tokens = parseArgs([...ports.argv]);
+  const mode = pickOutputMode({ tokens, isTTY: ports.isTTY, isAgent: ports.isAgent });
 
-  const mode = pickOutputMode({
-    tokens: parseArgs(argv),
-    isTTY: ports.isTTY,
-    isAgent: ports.isAgent,
-  });
-
-  const parsed = await readInvocation(wringer, { ...ports, argv });
+  const parsed = await readInvocation(wringer, ports, tokens);
 
   const outcome = pickCLIOutcome(parsed, mode);
 
@@ -65,7 +62,11 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
 // gunshi only records the invocation; the command runs after `cli` returns, so a gunshi parse error
 // and a command error never mix. gunshi resolves the command path before it checks the flags, so a
 // flag error still names the command.
-async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<ParsedInvocation> {
+async function readInvocation(
+  wringer: Wringer,
+  ports: CLIPorts,
+  tokens: readonly ArgToken[],
+): Promise<ParsedInvocation> {
   let invocation: Invocation | null = null;
   let commandPath: readonly string[] = [];
 
@@ -107,22 +108,27 @@ async function readInvocation(wringer: Wringer, ports: CLIPorts): Promise<Parsed
     return {
       kind: 'failed',
       command: pickCommandName(commandPath, ports.argv),
-      error: toUsageError(error),
+      error: toUsageError(error, findSignedValueFlag(tokens, ports.argv)),
     };
   }
 }
 
 // gunshi throws an AggregateError for a parse failure, with one error per problem.
-function toUsageError(error: unknown): WringerError {
+function toUsageError(error: unknown, signed: SignedValueFlag | undefined): WringerError {
   if (error instanceof WringerError) {
     return error;
   }
 
   const problems = error instanceof AggregateError ? error.errors.map(String) : [String(error)];
 
+  const hint =
+    signed === undefined
+      ? 'Add `--help` to the command to see its arguments.'
+      : `Join a negative value to its flag with \`=\`: \`${signed.flag}=${signed.value}\`.`;
+
   return new WringerError('usage', {
     message: problems.map((problem) => problem.replace(/^\w*Error: /u, '')).join(' '),
-    hint: 'Add `--help` to the command to see its arguments.',
+    hint,
   });
 }
 
@@ -147,7 +153,7 @@ async function dispatchInvocation(
   const result = await dispatch(wringer, invocation.path, invocation.raw, {
     root: plan.root,
     state: repo.state,
-    fingerprintHost: repo.fingerprintHost,
+    repoHost: repo.repoHost,
     supervisor: repo.supervisor,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
