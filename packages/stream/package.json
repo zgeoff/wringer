@@ -35,7 +35,9 @@
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
-    "@zgeoff/std": "catalog:"
+    "@zgeoff/std": "catalog:",
+    "@zgeoff/testing": "catalog:",
+    "tiny-invariant": "catalog:"
   },
   "peerDependencies": {
     "@wringer/core": "workspace:*"

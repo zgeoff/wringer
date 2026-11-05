@@ -1,7 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createActor } from 'xstate';
 import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 interface Write {
@@ -58,8 +59,14 @@ function setupTest() {
 
       return settle.promise;
     },
-    waitForWrites: (count: number) => waitFor(() => (writes.length === count ? true : null)),
-    waitForErrors: (count: number) => waitFor(() => (errors.length === count ? true : null)),
+    waitForWrites: (count: number) =>
+      waitFor(() => {
+        invariant(writes.length === count, `The writer has not made ${count} writes yet.`);
+      }),
+    waitForErrors: (count: number) =>
+      waitFor(() => {
+        invariant(errors.length === count, `The writer has not reported ${count} errors yet.`);
+      }),
   };
 }
 

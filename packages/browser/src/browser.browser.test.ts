@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { dispatch, readText } from '@wringer/core';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createBrowserWringer } from '../test-utils/create-browser-wringer.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { snapshotSchema } from './page-service-contract.ts';
@@ -303,7 +304,11 @@ test('it stops a browser action that ran past the command deadline before it lan
   );
 
   // The driver closes the page under the late click and loads the same URL in a new page.
-  const reloaded = await waitFor(() => (ctx.pageLoads() === 2 ? true : null));
+  const reloaded = await waitFor(() => {
+    invariant(ctx.pageLoads() === 2, 'The page has not reloaded yet.');
+
+    return true;
+  });
 
   ctx.revealRestock();
 
@@ -312,7 +317,7 @@ test('it stops a browser action that ran past the command deadline before it lan
 
     const printed = snapshotSchema.parse(snapshot.envelope.data).snapshot;
 
-    return printed.includes('button "Restock"') ? true : null;
+    invariant(printed.includes('button "Restock"'), 'The page shows no Restock button yet.');
   });
 
   expect({ code: result.envelope.error?.code, reloaded, posts: ctx.posts }).toStrictEqual({
