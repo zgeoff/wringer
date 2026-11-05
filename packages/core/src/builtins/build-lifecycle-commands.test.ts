@@ -7,6 +7,7 @@ import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { runGit } from '../run-git.ts';
+import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -45,6 +46,29 @@ async function setupTest() {
         },
       );
     },
+    runWithClock: (target: string, path: readonly string[], now: () => Date) =>
+      dispatch(wringer, path, {}, { ...shop.session, target, now }),
+
+    // The supervisor's own stop fails as if its socket broke mid-call, while every other call and
+    // the start go through.
+    runWithFailingStop: (target: string, path: readonly string[], timeoutMs: number) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target,
+          timeoutMs,
+          supervisor: {
+            start: shop.session.supervisor.start,
+            call: (call) =>
+              call.request.method === 'stop'
+                ? Promise.reject(new WringerError('environment', { message: 'The socket broke.' }))
+                : shop.session.supervisor.call(call),
+          },
+        },
+      ),
     waitForTargetLock: (target: string) =>
       shop.state.withTargetLock(target, () => Promise.resolve()),
 
@@ -220,6 +244,52 @@ test('#up stops a run that becomes ready only after the command missed its deadl
   });
 
   expect(status).toBe('ended');
+});
+
+test('#up gives up on readiness when its clock passes the ready timeout', async () => {
+  const ctx = await setupTest();
+
+  let nowMs = Date.parse('2026-03-01T09:00:00.000Z');
+
+  onTestFinished(async () => {
+    await ctx.run('slow', ['down']);
+  });
+
+  const result = await ctx.runWithClock('slow', ['up'], () => {
+    nowMs += 60_000;
+
+    return new Date(nowMs);
+  });
+
+  expect(result.envelope.error).toMatchObject({ code: 'timeout' });
+});
+
+test('#up logs a failed stop of the run it abandoned at its deadline to the run', async () => {
+  const ctx = await setupTest();
+
+  onTestFinished(async () => {
+    await ctx.run('slow', ['down']);
+  });
+
+  await ctx.runWithFailingStop('slow', ['up'], 100);
+
+  const pointers = await ctx.state.readPointers();
+
+  const events = await waitFor(async () => {
+    const read = await ctx.state.readRunEvents(pointers.currentRun['slow'] ?? '');
+
+    return read.some((event) => event.type === 'late-failure' && event.code === 'environment')
+      ? read
+      : null;
+  });
+
+  expect(events).toContainEqual({
+    type: 'late-failure',
+    at: expect.any(String),
+    command: 'up',
+    code: 'environment',
+    message: 'The socket broke.',
+  });
 });
 
 test('#up starts no run when its deadline passes while it reads the fingerprint', async () => {

@@ -7,7 +7,8 @@ import { supervisorServiceName } from '../supervisor-protocol.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
-import { callRunSupervisor } from './call-run-supervisor.ts';
+import { writeLateFailure } from '../write-late-failure.ts';
+import { callRunSupervisor, isSupervisorGone } from './call-run-supervisor.ts';
 import { pickStartAction } from './pick-start-action.ts';
 import type { StartFacts } from './pick-start-action.ts';
 
@@ -23,6 +24,7 @@ export const runDataSchema = z.strictObject({
 export type RunData = z.infer<typeof runDataSchema>;
 
 export interface StartRunRequest {
+  readonly command: 'up' | 'attach';
   readonly restart: boolean;
   readonly readyTimeoutMs: number;
 }
@@ -95,7 +97,7 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
       return toRunData(ready, false);
     } catch (error) {
-      await stopAbandonedRun(ctx, runID);
+      await stopAbandonedRun(ctx, runID, request.command);
 
       throw error;
     }
@@ -183,9 +185,9 @@ async function waitForReady(
   runID: string,
   timeoutMs: number,
 ): Promise<RunView> {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = ctx.now().getTime() + timeoutMs;
 
-  while (Date.now() < deadline) {
+  while (ctx.now().getTime() < deadline) {
     if (ctx.signal.aborted) {
       throw new WringerError('timeout', {
         message: `The command's deadline passed while run ${runID} started.`,
@@ -215,35 +217,36 @@ async function waitForReady(
   });
 }
 
-const stopTimeoutMs = 15_000;
-
-// A run that missed its deadline must not keep its app and services up behind the error. Its
-// supervisor may not have opened its socket yet, so the stop waits for the socket first.
-async function stopAbandonedRun(ctx: BuiltinContext, runID: string): Promise<void> {
+// A run that missed its deadline must not keep its app and services up behind the error. The stop
+// waits for a socket the supervisor may not have opened yet, and as the command's own error answers
+// first, a failed stop can only go to the run's log.
+async function stopAbandonedRun(
+  ctx: BuiltinContext,
+  runID: string,
+  command: StartRunRequest['command'],
+): Promise<void> {
   const socket = await readSupervisorSocket(ctx, runID);
 
   if (socket === null) {
     return;
   }
 
-  try {
-    await ctx.session.supervisor.call({
-      socket,
-      request: { service: supervisorServiceName, method: 'stop', args: null },
-      signal: AbortSignal.timeout(stopTimeoutMs),
-    });
-  } catch {
-    // The supervisor is already gone, which is the state this function wants.
-  }
+  await writeLateFailure(callSupervisorStop(ctx, socket), {
+    state: ctx.state,
+    runID,
+    command,
+    answered: null,
+    now: ctx.now,
+  });
 }
 
 const socketWaitMs = 10_000;
 
 // Resolves null once the run has ended, or when its supervisor never opens a socket.
 async function readSupervisorSocket(ctx: BuiltinContext, runID: string): Promise<string | null> {
-  const deadline = Date.now() + socketWaitMs;
+  const deadline = ctx.now().getTime() + socketWaitMs;
 
-  while (Date.now() < deadline) {
+  while (ctx.now().getTime() < deadline) {
     const view = await ctx.state.readRun(runID);
 
     if (view === undefined || view.status === 'crashed' || view.status === 'ended') {
@@ -258,4 +261,21 @@ async function readSupervisorSocket(ctx: BuiltinContext, runID: string): Promise
   }
 
   return null;
+}
+
+const stopTimeoutMs = 15_000;
+
+// A supervisor that is already gone is the state the stop wants.
+async function callSupervisorStop(ctx: BuiltinContext, socket: string): Promise<void> {
+  try {
+    await ctx.session.supervisor.call({
+      socket,
+      request: { service: supervisorServiceName, method: 'stop', args: null },
+      signal: AbortSignal.timeout(stopTimeoutMs),
+    });
+  } catch (error) {
+    if (!isSupervisorGone(error)) {
+      throw error;
+    }
+  }
 }

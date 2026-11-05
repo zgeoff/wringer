@@ -33,7 +33,11 @@ export function buildLifecycleCommands(): readonly RegisteredCommand[] {
         });
       }
 
-      return startRun(ctx, { restart: args.restart, readyTimeoutMs: launchReadyTimeoutMs });
+      return startRun(ctx, {
+        command: 'up',
+        restart: args.restart,
+        readyTimeoutMs: launchReadyTimeoutMs,
+      });
     },
   };
 
@@ -54,7 +58,11 @@ export function buildLifecycleCommands(): readonly RegisteredCommand[] {
         });
       }
 
-      return startRun(ctx, { restart: args.restart, readyTimeoutMs: launchReadyTimeoutMs });
+      return startRun(ctx, {
+        command: 'attach',
+        restart: args.restart,
+        readyTimeoutMs: launchReadyTimeoutMs,
+      });
     },
   };
 
