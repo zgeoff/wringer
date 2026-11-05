@@ -41,7 +41,7 @@ export function createNodeStateFileSystem(): StateFileSystem {
 
       return info.size;
     },
-    truncateFile: (path, length) => truncate(path, length),
+    truncateFile: truncate,
     writeTextAtomic: async (path, text) => {
       const temporary = `${path}.${randomUUID()}.tmp`;
 
