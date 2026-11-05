@@ -100,28 +100,125 @@ interface Follower {
   readonly drain: () => Promise<void>;
 }
 
-type SourceState = SourceStatus['state'];
+// A source's phase joins how its reading ended with whether its last write failed. A failed write
+// shows as `failed` until a write succeeds, then the source shows how its reading stands again.
+export type SourcePhase =
+  | 'running'
+  | 'running-unwritten'
+  | 'exited'
+  | 'exited-unwritten'
+  | 'failed'
+  | 'failed-unwritten';
 
-// The supervisor sends each source's status to the CLI, so every change of the source's own state
-// goes through this table. A failed write shows over that state only until a write succeeds.
-const sourceTransitions: Readonly<Record<SourceState, readonly SourceState[]>> = {
-  running: ['exited', 'failed'],
-  exited: [],
-  failed: [],
+// The supervisor sends each source's status to the CLI, so every change of it goes through this
+// table.
+const sourceTransitions: Readonly<Record<SourcePhase, readonly SourcePhase[]>> = {
+  running: ['running-unwritten', 'exited', 'failed'],
+  'running-unwritten': ['running', 'exited-unwritten', 'failed-unwritten'],
+  exited: ['exited-unwritten'],
+  'exited-unwritten': ['exited'],
+  failed: ['failed-unwritten'],
+  'failed-unwritten': ['failed'],
 };
 
-export function canMoveSource(from: SourceState, to: SourceState): boolean {
+export function canMoveSource(from: SourcePhase, to: SourcePhase): boolean {
   return sourceTransitions[from].includes(to);
+}
+
+export type SourceEvent = 'exit' | 'fail' | 'write-failed' | 'write-recovered';
+
+// The phase each event aims at; the table above decides whether the source may move there.
+const eventTargets: Readonly<Record<SourcePhase, Readonly<Record<SourceEvent, SourcePhase>>>> = {
+  running: {
+    exit: 'exited',
+    fail: 'failed',
+    'write-failed': 'running-unwritten',
+    'write-recovered': 'running',
+  },
+  'running-unwritten': {
+    exit: 'exited-unwritten',
+    fail: 'failed-unwritten',
+    'write-failed': 'running-unwritten',
+    'write-recovered': 'running',
+  },
+  exited: {
+    exit: 'exited',
+    fail: 'failed',
+    'write-failed': 'exited-unwritten',
+    'write-recovered': 'exited',
+  },
+  'exited-unwritten': {
+    exit: 'exited-unwritten',
+    fail: 'failed-unwritten',
+    'write-failed': 'exited-unwritten',
+    'write-recovered': 'exited',
+  },
+  failed: {
+    exit: 'exited',
+    fail: 'failed',
+    'write-failed': 'failed-unwritten',
+    'write-recovered': 'failed',
+  },
+  'failed-unwritten': {
+    exit: 'exited-unwritten',
+    fail: 'failed-unwritten',
+    'write-failed': 'failed-unwritten',
+    'write-recovered': 'failed',
+  },
+};
+
+// An event the table refuses from this phase, such as an exit after a failure, leaves it as it is.
+export function pickSourcePhase(phase: SourcePhase, event: SourceEvent): SourcePhase {
+  const target = eventTargets[phase][event];
+
+  return canMoveSource(phase, target) ? target : phase;
+}
+
+export interface SourceDetails {
+  // Why the reading ended, once it has.
+  readonly reading: string | null;
+  readonly write: string | null;
+}
+
+interface ReportedPhase {
+  readonly state: SourceStatus['state'];
+  readonly detail: keyof SourceDetails | null;
+}
+
+const reportedPhases: Readonly<Record<SourcePhase, ReportedPhase>> = {
+  running: { state: 'running', detail: null },
+  'running-unwritten': { state: 'failed', detail: 'write' },
+  exited: { state: 'exited', detail: 'reading' },
+  'exited-unwritten': { state: 'failed', detail: 'write' },
+  failed: { state: 'failed', detail: 'reading' },
+  'failed-unwritten': { state: 'failed', detail: 'write' },
+};
+
+export function buildSourceStatus(
+  name: string,
+  phase: SourcePhase,
+  details: SourceDetails,
+): SourceStatus {
+  const reported = reportedPhases[phase];
+
+  return {
+    name,
+    state: reported.state,
+    detail: reported.detail === null ? null : details[reported.detail],
+  };
 }
 
 function followSource(request: FollowSourceRequest): Follower {
   const path = join(request.directory, `${request.name}.ndjson`);
-  let current: SourceStatus = { name: request.name, state: 'running', detail: null };
-  let writeFailure: string | null = null;
+  let phase: SourcePhase = 'running';
+  let details: SourceDetails = { reading: null, write: null };
 
-  const move = (state: SourceState, detail: string): void => {
-    if (canMoveSource(current.state, state)) {
-      current = { ...current, state, detail };
+  const move = (event: SourceEvent, change: Partial<SourceDetails>): void => {
+    const next = pickSourcePhase(phase, event);
+
+    if (next !== phase) {
+      phase = next;
+      details = { ...details, ...change };
     }
   };
 
@@ -131,10 +228,10 @@ function followSource(request: FollowSourceRequest): Follower {
     appendText: request.appendText,
     pendingLimit: request.pendingLimit,
     onError: (error) => {
-      writeFailure = `The recorder could not write: ${String(error)}`;
+      move('write-failed', { write: `The recorder could not write: ${String(error)}` });
     },
     onRecovered: () => {
-      writeFailure = null;
+      move('write-recovered', { write: null });
     },
   });
 
@@ -146,19 +243,18 @@ function followSource(request: FollowSourceRequest): Follower {
     try {
       const exitCode = await runFollow(request, onLine);
 
-      move('exited', `exit code ${exitCode}`);
+      move('exit', { reading: `exit code ${exitCode}` });
 
       return null;
     } catch (error) {
-      move('failed', String(error));
+      move('fail', { reading: String(error) });
 
       return `${request.name} could not be read: ${String(error)}`;
     }
   };
 
   return {
-    status: () =>
-      writeFailure === null ? current : { ...current, state: 'failed', detail: writeFailure },
+    status: () => buildSourceStatus(request.name, phase, details),
     done: watch(),
     drain: writer.drain,
   };
