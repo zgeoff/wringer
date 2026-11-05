@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { rm } from 'node:fs/promises';
-import { isAbsolute, join } from 'node:path';
-import { runGit } from './run-git.ts';
+import { resolve } from 'node:path';
+import type { GitRequest } from './run-git.ts';
+import type { ProcessResult } from './run-process.ts';
+
+// The fingerprint's view of git and the disk.
+export interface FingerprintHost {
+  readonly runGit: (request: GitRequest) => Promise<ProcessResult>;
+  readonly removeFile: (path: string) => Promise<void>;
+}
 
 export interface FingerprintRequest {
   readonly cwd: string;
@@ -14,26 +20,29 @@ export const emptyFingerprint = 'empty';
 // The fingerprint is `git patch-id --stable` of the working tree against the merge base. A commit
 // leaves the diff against the merge base as it was, and a clean rebase moves both ends of it, so
 // neither changes the fingerprint. Untracked files join the diff through a temporary index.
-export async function readFingerprint(request: FingerprintRequest): Promise<string> {
-  const mergeBaseResult = await runGit({
+export async function readFingerprint(
+  host: FingerprintHost,
+  request: FingerprintRequest,
+): Promise<string> {
+  const mergeBaseResult = await host.runGit({
     cwd: request.cwd,
     args: ['merge-base', 'HEAD', request.base],
   });
 
   const mergeBase = mergeBaseResult.stdout.trim();
 
-  const indexPath = await readTemporaryIndexPath(request.cwd);
+  const indexPath = await readTemporaryIndexPath(host, request.cwd);
 
   const env = { GIT_INDEX_FILE: indexPath };
 
   try {
-    await runGit({ cwd: request.cwd, args: ['read-tree', 'HEAD'], env });
-    await runGit({ cwd: request.cwd, args: ['add', '--all'], env });
+    await host.runGit({ cwd: request.cwd, args: ['read-tree', 'HEAD'], env });
+    await host.runGit({ cwd: request.cwd, args: ['add', '--all'], env });
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index through `read-tree` anyway. The
-    // pathspecs start at the repo root, so a call from a subfolder sees the whole tree.
-    const diff = await runGit({
+    // root pathspecs and `--no-relative` make a call from a subfolder see the whole tree.
+    const diff = await host.runGit({
       cwd: request.cwd,
       args: [
         'diff',
@@ -41,6 +50,7 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
         '--binary',
         '--no-color',
         '--no-ext-diff',
+        '--no-relative',
         mergeBase,
         '--',
         ':(top)',
@@ -49,7 +59,7 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
       env,
     });
 
-    const patchID = await runGit({
+    const patchID = await host.runGit({
       cwd: request.cwd,
       args: ['patch-id', '--stable'],
       stdin: diff.stdout,
@@ -59,17 +69,17 @@ export async function readFingerprint(request: FingerprintRequest): Promise<stri
 
     return fingerprint === '' ? emptyFingerprint : fingerprint;
   } finally {
-    await rm(indexPath, { force: true });
+    await host.removeFile(indexPath);
   }
 }
 
-async function readTemporaryIndexPath(cwd: string): Promise<string> {
-  const result = await runGit({
+// git resolves a relative GIT_INDEX_FILE against the folder it runs in, so a path built on a
+// relative `cwd` would take that `cwd` twice. The path goes to git absolute.
+async function readTemporaryIndexPath(host: FingerprintHost, cwd: string): Promise<string> {
+  const result = await host.runGit({
     cwd,
     args: ['rev-parse', '--git-path', `wringer-index-${randomUUID()}`],
   });
 
-  const gitPath = result.stdout.trim();
-
-  return isAbsolute(gitPath) ? gitPath : join(cwd, gitPath);
+  return resolve(cwd, result.stdout.trim());
 }

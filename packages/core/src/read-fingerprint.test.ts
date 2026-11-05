@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
+import { removeFile } from './remove-file.ts';
 import { runGit } from './run-git.ts';
 
 async function setupTest() {
@@ -18,7 +19,8 @@ async function setupTest() {
   return {
     repo,
     git: (...args: readonly string[]) => runGit({ cwd: repo, args }),
-    readFingerprint: (cwd = repo) => readFingerprint({ cwd, base: 'main', exclude: ['.wringer'] }),
+    readFingerprint: (cwd = repo) =>
+      readFingerprint({ runGit, removeFile }, { cwd, base: 'main', exclude: ['.wringer'] }),
   };
 }
 
@@ -113,6 +115,44 @@ test('it gives a subfolder of the repo the fingerprint of the whole repo', async
     fromSubfolder: fromRoot,
     empty: false,
   });
+});
+
+test('it gives a subfolder the fingerprint of the whole repo when git diffs relative to the folder', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.repo, 'web'));
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+  await writeFile(join(ctx.repo, 'web', 'page.ts'), 'export const title = "Shop";\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('config', 'diff.relative', 'true');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const fromRoot = await ctx.readFingerprint();
+  const fromSubfolder = await ctx.readFingerprint(join(ctx.repo, 'web'));
+
+  expect({ fromSubfolder, empty: fromRoot === emptyFingerprint }).toStrictEqual({
+    fromSubfolder: fromRoot,
+    empty: false,
+  });
+});
+
+test('it reads the fingerprint of a repo given by a relative path', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const fromRelative = await ctx.readFingerprint(relative(process.cwd(), ctx.repo));
+  const fromAbsolute = await ctx.readFingerprint();
+
+  expect(fromRelative).toBe(fromAbsolute);
 });
 
 test('it leaves the evidence folder out of the fingerprint', async () => {
