@@ -5,6 +5,7 @@ import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { getLockValue } from './get-lock-value.ts';
 import { runEventSchema } from './run-events.ts';
 import type { RunEvent, RunEventType } from './run-events.ts';
+import { WringerError } from './wringer-error.ts';
 
 export type RunStatus = 'starting' | 'running' | 'crashed' | 'ended';
 
@@ -110,18 +111,24 @@ function foldRunStatus(events: readonly RunEvent[]): RunStatus | null {
 }
 
 // An event counts once its line ends: the next append cuts a last line with no newline, even one
-// that parses, so a reader skips it too.
+// that parses, so a reader skips it too. A whole line that is no event is corruption.
 export function parseRunLog(text: string): readonly RunEvent[] {
   const whole = text.slice(0, text.lastIndexOf('\n') + 1);
 
-  return whole.split('\n').flatMap((line) => {
+  return whole.split('\n').flatMap((line, index) => {
     if (line === '') {
       return [];
     }
 
     const parsed = runEventSchema.safeParse(parseJSONLine(line));
 
-    return parsed.success ? [parsed.data] : [];
+    if (!parsed.success) {
+      throw new WringerError('environment', {
+        message: `The run log is corrupt: line ${index + 1} is not a run event.`,
+      });
+    }
+
+    return [parsed.data];
   });
 }
 
