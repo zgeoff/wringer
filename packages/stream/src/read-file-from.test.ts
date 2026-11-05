@@ -17,7 +17,7 @@ test('it reads a file from the offset to its end', async () => {
 
   await writeFile(ctx.logPath, 'booted\nready\n');
 
-  const chunk = await readFileFrom(ctx.logPath, 7);
+  const chunk = await readFileFrom(ctx.logPath, 7, 1024);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 7,
@@ -27,7 +27,7 @@ test('it reads a file from the offset to its end', async () => {
 
 test('it reads a file that does not exist yet as empty', async () => {
   const ctx = await setupTest();
-  const chunk = await readFileFrom(ctx.logPath, 0);
+  const chunk = await readFileFrom(ctx.logPath, 0, 1024);
 
   expect({ start: chunk.start, length: chunk.bytes.length }).toStrictEqual({ start: 0, length: 0 });
 });
@@ -37,10 +37,23 @@ test('it reads a file that shrank below the offset from its start', async () => 
 
   await writeFile(ctx.logPath, 'new\n');
 
-  const chunk = await readFileFrom(ctx.logPath, 40);
+  const chunk = await readFileFrom(ctx.logPath, 40, 1024);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 0,
     text: 'new\n',
+  });
+});
+
+test('it reads at most the limit from the offset', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(ctx.logPath, 'booted\nready\nserving\n');
+
+  const chunk = await readFileFrom(ctx.logPath, 7, 5);
+
+  expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
+    start: 7,
+    text: 'ready',
   });
 });

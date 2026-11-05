@@ -22,7 +22,7 @@ export interface RecorderRequest {
   readonly now: () => Date;
   readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
-  readonly readFileFrom: (path: string, from: number) => Promise<FileChunk>;
+  readonly readFileFrom: (path: string, from: number, limitBytes: number) => Promise<FileChunk>;
 
   // At most this many records wait for the disk; a source that logs faster loses the excess, and
   // the stream says how many lines it lost.
@@ -198,6 +198,10 @@ function runFollow(request: FollowSourceRequest, onLine: (line: string) => void)
 
 const filePollMs = 100;
 
+// A file source can hold a large log before the run starts, so each read takes at most this much,
+// and the recorder reads again until it reaches the end.
+const fileReadLimitBytes = 64 * 1024;
+
 // The recorder reads a file source itself, so its stop can read the file to its end once the app
 // has stopped writing; a killed `tail` would drop what it had yet to read. A file source ends with
 // exit code 0 at the recorder's stop.
@@ -212,18 +216,23 @@ async function followFile(
   let carry = '';
 
   const readNew = async (): Promise<void> => {
-    const chunk = await request.readFileFrom(path, offset);
+    let readBytes = fileReadLimitBytes;
 
-    const kept = chunk.start < offset ? '' : carry;
+    while (readBytes === fileReadLimitBytes) {
+      const chunk = await request.readFileFrom(path, offset, fileReadLimitBytes);
 
-    offset = chunk.start + chunk.bytes.length;
+      const kept = chunk.start < offset ? '' : carry;
 
-    const split = collectLines(kept, decoder.decode(chunk.bytes, { stream: true }));
+      offset = chunk.start + chunk.bytes.length;
+      readBytes = chunk.bytes.length;
 
-    carry = split.carry;
+      const split = collectLines(kept, decoder.decode(chunk.bytes, { stream: true }));
 
-    for (const line of split.lines) {
-      onLine(line);
+      carry = split.carry;
+
+      for (const line of split.lines) {
+        onLine(line);
+      }
     }
   };
 
