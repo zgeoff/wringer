@@ -31,7 +31,7 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<st
 
   if (list !== undefined && parsed.rest.length > 0) {
     const [name, schema] = list;
-    const restValues = parsed.rest.map((word) => schema.parse?.(word) ?? word);
+    const restValues = parsed.rest.map((word): unknown => schema.parse?.(word) ?? word);
 
     raw[name] = [...toWords(raw[name]), ...restValues];
   }
