@@ -35,7 +35,7 @@ export function buildRunPaths(stateDir: string, runID: RunID): RunPaths {
     directory,
     manifest: join(directory, 'manifest.json'),
     log: join(directory, 'log.ndjson'),
-    socket: join(directory, 'sock'),
+    socket: join(directory, 'supervisor', 'sock'),
     supervisorLog: join(directory, 'supervisor.log'),
     streams: join(directory, 'streams'),
     children: join(directory, 'children'),
