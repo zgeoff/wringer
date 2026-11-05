@@ -7,7 +7,14 @@ export function local(): Host {
     kind: 'local',
     run: (request) =>
       runProcess({ argv: request.argv, stdin: request.stdin, signal: request.signal }),
-    follow: (request) =>
-      followProcess({ argv: request.argv, signal: request.signal, onLine: request.onLine }),
+    follow: async (request) => {
+      const followed = await followProcess({
+        argv: request.argv,
+        signal: request.signal,
+        onLine: request.onLine,
+      });
+
+      return followed.exitCode;
+    },
   };
 }

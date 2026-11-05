@@ -9,10 +9,19 @@ export interface FollowProcessRequest {
   readonly onLine: (line: string) => void;
 }
 
+export interface FollowResult {
+  readonly exitCode: number;
+
+  // The end of stderr, so a long follow keeps a bounded tail, such as ssh's reason it failed.
+  readonly stderr: string;
+}
+
+const stderrTailLength = 4096;
+
 // The command runs in a process group of its own, and the signal kills the whole group: a child
 // the command started, such as a `sleep` under `sh -c`, would otherwise keep stdout open, and the
 // follow would never end.
-export async function followProcess(request: FollowProcessRequest): Promise<number> {
+export async function followProcess(request: FollowProcessRequest): Promise<FollowResult> {
   const [command] = request.argv;
   const executable = resolveExecutable(command);
 
@@ -27,10 +36,13 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
   }
 
   if (!plan.start) {
-    return 0;
+    return { exitCode: 0, stderr: '' };
   }
 
   const child = spawnFollowed(plan.argv);
+
+  // stderr is read as it comes, so a full pipe never stalls the command.
+  const stderr = readStreamTail(child.stderr, stderrTailLength);
 
   const killGroup = (): void => {
     killProcessGroup(child.pid);
@@ -56,11 +68,13 @@ export async function followProcess(request: FollowProcessRequest): Promise<numb
       request.onLine(line);
     }
 
-    return await exited;
+    const [exitCode, tail] = await Promise.all([exited, stderr]);
+
+    return { exitCode, stderr: tail };
   } catch (error) {
     killGroup();
 
-    await child.exited;
+    await Promise.allSettled([child.exited, stderr]);
 
     throw error;
   } finally {
@@ -112,10 +126,22 @@ function spawnFollowed(argv: readonly string[]) {
     return Bun.spawn([...argv], {
       stdin: 'ignore',
       stdout: 'pipe',
-      stderr: 'ignore',
+      stderr: 'pipe',
       detached: true,
     });
   } catch (error) {
     throw buildSpawnError(argv.join(' '), error);
   }
+}
+
+async function readStreamTail(stream: ReadableStream<Uint8Array>, length: number): Promise<string> {
+  const decoder = new TextDecoder();
+
+  let tail = '';
+
+  for await (const chunk of stream) {
+    tail = `${tail}${decoder.decode(chunk, { stream: true })}`.slice(-length);
+  }
+
+  return `${tail}${decoder.decode()}`.slice(-length);
 }
