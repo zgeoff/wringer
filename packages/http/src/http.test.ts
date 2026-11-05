@@ -403,10 +403,13 @@ test('it answers a response that stalls past the request timeout with a timeout 
 
   const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
 
-  expect(result.envelope.error).toStrictEqual({
-    code: 'timeout',
-    message: 'GET https://shop.example/api/cart timed out.',
-    hint: null,
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 5,
+    error: {
+      code: 'timeout',
+      message: 'GET https://shop.example/api/cart timed out.',
+      hint: null,
+    },
   });
 });
 
@@ -430,10 +433,13 @@ test('it answers a body that stalls after the headers past the request timeout w
 
   const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
 
-  expect(result.envelope.error).toStrictEqual({
-    code: 'timeout',
-    message: 'GET https://shop.example/api/cart timed out.',
-    hint: null,
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 5,
+    error: {
+      code: 'timeout',
+      message: 'GET https://shop.example/api/cart timed out.',
+      hint: null,
+    },
   });
 });
 
