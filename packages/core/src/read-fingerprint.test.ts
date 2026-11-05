@@ -227,6 +227,41 @@ test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', as
 });
 
 test.each([
+  'GIT_LITERAL_PATHSPECS',
+  'GIT_GLOB_PATHSPECS',
+  'GIT_NOGLOB_PATHSPECS',
+  'GIT_ICASE_PATHSPECS',
+])('it gives the same fingerprint when the environment sets %s', async (name) => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.repo, 'logs'));
+  await writeFile(join(ctx.repo, 'rows.txt'), 'row 1\n');
+  await writeFile(join(ctx.repo, 'logs', 'run.log'), 'started\n');
+  await writeFile(join(ctx.repo, 'logs', 'Boot.LOG'), 'booted\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'rows.txt'), 'row 2\n');
+  await writeFile(join(ctx.repo, 'logs', 'run.log'), 'stopped\n');
+  await writeFile(join(ctx.repo, 'logs', 'Boot.LOG'), 'halted\n');
+
+  const request = { cwd: ctx.repo, base: 'main', exclude: ['*.log'] };
+
+  const before = await readFingerprint({ runGit, removeFile }, request);
+
+  const after = await readFingerprint(
+    {
+      runGit: (gitRequest) => runGit({ ...gitRequest, env: { [name]: '1', ...gitRequest.env } }),
+      removeFile,
+    },
+    request,
+  );
+
+  expect(after).toBe(before);
+});
+
+test.each([
   ['diff.ignoreSubmodules', 'all'],
   ['diff.submodule', 'log'],
 ])(

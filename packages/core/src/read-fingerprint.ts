@@ -49,8 +49,16 @@ export async function readFingerprint(
 
   const indexPath = await readTemporaryIndexPath(host, request.cwd);
 
-  // git lets GIT_DIFF_OPTS override `--unified`, so a caller's value would change the context lines.
-  const env = { GIT_INDEX_FILE: indexPath, GIT_DIFF_OPTS: '--unified=3' };
+  // git lets GIT_DIFF_OPTS override `--unified`, and the pathspec variables change what `:(top)` and
+  // each exclusion match, so a caller's values would change the diff.
+  const env = {
+    GIT_INDEX_FILE: indexPath,
+    GIT_DIFF_OPTS: '--unified=3',
+    GIT_LITERAL_PATHSPECS: '0',
+    GIT_GLOB_PATHSPECS: '0',
+    GIT_NOGLOB_PATHSPECS: '0',
+    GIT_ICASE_PATHSPECS: '0',
+  };
 
   try {
     await host.runGit({ cwd: request.cwd, args: ['read-tree', 'HEAD'], env });
