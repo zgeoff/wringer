@@ -37,7 +37,7 @@ export function pickQueryPlan(
 ): QueryPlan {
   const dialect = config.via === 'sql' ? config.adapter : config.dialect;
 
-  if (!query.write && isUndeclaredWrite(dialect, config.via, query.sql)) {
+  if (!query.write && isUndeclaredWrite(dialect, query.sql)) {
     return { kind: 'undeclared-write' };
   }
 
