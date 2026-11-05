@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { chromium } from 'playwright-core';
 import type { Browser } from 'playwright-core';
+import { createContextRefusingBrowser } from '../test-utils/create-context-refusing-browser.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { startBrowserPage } from './start-browser-page.ts';
 
@@ -44,13 +45,13 @@ function setupTest() {
 test('it fails its start and leaves the browser closed when the run context cannot open', async () => {
   const ctx = setupTest();
 
-  const browser = await chromium.launch({ headless: true });
+  const launched = await createContextRefusingBrowser();
 
-  await browser.close();
+  onTestFinished(() => launched.browser.close());
 
-  const [started] = await Promise.allSettled([ctx.startPageOn(browser)]);
+  const [started] = await Promise.allSettled([ctx.startPageOn(launched.refusing)]);
 
-  expect({ status: started.status, connected: browser.isConnected() }).toStrictEqual({
+  expect({ status: started.status, connected: launched.browser.isConnected() }).toStrictEqual({
     status: 'rejected',
     connected: false,
   });
