@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm, writeFile } from 'node:fs/promises';
+import { open, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
+import { buildRunPaths, dispatch } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createStreamWringer } from '../test-utils/create-stream-wringer.ts';
+import { readStreamSlice } from './read-stream-slice.ts';
 import { streamSliceSchema } from './stream.ts';
 
 async function setupTest() {
@@ -20,6 +21,17 @@ async function setupTest() {
   return {
     root: shop.repo.root,
     placeOrder: () => writeFile(join(triggers, 'order'), ''),
+
+    // A run that ended answers no `stream read`, so its records come from the stream's own file.
+    readEndedStream: (runID: string, name: string) =>
+      readStreamSlice(
+        {
+          path: join(buildRunPaths(shop.state.paths.root, runID).streams, `${name}.ndjson`),
+          from: 0,
+          maxBytes: 64 * 1024,
+        },
+        (path) => open(path, 'r'),
+      ),
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
   };
@@ -100,6 +112,27 @@ test('it reads a new run from its start when use marked cursors in an older run'
   });
 
   expect(lines).toStrictEqual(['{"event":"listening","port":4000}', 'booted']);
+});
+
+test('it records the lines the launched app logged as it stopped', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  await waitFor(async () => {
+    const result = await ctx.run('local', ['stream', 'read'], { name: 'app', from: 0 });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    return slice.records.some((record) => record.line === 'booted') ? true : null;
+  });
+
+  const down = await ctx.run('local', ['down']);
+  const slice = await ctx.readEndedStream(down.envelope.instance ?? '', 'app');
+
+  // The shell also logs `Terminated` for the `sleep` the SIGTERM ended.
+  expect(slice.records.map((record) => record.line)).toContain('closed');
 });
 
 test('it records a command source on an attach target', async () => {
