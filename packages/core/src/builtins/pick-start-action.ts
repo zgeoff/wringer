@@ -1,4 +1,4 @@
-import type { RunStatus } from '../run-log.ts';
+import type { RunStatus } from '../append-run-event.ts';
 import type { SupervisorReach } from './call-run-supervisor.ts';
 
 // What `up` has learned so far: the current run's status, and the answers of each call it made.

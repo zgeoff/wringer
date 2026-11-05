@@ -5,6 +5,7 @@ import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { getLockValue } from './get-lock-value.ts';
 import { parseRunLog } from './parse-run-log.ts';
 import type { RunEvent, RunEventType } from './run-events.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface AppendRunEventRequest {
   readonly fs: StateFileSystem;
@@ -13,9 +14,13 @@ export interface AppendRunEventRequest {
   readonly lockTimeoutMs: number;
   readonly line: string;
   readonly event: RunEvent;
+
+  // Decides from the log as it stands under the lock whether the event may still be written.
+  readonly refuse: ((events: readonly RunEvent[]) => WringerError | null) | null;
 }
 
-// The only writer of a run's log, under the run's lock. Resolves whether it wrote.
+// The only writer of a run's log, under the run's lock. Resolves whether it wrote, and rejects
+// with the refusal when `refuse` returns one.
 export async function appendRunEvent(request: AppendRunEventRequest): Promise<boolean> {
   await request.fs.createDirectory(dirname(request.lockPath));
 
@@ -24,7 +29,14 @@ export async function appendRunEvent(request: AppendRunEventRequest): Promise<bo
     async () => {
       const read = await request.fs.readText(request.logPath);
 
-      const plan = pickLogAppend(read ?? '', request.event);
+      const text = read ?? '';
+      const refusal = request.refuse === null ? null : request.refuse(parseRunLog(text));
+
+      if (refusal !== null) {
+        return refusal;
+      }
+
+      const plan = pickLogAppend(text, request.event);
 
       if (plan.truncateBytes !== null) {
         await request.fs.truncateFile(request.logPath, plan.truncateBytes);
@@ -39,7 +51,13 @@ export async function appendRunEvent(request: AppendRunEventRequest): Promise<bo
     { waitMs: request.lockTimeoutMs },
   );
 
-  return getLockValue(request.lockPath, result);
+  const written = getLockValue(request.lockPath, result);
+
+  if (written instanceof WringerError) {
+    throw written;
+  }
+
+  return written;
 }
 
 interface LogAppendPlan {
