@@ -57,7 +57,7 @@ test('it keeps the database connections open when a process an ssh session left 
   expect([...rows]).toStrictEqual([{ answer: 2 }]);
 });
 
-test('it removes the data volume of its container along with the container', async () => {
+test('it removes its SSH host container, sshd and Postgres together, and the data volume', async () => {
   const ctx = await setupTest();
 
   const volumes =
@@ -65,14 +65,19 @@ test('it removes the data volume of its container along with the container', asy
 
   ctx.postgres.remove();
 
-  const left = await $`docker volume ls --quiet`.text();
+  const [containers, left] = await Promise.all([
+    $`docker ps --all --quiet --no-trunc --filter id=${ctx.postgres.containerID}`.text(),
+    $`docker volume ls --quiet`.text(),
+  ]);
 
   const names = volumes.trim().split(' ');
 
   expect({
+    containers: containers.trim(),
+    sshAnswers: ctx.ssh('true').exitCode === 0,
     named: names.length,
     left: names.filter((name) => left.split('\n').includes(name)),
-  }).toStrictEqual({ named: 1, left: [] });
+  }).toStrictEqual({ containers: '', sshAnswers: false, named: 1, left: [] });
 });
 
 test('it runs psql over ssh on the host that holds the database', async () => {
