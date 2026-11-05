@@ -189,11 +189,11 @@ export async function dispatch(
   const envelope = buildEnvelope(input);
 
   const commandLate =
-    pending === null || run === undefined
+    pending === null
       ? Promise.resolve()
       : writeLateFailure(pending, {
           state,
-          runID: run.runID,
+          runID: run?.runID ?? null,
           command: envelope.command,
           answered: failure,
           now,

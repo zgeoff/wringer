@@ -6,7 +6,7 @@ import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
-import { runEventSchema, runIDSchema } from './run-events.ts';
+import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
 
 async function setupTest() {
   const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
@@ -127,6 +127,36 @@ test('it never interleaves events that many writers append at once', async () =>
 
   expect(lines).toHaveLength(20);
   expect(lines).toSatisfyAll((line: string) => runEventSchema.safeParse(JSON.parse(line)).success);
+});
+
+test('#appendLateFailure keeps each late failure on its own line of the state folder log', async () => {
+  const ctx = await setupTest();
+
+  await Promise.all([
+    ctx.state.appendLateFailure({
+      type: 'late-failure',
+      at: '2026-11-05T10:00:00.000Z',
+      command: 'recount',
+      code: 'internal',
+      message: 'The recount lost its place.',
+    }),
+    ctx.state.appendLateFailure({
+      type: 'late-failure',
+      at: '2026-11-05T10:00:01.000Z',
+      command: 'tally',
+      code: 'environment',
+      message: 'The tally sheet was missing.',
+    }),
+  ]);
+
+  const lines = await readFile(ctx.state.paths.lateFailures, 'utf8');
+
+  const commands = lines
+    .trimEnd()
+    .split('\n')
+    .map((line) => lateFailureEventSchema.parse(JSON.parse(line)).command);
+
+  expect(commands.toSorted()).toStrictEqual(['recount', 'tally']);
 });
 
 test('it refuses an event over the size cap with an internal error', async () => {

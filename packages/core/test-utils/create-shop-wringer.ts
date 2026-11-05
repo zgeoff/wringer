@@ -128,6 +128,20 @@ export function createShopWringer(): Wringer {
       data: emptySchema,
       run: () => Promise.resolve({}),
     })
+    .command({
+      path: ['recount'],
+      summary: 'Recount the shelves without a run, failing after the timeout',
+      args: emptySchema,
+      data: emptySchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: async () => {
+        await Bun.sleep(200);
+
+        throw new Error('The recount lost its place.');
+      },
+    })
     .action(
       shop.defineAction({
         name: 'count',
