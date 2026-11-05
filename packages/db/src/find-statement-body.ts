@@ -3,9 +3,6 @@ import type { SQLToken } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
-// The one statement in `sql`, up to the `;` after which only more `;`, comments and space follow,
-// or null when a second statement follows or a string, a name or a comment runs to the end. A `;`
-// inside a string, a name or a comment ends nothing.
 export function findStatementBody(dialect: Dialect, sql: string): string | null {
   const whole = parseSQLTokens(dialect, sql);
 

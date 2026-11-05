@@ -22,7 +22,6 @@ export const dbConfigSchema = z.discriminatedUnion('via', [sqlConfigSchema, exec
 
 export type DbConfig = z.infer<typeof dbConfigSchema>;
 
-// A write is a write unless the target's `readOnly.allow` holds the statement verbatim.
 export function pickQueryEffect(sql: string, write: boolean, config: DbConfig): Effect {
   const granted = config.readOnly?.allow.includes(sql.trim()) === true;
 

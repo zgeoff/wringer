@@ -2,7 +2,6 @@ import { Database } from 'bun:sqlite';
 import { SQL } from 'bun';
 import type { SQLClients } from './run-sql-query.ts';
 
-// The real database clients, clock and timer, which only the driver's entry point creates.
 export function createSQLClients(): SQLClients {
   return {
     openSqlite: (file, mode) => new Database(file, { [mode]: true }),

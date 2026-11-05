@@ -83,7 +83,6 @@ function scanSpace(sql: string, start: number): Scan | null {
     : null;
 }
 
-// A line comment runs to its newline, or to the end of the SQL.
 function makeLineCommentRule(newlinePattern: RegExp): Rule {
   return (sql, start) => {
     if (!sql.startsWith('--', start)) {
@@ -100,7 +99,6 @@ function makeLineCommentRule(newlinePattern: RegExp): Rule {
   };
 }
 
-// With nesting, `/* a /* b */ c */` is one comment; without, it ends at the first `*/`.
 function makeBlockCommentRule(nests: boolean): Rule {
   return (sql, start) => {
     if (!sql.startsWith('/*', start)) {

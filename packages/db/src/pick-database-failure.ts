@@ -32,9 +32,6 @@ const readOnlyMessagePattern = /attempt to write a readonly database|read-only t
 const environmentMessagePattern =
   /unable to open database|database is locked|file is not a database|disk I\/O error|database or disk is full|access permission denied|could not connect|connection to server|connection refused|no such file|password authentication failed|database "[^"]*" does not exist/iu;
 
-// A failure arrives as a driver's code or the text of the database's own client. A refused write
-// in a read-only session is the target's to answer, a statement stopped at the deadline is a
-// timeout, a database it cannot reach or open is the environment's, and the rest the statement's.
 export function pickDatabaseFailure(code: string | null, message: string): DatabaseFailure {
   if ((code !== null && readOnlyCodes.has(code)) || readOnlyMessagePattern.test(message)) {
     return 'read-only';

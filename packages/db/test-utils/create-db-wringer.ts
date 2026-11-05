@@ -11,9 +11,6 @@ export interface DbWringerOptions {
 const emptySchema = z.strictObject({});
 const countSchema = z.strictObject({ count: z.number() });
 
-// A repo's verify CLI for the db driver's tests, over the SQLite `file`: `prod` is read-only with one
-// granted statement, `box` and `bench` run the `sqlite3` program, and the action claims a read and
-// then asks to write.
 export function createDbWringer(options: DbWringerOptions): Wringer {
   const shop = bindDrivers([db({})] as const);
   const hint = 'prod is read-only: reproduce it on local.';
