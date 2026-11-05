@@ -18,9 +18,10 @@ export async function createContextRefusingBrowser(): Promise<ContextRefusingBro
         return () => Promise.reject(new Error('The browser refused a new context.'));
       }
 
+      // A method then runs with the proxy as `this`, and reads the browser's state through it.
       const value: unknown = Reflect.get(target, key, target);
 
-      return typeof value === 'function' ? value.bind(target) : value;
+      return value;
     },
   });
 
