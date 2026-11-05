@@ -4,6 +4,7 @@ import { buildPromisedObjectReads } from './build-promised-object-reads.ts';
 import { buildSkipWorktreeMarks } from './build-skip-worktree-marks.ts';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import { parsePatchID } from './parse-patch-id.ts';
+import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
 import type { GitRequest } from './run-git.ts';
 import type { ProcessResult } from './run-process.ts';
@@ -128,8 +129,8 @@ async function readMergeBase(host: FingerprintHost, root: string, base: string):
     const result = await host.runGit(steps.mergeBase);
 
     return result.stdout.trim();
-  } catch {
-    throw steps.noSharedCommit;
+  } catch (error) {
+    throw pickMergeBaseFailure(error, steps.noSharedCommit);
   }
 }
 

@@ -13,13 +13,11 @@ export interface MergeBaseSteps {
   readonly verifyBase: GitRequest;
   readonly mergeBase: GitRequest;
 
-  // What a failed `mergeBase` means once `verifyBase` has passed.
   readonly noSharedCommit: WringerError;
 }
 
-// `merge-base` names no cause when HEAD is unborn, so a repo with no commit fails before it. A
-// missing base fails `verifyBase` with git's own message, so a failed `merge-base` after it means
-// the two share no commit this clone holds.
+// `merge-base` names no cause when HEAD is unborn or the base is missing, so a repo with no commit
+// fails before it, and a missing base fails `verifyBase` with git's own message.
 export function pickMergeBaseSteps(input: MergeBaseStepInput): MergeBaseSteps | WringerError {
   if (input.newestCommit.trim() === '') {
     return new WringerError('environment', {

@@ -1124,6 +1124,49 @@ test('it fails with an environment error in a shallow clone too short to hold th
   });
 });
 
+test("it fails with git's own read error when merge-base cannot read a shared commit", async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 1;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  const head = await ctx.git('rev-parse', 'HEAD');
+
+  const start = head.stdout.trim();
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 2;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'two');
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 3;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'three');
+  await ctx.git('switch', '--quiet', '-c', 'feature', start);
+
+  await writeFile(join(ctx.repo, 'taxes.ts'), 'export const tax = 1;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'one tax');
+
+  await writeFile(join(ctx.repo, 'taxes.ts'), 'export const tax = 2;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'two taxes');
+
+  await rm(join(ctx.repo, '.git', 'objects', start.slice(0, 2), start.slice(2)));
+
+  const [read] = await Promise.allSettled([ctx.readFingerprint()]);
+
+  expect(read).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: `git merge-base failed: error: Could not read ${start}`,
+    }),
+  });
+});
+
 test('it gives a detached HEAD the fingerprint of the branch it left', async () => {
   const ctx = await setupTest();
 

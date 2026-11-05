@@ -18,7 +18,7 @@ export async function runGit(request: GitRequest): Promise<ProcessResult> {
   });
 
   if (result.exitCode !== 0) {
-    throw buildGitFailure(request, result.stderr);
+    throw buildGitFailure(request, result.exitCode, result.stderr);
   }
 
   return result;
@@ -35,14 +35,15 @@ export async function runGitBytes(request: GitRequest): Promise<Uint8Array> {
   });
 
   if (result.exitCode !== 0) {
-    throw buildGitFailure(request, result.stderr);
+    throw buildGitFailure(request, result.exitCode, result.stderr);
   }
 
   return result.stdout;
 }
 
-function buildGitFailure(request: GitRequest, stderr: string): WringerError {
+function buildGitFailure(request: GitRequest, exitCode: number, stderr: string): WringerError {
   return new WringerError('environment', {
     message: `git ${request.args[0] ?? ''} failed: ${stderr.trim()}`,
+    data: { exitCode, stderr },
   });
 }

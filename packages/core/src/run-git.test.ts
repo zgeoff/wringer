@@ -21,6 +21,29 @@ test('it fails with an environment error when git exits non-zero', async () => {
   ).rejects.toMatchObject({ code: 'environment' });
 });
 
+test("it carries git's exit status and stderr on a failure", async () => {
+  const ctx = await setupTest();
+
+  await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
+
+  expect(
+    runGit({ cwd: ctx.directory, args: ['rev-parse', '--verify', '--quiet', 'refs/heads/none'] }),
+  ).rejects.toMatchObject({ code: 'environment', data: { exitCode: 1, stderr: '' } });
+});
+
+test("#runGitBytes carries git's exit status and stderr on a failure", async () => {
+  const ctx = await setupTest();
+
+  await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
+
+  expect(
+    runGitBytes({ cwd: ctx.directory, args: ['cat-file', '-p', 'no-such-object'] }),
+  ).rejects.toMatchObject({
+    code: 'environment',
+    data: { exitCode: 128, stderr: 'fatal: Not a valid object name no-such-object\n' },
+  });
+});
+
 test('#runGitBytes fails with an environment error that names the command when git exits non-zero', async () => {
   const ctx = await setupTest();
 
