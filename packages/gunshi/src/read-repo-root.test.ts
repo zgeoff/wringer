@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { runProcess } from '@wringer/core';
 import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 
@@ -20,6 +21,18 @@ test('it reads the top of the worktree from a folder inside it', async () => {
   const root = await ctx.readRepoRoot(join(ctx.root, 'src', 'cart'));
 
   expect(root).toBe(ctx.root);
+});
+
+test('it keeps the trailing space of a worktree folder name', async () => {
+  const ctx = await setupTest();
+
+  const shop = join(ctx.root, 'shop ');
+
+  await runProcess({ argv: ['git', 'init', '--quiet', shop], cwd: ctx.root });
+
+  const root = await ctx.readRepoRoot(shop);
+
+  expect(root).toBe(shop);
 });
 
 test('it answers an environment error outside a git worktree', async () => {
