@@ -8,6 +8,8 @@ import type { FileFollowState } from './build-file-step.ts';
 import { collectLines } from './collect-lines.ts';
 import type { FileChunk, FilePosition } from './read-file-from.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
+import { sourcePhaseMachine } from './source-phase-machine.ts';
+import type { SourceDetails, SourcePhase } from './source-phase-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
 const fileSourceSchema = z.strictObject({ file: z.string().min(1) });
@@ -100,86 +102,6 @@ interface Follower {
   readonly drain: () => Promise<void>;
 }
 
-// A source's phase joins how its reading ended with whether its last write failed. A failed write
-// shows as `failed` until a write succeeds, then the source shows how its reading stands again.
-export type SourcePhase =
-  | 'running'
-  | 'running-unwritten'
-  | 'exited'
-  | 'exited-unwritten'
-  | 'failed'
-  | 'failed-unwritten';
-
-// The supervisor sends each source's status to the CLI, so every change of it goes through this
-// table.
-const sourceTransitions: Readonly<Record<SourcePhase, readonly SourcePhase[]>> = {
-  running: ['running-unwritten', 'exited', 'failed'],
-  'running-unwritten': ['running', 'exited-unwritten', 'failed-unwritten'],
-  exited: ['exited-unwritten'],
-  'exited-unwritten': ['exited'],
-  failed: ['failed-unwritten'],
-  'failed-unwritten': ['failed'],
-};
-
-export function canMoveSource(from: SourcePhase, to: SourcePhase): boolean {
-  return sourceTransitions[from].includes(to);
-}
-
-export type SourceEvent = 'exit' | 'fail' | 'write-failed' | 'write-recovered';
-
-// The phase each event aims at; the table above decides whether the source may move there.
-const eventTargets: Readonly<Record<SourcePhase, Readonly<Record<SourceEvent, SourcePhase>>>> = {
-  running: {
-    exit: 'exited',
-    fail: 'failed',
-    'write-failed': 'running-unwritten',
-    'write-recovered': 'running',
-  },
-  'running-unwritten': {
-    exit: 'exited-unwritten',
-    fail: 'failed-unwritten',
-    'write-failed': 'running-unwritten',
-    'write-recovered': 'running',
-  },
-  exited: {
-    exit: 'exited',
-    fail: 'failed',
-    'write-failed': 'exited-unwritten',
-    'write-recovered': 'exited',
-  },
-  'exited-unwritten': {
-    exit: 'exited-unwritten',
-    fail: 'failed-unwritten',
-    'write-failed': 'exited-unwritten',
-    'write-recovered': 'exited',
-  },
-  failed: {
-    exit: 'exited',
-    fail: 'failed',
-    'write-failed': 'failed-unwritten',
-    'write-recovered': 'failed',
-  },
-  'failed-unwritten': {
-    exit: 'exited-unwritten',
-    fail: 'failed-unwritten',
-    'write-failed': 'failed-unwritten',
-    'write-recovered': 'failed',
-  },
-};
-
-// An event the table refuses from this phase, such as an exit after a failure, leaves it as it is.
-export function pickSourcePhase(phase: SourcePhase, event: SourceEvent): SourcePhase {
-  const target = eventTargets[phase][event];
-
-  return canMoveSource(phase, target) ? target : phase;
-}
-
-export interface SourceDetails {
-  // Why the reading ended, once it has.
-  readonly reading: string | null;
-  readonly write: string | null;
-}
-
 interface ReportedPhase {
   readonly state: SourceStatus['state'];
   readonly detail: keyof SourceDetails | null;
@@ -210,17 +132,9 @@ export function buildSourceStatus(
 
 function followSource(request: FollowSourceRequest): Follower {
   const path = join(request.directory, `${request.name}.ndjson`);
-  let phase: SourcePhase = 'running';
-  let details: SourceDetails = { reading: null, write: null };
+  const phase = createActor(sourcePhaseMachine);
 
-  const move = (event: SourceEvent, change: Partial<SourceDetails>): void => {
-    const next = pickSourcePhase(phase, event);
-
-    if (next !== phase) {
-      phase = next;
-      details = { ...details, ...change };
-    }
-  };
+  phase.start();
 
   const writer = makeRecordWriter({
     path,
@@ -228,10 +142,13 @@ function followSource(request: FollowSourceRequest): Follower {
     appendText: request.appendText,
     pendingLimit: request.pendingLimit,
     onError: (error) => {
-      move('write-failed', { write: `The recorder could not write: ${String(error)}` });
+      phase.send({
+        type: 'write-failed',
+        detail: `The recorder could not write: ${String(error)}`,
+      });
     },
     onRecovered: () => {
-      move('write-recovered', { write: null });
+      phase.send({ type: 'write-recovered', detail: null });
     },
   });
 
@@ -243,18 +160,22 @@ function followSource(request: FollowSourceRequest): Follower {
     try {
       const exitCode = await runFollow(request, onLine);
 
-      move('exit', { reading: `exit code ${exitCode}` });
+      phase.send({ type: 'exit', detail: `exit code ${exitCode}` });
 
       return null;
     } catch (error) {
-      move('fail', { reading: String(error) });
+      phase.send({ type: 'fail', detail: String(error) });
 
       return `${request.name} could not be read: ${String(error)}`;
     }
   };
 
   return {
-    status: () => buildSourceStatus(request.name, phase, details),
+    status: () => {
+      const snapshot = phase.getSnapshot();
+
+      return buildSourceStatus(request.name, snapshot.context.phase, snapshot.context.details);
+    },
     done: watch(),
     drain: writer.drain,
   };

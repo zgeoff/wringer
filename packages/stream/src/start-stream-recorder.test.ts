@@ -7,12 +7,7 @@ import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
 import { readFileFrom } from './read-file-from.ts';
-import {
-  buildSourceStatus,
-  canMoveSource,
-  pickSourcePhase,
-  startStreamRecorder,
-} from './start-stream-recorder.ts';
+import { buildSourceStatus, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 import { waitOrAbort } from './wait-or-abort.ts';
 
@@ -333,35 +328,6 @@ test('it reports a source as running again once a write succeeds after one that 
   });
 
   expect(status).toStrictEqual({ name: 'app', state: 'running', detail: null });
-});
-
-test.each([
-  { from: 'running', to: 'exited', allowed: true },
-  { from: 'running', to: 'failed', allowed: true },
-  { from: 'running', to: 'running-unwritten', allowed: true },
-  { from: 'running-unwritten', to: 'running', allowed: true },
-  { from: 'running-unwritten', to: 'exited-unwritten', allowed: true },
-  { from: 'exited-unwritten', to: 'exited', allowed: true },
-  { from: 'exited', to: 'failed', allowed: false },
-  { from: 'exited', to: 'running', allowed: false },
-  { from: 'exited-unwritten', to: 'running', allowed: false },
-  { from: 'failed', to: 'exited', allowed: false },
-  { from: 'failed', to: 'running', allowed: false },
-  { from: 'failed-unwritten', to: 'exited', allowed: false },
-] as const)('#canMoveSource answers $allowed for $from to $to', (row) => {
-  expect(canMoveSource(row.from, row.to)).toBe(row.allowed);
-});
-
-test.each([
-  { phase: 'running', event: 'exit', next: 'exited' },
-  { phase: 'running', event: 'write-failed', next: 'running-unwritten' },
-  { phase: 'running-unwritten', event: 'exit', next: 'exited-unwritten' },
-  { phase: 'exited-unwritten', event: 'write-recovered', next: 'exited' },
-  { phase: 'failed-unwritten', event: 'write-recovered', next: 'failed' },
-  { phase: 'failed', event: 'exit', next: 'failed' },
-  { phase: 'exited', event: 'fail', next: 'exited' },
-] as const)('#pickSourcePhase moves $phase on $event to $next', (row) => {
-  expect(pickSourcePhase(row.phase, row.event)).toBe(row.next);
 });
 
 test.each([
