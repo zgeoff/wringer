@@ -10,10 +10,14 @@ export interface ParsedCommand {
   readonly rest: readonly string[];
 }
 
+export type RawArgsResult =
+  | { readonly ok: true; readonly raw: Record<string, unknown> }
+  | { readonly ok: false; readonly error: WringerError };
+
 // The parser reads a word such as `-15` as short options, so it reaches a positional only after
-// `--`. A word no positional takes is a usage error, so `down prod` never stops the current target
-// in place of `prod`.
-export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<string, unknown> {
+// `--`. A word no positional takes is a usage failure, so `down prod` never stops the current
+// target in place of `prod`.
+export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): RawArgsResult {
   const raw: Record<string, unknown> = Object.fromEntries(
     Object.keys(args).flatMap((name) =>
       name !== extraWordsArg && parsed.explicit[name] === true
@@ -29,7 +33,7 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<st
   );
 
   const unsetScalars = positionals.filter(
-    ([name, schema]) => schema.multiple !== true && !(name in raw),
+    ([name, schema]) => schema.multiple !== true && !Object.hasOwn(raw, name),
   );
 
   const restWords = [...parsed.rest];
@@ -54,13 +58,16 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<st
   const leftover = list === undefined ? [...extra, ...restWords] : extra;
 
   if (leftover.length > 0) {
-    throw new WringerError('usage', {
-      message: `The command takes no argument ${leftover.map((word) => `\`${String(word)}\``).join(', ')}.`,
-      hint: 'Pass a value with its flag, such as `--target prod`.',
-    });
+    return {
+      ok: false,
+      error: new WringerError('usage', {
+        message: `The command takes no argument ${leftover.map((word) => `\`${String(word)}\``).join(', ')}.`,
+        hint: 'Pass a value with its flag, such as `--target prod`.',
+      }),
+    };
   }
 
-  return raw;
+  return { ok: true, raw };
 }
 
 // gunshi leaves a multiple positional that took no word unset.
