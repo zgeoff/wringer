@@ -1,5 +1,5 @@
 import { WringerError } from '@wringer/core';
-import type { ArgToken } from 'gunshi';
+import type { ArgSchema, ArgToken } from 'gunshi';
 import type { GunshiArgs } from './build-gunshi-args.ts';
 import { extraWordsArg } from './build-positional-args.ts';
 
@@ -51,7 +51,7 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): RawArgsRe
     const word = restWords.shift();
 
     if (word !== undefined) {
-      raw[name] = schema.parse?.(word) ?? word;
+      raw[name] = parseWord(schema, word);
     }
   }
 
@@ -59,7 +59,7 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): RawArgsRe
 
   if (list !== undefined && restWords.length > 0) {
     const [name, schema] = list;
-    const restValues = restWords.map((word): unknown => schema.parse?.(word) ?? word);
+    const restValues = restWords.map((word) => parseWord(schema, word));
 
     raw[name] = [...toWords(raw[name]), ...restValues];
   }
@@ -125,4 +125,9 @@ function collectValuesBeforeTerminator(
 // gunshi leaves a multiple positional that took no word unset.
 function toWords(value: unknown): readonly unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+// A parser's result is the value, `null` included; only a positional with no parser keeps the word.
+function parseWord(schema: ArgSchema, word: string): unknown {
+  return schema.parse === undefined ? word : schema.parse(word);
 }

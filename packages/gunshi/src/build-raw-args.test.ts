@@ -104,6 +104,33 @@ test('it gives a word after `--` to an unset scalar positional, converted by its
   expect(result).toStrictEqual({ ok: true, raw: { degrees: -15 } });
 });
 
+test('it keeps a null that a scalar positional parser returns for a word after `--`', () => {
+  const result = buildRawArgs(
+    {
+      shelf: { type: 'positional', parse: (word: string): unknown => JSON.parse(word) },
+      [extraWordsArg]: { type: 'positional', multiple: true },
+    },
+    { tokens: parseArgs(['--', 'null']), values: {}, explicit: {}, rest: ['null'] },
+  );
+
+  expect(result).toStrictEqual({ ok: true, raw: { shelf: null } });
+});
+
+test('it keeps a null that a list positional parser returns for a word after `--`', () => {
+  const result = buildRawArgs(
+    {
+      sizes: {
+        type: 'positional',
+        multiple: true,
+        parse: (word: string): unknown => JSON.parse(word),
+      },
+    },
+    { tokens: parseArgs(['--', 'null', '3']), values: {}, explicit: {}, rest: ['null', '3'] },
+  );
+
+  expect(result).toStrictEqual({ ok: true, raw: { sizes: [null, 3] } });
+});
+
 test('it gives a word after `--` to a scalar positional named after an inherited key', () => {
   const result = buildRawArgs(
     {
