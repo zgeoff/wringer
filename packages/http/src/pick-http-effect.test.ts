@@ -13,6 +13,12 @@ test.each([
     effect: 'read',
   },
   {
+    name: 'a POST to a path that is no URL as a write',
+    method: 'POST',
+    path: '//[',
+    effect: 'write',
+  },
+  {
     name: 'a grant for another method as a write',
     method: 'DELETE',
     path: '/api/search/a',

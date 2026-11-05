@@ -28,6 +28,7 @@ test.each([
     path: '//cdn.example/x',
     json: undefined,
   },
+  { name: 'a path that is no URL', method: 'GET', path: '//[', json: undefined },
   { name: 'a JSON body on a GET', method: 'GET', path: '/api/cart', json: { item: 'mug' } },
   { name: 'a JSON body on a HEAD', method: 'HEAD', path: '/api/cart', json: { item: 'mug' } },
 ])('it refuses $name with a usage error', (row) => {

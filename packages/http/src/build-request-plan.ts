@@ -29,10 +29,11 @@ export function buildRequestPlan(input: RequestPlanInput): RequestPlan {
   }
 
   const base = new URL(input.baseURL);
-  const url = new URL(input.path, base);
+
+  const url = URL.parse(input.path, base.href);
 
   // A path such as `//host/` resolves to another origin, which the target's grants never cover.
-  if (url.origin !== base.origin) {
+  if (url === null || url.origin !== base.origin) {
     throw new WringerError('usage', {
       message: `${input.path} is not a path of the app at ${base.origin}.`,
       hint: 'Pass a path that starts with one /, such as /api/search.',
