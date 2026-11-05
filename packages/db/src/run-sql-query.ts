@@ -111,9 +111,19 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
     void runCancelLoop(clients, input.url, sessionName, progress);
   };
 
-  input.signal.addEventListener('abort', cancel, { once: true });
-
   try {
+    // A statement queued while the connection opens runs once it is up, before a cancel could see
+    // it, so the deadline is checked once the connection is up, and the cancel listens from then.
+    await client.connect();
+
+    if (input.signal.aborted) {
+      throw new WringerError('timeout', {
+        message: 'The query ran past its deadline before it started.',
+      });
+    }
+
+    input.signal.addEventListener('abort', cancel, { once: true });
+
     const result: unknown = await runPostgresStatement(client, input);
 
     const rows = rowsSchema.parse(result);

@@ -130,6 +130,29 @@ test('it refuses a Postgres read that writes, in its read-only transaction', asy
   });
 });
 
+test('it never sends a Postgres write whose signal aborts while its connection opens', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay']);
+
+  const controller = new AbortController();
+
+  const writing = ctx.runQuery("insert into notes (text) values ('late')", {
+    write: true,
+    signal: controller.signal,
+  });
+
+  controller.abort();
+
+  const [written] = await Promise.allSettled([writing]);
+  const notes = await ctx.readNotes();
+
+  expect({ written, notes }).toStrictEqual({
+    written: { status: 'rejected', reason: expect.objectContaining({ code: 'timeout' }) },
+    notes: ['pay'],
+  });
+});
+
 test('it cancels a running Postgres write when its signal aborts, and the write never commits', async () => {
   const ctx = await setupTest();
 
