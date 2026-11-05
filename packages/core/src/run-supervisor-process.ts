@@ -2,11 +2,13 @@ import { launchReadyTimeoutMs } from './builtins/build-lifecycle-commands.ts';
 import { createRepoState } from './create-repo-state.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 import { runSupervisor } from './run-supervisor.ts';
+import { appStopLimitMs } from './start-launch.ts';
 import { supervisorArgsSchema } from './supervisor-protocol.ts';
 import type { Wringer } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
-const stopWaitMs = 10_000;
+// One cleanup's wait covers the app's longest stop, with a second to spare.
+const stopWaitMs = appStopLimitMs + 1000;
 
 // The entry of the supervisor process: argv is what follows the hidden command name. The process
 // exits once its run has stopped.

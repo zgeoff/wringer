@@ -23,9 +23,11 @@ export interface Launch {
 }
 
 const stopGraceMs = 5000;
-
-// The grace and this drain together stay under the supervisor's wait for one cleanup.
 const logDrainMs = 2000;
+
+// The longest a stop takes: the stop command's grace, the app's grace before SIGKILL, then the
+// drain of its log.
+export const appStopLimitMs = 2 * stopGraceMs + logDrainMs;
 
 // The app runs in a process group of its own, and every stop signals the whole group, so a server
 // that a shell or a script runner started stops with it.
