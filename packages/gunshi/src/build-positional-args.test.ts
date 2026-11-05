@@ -50,6 +50,24 @@ test.each([
   expect(args['value']?.parse?.(row.word)).toBe(row.value);
 });
 
+test.each([
+  { positional: 'origin', word: '{"x":1}', value: { x: 1 } },
+  { positional: 'origin', word: '{x:1}', value: '{x:1}' },
+  { positional: 'points', word: '{"x":2}', value: { x: 2 } },
+])('it reads the $positional word $word as JSON, or keeps it as text', (row) => {
+  const point = z.strictObject({ x: z.number() });
+
+  const args = buildPositionalArgs({
+    path: ['plot'],
+    summary: 'Plot points',
+    args: z.strictObject({ origin: point, points: z.array(point) }),
+    positionals: ['origin', 'points'],
+    data: z.strictObject({}),
+  });
+
+  expect(args[row.positional]?.parse?.(row.word)).toStrictEqual(row.value);
+});
+
 test('it declares only the extra words for a node that groups commands', () => {
   const args = buildPositionalArgs(null);
 
