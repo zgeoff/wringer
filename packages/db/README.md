@@ -85,8 +85,8 @@ A query returns `{ columns, rows, rowCount }`.
   which copies the database to any path.
 - On Postgres, a read that holds the word `copy` or `lo_export` counts as a write, because a
   read-only transaction still lets both write server files. Postgres can run SQL from a string, so
-  the word counts inside a string, a quoted name or a comment too. A read with a `U&"…"` name counts
-  as a write.
+  the word counts inside a string or a quoted name too. The words inside a comment never count,
+  because Postgres never runs them. A read with a `U&"…"` name counts as a write.
 - On Postgres, a `DO` block and a call to a `query_to_xml` or `dblink` function count as writes.
   Each runs SQL from a string that the query can build at run time, where no search sees its words.
 - Through psql, a read that starts with `with` and holds `insert`, `update`, `delete` or `merge`
