@@ -1,0 +1,7 @@
+export function buildStalledBody(prefix: string): ReadableStream<Uint8Array> {
+  return new ReadableStream({
+    start: (controller) => {
+      controller.enqueue(new TextEncoder().encode(prefix));
+    },
+  });
+}

@@ -4,6 +4,8 @@ import { dispatch } from '@wringer/core';
 import { HttpResponse, delay, http } from 'msw';
 import { server } from '../../../test-utils/mocks/node.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
+import { buildBrokenBody } from '../test-utils/build-broken-body.ts';
+import { buildStalledBody } from '../test-utils/build-stalled-body.ts';
 import { createHttpWringer } from '../test-utils/create-http-wringer.ts';
 import { createLoopbackApp } from '../test-utils/create-loopback-app.ts';
 import { SHOP_API_URL, shopRequests } from '../test-utils/shop-handlers.ts';
@@ -425,15 +427,13 @@ test('it answers a body that stalls after the headers past the request timeout w
   const ctx = await setupTest();
 
   server.use(
-    http.get(`${SHOP_API_URL}/api/cart`, () => {
-      const body = new ReadableStream({
-        start: (controller) => {
-          controller.enqueue(new TextEncoder().encode('{"items":['));
-        },
-      });
-
-      return new HttpResponse(body, { headers: { 'content-type': 'application/json' } });
-    }),
+    http.get(
+      `${SHOP_API_URL}/api/cart`,
+      () =>
+        new HttpResponse(buildStalledBody('{"items":['), {
+          headers: { 'content-type': 'application/json' },
+        }),
+    ),
   );
 
   await ctx.run('local', ['attach']);
@@ -455,16 +455,13 @@ test('it answers a body that breaks off mid-read with an environment error', asy
   const ctx = await setupTest();
 
   server.use(
-    http.get(`${SHOP_API_URL}/api/cart`, () => {
-      const body = new ReadableStream({
-        start: (controller) => {
-          controller.enqueue(new TextEncoder().encode('{"items":['));
-          controller.error(new Error('the connection dropped'));
-        },
-      });
-
-      return new HttpResponse(body, { headers: { 'content-type': 'application/json' } });
-    }),
+    http.get(
+      `${SHOP_API_URL}/api/cart`,
+      () =>
+        new HttpResponse(buildBrokenBody('{"items":[', 'the connection dropped'), {
+          headers: { 'content-type': 'application/json' },
+        }),
+    ),
   );
 
   await ctx.run('local', ['attach']);
