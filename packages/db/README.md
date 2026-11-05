@@ -47,7 +47,8 @@ with `--write` for a statement that writes, and the doctor check `db.connect`.
 
 - `via: 'sql'` connects from the CLI to the SQLite file in `url` with `bun:sqlite`, or to the
   Postgres URL in `url` with Bun.SQL. When the command's deadline passes, the driver cancels the
-  Postgres query in the database.
+  Postgres query in the database. A SQLite call through `bun:sqlite` is synchronous, so its
+  statement runs to completion once it starts, and a write can commit after the timeout.
 - `via: 'exec'` runs the database's own client on the target's host, with the SQL on stdin:
   `sqlite3 -json`, or `psql` with the rows turned into JSON by `json_agg`. `program` replaces the
   client's command, such as `['docker', 'exec', '-i', 'db', 'psql']`.
@@ -60,9 +61,13 @@ A query through `via: 'exec'` has these limits:
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
   with a usage error, and any other read counts as a write that did not ask to write.
-- The command's deadline stops only the local process, so a client in a container runs on. psql gets
-  `statement_timeout` set to the time left. A SQLite statement runs to completion once it starts,
-  through sqlite3 and through `via: 'sql'` alike, so it can commit after the timeout.
+- When the command's deadline passes, the host stops the client's process group: `local()` kills
+  sqlite3 or psql, and `ssh()` stops the group on the remote host. A client that `program` starts in
+  a container, such as through `docker exec`, is outside that group and runs on. A sqlite3 there
+  runs its statement to completion, so a write can commit after the timeout.
+- psql gets a `statement_timeout` of the time left when it starts, and refuses to start once none is
+  left. Postgres reads the time on the database host's clock, so that clock must agree with the
+  CLI's.
 
 ## Results
 
