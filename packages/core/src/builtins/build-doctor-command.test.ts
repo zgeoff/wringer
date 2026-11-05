@@ -35,6 +35,13 @@ async function setupTest() {
           await ctx.session.exec(['sh', '-c', `echo $$ > '${pidPath}'; exec sleep 30`], 'read');
         },
       },
+      {
+        name: 'ledger',
+        timeoutMs: 1000,
+        run: () => {
+          throw new WringerError('check-failed', { message: 'The ledger is unbalanced.' });
+        },
+      },
     ],
   });
 
@@ -145,6 +152,21 @@ test('it logs the failure of a check that ends after its own deadline to the run
   });
 });
 
+test('it records a check that throws before it returns as failed, and runs the checks after it', async () => {
+  const ctx = await setupTest();
+  const attached = await ctx.run(['attach']);
+
+  await ctx.run(['doctor']);
+
+  const view = await ctx.readRun(attached.envelope.instance ?? '');
+
+  expect({
+    doctor: view?.doctor,
+    ledger: view?.doctorResults.find((check) => check.name === 'clock.ledger')?.code,
+    shelf: view?.doctorResults.find((check) => check.name === 'shelf')?.code,
+  }).toStrictEqual({ doctor: 'failed', ledger: 'check-failed', shelf: 'timeout' });
+});
+
 test('it lists the evidence a failed check kept in the doctor envelope', async () => {
   const ctx = await setupTest();
 
@@ -173,6 +195,7 @@ test('it starts no check once the doctor ran past its own deadline', async () =>
 
   expect(view.doctorResults.map((check) => [check.name, check.code])).toStrictEqual([
     ['clock.hang', 'timeout'],
+    ['clock.ledger', 'timeout'],
     ['note', 'timeout'],
     ['scribble', 'timeout'],
     ['shelf', 'timeout'],

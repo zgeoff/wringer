@@ -119,7 +119,10 @@ async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<Check
 
   deadline.addEventListener('abort', onAbort, { once: true });
 
-  const work = check.run(ctx.openDrive('read-only', { signal: deadline, at: deadlineAt }));
+  // A check that throws before it returns its promise fails like one that rejects.
+  const work = Promise.try(() =>
+    check.run(ctx.openDrive('read-only', { signal: deadline, at: deadlineAt })),
+  );
 
   try {
     await Promise.race([work, timedOut.promise]);
