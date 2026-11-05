@@ -1,3 +1,4 @@
+import { findOwnValue } from '../find-own-value.ts';
 import type { BuiltinContext } from '../types.ts';
 import { callRunSupervisor } from './call-run-supervisor.ts';
 import { pickStopPlan } from './pick-stop-plan.ts';
@@ -10,7 +11,7 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
   return ctx.state.withTargetLock(ctx.targetName, async () => {
     const pointers = await ctx.state.readPointers();
 
-    const runID = pointers.currentRun[ctx.targetName];
+    const runID = findOwnValue(pointers.currentRun, ctx.targetName);
     const view = runID === undefined ? undefined : await ctx.state.readRun(runID);
 
     if (runID !== undefined) {

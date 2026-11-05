@@ -11,9 +11,9 @@ const textSchema = z.strictObject({ text: z.string() });
 const tallySchema = z.strictObject({ count: z.bigint() });
 const directorySchema = z.strictObject({ directory: z.string() });
 
-// A repo's verify CLI for tests: launch targets `local` (ready at once), `broken` (exits first) and
-// `slow` (ready after half a second), read-only attach targets `prod` (with a hint) and `archive`
-// (without), and actions that read, write, keep evidence, hang, throw, flood and pause.
+// A verify CLI for tests: launch targets `local`, `broken` (exits first) and `slow` (ready after
+// 0.5 s), read-only `prod` (hinted) and `archive`, `constructor`, named for an inherited key, and
+// actions that read, write, keep evidence, hang, throw, flood and pause.
 export function createShopWringer(): Wringer {
   const shop = bindDrivers([notes({ prefix: '' })] as const);
 
@@ -80,6 +80,15 @@ export function createShopWringer(): Wringer {
       shop.defineTarget({
         mode: 'attach',
         access: 'read-only',
+        host: local(),
+        drivers: { notes: () => ({}) },
+      }),
+    )
+    .target(
+      'constructor',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
         host: local(),
         drivers: { notes: () => ({}) },
       }),

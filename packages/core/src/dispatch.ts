@@ -10,6 +10,7 @@ import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
 import { exitCodeFor } from './error-codes.ts';
 import type { ExitCode } from './error-codes.ts';
+import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
@@ -201,7 +202,7 @@ async function readContext(
   const [firstTarget = ''] = wringer.targets.keys();
   const targetName = session.target ?? pointers.target ?? firstTarget;
   const target = getTarget(wringer, targetName);
-  const runID = pointers.currentRun[targetName];
+  const runID = findOwnValue(pointers.currentRun, targetName);
   const run = runID === undefined ? undefined : await state.readRun(runID);
 
   return { targetName, target, run, feature: session.feature ?? pointers.feature ?? null };

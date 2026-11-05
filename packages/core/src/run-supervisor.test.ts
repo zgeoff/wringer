@@ -301,6 +301,28 @@ test('#runSupervisor ends and closes its socket when its first log write fails',
   expect(ctx.callStatus(socket)).rejects.toThrow();
 });
 
+test('#runSupervisor answers a call to a method every object inherits with a usage error', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  void ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const called = callSupervisor({
+    socket: ready.supervisor?.socket ?? '',
+    request: { service: 'leaky/store', method: 'constructor', args: null },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  expect(called).rejects.toMatchObject({ code: 'usage' });
+});
+
 test('#runSupervisor lets a service run a command from its stop', async () => {
   const ctx = await setupTest();
 

@@ -4,7 +4,14 @@ import { createShopWringer } from './create-shop-wringer.ts';
 test('it registers the five shop targets', () => {
   const wringer = createShopWringer();
 
-  expect([...wringer.targets.keys()]).toStrictEqual(['local', 'prod', 'broken', 'slow', 'archive']);
+  expect([...wringer.targets.keys()]).toStrictEqual([
+    'local',
+    'prod',
+    'broken',
+    'slow',
+    'archive',
+    'constructor',
+  ]);
 });
 
 test('it registers the stock and restock repo commands', () => {

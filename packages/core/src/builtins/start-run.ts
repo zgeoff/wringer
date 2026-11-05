@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { RunView } from '../build-run-view.ts';
 import { callSupervisor } from '../call-supervisor.ts';
+import { findOwnValue } from '../find-own-value.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { readFingerprint } from '../read-fingerprint.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
@@ -33,7 +34,7 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
   return ctx.state.withTargetLock(ctx.targetName, async () => {
     const pointers = await ctx.state.readPointers();
 
-    const currentID = pointers.currentRun[ctx.targetName];
+    const currentID = findOwnValue(pointers.currentRun, ctx.targetName);
     const current = currentID === undefined ? undefined : await ctx.state.readRun(currentID);
 
     const reused = await settleCurrentRun(ctx, current, request.restart);
