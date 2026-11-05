@@ -1,10 +1,10 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import type { SupervisorRequestHandler } from './answer-supervisor-connection.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
-import type { SupervisorRequestHandler } from './listen-supervisor-socket.ts';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();
@@ -18,8 +18,12 @@ async function setupTest() {
   const socket = join(directory, 'run.sock');
 
   return {
-    listen: async (handle: SupervisorRequestHandler) => {
-      const server = await listenSupervisorSocket(socket, handle);
+    listen: async (answerRequest: SupervisorRequestHandler) => {
+      const server = await listenSupervisorSocket({
+        path: socket,
+        answerRequest,
+        onTransportError: mock(),
+      });
 
       stack.defer(() => {
         server.close();
