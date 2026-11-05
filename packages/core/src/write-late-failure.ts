@@ -1,6 +1,6 @@
 import type { StatePort } from './create-file-state.ts';
-import type { LateFailureEvent, RunID } from './run-events.ts';
-import { toWringerError } from './to-wringer-error.ts';
+import { pickLateFailureWrite } from './pick-late-failure-write.ts';
+import type { RunID } from './run-events.ts';
 import type { WringerError } from './wringer-error.ts';
 
 export interface LateFailureRequest {
@@ -23,24 +23,16 @@ export async function writeLateFailure(
 ): Promise<void> {
   const [settled] = await Promise.allSettled([work]);
 
-  if (settled.status === 'fulfilled' || settled.reason === request.answered) {
+  const plan = pickLateFailureWrite(settled, { ...request, at: request.now() });
+
+  if (plan === null) {
     return;
   }
 
-  const failure = toWringerError(settled.reason);
-
-  const event: LateFailureEvent = {
-    type: 'late-failure',
-    at: request.now().toISOString(),
-    command: request.command,
-    code: failure.code,
-    message: failure.message,
-  };
-
   const writing =
-    request.runID === null
-      ? request.state.appendLateFailure(event)
-      : request.state.appendEvent(request.runID, event);
+    plan.runID === null
+      ? request.state.appendLateFailure(plan.event)
+      : request.state.appendEvent(plan.runID, plan.event);
 
   await writing.catch(() => {
     // Nothing is left to tell once the log refuses the write.
