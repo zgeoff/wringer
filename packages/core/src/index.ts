@@ -59,5 +59,6 @@ export { ssh } from './ssh.ts';
 export type { PrefixLayer, SSHOptions } from './ssh.ts';
 export { supervisorCommandName } from './supervisor-protocol.ts';
 export type * from './types.ts';
+export { createNodeFingerprintHost } from './create-node-fingerprint-host.ts';
 export { WringerError } from './wringer-error.ts';
 export type { WringerErrorDetails } from './wringer-error.ts';
