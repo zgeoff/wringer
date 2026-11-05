@@ -10,9 +10,9 @@ export interface ParsedCommand {
   readonly rest: readonly string[];
 }
 
-// Only the arguments the caller gave reach the command, so the schema's own defaults fill the rest.
-// The words after `--` join the command's list positional. A word no positional takes is a usage
-// error, so `down prod` never stops the current target in place of `prod`.
+// The parser reads a word such as `-15` as short options, so it reaches a positional only after
+// `--`. A word no positional takes is a usage error, so `down prod` never stops the current target
+// in place of `prod`.
 export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<string, unknown> {
   const raw: Record<string, unknown> = Object.fromEntries(
     Object.keys(args).flatMap((name) =>
@@ -24,19 +24,34 @@ export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<st
 
   const extra = toWords(parsed.values[extraWordsArg]);
 
-  const list = Object.entries(args).find(
-    ([name, schema]) =>
-      name !== extraWordsArg && schema.type === 'positional' && schema.multiple === true,
+  const positionals = Object.entries(args).filter(
+    ([name, schema]) => name !== extraWordsArg && schema.type === 'positional',
   );
 
-  if (list !== undefined && parsed.rest.length > 0) {
+  const unsetScalars = positionals.filter(
+    ([name, schema]) => schema.multiple !== true && !(name in raw),
+  );
+
+  const restWords = [...parsed.rest];
+
+  for (const [name, schema] of unsetScalars) {
+    const word = restWords.shift();
+
+    if (word !== undefined) {
+      raw[name] = schema.parse?.(word) ?? word;
+    }
+  }
+
+  const list = positionals.find(([, schema]) => schema.multiple === true);
+
+  if (list !== undefined && restWords.length > 0) {
     const [name, schema] = list;
-    const restValues = parsed.rest.map((word): unknown => schema.parse?.(word) ?? word);
+    const restValues = restWords.map((word): unknown => schema.parse?.(word) ?? word);
 
     raw[name] = [...toWords(raw[name]), ...restValues];
   }
 
-  const leftover = list === undefined ? [...extra, ...parsed.rest] : extra;
+  const leftover = list === undefined ? [...extra, ...restWords] : extra;
 
   if (leftover.length > 0) {
     throw new WringerError('usage', {
