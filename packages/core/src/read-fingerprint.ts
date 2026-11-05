@@ -50,6 +50,7 @@ export async function readFingerprint(
         '--binary',
         '--no-color',
         '--no-ext-diff',
+        '--no-textconv',
         '--no-relative',
         mergeBase,
         '--',

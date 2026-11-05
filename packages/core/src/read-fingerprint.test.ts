@@ -94,6 +94,26 @@ test('it changes the fingerprint when an untracked file changes', async () => {
   expect(after).not.toBe(before);
 });
 
+test('it changes the fingerprint when a file changes that a textconv filter hides', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitattributes'), '*.cfg diff=blank\n');
+
+  await ctx.git('config', 'diff.blank.textconv', 'sed d');
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.cfg'), 'port=3000\n');
+
+  const before = await ctx.readFingerprint();
+
+  await writeFile(join(ctx.repo, 'shop.cfg'), 'port=4000\n');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).not.toBe(before);
+});
+
 test('it gives a subfolder of the repo the fingerprint of the whole repo', async () => {
   const ctx = await setupTest();
 
