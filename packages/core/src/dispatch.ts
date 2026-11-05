@@ -69,6 +69,7 @@ interface DriveTrace {
   drive: boolean;
   ranOnRun: boolean;
   boundRun: RunID | null;
+  readonly late: Promise<void>[];
 }
 
 // Every command, built-in, driver, repo or action, ends here and yields exactly one envelope.
@@ -92,7 +93,14 @@ export async function dispatch(
   let outcome: CommandOutcome | null = null;
   let failure: WringerError | null = null;
   let pending: Promise<CommandOutcome> | null = null;
-  const trace: DriveTrace = { evidence: [], drive: false, ranOnRun: false, boundRun: null };
+
+  const trace: DriveTrace = {
+    evidence: [],
+    drive: false,
+    ranOnRun: false,
+    boundRun: null,
+    late: [],
+  };
 
   try {
     if (read instanceof WringerError) {
@@ -174,7 +182,7 @@ export async function dispatch(
 
   const envelope = buildEnvelope(input);
 
-  const late =
+  const commandLate =
     pending === null || run === undefined
       ? Promise.resolve()
       : writeLateFailure(pending, {
@@ -184,6 +192,8 @@ export async function dispatch(
           answered: failure,
           now,
         });
+
+  const late = waitForLate([commandLate, ...trace.late]);
 
   const logFailure =
     run === undefined
@@ -503,6 +513,9 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     bindRun: (runID) => {
       request.trace.boundRun = runID;
     },
+    keepLate: (work) => {
+      request.trace.late.push(work);
+    },
   };
 }
 
@@ -546,4 +559,8 @@ async function readEnvelopeCursors(
   } catch (error) {
     return toWringerError(error);
   }
+}
+
+async function waitForLate(works: readonly Promise<void>[]): Promise<void> {
+  await Promise.all(works);
 }

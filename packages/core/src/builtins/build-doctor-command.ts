@@ -5,6 +5,7 @@ import type { CheckResult } from '../run-events.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext, Drive, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
+import { writeLateFailure } from '../write-late-failure.ts';
 import { pickDoctorOutcome } from './pick-doctor-outcome.ts';
 
 const doctorDataSchema = z.strictObject({
@@ -118,11 +119,10 @@ async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<Check
 
   deadline.addEventListener('abort', onAbort, { once: true });
 
+  const work = check.run(ctx.openDrive('read-only', { signal: deadline, at: deadlineAt }));
+
   try {
-    await Promise.race([
-      check.run(ctx.openDrive('read-only', { signal: deadline, at: deadlineAt })),
-      timedOut.promise,
-    ]);
+    await Promise.race([work, timedOut.promise]);
 
     return {
       name: check.name,
@@ -133,6 +133,19 @@ async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<Check
     };
   } catch (error) {
     const failure = toWringerError(error);
+
+    // The doctor answers at the check's timeout, while the check runs on in the run it read.
+    if (deadline.aborted) {
+      ctx.keepLate(
+        writeLateFailure(work, {
+          state: ctx.state,
+          runID: ctx.run?.runID ?? '',
+          command: `doctor ${check.name}`,
+          answered: null,
+          now: ctx.now,
+        }),
+      );
+    }
 
     return {
       name: check.name,
