@@ -114,7 +114,7 @@ test('it binds a parameter into a Postgres read', async () => {
   expect(result).toStrictEqual({ columns: ['label'], rows: [{ label: 'parcel' }], rowCount: 1 });
 });
 
-test('it runs a Postgres read under a timeout cut by the round trip that setting it took', async () => {
+test('it runs a Postgres read under a timeout no longer than the time left after a slow round trip', async () => {
   const ctx = await setupTest();
 
   const timesLeftMs = [60_000, 59_000, 58_900];
@@ -123,7 +123,21 @@ test('it runs a Postgres read under a timeout cut by the round trip that setting
     timeLeftMs: () => timesLeftMs.shift() ?? 0,
   });
 
-  expect(result.rows).toStrictEqual([{ timeout: '58s' }]);
+  expect(result.rows).toStrictEqual([{ timeout: '57s' }]);
+});
+
+test('it refuses to start a Postgres read when each round trip grows past the time left', async () => {
+  const ctx = await setupTest();
+
+  const timesLeftMs = [60_000, 59_000, 56_000, 40_000];
+
+  const failure = await ctx
+    .runQuery("select current_setting('statement_timeout') as timeout", {
+      timeLeftMs: () => timesLeftMs.shift() ?? 0,
+    })
+    .catch((error: unknown) => error);
+
+  expect(failure).toMatchObject({ code: 'timeout' });
 });
 
 test('it counts the rows a Postgres write changed', async () => {

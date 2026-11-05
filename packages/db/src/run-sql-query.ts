@@ -137,7 +137,7 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
 
     if (step.kind === 'expired') {
       throw new WringerError('timeout', {
-        message: 'The query ran past its deadline before it started.',
+        message: 'The query could not start under a timeout that ends by its deadline.',
       });
     }
 
