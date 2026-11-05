@@ -21,6 +21,25 @@ test('it rejects an ok envelope that carries an error', () => {
   expect(result.error?.issues).toPartiallyContain({ path: ['error'] });
 });
 
+test('it rejects a failed envelope that carries no error', () => {
+  const result = envelopeSchema.safeParse({
+    wringer: 1,
+    ok: false,
+    command: 'status',
+    target: null,
+    instance: null,
+    feature: null,
+    sha: null,
+    durationMs: 3,
+    data: null,
+    evidence: [],
+    cursors: {},
+    error: null,
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['error'] });
+});
+
 test('it rejects an envelope with undefined data, which a JSON log line would lose', () => {
   const result = envelopeSchema.safeParse({
     wringer: 1,
@@ -54,6 +73,26 @@ test('it rejects a truncated envelope that names no path for its data', () => {
     evidence: [],
     cursors: {},
     truncated: true,
+    error: null,
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['truncatedPath'] });
+});
+
+test('it rejects an envelope that names a path for its data but is not truncated', () => {
+  const result = envelopeSchema.safeParse({
+    wringer: 1,
+    ok: true,
+    command: 'db.query',
+    target: 'local',
+    instance: 'mf3k2a-7q1z',
+    feature: null,
+    sha: null,
+    durationMs: 3,
+    data: null,
+    evidence: [],
+    cursors: {},
+    truncatedPath: '.wringer/runs/mf3k2a-7q1z/data/1.json',
     error: null,
   });
 
