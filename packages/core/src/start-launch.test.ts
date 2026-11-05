@@ -5,14 +5,20 @@ import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { probeProcess } from './probe-process.ts';
 import { readLaunchHost } from './read-launch-host.ts';
+import type { LaunchHost } from './read-launch-host.ts';
 import { startLaunch } from './start-launch.ts';
 import type { LaunchRequest } from './start-launch.ts';
 import { WringerError } from './wringer-error.ts';
 
+// The stack stops each app before it removes the folder the app logs into.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'start-launch');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
   const host = readLaunchHost();
 
@@ -22,7 +28,14 @@ async function setupTest() {
     startApp: async (request: Omit<LaunchRequest, 'host'>) => {
       const launch = await startLaunch({ host, ...request });
 
-      onTestFinished(() => launch.stop());
+      stack.defer(() => launch.stop());
+
+      return launch;
+    },
+    startAppOn: async (launchHost: LaunchHost, request: Omit<LaunchRequest, 'host'>) => {
+      const launch = await startLaunch({ host: launchHost, ...request });
+
+      stack.defer(() => launch.stop());
 
       return launch;
     },
@@ -168,13 +181,14 @@ test('it reports a crash with the exit code when a ready app exits', async () =>
 test('it starts the app in the host folder with the host environment and the plan’s own', async () => {
   const ctx = await setupTest();
 
-  const launch = await startLaunch({
-    host: {
-      ...readLaunchHost(),
-      guard: [],
-      cwd: ctx.directory,
-      env: { PATH: process.env['PATH'], SHELF: 'herbs' },
-    },
+  const host = {
+    ...readLaunchHost(),
+    guard: [],
+    cwd: ctx.directory,
+    env: { PATH: process.env['PATH'], SHELF: 'herbs' },
+  };
+
+  const launch = await ctx.startAppOn(host, {
     plan: {
       command: [
         'sh',
@@ -193,8 +207,6 @@ test('it starts the app in the host folder with the host environment and the pla
     signal: new AbortController().signal,
     onCrash: mock<(reason: string) => void>(),
   });
-
-  onTestFinished(() => launch.stop());
 
   expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
 });
