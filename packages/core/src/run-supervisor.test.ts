@@ -3,10 +3,11 @@ import { once } from 'node:events';
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildStandInServices } from '../test-utils/build-stand-in-services.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { createRepoState } from './create-repo-state.ts';
@@ -319,13 +320,17 @@ test('#runSupervisor answers a second stop only once the first has ended the run
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const socket = ready.supervisor?.socket ?? '';
   const first = ctx.stopThenRead(socket, 'shelf-run');
 
-  await waitFor(() => (ctx.stopCalls.length > 0 ? true : null));
+  await waitFor(() => {
+    invariant(ctx.stopCalls.length > 0, 'No stop has run yet.');
+  });
 
   const second = ctx.stopThenRead(socket, 'shelf-run');
 
@@ -348,7 +353,9 @@ test('#runSupervisor reports a failed final log write when a signal stopped the 
   await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   await rm(join(ctx.runFolder('shelf-run'), 'manifest.json'));
@@ -374,7 +381,9 @@ test('#runSupervisor ends and frees its socket when its final log write fails', 
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   await rm(join(ctx.runFolder('shelf-run'), 'manifest.json'));
@@ -421,7 +430,9 @@ test('#runSupervisor answers a call to a method every object inherits with a usa
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const called = callSupervisor({
@@ -443,7 +454,9 @@ test('#runSupervisor ends the run as crashed and still stops the other services 
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   await Promise.allSettled([ctx.callStop(ready.supervisor?.socket ?? ''), supervising]);
@@ -466,7 +479,9 @@ test('#runSupervisor stops the app before the services, so a service sees what t
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   await Promise.all([ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'), supervising]);
@@ -484,7 +499,9 @@ test('#runSupervisor lets a service run a command from its stop', async () => {
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const [ended] = await Promise.all([
@@ -508,7 +525,9 @@ test('#runSupervisor removes its socket folder through the launch host once the 
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   ctx.openStopGate();
@@ -530,7 +549,9 @@ test('#runSupervisor ends a connection that sent no request when the run stops',
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const socket = ready.supervisor?.socket ?? '';
@@ -546,7 +567,9 @@ test('#runSupervisor ends a connection that sent no request when the run stops',
 
   await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
 
-  await waitFor(() => (idle.closed ? true : null));
+  await waitFor(() => {
+    invariant(idle.closed, 'The idle connection is still open.');
+  });
 
   expect(idle.closed).toBeTrue();
 });
@@ -561,7 +584,9 @@ test('#runSupervisor ends a connection whose client keeps its side open after th
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const socket = ready.supervisor?.socket ?? '';
@@ -594,7 +619,9 @@ test('#runSupervisor ends a connection whose client keeps its side open after th
   const closed = await waitFor(() => {
     lingering.write('ping\n');
 
-    return lingering.closed ? true : null;
+    invariant(lingering.closed, 'The lingering connection is still open.');
+
+    return lingering.closed;
   });
 
   expect(closed).toBeTrue();
@@ -610,13 +637,17 @@ test('#runSupervisor ends the run and frees its socket when a service call never
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const socket = ready.supervisor?.socket ?? '';
   const holding = Promise.allSettled([ctx.callHold(socket)]);
 
-  await waitFor(() => (ctx.stopCalls.includes('hold') ? true : null));
+  await waitFor(() => {
+    invariant(ctx.stopCalls.includes('hold'), 'The held stop has not run yet.');
+  });
 
   await Promise.all([ctx.callStop(socket), supervising]);
 
@@ -638,7 +669,9 @@ test('#runSupervisor listens on its socket through the launch host', async () =>
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   expect(ctx.listenSocket).toHaveBeenCalledExactlyOnceWith(
@@ -662,7 +695,9 @@ test('#runSupervisor lets only its owner reach the socket, whatever the umask', 
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   const socket = ready.supervisor?.socket ?? '';
@@ -687,7 +722,9 @@ test('#runSupervisor ends the run and frees its socket when a startup step ignor
   const supervisor = await waitFor(async () => {
     const view = await ctx.readRun('queue-run');
 
-    return view?.supervisor ?? null;
+    invariant(view?.supervisor, 'The run has no supervisor yet.');
+
+    return view.supervisor;
   });
 
   teardown.abort();
@@ -712,7 +749,9 @@ test('#runSupervisor stops a service that came up after the stop stopped waiting
   await waitFor(async () => {
     const view = await ctx.readRun('queue-run');
 
-    return view?.supervisor ?? null;
+    invariant(view?.supervisor, 'The run has no supervisor yet.');
+
+    return view.supervisor;
   });
 
   teardown.abort();
@@ -721,7 +760,11 @@ test('#runSupervisor stops a service that came up after the stop stopped waiting
 
   ctx.openStartGate();
 
-  const stopCalls = await waitFor(() => (ctx.stopCalls.length > 0 ? ctx.stopCalls : null));
+  const stopCalls = await waitFor(() => {
+    invariant(ctx.stopCalls.length > 0, 'No stop has run yet.');
+
+    return ctx.stopCalls;
+  });
 
   expect(stopCalls).toStrictEqual(['queue']);
 });
@@ -738,16 +781,23 @@ test('#runSupervisor ends a command the startup runs once the stop stops waiting
   await waitFor(async () => {
     const view = await ctx.readRun('press-run');
 
-    return view?.supervisor ?? null;
+    invariant(view?.supervisor, 'The run has no supervisor yet.');
+
+    return view.supervisor;
   });
 
   teardown.abort();
 
   await supervising;
 
-  const calls = await waitFor(() => (ctx.stopCalls.length > 0 ? ctx.stopCalls : null), {
-    timeoutMs: 3000,
-  });
+  const calls = await waitFor(
+    () => {
+      invariant(ctx.stopCalls.length > 0, 'No stop has run yet.');
+
+      return ctx.stopCalls;
+    },
+    { timeoutMs: 3000 },
+  );
 
   expect(calls).toStrictEqual(['press command rejected']);
 });
@@ -762,7 +812,9 @@ test('#runSupervisor logs and answers the failed stop of an app that the stop ca
   const supervisor = await waitFor(async () => {
     const view = await ctx.readRun('held-run');
 
-    return view?.supervisor ?? null;
+    invariant(view?.supervisor, 'The run has no supervisor yet.');
+
+    return view.supervisor;
   });
 
   const [answer] = await Promise.allSettled([ctx.callStop(supervisor.socket), supervising]);
@@ -792,7 +844,10 @@ test('#runSupervisor lets a service that came up run a command from its stop aft
   await waitFor(async () => {
     const events = await ctx.readRunEvents('mixed-run');
 
-    return events.some((event) => event.type === 'service-ready') ? true : null;
+    invariant(
+      events.some((event) => event.type === 'service-ready'),
+      'No service is ready yet.',
+    );
   });
 
   teardown.abort();
@@ -840,7 +895,9 @@ test('#runSupervisor records a service that failed to stop in the crash reason',
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   ctx.openStopGate();
@@ -862,7 +919,9 @@ test('#runSupervisor answers a stop with an environment error when a service fai
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
 
-    return view?.status === 'running' ? view : null;
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
   });
 
   ctx.openStopGate();

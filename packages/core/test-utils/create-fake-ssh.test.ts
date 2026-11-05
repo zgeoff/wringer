@@ -2,11 +2,12 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { killProcessGroup } from '../src/kill-process-group.ts';
 import { probeProcess } from '../src/probe-process.ts';
 import { createFakeSSH } from './create-fake-ssh.ts';
-import { waitFor } from './wait-for.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'create-fake-ssh');
@@ -82,7 +83,9 @@ test('it stops every process group a remote setsid started', async () => {
   const pid = await waitFor(async () => {
     const text = await readOptionalText(join(ctx.directory, 'remote.pid'));
 
-    return text?.endsWith('\n') === true ? Number(text) : null;
+    invariant(text?.endsWith('\n') === true, 'The remote command has not written its PID yet.');
+
+    return Number(text);
   });
 
   onTestFinished(() => {
@@ -91,7 +94,11 @@ test('it stops every process group a remote setsid started', async () => {
 
   await ctx.fake.stopGroups();
 
-  const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
+  const stopped = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
 
   expect({ exitCode: ran.exitCode, stopped }).toStrictEqual({ exitCode: 0, stopped: true });
 });

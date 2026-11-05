@@ -2,10 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { createTestFolder } from '../../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
-import { waitFor } from '../../test-utils/wait-for.ts';
 import { createWringer } from '../create-wringer.ts';
 import { defineDriver } from '../define-driver.ts';
 import { dispatch } from '../dispatch.ts';
@@ -116,7 +117,12 @@ test('it stops the work of a check that ran past its own deadline', async () => 
 
   const result = await ctx.run(['doctor']);
   const pid = await ctx.readPID();
-  const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
+
+  const stopped = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The check is still running.');
+
+    return true;
+  });
 
   expect({ exitCode: result.exitCode, stopped }).toStrictEqual({ exitCode: 1, stopped: true });
 });
@@ -190,7 +196,9 @@ test('it starts no check once the doctor ran past its own deadline', async () =>
   const view = await waitFor(async () => {
     const read = await ctx.readRun(runID);
 
-    return read?.doctor === 'failed' ? read : null;
+    invariant(read?.doctor === 'failed', 'The doctor has not failed yet.');
+
+    return read;
   });
 
   expect(view.doctorResults.map((check) => [check.name, check.code])).toStrictEqual([

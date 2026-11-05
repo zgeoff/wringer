@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createGuardedApp } from '../test-utils/create-guarded-app.ts';
-import { waitFor } from '../test-utils/wait-for.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 
 test('it reads the launch guard, the folder and the environment of this process', () => {
@@ -33,7 +34,9 @@ test.skipIf(Bun.which('setpriv') === null)(
     const exited = await waitFor(async () => {
       const running = await app.probeRunning();
 
-      return running ? null : true;
+      invariant(!running, 'The app is still running.');
+
+      return true;
     });
 
     expect(exited).toBeTrue();
