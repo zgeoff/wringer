@@ -1,11 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildEnvelope } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { probeProcess } from '../../core/src/probe-process.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
+import { createCleanupRegistry } from './create-cleanup-registry.ts';
 import { createCLIRunner } from './create-cli-runner.ts';
+import { readPIDFile } from './read-pid-file.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'cli-runner');
@@ -13,34 +15,20 @@ async function setupTest() {
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   const script = join(directory, 'cli.ts');
-  const cleanups: (() => void)[] = [];
+  const cleanups = createCleanupRegistry();
 
   onTestFinished(() => {
-    for (const cleanup of cleanups) {
-      cleanup();
-    }
+    cleanups.runAll();
   });
 
   return {
     directory,
-    runner: createCLIRunner({
-      script,
-      cwd: directory,
-      onCleanup: (cleanup) => {
-        cleanups.push(cleanup);
-      },
-    }),
+    runner: createCLIRunner({ script, cwd: directory, onCleanup: cleanups.register }),
     writeScript: (source: string) => writeFile(script, source),
     runCleanups: () => {
-      for (const cleanup of cleanups) {
-        cleanup();
-      }
+      cleanups.runAll();
     },
-    readPID: async (path: string) => {
-      const text = await readFile(path, 'utf8');
-
-      return Number(text);
-    },
+    readPID: (path: string) => readPIDFile(path),
   };
 }
 
@@ -109,6 +97,59 @@ test('it stops the process group a run left behind in the cleanup it registers',
 
   expect(stopped).toBe(true);
 });
+
+test('it reads the envelope of a CLI that writes more to stderr than a pipe holds', async () => {
+  const ctx = await setupTest();
+
+  const envelope = buildEnvelope({
+    command: 'restock',
+    target: null,
+    instance: null,
+    feature: null,
+    sha: null,
+    durationMs: 3,
+    data: null,
+    evidence: [],
+    cursors: {},
+    truncatedPath: null,
+    error: null,
+  });
+
+  await ctx.writeScript(
+    [
+      String.raw`await Bun.write(Bun.stderr, 'shelf warning\n'.repeat(20_000));`,
+      `console.log(${JSON.stringify(JSON.stringify(envelope))});`,
+      '',
+    ].join('\n'),
+  );
+
+  const result = await ctx.runner.run('restock');
+
+  expect(result).toStrictEqual({ exitCode: 0, events: [], envelope, errors: [] });
+});
+
+test.each(['stdout', 'stderr'])(
+  'it lets a CLI run to its end when it writes more to %s than a pipe holds',
+  async (stream) => {
+    const ctx = await setupTest();
+
+    const donePath = join(ctx.directory, 'done');
+
+    await ctx.writeScript(
+      [
+        `await Bun.write(Bun.${stream}, 'shelf warning\\n'.repeat(20_000));`,
+        `await Bun.write(${JSON.stringify(donePath)}, 'done');`,
+        '',
+      ].join('\n'),
+    );
+
+    await ctx.runner.runToEnd(['down'], 3000);
+
+    const done = await Bun.file(donePath).exists();
+
+    expect(done).toBe(true);
+  },
+);
 
 test('it ends a CLI that runs past the deadline of a run to its end', async () => {
   const ctx = await setupTest();
