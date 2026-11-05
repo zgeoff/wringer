@@ -129,6 +129,31 @@ test('it kills a remote command that ignores SIGINT and SIGTERM when the run tim
   expect(exited).toBe(true);
 });
 
+test('it names a failed stop connection in the error of a run that timed out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'drops-stops', binary: ctx.fake.binary });
+
+  // The fake runs the remote side here and holds ssh's pipes until it ends, so it ends soon.
+  const running = host.run({
+    argv: ['sleep', '2'],
+    access: 'read-write',
+    signal: AbortSignal.timeout(300),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+
+  expect(settled).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'timeout',
+      message: expect.stringContaining(
+        'The remote command may still run: the stop exited with code 255',
+      ),
+    }),
+  });
+});
+
 test('it returns the exit code of a remote command that fails', async () => {
   const ctx = await setupTest();
 
