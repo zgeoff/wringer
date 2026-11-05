@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
@@ -300,20 +300,27 @@ test.each([
   async (key, value) => {
     const ctx = await setupTest();
 
-    const lib = ['-C', 'lib', '-c', 'user.email=tester@example.com', '-c', 'user.name=Tester'];
+    const submoduleGitArgs = [
+      '-C',
+      'lib',
+      '-c',
+      'user.email=tester@example.com',
+      '-c',
+      'user.name=Tester',
+    ];
 
     await mkdir(join(ctx.repo, 'lib'));
     await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
 
     await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
-    await ctx.git(...lib, 'add', '.');
-    await ctx.git(...lib, 'commit', '--quiet', '-m', 'start');
+    await ctx.git(...submoduleGitArgs, 'add', '.');
+    await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
     await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
     await ctx.git('commit', '--quiet', '-m', 'start');
 
     await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 7;\n');
 
-    await ctx.git(...lib, 'commit', '--quiet', '-am', 'raise');
+    await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-am', 'raise');
 
     const before = await ctx.readFingerprint();
 
@@ -396,7 +403,15 @@ test('it gives a subfolder the fingerprint of the whole repo when an ignored fil
 test('it stages a submodule outside the subfolder by its path from the repo root', async () => {
   const ctx = await setupTest();
 
-  const lib = ['-C', 'lib', '-c', 'user.email=tester@example.com', '-c', 'user.name=Tester'];
+  const submoduleGitArgs = [
+    '-C',
+    'lib',
+    '-c',
+    'user.email=tester@example.com',
+    '-c',
+    'user.name=Tester',
+  ];
+
   const requests: GitRequest[] = [];
 
   await mkdir(join(ctx.repo, 'web'));
@@ -405,8 +420,8 @@ test('it stages a submodule outside the subfolder by its path from the repo root
   await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
 
   await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
-  await ctx.git(...lib, 'add', '.');
-  await ctx.git(...lib, 'commit', '--quiet', '-m', 'start');
+  await ctx.git(...submoduleGitArgs, 'add', '.');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
   await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
   await ctx.git('add', '.');
   await ctx.git('commit', '--quiet', '-m', 'start');
@@ -435,7 +450,14 @@ test('it stages a submodule outside the subfolder by its path from the repo root
 test('it gives a subfolder the fingerprint of the whole repo when a submodule outside it moved', async () => {
   const ctx = await setupTest();
 
-  const lib = ['-C', 'lib', '-c', 'user.email=tester@example.com', '-c', 'user.name=Tester'];
+  const submoduleGitArgs = [
+    '-C',
+    'lib',
+    '-c',
+    'user.email=tester@example.com',
+    '-c',
+    'user.name=Tester',
+  ];
 
   await mkdir(join(ctx.repo, 'web'));
   await mkdir(join(ctx.repo, 'lib'));
@@ -443,8 +465,8 @@ test('it gives a subfolder the fingerprint of the whole repo when a submodule ou
   await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
 
   await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
-  await ctx.git(...lib, 'add', '.');
-  await ctx.git(...lib, 'commit', '--quiet', '-m', 'start');
+  await ctx.git(...submoduleGitArgs, 'add', '.');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
   await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
   await ctx.git('add', '.');
   await ctx.git('commit', '--quiet', '-m', 'start');
@@ -452,7 +474,7 @@ test('it gives a subfolder the fingerprint of the whole repo when a submodule ou
 
   await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 7;\n');
 
-  await ctx.git(...lib, 'commit', '--quiet', '-am', 'raise');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-am', 'raise');
 
   const fromRoot = await ctx.readFingerprint();
   const fromSubfolder = await ctx.readFingerprint(join(ctx.repo, 'web'));
@@ -499,6 +521,112 @@ test('it gives the same fingerprint whatever big-file threshold the repo sets', 
   const after = await ctx.readFingerprint();
 
   expect(after).toBe(before);
+});
+
+test('it gives the same fingerprint whatever binary setting the repo gives a named diff driver', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitattributes'), '*.cfg diff=settings\n');
+  await writeFile(join(ctx.repo, 'shop.cfg'), 'currency = EUR\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'shop.cfg'), 'currency = GBP\n');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'diff.settings.binary', 'true');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test('it gives the same fingerprint to a staged, ignored file whose name is not UTF-8 before and after commit', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitignore'), '*.log\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  const name = Buffer.concat([Buffer.from([0x63, 0x61, 0x66, 0xe9]), Buffer.from('.log')]);
+
+  await writeFile(Buffer.concat([Buffer.from(`${ctx.repo}/`), name]), 'opened\n');
+
+  await ctx.git('add', '--force', '--', '*.log');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('commit', '--quiet', '-m', 'work');
+
+  const after = await ctx.readFingerprint();
+
+  expect({ before, after }).toStrictEqual({
+    before: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    after: before,
+  });
+});
+
+test('it keeps a moved submodule whose folder name is not UTF-8 in the fingerprint before and after commit', async () => {
+  const ctx = await setupTest();
+
+  const submoduleGitArgs = [
+    '-C',
+    'lib',
+    '-c',
+    'user.email=tester@example.com',
+    '-c',
+    'user.name=Tester',
+  ];
+
+  const name = Buffer.concat([Buffer.from([0x63, 0x61, 0x66, 0xe9]), Buffer.from('-lib')]);
+
+  const stageGitlink = async (sha: string) => {
+    const entry = Buffer.concat([Buffer.from(`160000 ${sha}\t`), name, Buffer.from([0])]);
+
+    await runGit({
+      cwd: ctx.repo,
+      args: ['update-index', '--add', '-z', '--index-info'],
+      stdin: entry,
+    });
+  };
+
+  await mkdir(join(ctx.repo, 'lib'));
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
+  await ctx.git(...submoduleGitArgs, 'add', '.');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
+
+  const start = await ctx.git('-C', 'lib', 'rev-parse', 'HEAD');
+
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 7;\n');
+
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-am', 'raise');
+
+  const raised = await ctx.git('-C', 'lib', 'rev-parse', 'HEAD');
+
+  await rename(join(ctx.repo, 'lib'), Buffer.concat([Buffer.from(`${ctx.repo}/`), name]));
+  await stageGitlink(start.stdout.trim());
+
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  const before = await ctx.readFingerprint();
+
+  await stageGitlink(raised.stdout.trim());
+
+  await ctx.git('commit', '--quiet', '-m', 'raise');
+
+  const after = await ctx.readFingerprint();
+
+  expect({ before, after }).toStrictEqual({
+    before: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    after: before,
+  });
 });
 
 test('it reads the fingerprint of a repo whose folder name ends in a space', async () => {

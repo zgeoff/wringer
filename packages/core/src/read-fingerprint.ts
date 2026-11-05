@@ -84,12 +84,18 @@ export async function readFingerprint(
 
     await addSubmodules(host, root, env);
 
+    const configNames = await host.runGit({
+      cwd: root,
+      args: ['config', '--list', '--name-only', '-z'],
+    });
+
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
     const diff = await host.runGitBytes({
       cwd: root,
       args: [
         ...pinnedDiffConfig,
+        ...buildDriverBinaryPins(configNames.stdout),
         'diff',
         '--cached',
         '--binary',
@@ -153,4 +159,14 @@ async function addSubmodules(
   for (const request of buildSubmoduleAdds({ root, env, stagedEntries: staged })) {
     await host.runGit(request);
   }
+}
+
+const driverBinaryPattern = /^diff\..+\.binary$/u;
+
+// A named diff driver's `binary` setting is local config, and makes a text file diff as binary even
+// with `--no-textconv`; `auto` gives the file back to git's own check.
+function buildDriverBinaryPins(configNames: string): string[] {
+  return configNames
+    .split('\0')
+    .flatMap((name) => (driverBinaryPattern.test(name) ? ['-c', `${name}=auto`] : []));
 }
