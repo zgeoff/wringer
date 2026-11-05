@@ -1,11 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { envelopeSchema } from '@wringer/core';
-import { z } from 'zod';
-import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
-import { parsePublishedEvent } from '../../../test-utils/parse-published-event.ts';
-import { killProcessGroup } from '../../core/src/kill-process-group.ts';
 import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
+import { createCLIRunner } from '../test-utils/create-cli-runner.ts';
 
 // These tests start the demo repo's verify script as a process, so `up` and `attach` start the real
 // supervisor process, detached, as they do for a repo. Each event line and the final envelope the
@@ -13,65 +9,18 @@ import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);
 
-  const script = join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts');
-  const eventLineSchema = z.object({ event: z.string() });
-
-  // The CLI runs in a process group of its own, so the cleanup stops it and anything it started
-  // in that group when it hangs past the test.
-  const startCLI = (argv: readonly string[]) =>
-    Bun.spawn([process.execPath, script, ...argv], {
-      cwd: repo.root,
-      detached: true,
-      stdin: 'ignore',
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-  const run = async (...argv: readonly string[]) => {
-    const child = startCLI(argv);
-
-    onTestFinished(() => {
-      killProcessGroup(child.pid);
-    });
-
-    const [stdout, exitCode] = await Promise.all([new Response(child.stdout).text(), child.exited]);
-
-    const lines = stdout.trimEnd().split('\n');
-    const last = lines.at(-1) ?? '';
-
-    return {
-      exitCode,
-      errors: [
-        ...lines.slice(0, -1).flatMap((line) => parsePublishedEvent(line).errors),
-        ...parsePublishedEnvelope(last).errors,
-      ],
-      events: lines.slice(0, -1).map((line) => eventLineSchema.parse(JSON.parse(line)).event),
-      envelope: envelopeSchema.parse(JSON.parse(last)),
-    };
-  };
-
-  // The stops run inside the cleanup, where no further cleanup can be registered, so each one has a
-  // deadline that kills its group instead.
-  const stopCLI = async (argv: readonly string[]) => {
-    const child = startCLI(argv);
-
-    const deadline = setTimeout(() => {
-      killProcessGroup(child.pid);
-    }, 10_000);
-
-    await child.exited;
-
-    clearTimeout(deadline);
-  };
+  const cli = createCLIRunner({
+    script: join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts'),
+    cwd: repo.root,
+  });
 
   onTestFinished(async () => {
-    await stopCLI(['down', '--target', 'local']);
-    await stopCLI(['detach', '--target', 'prod']);
-
+    await cli.runToEnd(['down', '--target', 'local'], 10_000);
+    await cli.runToEnd(['detach', '--target', 'prod'], 10_000);
     await repo.remove();
   });
 
-  return { run };
+  return { run: cli.run };
 }
 
 test('it starts the app under a supervisor process with `up`, and stops it with `down`', async () => {
