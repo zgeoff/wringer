@@ -5,6 +5,7 @@ import { createDirectory, local } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
+import { readFileFrom } from './read-file-from.ts';
 import { canMoveSource, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 
@@ -21,22 +22,29 @@ async function setupTest() {
 
   const streams = join(directory, 'streams');
   const createDirectoryCalls = mock(createDirectory);
+  const readFileCalls = mock(readFileFrom);
 
   return {
     directory,
     streams,
     createDirectoryCalls,
+
+    // Resolves once the recorder has finished its first read of a file source.
+    firstFileRead: async () => {
+      await waitFor(() => readFileCalls.mock.results[0] ?? null);
+      await readFileCalls.mock.results[0]?.value;
+    },
     streamPath: (name: string) => join(streams, `${name}.ndjson`),
     start: async (sources: Readonly<Record<string, StreamSource>>, pendingLimit = 10_000) => {
       const recorder = await startStreamRecorder({
         sources,
         directory: streams,
         host: local(),
-        localHost: local(),
         access: 'read-only',
         now: () => new Date('2026-03-01T09:30:00.000Z'),
         createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
+        readFileFrom: readFileCalls,
         pendingLimit,
       });
 
@@ -100,6 +108,28 @@ test('it records the lines appended to a file source', async () => {
 
   expect(recorded).toBe(
     '{"at":"2026-03-01T09:30:00.000Z","line":"booted"}\n{"at":"2026-03-01T09:30:00.000Z","line":"order 7 placed"}\n',
+  );
+});
+
+test('it records the lines a file source gained just before the recorder stopped', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  await writeFile(log, '');
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  await ctx.firstFileRead();
+
+  await appendFile(log, 'shutting down\nbye');
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(
+    '{"at":"2026-03-01T09:30:00.000Z","line":"shutting down"}\n{"at":"2026-03-01T09:30:00.000Z","line":"bye"}\n',
   );
 });
 

@@ -1,9 +1,11 @@
 import { join } from 'node:path';
-import { WringerError, createDirectory, defineDriver, findOwnValue, local } from '@wringer/core';
-import type { RunHandle } from '@wringer/core';
+import { WringerError, createDirectory, defineDriver, findOwnValue } from '@wringer/core';
+import type { DriverSession, Fence, RunHandle } from '@wringer/core';
 import { z } from 'zod';
 import { appendWholeText } from './append-whole-text.ts';
+import { readFileFrom } from './read-file-from.ts';
 import { readStreamSlice, streamRecordSchema } from './read-stream-slice.ts';
+import type { StreamSlice, StreamSliceRequest } from './read-stream-slice.ts';
 import {
   sourceStatusSchema,
   startStreamRecorder,
@@ -23,20 +25,12 @@ export const streamReadSchema = z.strictObject({
   maxBytes: z.number().int().min(minimumSliceBytes).optional(),
 });
 
-export type StreamRead = z.input<typeof streamReadSchema>;
-
 export const streamSliceSchema = z.strictObject({
   name: z.string(),
   records: z.array(streamRecordSchema),
   cursor: z.number().int().nonnegative(),
   more: z.boolean(),
 });
-
-export type StreamSliceData = z.infer<typeof streamSliceSchema>;
-
-export interface StreamClient {
-  readonly read: (request: StreamRead) => Promise<StreamSliceData>;
-}
 
 const optionsSchema = z.strictObject({
   maxBytes: z
@@ -66,11 +60,11 @@ export const stream = defineDriver({
           sources: pickSources(ctx.config.sources, ctx.run),
           directory: ctx.run.paths.streams,
           host: ctx.host,
-          localHost: local(),
           access: ctx.access,
           now: () => new Date(),
           createDirectory,
           appendText: appendWholeText,
+          readFileFrom,
           pendingLimit: 10_000,
         });
 
@@ -81,31 +75,7 @@ export const stream = defineDriver({
       },
     },
   },
-  client: (session, fence): StreamClient => ({
-    read: fence({
-      effect: () => 'read',
-      describe: (request: StreamRead) => `stream read ${request.name}`,
-      run: async (request) => {
-        const parsed = streamReadSchema.parse(request);
-        const sources = pickSources(session.config.sources, session.run);
-
-        if (!Object.hasOwn(sources, parsed.name)) {
-          throw new WringerError('usage', {
-            message: `Target ${session.target} records no stream named ${parsed.name}.`,
-            hint: `Read one of: ${Object.keys(sources).join(', ')}.`,
-          });
-        }
-
-        const slice = await readStreamSlice({
-          path: join(session.run.paths.streams, `${parsed.name}.ndjson`),
-          from: parsed.from ?? findOwnValue(session.cursors, parsed.name) ?? 0,
-          maxBytes: Math.min(parsed.maxBytes ?? session.options.maxBytes, session.options.maxBytes),
-        });
-
-        return { name: parsed.name, ...slice, records: [...slice.records] };
-      },
-    }),
-  }),
+  client: (session, fence) => createStreamClient(session, fence, readStreamSlice),
   commands: (command) => [
     command({
       path: ['stream', 'read'],
@@ -143,4 +113,51 @@ function pickSources(
   run: RunHandle,
 ): Readonly<Record<string, StreamSource>> {
   return sources ?? { app: { file: run.childLog('app').path } };
+}
+
+type StreamSession = DriverSession<
+  z.infer<typeof optionsSchema>,
+  z.infer<typeof targetConfigSchema>
+>;
+
+type ReadSlice = (request: StreamSliceRequest) => Promise<StreamSlice>;
+
+export type StreamRead = z.input<typeof streamReadSchema>;
+
+export type StreamSliceData = z.infer<typeof streamSliceSchema>;
+
+export interface StreamClient {
+  readonly read: (request: StreamRead) => Promise<StreamSliceData>;
+}
+
+function createStreamClient(
+  session: StreamSession,
+  fence: Fence,
+  readSlice: ReadSlice,
+): StreamClient {
+  return {
+    read: fence({
+      effect: () => 'read',
+      describe: (request: StreamRead) => `stream read ${request.name}`,
+      run: async (request) => {
+        const parsed = streamReadSchema.parse(request);
+        const sources = pickSources(session.config.sources, session.run);
+
+        if (!Object.hasOwn(sources, parsed.name)) {
+          throw new WringerError('usage', {
+            message: `Target ${session.target} records no stream named ${parsed.name}.`,
+            hint: `Read one of: ${Object.keys(sources).join(', ')}.`,
+          });
+        }
+
+        const slice = await readSlice({
+          path: join(session.run.paths.streams, `${parsed.name}.ndjson`),
+          from: parsed.from ?? findOwnValue(session.cursors, parsed.name) ?? 0,
+          maxBytes: Math.min(parsed.maxBytes ?? session.options.maxBytes, session.options.maxBytes),
+        });
+
+        return { name: parsed.name, ...slice, records: [...slice.records] };
+      },
+    }),
+  };
 }

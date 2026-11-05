@@ -45,7 +45,9 @@ the doctor check `stream.recording`, which fails when a source has stopped.
 ## Sources
 
 - `{ command: [...] }` runs the command on the target's host and records each line it prints.
-- `{ file: '<path>' }` tails a file on the machine where the run lives.
+- `{ file: '<path>' }` follows a file on the machine where the run lives. The supervisor stops the
+  app first, then reads the file to its end, so the lines the app logs while it shuts down are
+  recorded.
 - A target with no `sources` records `app`: the log of the app that the run launched.
 
 The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one

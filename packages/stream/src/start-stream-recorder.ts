@@ -1,8 +1,10 @@
 import { join } from 'node:path';
+import { setTimeout } from 'node:timers/promises';
 import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
+import type { FileChunk } from './read-file-from.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 const commandSourceSchema = z.strictObject({ command: z.array(z.string().min(1)).min(1) });
@@ -16,11 +18,11 @@ export interface RecorderRequest {
   readonly sources: Readonly<Record<string, StreamSource>>;
   readonly directory: string;
   readonly host: Host;
-  readonly localHost: Host;
   readonly access: Access;
   readonly now: () => Date;
   readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
+  readonly readFileFrom: (path: string, from: number) => Promise<FileChunk>;
 
   // At most this many records wait for the disk; a source that logs faster loses the excess, and
   // the stream says how many lines it lost.
@@ -41,7 +43,7 @@ export interface StreamRecorder {
 }
 
 // Follows each source for the whole run and appends each line to `<name>.ndjson` as `{ at, line }`.
-// A `command` source runs on the target's host; a `file` source is tailed where the run lives.
+// A `command` source runs on the target's host; a `file` source is read where the run lives.
 export async function startStreamRecorder(request: RecorderRequest): Promise<StreamRecorder> {
   await request.createDirectory(request.directory);
 
@@ -191,10 +193,64 @@ function runFollow(request: FollowSourceRequest, onLine: (line: string) => void)
     });
   }
 
-  return request.localHost.follow({
-    argv: ['tail', '-n', '+1', '-F', request.source.file],
-    access: request.access,
-    signal: request.signal,
-    onLine,
-  });
+  return followFile(request, request.source.file, onLine);
+}
+
+const filePollMs = 100;
+
+// The recorder reads a file source itself, so its stop can read the file to its end once the app
+// has stopped writing; a killed `tail` would drop what it had yet to read. A file source ends with
+// exit code 0 at the recorder's stop.
+async function followFile(
+  request: FollowSourceRequest,
+  path: string,
+  onLine: (line: string) => void,
+): Promise<number> {
+  const decoder = new TextDecoder();
+
+  let offset = 0;
+  let carry = '';
+
+  const readNew = async (): Promise<void> => {
+    const chunk = await request.readFileFrom(path, offset);
+
+    const kept = chunk.start < offset ? '' : carry;
+
+    offset = chunk.start + chunk.bytes.length;
+
+    const split = collectLines(kept, decoder.decode(chunk.bytes, { stream: true }));
+
+    carry = split.carry;
+
+    for (const line of split.lines) {
+      onLine(line);
+    }
+  };
+
+  while (!request.signal.aborted) {
+    await readNew();
+
+    // Bun.sleep takes no signal, and this wait has to end at the stop.
+    await setTimeout(filePollMs, undefined, { signal: request.signal }).catch(() => null);
+  }
+
+  await readNew();
+
+  if (carry !== '') {
+    onLine(carry);
+  }
+
+  return 0;
+}
+
+interface LineSplit {
+  readonly lines: readonly string[];
+  readonly carry: string;
+}
+
+// The text after the last newline waits for the rest of its line.
+function collectLines(carry: string, text: string): LineSplit {
+  const parts = `${carry}${text}`.split('\n');
+
+  return { lines: parts.slice(0, -1), carry: parts.at(-1) ?? '' };
 }
