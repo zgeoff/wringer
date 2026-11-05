@@ -3,15 +3,18 @@ import { WringerError, createDirectory, defineDriver, findOwnValue } from '@wrin
 import type { DriverSession, Fence, RunHandle } from '@wringer/core';
 import { z } from 'zod';
 import { appendWholeText } from './append-whole-text.ts';
+import { streamRecordSchema } from './build-stream-slice.ts';
+import type { StreamSlice } from './build-stream-slice.ts';
 import { readFileFrom } from './read-file-from.ts';
-import { readStreamSlice, streamRecordSchema } from './read-stream-slice.ts';
-import type { StreamSlice, StreamSliceRequest } from './read-stream-slice.ts';
+import { readStreamSlice } from './read-stream-slice.ts';
+import type { StreamSliceRequest } from './read-stream-slice.ts';
 import {
   sourceStatusSchema,
   startStreamRecorder,
   streamSourceSchema,
 } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
+import { waitOrAbort } from './wait-or-abort.ts';
 
 const streamNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*$/u);
 
@@ -65,6 +68,7 @@ export const stream = defineDriver({
           createDirectory,
           appendText: appendWholeText,
           readFileFrom,
+          wait: waitOrAbort,
           pendingLimit: 10_000,
         });
 

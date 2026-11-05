@@ -9,6 +9,7 @@ import { appendWholeText } from './append-whole-text.ts';
 import { readFileFrom } from './read-file-from.ts';
 import { canMoveSource, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
+import { waitOrAbort } from './wait-or-abort.ts';
 
 // The recorder writes into the test folder until it stops, so the stack stops every recorder
 // before it removes the folder.
@@ -56,6 +57,7 @@ async function setupTest() {
         createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
         readFileFrom: readFileCalls,
+        wait: waitOrAbort,
         pendingLimit,
       });
 

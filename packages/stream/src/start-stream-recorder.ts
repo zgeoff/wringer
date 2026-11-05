@@ -1,5 +1,4 @@
 import { join } from 'node:path';
-import { setTimeout } from 'node:timers/promises';
 import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
@@ -30,6 +29,9 @@ export interface RecorderRequest {
     from: FilePosition,
     limitBytes: number,
   ) => Promise<FileChunk>;
+
+  // A file source polls through this; it settles early, without rejecting, once the signal aborts.
+  readonly wait: (delayMs: number, signal: AbortSignal) => Promise<void>;
 
   // At most this many records wait behind the batch being written; a source that logs faster loses
   // the excess, and the stream says how many lines it lost.
@@ -272,7 +274,7 @@ async function followFile(
     await readNew();
 
     // Bun.sleep takes no signal, and this wait has to end at the stop.
-    await setTimeout(filePollMs, undefined, { signal: request.signal }).catch(() => null);
+    await request.wait(filePollMs, request.signal);
   }
 
   await readNew();
