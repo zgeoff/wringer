@@ -38,6 +38,26 @@ test('#use marks the cursors of the current target run', async () => {
   });
 });
 
+test('#use treats a target named after an inherited object key as one with no run', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('constructor', ['use'], { feature: 'checkout' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { target: null, feature: 'checkout', cursors: {} },
+  });
+});
+
+test('#status treats a target named after an inherited object key as one with no run', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('constructor', ['status']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 0,
+    code: undefined,
+  });
+});
+
 test('#use saves the run that its cursors belong to', async () => {
   const ctx = await setupTest();
   const up = await ctx.run('local', ['up']);

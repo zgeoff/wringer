@@ -2,6 +2,7 @@ import { join, relative } from 'node:path';
 import { z } from 'zod';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildRunPaths } from '../build-state-paths.ts';
+import { findOwnValue } from '../find-own-value.ts';
 import { unassignedFeature } from '../open-drive.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
@@ -111,7 +112,7 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
       // may change.
       const before = await ctx.state.readPointers();
 
-      const runID = before.currentRun[args.target ?? ctx.targetName];
+      const runID = findOwnValue(before.currentRun, args.target ?? ctx.targetName);
       const cursors = runID === undefined ? {} : await ctx.state.readCursors(runID);
 
       const pointers = await ctx.state.writePointers((current) => ({

@@ -1,6 +1,7 @@
 import { dirname } from 'node:path';
 import { buildRunHandle } from './build-run-handle.ts';
 import type { StatePort } from './create-file-state.ts';
+import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
 import { defaultRefusalHint } from './make-fence.ts';
@@ -137,7 +138,8 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       return { pid: process.pid };
     }
 
-    const method = services.get(request.service)?.methods[request.method];
+    const methods = services.get(request.service)?.methods ?? {};
+    const method = findOwnValue(methods, request.method);
 
     if (method === undefined) {
       throw new WringerError('usage', {
