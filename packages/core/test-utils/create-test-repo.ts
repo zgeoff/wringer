@@ -20,14 +20,23 @@ export async function createTestRepo(parent: string): Promise<TestRepo> {
     return result.stdout;
   };
 
-  await git('init', '--quiet', '--initial-branch=main');
-  await git('config', 'user.email', 'tester@example.com');
-  await git('config', 'user.name', 'Tester');
-  await git('config', 'commit.gpgsign', 'false');
-  await writeFile(join(root, '.gitignore'), '.wringer/\n');
-  await writeFile(join(root, 'README.md'), '# shop\n');
-  await git('add', '.');
-  await git('commit', '--quiet', '-m', 'start');
+  const remove = () => rm(root, { recursive: true, force: true });
 
-  return { root, git, remove: () => rm(root, { recursive: true, force: true }) };
+  // The caller gets `remove` only once this returns, so a failed step removes the folder here.
+  try {
+    await git('init', '--quiet', '--initial-branch=main');
+    await git('config', 'user.email', 'tester@example.com');
+    await git('config', 'user.name', 'Tester');
+    await git('config', 'commit.gpgsign', 'false');
+    await writeFile(join(root, '.gitignore'), '.wringer/\n');
+    await writeFile(join(root, 'README.md'), '# shop\n');
+    await git('add', '.');
+    await git('commit', '--quiet', '-m', 'start');
+  } catch (error) {
+    await remove();
+
+    throw error;
+  }
+
+  return { root, git, remove };
 }
