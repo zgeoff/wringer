@@ -285,6 +285,21 @@ test("it writes a failure that a timed-out command's work hits after the answer 
   });
 });
 
+test('it writes no event that a timed-out command emits after the answer', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const before = ctx.lines.length;
+
+  const result = await ctx.run('local', ['action', 'linger']);
+
+  await result.late;
+
+  expect(ctx.lines.slice(before)).toStrictEqual([]);
+});
+
 test('it never runs the body of a command whose deadline passed while its guards ran', async () => {
   const ctx = await setupTest();
 
