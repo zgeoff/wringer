@@ -74,7 +74,8 @@ test('it rejects a call that a live supervisor answers too late', async () => {
 
   onTestFinished(() => {
     answer.resolve(null);
-    server.close();
+
+    return server.close();
   });
 
   const calling = ctx.callRunSupervisor(

@@ -1,5 +1,7 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
+import { once } from 'node:events';
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
@@ -508,6 +510,37 @@ test('#runSupervisor removes its socket folder through the launch host once the 
   await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
 
   expect(ctx.removeDirectory).toHaveBeenCalledExactlyOnceWith(dirname(socket));
+});
+
+test('#runSupervisor ends a connection that sent no request when the run stops', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const socket = ready.supervisor?.socket ?? '';
+  const idle = createConnection(socket);
+
+  onTestFinished(() => {
+    idle.destroy();
+  });
+
+  await once(idle, 'connect');
+
+  ctx.openStopGate();
+
+  await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
+
+  await waitFor(() => (idle.closed ? true : null));
+
+  expect(idle.closed).toBeTrue();
 });
 
 test('#runSupervisor listens on its socket through the launch host', async () => {

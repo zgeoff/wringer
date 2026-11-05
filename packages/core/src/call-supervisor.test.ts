@@ -22,9 +22,7 @@ async function setupTest() {
     },
   });
 
-  onTestFinished(() => {
-    server.close();
-  });
+  onTestFinished(() => server.close());
 
   return { socket, handle };
 }

@@ -240,8 +240,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   await waitForClosed();
 
-  server.close();
-
+  await server.close();
   await options.launchHost.removeDirectory(dirname(socket));
 }
 
