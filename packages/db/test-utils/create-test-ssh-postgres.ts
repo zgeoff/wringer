@@ -38,6 +38,10 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
     'run',
     '--detach',
     '--rm',
+
+    // A process an ssh session leaves behind is reparented to PID 1. Postgres as PID 1 reads its
+    // exit as a crashed backend and restarts, cutting every connection, so tini reaps it instead.
+    '--init',
     '--env',
     'POSTGRES_USER=shop',
     '--env',
