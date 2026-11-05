@@ -2,9 +2,10 @@ import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
 import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
@@ -242,11 +243,12 @@ test.each([
     signal: controller.signal,
   });
 
-  await waitFor(() =>
-    ctx.postgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)')
-      ? true
-      : null,
-  );
+  await waitFor(() => {
+    invariant(
+      ctx.postgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)'),
+      'The sleep has not reached postgres yet.',
+    );
+  });
 
   controller.abort();
 
@@ -260,11 +262,12 @@ test('it reports a refused cancel once, then cancels the Postgres write on a new
 
   const running = ctx.runOnRefusingPostgres('select pg_sleep(60)', controller.signal);
 
-  await waitFor(() =>
-    ctx.refusingPostgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)')
-      ? true
-      : null,
-  );
+  await waitFor(() => {
+    invariant(
+      ctx.refusingPostgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)'),
+      'The sleep has not reached postgres yet.',
+    );
+  });
 
   controller.abort();
 

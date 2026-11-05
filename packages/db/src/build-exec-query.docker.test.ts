@@ -1,9 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { ssh } from '@wringer/core';
+import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';
 import { buildExecQuery } from './build-exec-query.ts';
 import { parseExecResult } from './parse-exec-result.ts';
@@ -50,7 +51,7 @@ async function setupTest() {
         select pid from pg_stat_activity
         where state = 'active' and pid <> pg_backend_pid() and query like '%pg_sleep%'`;
 
-      return rows.length === 0 ? true : null;
+      return rows.length === 0;
     },
     runWrite: (sql: string, signal: AbortSignal, deadlineAtMs: number) => {
       const query = buildExecQuery({
@@ -142,7 +143,14 @@ test('it never commits a psql write over ssh that ran past its deadline', async 
     ),
   ]);
 
-  await waitFor(() => ctx.probeIdle(), { timeoutMs: 8000 });
+  await waitFor(
+    async () => {
+      const idle = await ctx.probeIdle();
+
+      invariant(idle, 'Postgres still runs the sleep.');
+    },
+    { timeoutMs: 8000 },
+  );
 
   const notes = await ctx.readNotes();
 
