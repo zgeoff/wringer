@@ -7,10 +7,8 @@ import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
 import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
-import { exitCodeFor } from './error-codes.ts';
 import type { ExitCode } from './error-codes.ts';
 import { findOwnValue } from './find-own-value.ts';
-import { findVerdictRefusal } from './find-verdict-refusal.ts';
 import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
 import { defaultRefusalHint } from './make-fence.ts';
@@ -25,12 +23,13 @@ import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { pickEnvelopeTarget } from './pick-envelope-target.ts';
+import { pickLogRefusal } from './pick-log-refusal.ts';
 import { raceDeadline } from './race-deadline.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
-import { doneCommand } from './read-verdicts.ts';
 import type { RunID } from './run-events.ts';
+import { settleDispatchAnswer } from './settle-dispatch-answer.ts';
 import { settleEnvelope } from './settle-envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type {
@@ -210,21 +209,10 @@ export async function dispatch(
           drive: trace.drive,
           failure: input.error,
           now,
-          refuse:
-            envelope.command === doneCommand && envelope.ok
-              ? (current) => findVerdictRefusal(before?.run, current)
-              : null,
+          refuse: pickLogRefusal(envelope, before?.run),
         });
 
-  if (logFailure !== null) {
-    return {
-      envelope: buildEnvelope({ ...input, data: null, truncatedPath: null, error: logFailure }),
-      exitCode: exitCodeFor[logFailure.code],
-      late,
-    };
-  }
-
-  return { envelope, exitCode: input.error === null ? 0 : exitCodeFor[input.error.code], late };
+  return { ...settleDispatchAnswer(input, logFailure), late };
 }
 
 interface CommandContext {
