@@ -12,7 +12,7 @@ export const nodeFileSystem: FileSystem = {
 
     return new Uint8Array(buffer);
   },
-  readDirectory: (path) => readdir(path),
+  readDirectory: readdir,
   readFolderNames: async (path) => {
     const entries = await readdir(path, { withFileTypes: true });
 
