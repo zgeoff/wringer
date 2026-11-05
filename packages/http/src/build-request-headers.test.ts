@@ -1,5 +1,4 @@
 import { expect, test } from 'bun:test';
-import { WringerError } from '@wringer/core';
 import { buildRequestHeaders } from './build-request-headers.ts';
 
 test.each([
@@ -12,14 +11,17 @@ test.each([
   },
   { given: { accept: 'text/html' }, hasBody: false, expected: { accept: 'text/html' } },
 ])('it builds $expected from $given with a body $hasBody', (row) => {
-  expect(Object.fromEntries(buildRequestHeaders(row.given, row.hasBody))).toStrictEqual(
-    row.expected,
-  );
+  const outcome = buildRequestHeaders(row.given, row.hasBody);
+
+  expect(outcome).toStrictEqual({ kind: 'headers', headers: new Headers(row.expected) });
 });
 
-test('it refuses a header name HTTP forbids with a usage error', () => {
-  expect(() => buildRequestHeaders({ 'bad name': 'mug' }, false)).toThrowWithMessage(
-    WringerError,
-    /^A request header is not valid HTTP/u,
-  );
+test('it refuses a header name HTTP forbids', () => {
+  const outcome = buildRequestHeaders({ 'bad name': 'mug' }, false);
+
+  expect(outcome).toStrictEqual({
+    kind: 'refuse',
+    message: 'A request header is not valid HTTP.',
+    hint: 'Pass each header as `Name: value`, with a name of letters, digits and dashes.',
+  });
 });
