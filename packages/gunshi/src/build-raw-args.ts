@@ -1,49 +1,46 @@
 import { WringerError } from '@wringer/core';
 import type { GunshiArgs } from './build-gunshi-args.ts';
-import type { Positional } from './build-positionals.ts';
-import type { ScalarType } from './parse-arg-properties.ts';
+import { extraWordsArg } from './build-positional-args.ts';
 
 export interface ParsedCommand {
   readonly values: Readonly<Record<string, unknown>>;
   readonly explicit: Readonly<Record<string, boolean>>;
-  readonly words: readonly string[];
+
+  // The words after `--`, which gunshi assigns to no positional.
+  readonly rest: readonly string[];
 }
 
-// Only the flags the caller gave reach the command, so the schema's own defaults fill the rest. A
-// word no positional takes is a usage error, so `down prod` never stops the current target in
-// place of `prod`.
-export function buildRawArgs(
-  flags: GunshiArgs,
-  positionals: readonly Positional[],
-  parsed: ParsedCommand,
-): Record<string, unknown> {
+// Only the arguments the caller gave reach the command, so the schema's own defaults fill the rest.
+// The words after `--` join the command's list positional. A word no positional takes is a usage
+// error, so `down prod` never stops the current target in place of `prod`.
+export function buildRawArgs(args: GunshiArgs, parsed: ParsedCommand): Record<string, unknown> {
   const raw: Record<string, unknown> = Object.fromEntries(
-    Object.keys(flags).flatMap((name) =>
-      parsed.explicit[name] === true ? [[name, parsed.values[name]] as const] : [],
+    Object.keys(args).flatMap((name) =>
+      name !== extraWordsArg && parsed.explicit[name] === true
+        ? [[name, parsed.values[name]] as const]
+        : [],
     ),
   );
 
-  let next = 0;
+  const extra = toWords(parsed.values[extraWordsArg]);
 
-  for (const positional of positionals) {
-    if (next >= parsed.words.length) {
-      break;
-    }
+  const list = Object.entries(args).find(
+    ([name, schema]) =>
+      name !== extraWordsArg && schema.type === 'positional' && schema.multiple === true,
+  );
 
-    if (positional.list) {
-      raw[positional.name] = parsed.words.slice(next).map((word) => toTyped(word, positional.type));
-      next = parsed.words.length;
-    } else {
-      raw[positional.name] = toTyped(parsed.words[next] ?? '', positional.type);
-      next += 1;
-    }
+  if (list !== undefined && parsed.rest.length > 0) {
+    const [name, schema] = list;
+    const restValues = parsed.rest.map((word) => schema.parse?.(word) ?? word);
+
+    raw[name] = [...toWords(raw[name]), ...restValues];
   }
 
-  const leftover = parsed.words.slice(next);
+  const leftover = list === undefined ? [...extra, ...parsed.rest] : extra;
 
   if (leftover.length > 0) {
     throw new WringerError('usage', {
-      message: `The command takes no argument ${leftover.map((word) => `\`${word}\``).join(', ')}.`,
+      message: `The command takes no argument ${leftover.map((word) => `\`${String(word)}\``).join(', ')}.`,
       hint: 'Pass a value with its flag, such as `--target prod`.',
     });
   }
@@ -51,17 +48,7 @@ export function buildRawArgs(
   return raw;
 }
 
-// A word that does not convert stays text, so the command's schema rejects it with its path.
-function toTyped(word: string, type: ScalarType): unknown {
-  if (type === 'number' || type === 'integer') {
-    const value = Number(word);
-
-    return word.trim() === '' || Number.isNaN(value) ? word : value;
-  }
-
-  if (type === 'boolean' && (word === 'true' || word === 'false')) {
-    return word === 'true';
-  }
-
-  return word;
+// gunshi leaves a multiple positional that took no word unset.
+function toWords(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value : [];
 }
