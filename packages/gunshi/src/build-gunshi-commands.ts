@@ -22,11 +22,15 @@ export interface Invocation {
   readonly globals: GlobalFlags;
 }
 
+export type InvokeResult =
+  | { readonly kind: 'invoked'; readonly invocation: Invocation }
+  | { readonly kind: 'refused'; readonly error: WringerError };
+
 // gunshi parses the words; the command runs only after gunshi returns, so every failure, from
 // gunshi or from the command, reaches the one place that writes the envelope.
 export function buildGunshiCommands(
   wringer: Wringer,
-  onInvoke: (invocation: Invocation) => void,
+  onInvoke: (result: InvokeResult) => void,
 ): Record<string, Command> {
   const root = buildTree([...wringer.commands.values()].map((command) => command.info));
 
@@ -88,7 +92,7 @@ const globalArgs: GunshiArgs = {
 function toGunshiCommand(
   path: readonly string[],
   node: CommandNode,
-  onInvoke: (invocation: Invocation) => void,
+  onInvoke: (result: InvokeResult) => void,
 ): Command {
   const commandArgs: GunshiArgs = {
     ...(node.info === null ? {} : buildGunshiArgs(node.info)),
@@ -111,33 +115,7 @@ function toGunshiCommand(
     toKebab: true,
     ...(node.children.size === 0 ? {} : { subCommands }),
     run: (ctx: CommandContext) => {
-      const bareFlags = collectFlagsWithoutValue(ctx.tokens, args);
-
-      if (bareFlags.length > 0) {
-        throw new WringerError('usage', {
-          message: `Give a value after ${bareFlags.join(', ')}.`,
-          hint: "Write `''` after a flag to pass an empty value.",
-        });
-      }
-
-      const valuedBooleans = collectBooleanFlagsWithValue(ctx.tokens, args);
-
-      if (valuedBooleans.length > 0) {
-        throw new WringerError('usage', {
-          message: `${valuedBooleans.join(', ')} takes no value.`,
-          hint: 'Write the flag alone to turn it on, or `--no-<flag>` to turn it off.',
-        });
-      }
-
-      onInvoke({
-        path,
-        raw: buildRawArgs(commandArgs, {
-          values: ctx.values,
-          explicit: ctx.explicit,
-          rest: ctx.rest,
-        }),
-        globals: parseGlobalFlags(commandArgs, ctx),
-      });
+      onInvoke(pickInvokeResult({ path, args, commandArgs, ctx }));
     },
   };
 }
@@ -154,6 +132,54 @@ function buildDescription(info: CommandInfo | null): string {
   return `${info.summary} [${effect}]`;
 }
 
+interface InvokeRequest {
+  readonly path: readonly string[];
+  readonly args: GunshiArgs;
+  readonly commandArgs: GunshiArgs;
+  readonly ctx: Pick<CommandContext, 'tokens' | 'values' | 'explicit' | 'rest'>;
+}
+
+// Words that gunshi parsed but the command cannot take are a usage failure, not an exception.
+function pickInvokeResult(request: InvokeRequest): InvokeResult {
+  const bareFlags = collectFlagsWithoutValue(request.ctx.tokens, request.args);
+
+  if (bareFlags.length > 0) {
+    return {
+      kind: 'refused',
+      error: new WringerError('usage', {
+        message: `Give a value after ${bareFlags.join(', ')}.`,
+        hint: "Write `''` after a flag to pass an empty value.",
+      }),
+    };
+  }
+
+  const valuedBooleans = collectBooleanFlagsWithValue(request.ctx.tokens, request.args);
+
+  if (valuedBooleans.length > 0) {
+    return {
+      kind: 'refused',
+      error: new WringerError('usage', {
+        message: `${valuedBooleans.join(', ')} takes no value.`,
+        hint: 'Write the flag alone to turn it on, or `--no-<flag>` to turn it off.',
+      }),
+    };
+  }
+
+  const built = buildRawArgs(request.commandArgs, request.ctx);
+
+  if (!built.ok) {
+    return { kind: 'refused', error: built.error };
+  }
+
+  const globals = parseGlobalFlags(request.commandArgs, request.ctx);
+
+  if (globals instanceof WringerError) {
+    return { kind: 'refused', error: globals };
+  }
+
+  return { kind: 'invoked', invocation: { path: request.path, raw: built.raw, globals } };
+}
+
 const globalFlagsSchema = z.strictObject({
   target: z.string().min(1).optional(),
   feature: z.string().min(1).optional(),
@@ -165,7 +191,7 @@ const globalFlagsSchema = z.strictObject({
 function parseGlobalFlags(
   commandArgs: GunshiArgs,
   ctx: Pick<CommandContext, 'values' | 'explicit'>,
-): GlobalFlags {
+): GlobalFlags | WringerError {
   const given = Object.fromEntries(
     Object.keys(globalFlagsSchema.shape).flatMap((name) =>
       Object.hasOwn(commandArgs, name) || ctx.explicit[name] !== true
@@ -177,7 +203,7 @@ function parseGlobalFlags(
   const parsed = globalFlagsSchema.safeParse(given);
 
   if (!parsed.success) {
-    throw new WringerError('usage', { message: z.prettifyError(parsed.error) });
+    return new WringerError('usage', { message: z.prettifyError(parsed.error) });
   }
 
   return parsed.data;

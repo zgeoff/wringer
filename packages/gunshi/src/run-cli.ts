@@ -3,7 +3,7 @@ import type { RepoHost, StatePort, SupervisorPort, Wringer } from '@wringer/core
 import { cli, parseArgs } from 'gunshi';
 import type { ArgToken } from 'gunshi';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
-import type { Invocation } from './build-gunshi-commands.ts';
+import type { Invocation, InvokeResult } from './build-gunshi-commands.ts';
 import { findSignedValueFlag } from './find-signed-value-flag.ts';
 import type { SignedValueFlag } from './find-signed-value-flag.ts';
 import { pickCLIOutcome } from './pick-cli-outcome.ts';
@@ -67,11 +67,11 @@ async function readInvocation(
   ports: CLIPorts,
   tokens: readonly ArgToken[],
 ): Promise<ParsedInvocation> {
-  let invocation: Invocation | null = null;
+  let invoked: InvokeResult | null = null;
   let commandPath: readonly string[] = [];
 
-  const subCommands = buildGunshiCommands(wringer, (invoked) => {
-    invocation = invoked;
+  const subCommands = buildGunshiCommands(wringer, (result) => {
+    invoked = result;
   });
 
   try {
@@ -99,11 +99,7 @@ async function readInvocation(
       },
     );
 
-    if (invocation !== null) {
-      return { kind: 'invoked', invocation };
-    }
-
-    return { kind: 'printed', text: `${printed ?? ''}\n` };
+    return pickParsedInvocation(invoked, printed, pickCommandName(commandPath, ports.argv));
   } catch (error) {
     return {
       kind: 'failed',
@@ -111,6 +107,23 @@ async function readInvocation(
       error: toUsageError(error, findSignedValueFlag(tokens, ports.argv)),
     };
   }
+}
+
+// gunshi ran no command when it printed help or a version.
+function pickParsedInvocation(
+  invoked: InvokeResult | null,
+  printed: string | undefined,
+  command: string,
+): ParsedInvocation {
+  if (invoked === null) {
+    return { kind: 'printed', text: `${printed ?? ''}\n` };
+  }
+
+  if (invoked.kind === 'refused') {
+    return { kind: 'failed', command, error: invoked.error };
+  }
+
+  return { kind: 'invoked', invocation: invoked.invocation };
 }
 
 // gunshi throws an AggregateError for a parse failure, with one error per problem.
