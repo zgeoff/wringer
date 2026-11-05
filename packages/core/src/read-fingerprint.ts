@@ -32,9 +32,9 @@ const pinnedDiffOptions = [
   '--submodule=short',
 ];
 
-// The fingerprint is `git patch-id --verbatim` of the working tree against the merge base. A commit
-// leaves the diff against the merge base as it was, and a clean rebase moves both ends of it, so
-// neither changes the fingerprint. Untracked files join the diff through a temporary index.
+// The fingerprint hashes the diff of the working tree against the merge base, context included, so
+// a commit leaves it as it was, and so does a rebase that leaves each change's context lines alone.
+// Untracked files join the diff through a temporary index.
 export async function readFingerprint(
   host: FingerprintHost,
   request: FingerprintRequest,

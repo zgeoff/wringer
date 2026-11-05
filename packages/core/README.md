@@ -27,8 +27,10 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
 - A closed set of error codes, each mapped to one exit code.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
 - The fingerprint: `git patch-id --verbatim` of the working tree against the merge base, which stays
-  the same across a commit and a clean rebase. It needs git 2.39 or later. Every git setting that
-  shapes the diff is pinned, so the same change gets the same fingerprint in any clone.
+  the same across a commit and across a clean rebase that leaves the 3 lines around each change as
+  they were. A rebase that changes those lines changes the fingerprint, because the hash keeps the
+  diff's context. It needs git 2.39 or later. Every git setting that shapes the diff is pinned, so
+  the same change gets the same fingerprint in any clone.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer.
 
