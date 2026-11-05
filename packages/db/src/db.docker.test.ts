@@ -24,8 +24,6 @@ async function setupTest() {
   return {
     directory,
     file,
-
-    // `using` closes the database even when a statement throws.
     seedNotes: (texts: readonly string[]) => {
       using database = new Database(file);
 

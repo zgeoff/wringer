@@ -5,8 +5,6 @@ import { parseSQLTokens } from './parse-sql-tokens.ts';
 // Each Postgres read a subquery can hold. SHOW and EXPLAIN cannot sit in one.
 const wrappableWords: ReadonlySet<string> = new Set(['select', 'with', 'values', 'table']);
 
-// The Postgres statement without what follows its end, when it is a read the driver can wrap to
-// learn its columns.
 export function findWrappableStatement(sql: string): string | null {
   const statement = findStatementBody('postgres', sql);
 

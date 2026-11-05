@@ -58,7 +58,6 @@ function buildPragmaFormError(): WringerError {
 
 const numberPattern = /^[+-]?\d+$/u;
 
-// The value of `pragma name = value` or `pragma name(value)`: a name, a string or an integer.
 function parsePragmaValue(opener: SQLToken, rest: readonly SQLToken[]): string {
   const isCall = opener.kind === 'symbol' && opener.text === '(';
   const isSet = opener.kind === 'symbol' && opener.text === '=';

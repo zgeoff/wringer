@@ -24,8 +24,6 @@ async function setupTest() {
   return {
     directory,
     file,
-
-    // `using` closes the database even when a statement throws.
     seedNotes: (texts: readonly string[]) => {
       using database = new Database(file);
 
@@ -244,7 +242,17 @@ test('it reads rows through the database client on the target host', async () =>
   });
 });
 
-test('it names the columns of a pragma read through the database client that returns no rows', async () => {
+test.each([
+  { name: 'a missing table, with no rows', table: 'receipts', rows: [] },
+  {
+    name: 'a table, with a row per column',
+    table: 'notes',
+    rows: [
+      { cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 },
+      { cid: 1, name: 'text', type: 'TEXT', notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  },
+])('it names the columns of a pragma read of $name through the database client', async (row) => {
   const ctx = await setupTest();
 
   ctx.seedNotes([]);
@@ -252,35 +260,38 @@ test('it names the columns of a pragma read through the database client that ret
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
 
-  const result = await ctx.run('box', ['db', 'query'], { sql: 'pragma table_info(receipts)' });
+  const result = await ctx.run('box', ['db', 'query'], { sql: `pragma table_info(${row.table})` });
 
   expect(result.envelope.data).toStrictEqual({
     columns: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'],
-    rows: [],
-    rowCount: 0,
+    rows: row.rows,
+    rowCount: row.rows.length,
   });
 });
 
-test('it reads a table named like the view that names the columns, through the database client', async () => {
-  const ctx = await setupTest();
+test.each(['table', 'view'])(
+  'it reads a %s named like the view that names the columns, through the database client',
+  async (kind) => {
+    const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+    ctx.seedNotes([]);
 
-  using database = new Database(ctx.file);
+    using database = new Database(ctx.file);
 
-  database.run("create table wringer_read as select 'kept' as label");
+    database.run(`create ${kind} wringer_read as select 'kept' as label`);
 
-  await ctx.run('box', ['attach']);
-  await ctx.run('box', ['doctor']);
+    await ctx.run('box', ['attach']);
+    await ctx.run('box', ['doctor']);
 
-  const result = await ctx.run('box', ['db', 'query'], { sql: 'select label from wringer_read' });
+    const result = await ctx.run('box', ['db', 'query'], { sql: 'select label from wringer_read' });
 
-  expect(result.envelope.data).toStrictEqual({
-    columns: ['label'],
-    rows: [{ label: 'kept' }],
-    rowCount: 1,
-  });
-});
+    expect(result.envelope.data).toStrictEqual({
+      columns: ['label'],
+      rows: [{ label: 'kept' }],
+      rowCount: 1,
+    });
+  },
+);
 
 test('it answers a read through the database client that runs past the deadline with exit code 5', async () => {
   const ctx = await setupTest();

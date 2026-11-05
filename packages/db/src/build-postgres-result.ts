@@ -4,7 +4,6 @@ import type { DbResult } from './db-result-schema.ts';
 
 const rowsSchema = z.array(rowSchema);
 
-// `probed` is the result of the column probe, which runs only for a read that returned no rows.
 // Bun.SQL puts the count of rows a write changed on the result array as `count`.
 export function buildPostgresResult(result: unknown, write: boolean, probed: unknown): DbResult {
   const rows = rowsSchema.parse(result);

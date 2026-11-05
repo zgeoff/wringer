@@ -100,8 +100,6 @@ async function runQuery(
   }
 }
 
-// The fence answers an undeclared write as a write: on a read-only target with the target's hint,
-// elsewhere with a usage error.
 function rejectUndeclaredWrite(fence: Fence, sql: string): Promise<never> {
   const undeclared = new WringerError('usage', {
     message: `The statement \`${summarize(sql)}\` writes, but the query did not ask to write.`,
@@ -136,8 +134,6 @@ async function readResult(
   return parseExecResult({ result, output: plan.exec.output, write: plan.write });
 }
 
-// A read the database refused because it writes is an undeclared write; a database it could not
-// reach or open is the environment's fault; anything else is the statement's.
 function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise<never> {
   if (error instanceof WringerError) {
     return Promise.reject(error);

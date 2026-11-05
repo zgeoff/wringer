@@ -28,8 +28,7 @@ export type QueryPlan =
       readonly write: boolean;
     };
 
-// Decides how a query runs from the target's config alone, so the driver only carries the plan
-// out. A read that the database would not refuse in time is an undeclared write before it runs.
+// A read that the database would not refuse in time is an undeclared write before it runs.
 export function pickQueryPlan(
   config: DbConfig,
   query: PlannedQuery,

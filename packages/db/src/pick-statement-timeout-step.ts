@@ -19,7 +19,6 @@ export type StatementTimeoutStep =
 // whose round trips keep growing fails the query rather than run it past its deadline.
 const maxTimeoutSets = 3;
 
-// `previous` is the last timeout the connection set, or null before the first one.
 export function pickStatementTimeoutStep(
   previous: SetTimeoutStep | null,
   aborted: boolean,
