@@ -6,6 +6,7 @@ import type { StatePort } from './create-file-state.ts';
 import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import { defaultRefusalHint } from './make-fence.ts';
+import { pickPendingCleanups } from './pick-pending-cleanups.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { LaunchHost } from './read-launch-host.ts';
 import type { Endpoints, RunEvent } from './run-events.ts';
@@ -49,6 +50,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const services = new Map<string, ServiceInstance>();
   const lifetime = new AbortController();
   const serviceCommands = new AbortController();
+  const startupCommands = new AbortController();
 
   const append = (event: RunEvent): Promise<void> =>
     options.state.appendEvent(options.runID, event);
@@ -56,31 +58,35 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const at = (): string => options.now().toISOString();
   let launch: Launch | undefined;
 
-  const stoppedKeys = new Set<string>();
+  const stopping = new Set<string>();
 
-  // Stops each part of the run that is up and not yet stopping, and names each that failed. A part
-  // is marked before its stop starts, so two calls never stop the same part. The app stops first,
-  // so a service that records its log, such as a stream recorder, sees its last lines.
+  // Names each part whose stop failed. A part is marked before its stop starts, so two calls never
+  // stop the same part.
   const stopStarted = async (): Promise<readonly string[]> => {
     const current = launch;
 
-    const appCleanups: readonly Cleanup[] =
-      current === undefined ? [] : [['app', () => current.stop()]];
+    const pending = pickPendingCleanups({
+      launched: current !== undefined,
+      serviceKeys: [...services.keys()],
+      stopping,
+    });
 
-    const serviceCleanups = [...services].map(([key, service]): Cleanup => [
-      key,
-      () => service.stop(),
-    ]);
-
-    const appPending = appCleanups.filter(([key]) => !stoppedKeys.has(key));
-    const servicePending = serviceCleanups.filter(([key]) => !stoppedKeys.has(key));
-
-    for (const [key] of [...appPending, ...servicePending]) {
-      stoppedKeys.add(key);
+    for (const key of [...pending.app, ...pending.services]) {
+      stopping.add(key);
     }
 
-    const appFailures = await runCleanups(appPending, options.stopWaitMs);
-    const serviceFailures = await runCleanups(servicePending, options.stopWaitMs);
+    const appCleanups = pending.app.flatMap((key): Cleanup[] =>
+      current === undefined ? [] : [[key, () => current.stop()]],
+    );
+
+    const serviceCleanups = pending.services.flatMap((key): Cleanup[] => {
+      const service = services.get(key);
+
+      return service === undefined ? [] : [[key, () => service.stop()]];
+    });
+
+    const appFailures = await runCleanups(appCleanups, options.stopWaitMs);
+    const serviceFailures = await runCleanups(serviceCleanups, options.stopWaitMs);
 
     return [...appFailures, ...serviceFailures];
   };
@@ -91,6 +97,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     const failures = await stopStarted();
 
     const steps = buildShutDownSteps({ ...plan, failures, at: at() });
+
+    if (steps.abortStartupCommands) {
+      startupCommands.abort();
+    }
 
     if (steps.abortCommands) {
       serviceCommands.abort();
@@ -152,6 +162,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       hint: target.refusalHint ?? defaultRefusalHint,
       signal: lifetime.signal,
       commandSignal: serviceCommands.signal,
+      startupCommandSignal: startupCommands.signal,
       started: services,
       onReady: (key) => append({ type: 'service-ready', at: at(), service: key }),
     });

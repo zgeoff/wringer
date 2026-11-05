@@ -95,6 +95,14 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  const busy = defineDriver({
+    name: 'busy',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: { press: services.press },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(leaky({}))
     .use(stuck({}))
@@ -102,6 +110,13 @@ async function setupTest() {
     .use(tidy({}))
     .use(brittle({}))
     .use(scribe({}))
+    .use(busy({}))
+    .target('busy-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { busy: () => ({}) },
+    })
     .target('box', {
       mode: 'attach',
       access: 'read-write',
@@ -645,6 +660,32 @@ test('#runSupervisor stops a service that came up after the stop stopped waiting
   const stopCalls = await waitFor(() => (ctx.stopCalls.length > 0 ? ctx.stopCalls : null));
 
   expect(stopCalls).toStrictEqual(['queue']);
+});
+
+test('#runSupervisor ends a command the startup runs once the stop stops waiting for the startup', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('press-run');
+
+  const teardown = new AbortController();
+
+  const supervising = ctx.runSupervisor('press-run', teardown.signal, 'busy-box');
+
+  await waitFor(async () => {
+    const view = await ctx.readRun('press-run');
+
+    return view?.supervisor ?? null;
+  });
+
+  teardown.abort();
+
+  await supervising;
+
+  const calls = await waitFor(() => (ctx.stopCalls.length > 0 ? ctx.stopCalls : null), {
+    timeoutMs: 3000,
+  });
+
+  expect(calls).toStrictEqual(['press command rejected']);
 });
 
 test('#runSupervisor starts nothing and ends the run when its stop signal fired already', async () => {
