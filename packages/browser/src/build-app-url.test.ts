@@ -13,6 +13,7 @@ test.each([
   ['//example.com/orders'],
   ['https://example.com/orders'],
   ['orders'],
+  ['//['],
 ])('it refuses %s with a usage error', (path) => {
   expect(buildAppURL(path, 'http://127.0.0.1:4100/')).toMatchObject({ code: 'usage' });
 });
