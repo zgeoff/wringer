@@ -7,6 +7,9 @@ type Dialect = 'sqlite' | 'postgres';
 
 const sqliteEscapeWords = new Set(['attach', 'vacuum', 'query_only']);
 
+// A SQLite read starts with one of these words, and the read-only handle refuses a write inside it.
+const sqliteReadWords = new Set(['select', 'with', 'values', 'explain', 'pragma']);
+
 // A read-only Postgres transaction still runs `NOTIFY`, `LISTEN`, `SET` and `PREPARE`, so a read
 // starts with one of these words or counts as a write.
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
@@ -39,7 +42,10 @@ export function isUndeclaredWrite(dialect: Dialect, sql: string): boolean {
   );
 
   if (dialect === 'sqlite') {
-    return words.some((word) => sqliteEscapeWords.has(word));
+    return (
+      !sqliteReadWords.has(findLeadingWord(lex.tokens) ?? '') ||
+      words.some((word) => sqliteEscapeWords.has(word))
+    );
   }
 
   return (

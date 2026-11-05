@@ -80,8 +80,8 @@ A query returns `{ columns, rows, rowCount }`.
   SQLite, `via: 'sql'` opens the file read-only with `query_only` on, and `via: 'exec'` runs sqlite3
   with `-readonly`. Postgres runs a read in a read-only transaction.
 - A query through `via: 'sql'` holds one statement, so a read cannot end its transaction early.
-- On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
-  a string, a quoted name or a comment do not count. A read-only handle still runs `VACUUM INTO`,
+- On SQLite, a read starts with `select`, `with`, `values`, `explain` or `pragma`, and one that runs
+  `attach`, `vacuum` or `query_only` counts as a write. A read-only handle still runs `VACUUM INTO`,
   which copies the database to any path.
 - On Postgres, a read starts with `select`, `with`, `values`, `table`, `show` or `explain`, and
   holds none of `insert`, `update`, `delete`, `merge`, `into`, `create`, `execute` or `declare`. Any

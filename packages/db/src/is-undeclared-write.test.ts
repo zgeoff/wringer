@@ -156,3 +156,32 @@ test.each([
 ])('it reads the Postgres statement `$sql` as a write: $write', (row) => {
   expect(isUndeclaredWrite('postgres', row.sql)).toBe(row.write);
 });
+
+// One statement for each top-level SQLite command keyword.
+test.each([
+  { sql: 'ALTER TABLE notes ADD COLUMN tag text', write: true },
+  { sql: 'ANALYZE notes', write: true },
+  { sql: "ATTACH '/srv/other.db' AS other", write: true },
+  { sql: 'BEGIN', write: true },
+  { sql: 'COMMIT', write: true },
+  { sql: 'CREATE TABLE archive (id int)', write: true },
+  { sql: 'DELETE FROM notes', write: true },
+  { sql: 'DETACH other', write: true },
+  { sql: 'DROP TABLE notes', write: true },
+  { sql: 'END', write: true },
+  { sql: 'EXPLAIN QUERY PLAN SELECT id FROM notes', write: false },
+  { sql: "INSERT INTO notes VALUES (1, 'pay')", write: true },
+  { sql: 'PRAGMA table_info(notes)', write: false },
+  { sql: 'REINDEX notes', write: true },
+  { sql: 'RELEASE before_pay', write: true },
+  { sql: "REPLACE INTO notes VALUES (1, 'pay')", write: true },
+  { sql: 'ROLLBACK', write: true },
+  { sql: 'SAVEPOINT before_pay', write: true },
+  { sql: 'SELECT id FROM notes', write: false },
+  { sql: "UPDATE notes SET text = 'paid'", write: true },
+  { sql: 'VACUUM', write: true },
+  { sql: 'VALUES (1), (2)', write: false },
+  { sql: 'WITH open AS (SELECT 1) SELECT * FROM open', write: false },
+])('it reads the SQLite statement `$sql` as a write: $write', (row) => {
+  expect(isUndeclaredWrite('sqlite', row.sql)).toBe(row.write);
+});
