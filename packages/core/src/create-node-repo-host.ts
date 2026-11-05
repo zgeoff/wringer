@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
 import { readText } from './read-text.ts';
 import { removeFile } from './remove-file.ts';
-import { runGit } from './run-git.ts';
+import { runGit, runGitBytes } from './run-git.ts';
 import type { RepoHost } from './types.ts';
 import { writeNewFile } from './write-new-file.ts';
 
@@ -10,6 +10,7 @@ import { writeNewFile } from './write-new-file.ts';
 export function createNodeRepoHost(): RepoHost {
   return {
     runGit,
+    runGitBytes,
     removeFile,
     readText,
     createDirectory,
