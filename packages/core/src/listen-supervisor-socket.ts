@@ -27,17 +27,22 @@ export async function listenSupervisorSocket(
   const answers = new Set<Promise<void>>();
   const connections = new Set<Socket>();
 
-  // An answer catches its own failures, so it never rejects.
+  // An answer catches its own failures, so it never rejects. A connection stays open after its
+  // answer until the client closes its side, so it is tracked until it closes.
   const track = async (connection: Socket): Promise<void> => {
+    connections.add(connection);
+
+    connection.once('close', () => {
+      connections.delete(connection);
+    });
+
     const answer = answerSupervisorConnection(connection, options, closing.signal);
 
     answers.add(answer);
-    connections.add(connection);
 
     await answer;
 
     answers.delete(answer);
-    connections.delete(connection);
   };
 
   const server = createServer((connection) => {
