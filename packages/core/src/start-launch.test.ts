@@ -199,6 +199,44 @@ test('it starts the app in the host folder with the host environment and the pla
   expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
 });
 
+test('it creates the log folder, runs the stop command and signals the app through its host', async () => {
+  const ctx = await setupTest();
+
+  const real = readLaunchHost();
+
+  const host = {
+    ...real,
+    createDirectory: mock(real.createDirectory),
+    runProcess: mock(real.runProcess),
+    killProcessGroup: mock(real.killProcessGroup),
+  };
+
+  const launch = await startLaunch({
+    host,
+    plan: {
+      command: ['sh', '-c', 'echo \'{"port":4100}\'; exec sleep 60'],
+      stop: ['true'],
+      ready: () => ({}),
+    },
+    logPath: join(ctx.directory, 'logs', 'app.log'),
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+  });
+
+  await launch.stop();
+
+  expect({
+    folders: host.createDirectory.mock.calls,
+    stopCommands: host.runProcess.mock.calls.map(([request]) => request.argv),
+    signals: host.killProcessGroup.mock.calls.map(([, signal]) => signal),
+  }).toStrictEqual({
+    folders: [[join(ctx.directory, 'logs')]],
+    stopCommands: [['true']],
+    signals: expect.arrayContaining(['SIGTERM']),
+  });
+});
+
 test('it refuses with an environment error when the app cannot start', async () => {
   const ctx = await setupTest();
 

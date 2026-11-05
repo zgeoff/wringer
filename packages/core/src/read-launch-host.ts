@@ -1,4 +1,8 @@
-import { appendFile } from 'node:fs/promises';
+import { appendText } from './append-text.ts';
+import { createDirectory } from './create-directory.ts';
+import { killProcessGroup } from './kill-process-group.ts';
+import { runProcess } from './run-process.ts';
+import type { ProcessRequest, ProcessResult } from './run-process.ts';
 
 export interface AppSpawnOptions {
   readonly cwd: string;
@@ -12,12 +16,16 @@ export interface AppProcess {
   readonly exited: Promise<number>;
 }
 
+// Everything the launch reads from or does to this machine.
 export interface LaunchHost {
   readonly guard: readonly string[];
   readonly cwd: string;
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly spawnApp: (argv: readonly string[], options: AppSpawnOptions) => AppProcess;
   readonly appendLog: (path: string, text: string) => Promise<void>;
+  readonly createDirectory: (path: string) => Promise<void>;
+  readonly killProcessGroup: (pid: number, signal?: NodeJS.Signals) => void;
+  readonly runProcess: (request: ProcessRequest) => Promise<ProcessResult>;
 }
 
 // setpriv asks the kernel to kill the app when the supervisor dies; hosts without setpriv, such as
@@ -39,6 +47,9 @@ export function readLaunchHost(): LaunchHost {
         stderr: 'pipe',
         detached: true,
       }),
-    appendLog: (path, text) => appendFile(path, text),
+    appendLog: appendText,
+    createDirectory,
+    killProcessGroup,
+    runProcess,
   };
 }

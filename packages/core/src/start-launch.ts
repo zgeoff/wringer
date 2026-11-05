@@ -1,11 +1,8 @@
 import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
-import { createDirectory } from './create-directory.ts';
-import { killProcessGroup } from './kill-process-group.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
-import { runProcess } from './run-process.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { LaunchPlan } from './types.ts';
 import { WringerError } from './wringer-error.ts';
@@ -31,7 +28,7 @@ const stopGraceMs = 5000;
 export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const cwd = request.plan.cwd ?? request.host.cwd;
 
-  await createLogFolder(request.logPath);
+  await createLogFolder(request.host, request.logPath);
 
   // The abort listener below never fires for a run that stopped already, so the app would start.
   if (request.signal.aborted) {
@@ -100,7 +97,8 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     const exitCode = await child.exited;
 
     // A child the app started may outlive it; nothing else would stop it.
-    killProcessGroup(child.pid);
+    request.host.killProcessGroup(child.pid);
+
     crash(`The app exited with code ${exitCode}.`);
   };
 
@@ -110,19 +108,20 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     stopping = true;
 
     if (request.plan.stop !== undefined) {
-      await runStopCommand(request.plan.stop, cwd);
+      await runStopCommand(request.host, request.plan.stop, cwd);
     }
 
-    killProcessGroup(child.pid, 'SIGTERM');
+    request.host.killProcessGroup(child.pid, 'SIGTERM');
 
     const forced = setTimeout(() => {
-      killProcessGroup(child.pid);
+      request.host.killProcessGroup(child.pid);
     }, stopGraceMs);
 
     await child.exited;
 
     clearTimeout(forced);
-    killProcessGroup(child.pid);
+
+    request.host.killProcessGroup(child.pid);
   };
 
   try {
@@ -140,9 +139,9 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   }
 }
 
-async function createLogFolder(logPath: string): Promise<void> {
+async function createLogFolder(host: LaunchHost, logPath: string): Promise<void> {
   try {
-    await createDirectory(dirname(logPath));
+    await host.createDirectory(dirname(logPath));
   } catch (error) {
     throw new WringerError('environment', {
       message: `The folder for the app log could not be created: ${String(error)}`,
@@ -185,9 +184,13 @@ function parseLogLine(line: string): Readonly<Record<string, unknown>> {
 
 // A stop command that fails or hangs must not keep the app alive, so it gets the grace period and
 // its failure is dropped: the SIGTERM and SIGKILL that follow end the app whatever it did.
-async function runStopCommand(argv: readonly string[], cwd: string): Promise<void> {
+async function runStopCommand(
+  host: LaunchHost,
+  argv: readonly string[],
+  cwd: string,
+): Promise<void> {
   try {
-    await runProcess({ argv, cwd, signal: AbortSignal.timeout(stopGraceMs) });
+    await host.runProcess({ argv, cwd, signal: AbortSignal.timeout(stopGraceMs) });
   } catch {
     // Dropped on purpose; see above.
   }
