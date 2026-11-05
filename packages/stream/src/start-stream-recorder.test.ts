@@ -2,6 +2,7 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
+import { readOptionalText } from '@zgeoff/std';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
@@ -67,11 +68,9 @@ async function setupTest() {
       return recorder;
     },
     readStream: async (name: string) => {
-      const file = Bun.file(join(streams, `${name}.ndjson`));
+      const text = await readOptionalText(join(streams, `${name}.ndjson`));
 
-      const exists = await file.exists();
-
-      return exists ? file.text() : '';
+      return text ?? '';
     },
   };
 }

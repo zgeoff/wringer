@@ -1,4 +1,5 @@
 import { appendFile, stat, truncate } from 'node:fs/promises';
+import { isErrorCode } from '@wringer/core';
 
 // An append that fails part-way, such as on a full disk, leaves the bytes it wrote; they are cut,
 // so a retry of the same text never doubles a record or splices a torn one into the file.
@@ -20,7 +21,7 @@ async function readFileSize(path: string): Promise<number> {
 
     return info.size;
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isErrorCode(error, 'ENOENT')) {
       return 0;
     }
 

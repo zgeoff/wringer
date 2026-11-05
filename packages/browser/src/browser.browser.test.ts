@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
+import { dispatch, readText } from '@wringer/core';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createBrowserWringer } from '../test-utils/create-browser-wringer.ts';
@@ -39,7 +39,7 @@ test('it opens a page and prints its snapshot with refs, kept as evidence', asyn
 
   const evidencePath = result.envelope.evidence[0]?.path ?? '';
 
-  const evidence = await Bun.file(join(ctx.root, evidencePath)).text();
+  const evidence = await readText(join(ctx.root, evidencePath));
 
   expect({ data: result.envelope.data, evidence }).toStrictEqual({
     data: {

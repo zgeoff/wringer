@@ -111,6 +111,7 @@
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
+        "@zgeoff/std": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
