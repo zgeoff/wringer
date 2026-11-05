@@ -88,7 +88,12 @@ function findReferenced(jsonSchema: unknown, defs: Readonly<Record<string, unkno
     return jsonSchema;
   }
 
-  return findOwnValue(defs, ref.data.$ref.slice('#/$defs/'.length)) ?? jsonSchema;
+  return findOwnValue(defs, toPointerSegment(ref.data.$ref.slice('#/$defs/'.length))) ?? jsonSchema;
+}
+
+// A JSON Pointer escapes `/` as `~1` and `~` as `~0`; decoding `~1` first keeps `~01` as `~1`.
+function toPointerSegment(escaped: string): string {
+  return escaped.replaceAll('~1', '/').replaceAll('~0', '~');
 }
 
 function pickMergedProperty(seen: ArgProperty, property: ArgProperty): ArgProperty {

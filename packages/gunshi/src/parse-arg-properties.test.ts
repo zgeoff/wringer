@@ -39,6 +39,27 @@ test('it reads the arguments of a schema, a branch and a field that each carry a
   });
 });
 
+test('it reads the arguments of a branch whose id holds a slash and a tilde', () => {
+  const pickup = z.strictObject({ mode: z.literal('pickup'), counter: z.string() });
+  const post = z.strictObject({ mode: z.literal('post'), shelf: z.string() });
+
+  const properties = parseArgProperties({
+    path: ['ship'],
+    summary: 'Ship an order',
+    args: z.union([
+      pickup.meta({ id: 'shipping/pickup~desk' }),
+      post.meta({ id: 'shipping/post' }),
+    ]),
+    data: z.strictObject({}),
+  });
+
+  expect(properties).toStrictEqual({
+    mode: { type: 'string', const: 'pickup' },
+    counter: { type: 'string' },
+    shelf: { type: 'string' },
+  });
+});
+
 test('it reads an argument named after a key every object inherits', () => {
   const properties = parseArgProperties({
     path: ['seed'],
