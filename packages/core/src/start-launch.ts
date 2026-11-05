@@ -126,7 +126,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   const endpoints = match(started.start)
     .with({ kind: 'ready' }, (ready) => ready.endpoints)
     .with({ kind: 'failed' }, (failed) => {
-      throw buildStartFailure(failed.failure, started.stopFailure, request.onStopFailed);
+      throw buildStartFailure(failed.failure, pickStopFailure(started), request.onStopFailed);
     })
     .with({ kind: 'pending' }, () => {
       throw new WringerError('internal', { message: 'The app settled before its start did.' });
@@ -265,6 +265,7 @@ function parseLogLine(line: string): Readonly<Record<string, unknown>> {
 
 interface StartedApp {
   readonly start: AppStart;
+  readonly logFailure: string | null;
   readonly stopFailure: WringerError | null;
 }
 
