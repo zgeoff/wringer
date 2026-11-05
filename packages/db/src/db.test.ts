@@ -244,6 +244,44 @@ test('it reads rows through the database client on the target host', async () =>
   });
 });
 
+test('it names the columns of a pragma read through the database client that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: 'pragma table_info(receipts)' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'],
+    rows: [],
+    rowCount: 0,
+  });
+});
+
+test('it reads a table named like the view that names the columns, through the database client', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  using database = new Database(ctx.file);
+
+  database.run("create table wringer_read as select 'kept' as label");
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: 'select label from wringer_read' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['label'],
+    rows: [{ label: 'kept' }],
+    rowCount: 1,
+  });
+});
+
 test('it answers a read through the database client that runs past the deadline with exit code 5', async () => {
   const ctx = await setupTest();
 

@@ -23,6 +23,7 @@ async function setupTest() {
 
   return {
     directory,
+    file,
 
     // `using` closes the database even when a statement throws.
     seedNotes: (texts: readonly string[]) => {
@@ -52,6 +53,44 @@ test('it names the columns of a read through the real sqlite3 client that return
   });
 
   expect(result.envelope.data).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
+});
+
+test('it names the columns of a pragma read through the real sqlite3 client that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: 'pragma table_info(receipts)' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'],
+    rows: [],
+    rowCount: 0,
+  });
+});
+
+test('it reads a table named like the view that names the columns, through the real sqlite3 client', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  using database = new Database(ctx.file);
+
+  database.run("create table wringer_read as select 'kept' as label");
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: 'select label from wringer_read' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['label'],
+    rows: [{ label: 'kept' }],
+    rowCount: 1,
+  });
 });
 
 test('it fails a shell command sent to the real sqlite3 client without running it', async () => {
