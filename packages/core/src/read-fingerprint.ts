@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
+import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import type { GitRequest } from './run-git.ts';
 import type { ProcessResult } from './run-process.ts';
 
-// The fingerprint's view of git and the disk.
 export interface FingerprintHost {
   readonly runGit: (request: GitRequest) => Promise<ProcessResult>;
   readonly removeFile: (path: string) => Promise<void>;
@@ -33,9 +33,6 @@ const pinnedDiffOptions = [
   '--submodule=short',
 ];
 
-// The fingerprint hashes the diff of the working tree against the merge base, context included, so
-// a commit leaves it as it was, and so does a rebase that leaves each change's context lines alone.
-// Untracked files join the diff through a temporary index.
 export async function readFingerprint(
   host: FingerprintHost,
   request: FingerprintRequest,
@@ -127,8 +124,6 @@ async function readTemporaryIndexPath(host: FingerprintHost, cwd: string): Promi
   return resolve(cwd, result.stdout.trim());
 }
 
-// `add --all` skips a submodule that the repo's config marks `ignore = all` on newer git, so its
-// new commit would never reach the diff; `--force` stages it whatever the config says.
 async function addSubmodules(
   host: FingerprintHost,
   cwd: string,
@@ -136,20 +131,7 @@ async function addSubmodules(
 ): Promise<void> {
   const staged = await host.runGit({ cwd, args: ['ls-files', '--stage', '-z'], env });
 
-  const submodules = collectSubmodulePaths(staged.stdout);
-
-  if (submodules.length > 0) {
-    await host.runGit({ cwd, args: ['add', '--force', '--', ...submodules], env });
+  for (const request of buildSubmoduleAdds({ cwd, env, stagedEntries: staged.stdout })) {
+    await host.runGit(request);
   }
-}
-
-const gitlinkMode = '160000';
-
-// Each entry is `<mode> <object> <stage>\t<path>`, ended by a zero byte.
-function collectSubmodulePaths(stagedEntries: string): string[] {
-  return stagedEntries.split('\0').flatMap((entry) => {
-    const [info = '', path = ''] = entry.split('\t');
-
-    return info.startsWith(`${gitlinkMode} `) ? [`:(top,literal)${path}`] : [];
-  });
 }

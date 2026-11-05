@@ -46,7 +46,7 @@ test('it gives the same fingerprint before and after the work is committed', asy
   expect(after).toBe(before);
 });
 
-test('it gives the same fingerprint after a clean rebase onto a moved base', async () => {
+test("it gives the same fingerprint after a rebase onto a base that moved outside the change's context lines", async () => {
   const ctx = await setupTest();
 
   await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
