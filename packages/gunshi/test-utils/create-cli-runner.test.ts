@@ -2,9 +2,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildEnvelope } from '@wringer/core';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { probeProcess } from '../../core/src/probe-process.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createCleanupRegistry } from './create-cleanup-registry.ts';
 import { createCLIRunner } from './create-cli-runner.ts';
 import { readPIDFile } from './read-pid-file.ts';
@@ -93,7 +94,11 @@ test('it stops the process group a run left behind in the cleanup it registers',
 
   ctx.runCleanups();
 
-  const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
+  const stopped = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The CLI is still running.');
+
+    return true;
+  });
 
   expect(stopped).toBe(true);
 });
