@@ -1,4 +1,3 @@
-import { onTestFinished } from 'bun:test';
 import { killProcessGroup } from '../../core/src/kill-process-group.ts';
 import { parseCLIOutput } from './parse-cli-output.ts';
 import type { CLIOutput } from './parse-cli-output.ts';
@@ -10,6 +9,9 @@ interface CLIRun extends CLIOutput {
 export interface CLIRunnerOptions {
   readonly script: string;
   readonly cwd: string;
+
+  // Registers the cleanup that kills a run's process group, such as `onTestFinished`.
+  readonly onCleanup: (cleanup: () => void) => void;
 }
 
 export interface CLIRunner {
@@ -37,7 +39,7 @@ export function createCLIRunner(options: CLIRunnerOptions): CLIRunner {
     run: async (...argv) => {
       const child = start(argv);
 
-      onTestFinished(() => {
+      options.onCleanup(() => {
         killProcessGroup(child.pid);
       });
 

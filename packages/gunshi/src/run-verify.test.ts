@@ -12,6 +12,7 @@ async function setupTest() {
   const cli = createCLIRunner({
     script: join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts'),
     cwd: repo.root,
+    onCleanup: onTestFinished,
   });
 
   onTestFinished(async () => {
