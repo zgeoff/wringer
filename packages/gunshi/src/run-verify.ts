@@ -1,4 +1,9 @@
-import { createRepoState, makeProcessSupervisorStarter, runSupervisorProcess } from '@wringer/core';
+import {
+  createNodeFingerprintHost,
+  createRepoState,
+  makeProcessSupervisorStarter,
+  runSupervisorProcess,
+} from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { getAgentProfile } from 'gunshi/agent';
 import { readRepoRoot } from './read-repo-root.ts';
@@ -22,6 +27,7 @@ export async function runVerify(wringer: Wringer): Promise<void> {
     readRepoRoot,
     openRepo: (root) => ({
       state: createRepoState(root, wringer.stateDir),
+      fingerprintHost: createNodeFingerprintHost(),
       supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
     }),
     runSupervisor: runSupervisorProcess,

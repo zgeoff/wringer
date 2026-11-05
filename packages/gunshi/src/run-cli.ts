@@ -1,5 +1,5 @@
 import { WringerError, dispatch, supervisorCommandName } from '@wringer/core';
-import type { StatePort, SupervisorStarter, Wringer } from '@wringer/core';
+import type { FingerprintHost, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
 import { cli, parseArgs } from 'gunshi';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { Invocation } from './build-gunshi-commands.ts';
@@ -14,6 +14,7 @@ import { renderHumanEvent } from './render-human-event.ts';
 
 interface RepoPorts {
   readonly state: StatePort;
+  readonly fingerprintHost: FingerprintHost;
   readonly supervisor: SupervisorStarter;
 }
 
@@ -143,6 +144,7 @@ async function dispatchInvocation(
   const result = await dispatch(wringer, invocation.path, invocation.raw, {
     root: plan.root,
     state: repo.state,
+    fingerprintHost: repo.fingerprintHost,
     supervisor: repo.supervisor,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
