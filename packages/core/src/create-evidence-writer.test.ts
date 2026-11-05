@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import { createNodeRepoHost } from './create-node-repo-host.ts';
 
@@ -10,15 +11,18 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
+  const clock = buildStubClock();
+
   const evidence = createEvidenceWriter({
     root,
     directory: join(root, '.wringer', 'evidence'),
-    now: () => new Date('2026-03-01T09:30:00.000Z'),
+    now: clock.now,
     files: createNodeRepoHost(),
   });
 
   return {
     root,
+    clock,
     evidence,
     readText: (path: string) => readFile(join(root, path), 'utf8'),
   };
@@ -26,6 +30,9 @@ async function setupTest() {
 
 test('it writes a file under a stamped name, relative to the root', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
   const evidence = await ctx.evidence.writer.writeFile('http', 'get.json', '{"ok":true}');
 
   expect(evidence).toStrictEqual({
@@ -56,6 +63,8 @@ test('it records a file that already exists and adds it to the collected list', 
 
 test('it keeps both files when two writes in one millisecond share a name', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
 
   const written = await Promise.all([
     ctx.evidence.writer.writeFile('http', 'get.json', 'first'),
