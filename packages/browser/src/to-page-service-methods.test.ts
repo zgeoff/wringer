@@ -30,12 +30,9 @@ test('it passes a request that keeps the contract on to its handler', async () =
   expect(ctx.clickCalls).toHaveBeenCalledExactlyOnceWith({ role: 'button', name: 'Pay' }, signal);
 });
 
-test('it rejects a request that breaks the contract before its handler runs', async () => {
+test('it rejects a request that breaks the contract before its handler runs', () => {
   const ctx = setupTest();
 
-  await expect(
-    ctx.methods.click({ role: 'button' }, new AbortController().signal),
-  ).rejects.toThrow();
-
+  expect(ctx.methods.click({ role: 'button' }, new AbortController().signal)).rejects.toThrow();
   expect(ctx.clickCalls).not.toHaveBeenCalled();
 });
