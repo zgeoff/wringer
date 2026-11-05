@@ -1,5 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { createActor } from 'xstate';
+import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
@@ -14,12 +15,13 @@ function setupTest() {
 
   // The number of writes started when each recovery was reported.
   const recoveries: number[] = [];
+  const clock = buildStubClock();
 
   const writer = createActor(recordWriterMachine, {
     input: {
       path: 'app.ndjson',
       pendingLimit: 1,
-      now: () => new Date('2026-03-01T09:30:00.000Z'),
+      now: clock.now,
       write: (text) => {
         const settle = Promise.withResolvers<undefined>();
 
@@ -43,6 +45,7 @@ function setupTest() {
   });
 
   return {
+    clock,
     writes,
     recoveries,
     add: (record: string) => {
@@ -92,6 +95,7 @@ test('it reports a recovery once, when a write succeeds after one that failed', 
 test('it keeps the count of dropped lines when the batch that reports them fails to write', async () => {
   const ctx = setupTest();
 
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
   ctx.add('pear');
   ctx.add('plum');
   ctx.add('fig');
