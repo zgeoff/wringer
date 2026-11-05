@@ -4,21 +4,48 @@ import { dirname, join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { withStateLock } from './with-state-lock.ts';
 
+// The stack releases each holder of the lock before it removes the folder the lock sits in.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'with-state-lock');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
+  const lockPath = join(directory, 'locks', 'target-local.lock');
 
   return {
-    lockPath: join(directory, 'locks', 'target-local.lock'),
+    lockPath,
 
-    // A separate process takes the lock and keeps it until the test kills it.
-    holdInOtherProcess: async (path: string) => {
-      await mkdir(dirname(path), { recursive: true });
+    // This process holds the lock until the test ends.
+    holdHere: async () => {
+      const entered = Promise.withResolvers<undefined>();
+      const release = Promise.withResolvers<undefined>();
+
+      const holding = withStateLock(lockPath, 2000, async () => {
+        entered.resolve(undefined);
+
+        await release.promise;
+      });
+
+      stack.defer(async () => {
+        release.resolve(undefined);
+
+        await holding;
+      });
+
+      await entered.promise;
+    },
+
+    // A separate process takes the lock and keeps it until it is killed.
+    holdInOtherProcess: async () => {
+      await mkdir(dirname(lockPath), { recursive: true });
 
       const script = [
         "import { withFileLock } from '@zgeoff/std/with-file-lock';",
-        `await withFileLock(${JSON.stringify(path)}, async () => {`,
+        `await withFileLock(${JSON.stringify(lockPath)}, async () => {`,
         "  console.log('held');",
         '  await Bun.sleep(60_000);',
         '});',
@@ -29,8 +56,10 @@ async function setupTest() {
         stdout: 'pipe',
       });
 
-      onTestFinished(() => {
+      stack.defer(async () => {
         holder.kill('SIGKILL');
+
+        await holder.exited;
       });
 
       const reader = holder.stdout.getReader();
@@ -52,22 +81,7 @@ test('it runs the work in a folder it creates and returns the work value', async
 test('it keeps a second caller out with an environment error while the first holds the lock', async () => {
   const ctx = await setupTest();
 
-  const firstIn = Promise.withResolvers<undefined>();
-  const release = Promise.withResolvers<undefined>();
-
-  const firstHolder = withStateLock(ctx.lockPath, 2000, async () => {
-    firstIn.resolve(undefined);
-
-    await release.promise;
-  });
-
-  onTestFinished(async () => {
-    release.resolve(undefined);
-
-    await firstHolder;
-  });
-
-  await firstIn.promise;
+  await ctx.holdHere();
 
   expect(withStateLock(ctx.lockPath, 50, () => Promise.resolve('second in'))).rejects.toMatchObject(
     { code: 'environment' },
@@ -84,7 +98,7 @@ test('it lets the next caller in once the first holder is done', async () => {
 
 test('it lets a caller in once the process that held the lock is killed', async () => {
   const ctx = await setupTest();
-  const holding = await ctx.holdInOtherProcess(ctx.lockPath);
+  const holding = await ctx.holdInOtherProcess();
 
   holding.holder.kill('SIGKILL');
 
@@ -102,7 +116,7 @@ test('it lets a caller in once the process that held the lock is killed', async 
 
 test('it keeps a caller out while a live process holds the lock', async () => {
   const ctx = await setupTest();
-  const holding = await ctx.holdInOtherProcess(ctx.lockPath);
+  const holding = await ctx.holdInOtherProcess();
 
   const entering = withStateLock(ctx.lockPath, 50, () => Promise.resolve('in'));
 
