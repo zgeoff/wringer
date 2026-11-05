@@ -71,8 +71,9 @@ A query returns `{ columns, rows, rowCount }`.
 
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
-- `columns` holds a read's columns, also with no rows: from the statement on SQLite `via: 'sql'`,
-  else from a wrapper, or from the first row for a Postgres `show` or `explain` read.
+- `columns` holds a read's columns in the statement's order, also with no rows: from the statement
+  on SQLite `via: 'sql'`, else from a wrapper, or from the first row for a Postgres `show` or
+  `explain` read.
 
 ## Reads and writes
 

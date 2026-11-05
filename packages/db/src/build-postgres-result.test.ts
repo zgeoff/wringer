@@ -22,9 +22,15 @@ test('#buildPostgresResult takes the columns from the first row and counts the r
 });
 
 test('#buildPostgresResult takes the columns of an empty read from its probe', () => {
-  const result = buildPostgresResult([], false, [{ wringer_row: { id: null, text: null } }]);
+  const result = buildPostgresResult([], false, [{ wringer_columns: ['id', 'text'] }]);
 
   expect(result).toStrictEqual({ columns: ['id', 'text'], rows: [], rowCount: 0 });
+});
+
+test('#buildPostgresResult keeps the probe’s order for columns named like array indexes', () => {
+  const result = buildPostgresResult([{ 1: 2, 2: 1 }], false, [{ wringer_columns: ['2', '1'] }]);
+
+  expect(result).toStrictEqual({ columns: ['2', '1'], rows: [{ 1: 2, 2: 1 }], rowCount: 1 });
 });
 
 test('#buildPostgresResult gives a write the count of rows it changed', () => {

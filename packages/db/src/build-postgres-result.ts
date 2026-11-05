@@ -10,7 +10,7 @@ export function buildPostgresResult(result: unknown, write: boolean, probed: unk
   const count = findAffectedCount(result);
 
   return {
-    columns: probed === null ? Object.keys(rows[0] ?? {}) : collectProbedColumns(probed),
+    columns: probed === null ? Object.keys(rows[0] ?? {}) : getProbedColumns(probed),
     rows,
     rowCount: write && count !== null ? count : rows.length,
   };
@@ -23,11 +23,12 @@ function findAffectedCount(result: unknown): number | null {
   return typeof count === 'number' ? count : null;
 }
 
-const probedRowSchema = z.record(z.string(), z.unknown());
-const probeSchema = z.array(z.strictObject({ wringer_row: probedRowSchema }));
+// The probe always returns one row, which holds the column names in order.
+const probedRowSchema = z.strictObject({ wringer_columns: z.array(z.string()) });
+const probeSchema = z.tuple([probedRowSchema]);
 
-function collectProbedColumns(probed: unknown): string[] {
+function getProbedColumns(probed: unknown): string[] {
   const [probe] = probeSchema.parse(probed);
 
-  return Object.keys(probe?.wringer_row ?? {});
+  return probe.wringer_columns;
 }

@@ -258,8 +258,8 @@ async function runPostgresStatement(client: SQL, input: SQLQueryInput): Promise<
   return client.begin('read only', async (transaction) => {
     const result: unknown = await startPostgresQuery(transaction, input.sql, input.params);
 
-    const rowCount = Array.isArray(result) ? result.length : 0;
-    const probe = buildColumnProbe(input.sql, rowCount);
+    const rows: readonly unknown[] = Array.isArray(result) ? result : [];
+    const probe = buildColumnProbe(input.sql, rows);
 
     const probed: unknown =
       probe === null ? null : await startPostgresQuery(transaction, probe, input.params);
