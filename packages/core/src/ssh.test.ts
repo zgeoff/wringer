@@ -1,7 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
+import { waitFor } from '../test-utils/wait-for.ts';
+import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
 
 async function setupTest() {
@@ -9,7 +12,7 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { fake: await createFakeSSH(directory) };
+  return { directory, fake: await createFakeSSH(directory) };
 }
 
 test('it quotes the argv once per shell layer of a three-layer prefix', async () => {
@@ -57,6 +60,28 @@ test('it passes stdin through to the remote command', async () => {
   const result = await host.run({ argv: ['cat'], access: 'read-write', stdin: 'select 1;' });
 
   expect(result.stdout).toBe('select 1;');
+});
+
+test('it stops the remote command and every process it started when the run times out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const pidPath = join(ctx.directory, 'remote.pid');
+
+  const running = host.run({
+    argv: ['sh', '-c', 'sleep 30 & echo $! > "$0"; wait', pidPath],
+    access: 'read-write',
+    signal: AbortSignal.timeout(1000),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+  const pidText = await readFile(pidPath, 'utf8');
+
+  const pid = Number(pidText);
+
+  const exited = await waitFor(() => (probeProcess(pid) ? null : true));
+
+  expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
 });
 
 test('it returns the exit code of a remote command that fails', async () => {
