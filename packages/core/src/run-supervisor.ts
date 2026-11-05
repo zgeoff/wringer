@@ -1,12 +1,13 @@
 import { dirname } from 'node:path';
+import { match } from 'ts-pattern';
 import { createActor, waitFor } from 'xstate';
 import { buildRunHandle } from './build-run-handle.ts';
 import { buildShutDownSteps } from './build-shut-down-steps.ts';
 import type { StatePort } from './create-file-state.ts';
-import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { pickPendingCleanups } from './pick-pending-cleanups.ts';
+import { pickSupervisorOperation } from './pick-supervisor-operation.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { LaunchHost } from './read-launch-host.ts';
 import type { Endpoints, RunEvent } from './run-events.ts';
@@ -15,11 +16,10 @@ import type { Launch } from './start-launch.ts';
 import { startServices } from './start-services.ts';
 import { supervisorMachine } from './supervisor-machine.ts';
 import type { ShutDownPlan } from './supervisor-machine.ts';
-import { supervisorServiceName } from './supervisor-protocol.ts';
 import type { SupervisorRequest } from './supervisor-protocol.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { ServiceInstance, TargetDefinition, Wringer } from './types.ts';
-import { WringerError } from './wringer-error.ts';
+import type { WringerError } from './wringer-error.ts';
 
 export interface SupervisorOptions {
   readonly wringer: Wringer;
@@ -207,28 +207,21 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     return closed.context.failure;
   };
 
-  const answerRequest = async (request: SupervisorRequest): Promise<unknown> => {
-    if (request.service === supervisorServiceName) {
-      const failure = request.method === 'stop' ? await stop(null) : null;
+  const answerRequest = (request: SupervisorRequest): Promise<unknown> =>
+    match(pickSupervisorOperation(request, services))
+      .with({ kind: 'stop' }, async () => {
+        const failure = await stop(null);
 
-      if (failure !== null) {
-        throw failure;
-      }
+        if (failure !== null) {
+          throw failure;
+        }
 
-      return { pid: process.pid };
-    }
-
-    const methods = services.get(request.service)?.methods ?? {};
-    const method = findOwnValue(methods, request.method);
-
-    if (method === undefined) {
-      throw new WringerError('usage', {
-        message: `The run has no service call ${request.service} ${request.method}.`,
-      });
-    }
-
-    return method(request.args);
-  };
+        return { pid: process.pid };
+      })
+      .with({ kind: 'status' }, () => Promise.resolve({ pid: process.pid }))
+      .with({ kind: 'call' }, (operation) => operation.call())
+      .with({ kind: 'refuse' }, (operation) => Promise.reject(operation.error))
+      .exhaustive();
 
   const server = await options.launchHost.listenSupervisorSocket({
     path: socket,
