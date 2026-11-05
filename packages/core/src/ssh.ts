@@ -110,19 +110,20 @@ function joinShellWords(words: readonly string[]): string {
   return words.map((word) => quoteShellWord(word)).join(' ');
 }
 
-// An abort can land before the remote command has recorded its group, so the stop waits up to 2 s
-// for the file. It sends SIGINT first, so a client such as psql cancels its query on the server,
-// then SIGTERM to whatever of the group is still running 2 s later. dash's `kill` refuses `--`.
+// An abort can land before the remote command records its group, so the stop waits 2 s for the
+// file. SIGINT goes first, so psql cancels its query on the server; SIGTERM and SIGKILL follow, each
+// 1 s after the one before, to what still runs. dash's `kill` refuses `--`.
 const groupStopScript = [
   'i=0',
   'while [ ! -f "$1" ] && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done',
   'group=$(cat "$1" 2>/dev/null) || exit 0',
-  'kill -INT "-$group" 2>/dev/null',
-  'i=0',
-  'while kill -0 "-$group" 2>/dev/null && [ "$i" -lt 20 ]; do sleep 0.1; i=$((i + 1)); done',
-  'kill -TERM "-$group" 2>/dev/null',
+  'for signal in INT TERM KILL; do',
+  '  kill -"$signal" "-$group" 2>/dev/null || break',
+  '  i=0',
+  '  while kill -0 "-$group" 2>/dev/null && [ "$i" -lt 10 ]; do sleep 0.1; i=$((i + 1)); done',
+  'done',
   'rm -f "$1"',
-].join('; ');
+].join('\n');
 
 function buildGroupStopArgv(groupFile: string): readonly string[] {
   return ['sh', '-c', groupStopScript, 'wringer', groupFile];
