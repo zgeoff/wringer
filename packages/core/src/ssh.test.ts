@@ -7,15 +7,19 @@ import { waitFor } from '../test-utils/wait-for.ts';
 import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
 
+// The stack stops the remote process groups before it removes the folder their logs sit in.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'ssh');
+
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
+
   const fake = await createFakeSSH(directory);
 
-  onTestFinished(async () => {
-    await fake.stopGroups();
-
-    await rm(directory, { recursive: true, force: true });
-  });
+  stack.defer(() => fake.stopGroups());
 
   return { directory, fake };
 }
