@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
-import { appendText } from './append-text.ts';
+import { appendFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
+import { readOptionalText } from '@zgeoff/std';
 import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
-import { readOptionalText } from './read-optional-text.ts';
 
 // The file operations the run state needs. A missing file or folder reads as null or as no names;
 // every other failure, such as EACCES or EIO, rejects.
@@ -19,7 +18,11 @@ export interface StateFileSystem {
 
 export function createNodeStateFileSystem(): StateFileSystem {
   return {
-    readText: readOptionalText,
+    readText: async (path) => {
+      const text = await readOptionalText(path);
+
+      return text ?? null;
+    },
     listNames: async (directory) => {
       try {
         return await readdir(directory);
@@ -32,7 +35,7 @@ export function createNodeStateFileSystem(): StateFileSystem {
       }
     },
     createDirectory,
-    appendText,
+    appendText: appendFile,
     readFileSize: async (path) => {
       const info = await stat(path);
 
