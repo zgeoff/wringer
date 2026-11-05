@@ -5,7 +5,7 @@ import { HttpResponse, delay, http } from 'msw';
 import { server } from '../../../test-utils/mocks/node.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { createHttpWringer } from '../test-utils/create-http-wringer.ts';
-import { readUnusedPort } from '../test-utils/read-unused-port.ts';
+import { createLoopbackApp } from '../test-utils/create-loopback-app.ts';
 import { SHOP_API_URL, shopRequests } from '../test-utils/shop-handlers.ts';
 import type { HttpTransport } from './http.ts';
 
@@ -22,20 +22,22 @@ async function setupTest() {
     wringer: transportWringer,
   });
 
-  const refusingWringer = createHttpWringer(`http://127.0.0.1:${await readUnusedPort()}`);
+  const app = createLoopbackApp();
+  const loopbackWringer = createHttpWringer(app.url);
 
-  const refusingShop = await createTestSession({
+  const loopbackShop = await createTestSession({
     parent: import.meta.dir,
-    wringer: refusingWringer,
+    wringer: loopbackWringer,
   });
 
   return {
     root: shop.repo.root,
     transport,
+    stopApp: () => app.stop(),
     runWithTransport: (path: readonly string[], args: unknown = {}) =>
       dispatch(transportWringer, path, args, { ...transportShop.session, target: 'local' }),
-    runOnRefusingPort: (path: readonly string[], args: unknown = {}) =>
-      dispatch(refusingWringer, path, args, { ...refusingShop.session, target: 'local' }),
+    runOnLoopback: (path: readonly string[], args: unknown = {}) =>
+      dispatch(loopbackWringer, path, args, { ...loopbackShop.session, target: 'local' }),
     readEvidence: async (path: string) => {
       const evidence: unknown = await Bun.file(join(shop.repo.root, path)).json();
 
@@ -331,9 +333,10 @@ test('it returns a redirect from a granted POST without following it', async () 
 test('it fails the doctor with the refusal when nothing listens on the app port', async () => {
   const ctx = await setupTest();
 
-  await ctx.runOnRefusingPort(['attach']);
+  await ctx.runOnLoopback(['attach']);
+  await ctx.stopApp();
 
-  const result = await ctx.runOnRefusingPort(['doctor']);
+  const result = await ctx.runOnLoopback(['doctor']);
 
   expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 1,
@@ -349,6 +352,24 @@ test('it fails the doctor with the refusal when nothing listens on the app port'
         },
       ],
     },
+  });
+});
+
+test('it answers a request the app port refuses with an environment error and exit code 4', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runOnLoopback(['attach']);
+  await ctx.runOnLoopback(['doctor']);
+  await ctx.stopApp();
+
+  const result = await ctx.runOnLoopback(['http', 'request'], { path: '/api/cart' });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 4,
+    error: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringContaining('ECONNREFUSED'),
+    }),
   });
 });
 
