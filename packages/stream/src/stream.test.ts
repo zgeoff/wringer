@@ -18,6 +18,7 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   return {
+    root: shop.repo.root,
     placeOrder: () => writeFile(join(triggers, 'order'), ''),
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
@@ -164,6 +165,46 @@ test('it rejects a read whose maxBytes could hold no whole record', async () => 
   expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
     exitCode: 2,
     code: 'usage',
+  });
+});
+
+test('it reads at most the configured 64 KiB of whole records when a read asks for more', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('bulk', ['attach']);
+  await ctx.run('bulk', ['doctor']);
+
+  await waitFor(async () => {
+    const result = await ctx.run('bulk', ['stream', 'read'], { name: 'orders', from: 90_000 });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    return slice.records.at(-1)?.line.startsWith('order 1000 ') === true ? true : null;
+  });
+
+  const result = await ctx.run('bulk', ['stream', 'read'], {
+    name: 'orders',
+    from: 0,
+    maxBytes: 1024 * 1024,
+  });
+
+  const payload: unknown = await Bun.file(
+    join(ctx.root, result.envelope.truncatedPath ?? ''),
+  ).json();
+
+  const slice = streamSliceSchema.parse(payload);
+  const records = slice.records.map((record) => `${JSON.stringify(record)}\n`).join('');
+
+  expect({
+    more: slice.more,
+    cursor: slice.cursor,
+    firstLine: slice.records[0]?.line,
+    withinLimit: slice.cursor <= 64 * 1024,
+  }).toStrictEqual({
+    more: true,
+    cursor: Buffer.byteLength(records),
+    firstLine: 'order 1 placed for the spring catalogue: two mugs and a teapot',
+    withinLimit: true,
   });
 });
 
