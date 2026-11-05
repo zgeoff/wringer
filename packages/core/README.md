@@ -33,7 +33,10 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
   the config, attributes and ignore files of the clone, the user and the system never apply, so the
   same change gets the same fingerprint in any clone. A clone whose config converts a file as git
   adds it, such as `core.autocrlf` or a clean filter, can get another fingerprint once the change is
-  committed; the verdict then reads as stale, never as fresh.
+  committed; the verdict then reads as stale, never as fresh. A sparse checkout, a linked worktree,
+  a shallow or partial clone and a detached HEAD get the fingerprint of the same change in a full
+  clone. A repo with no commit, and a shallow clone that lacks the merge base, fail with an
+  `environment` error.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer.
 

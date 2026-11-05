@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import type { GitRequest } from './run-git.ts';
 import type { ProcessResult } from './run-process.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface FingerprintHost {
   readonly runGit: (request: GitRequest) => Promise<ProcessResult>;
@@ -38,13 +39,9 @@ export async function readFingerprint(
   request: FingerprintRequest,
 ): Promise<string> {
   const root = await readRepoRoot(host, request.cwd);
+  const mergeBase = await readMergeBase(host, root, request.base);
 
-  const mergeBaseResult = await host.runGit({
-    cwd: root,
-    args: ['merge-base', 'HEAD', request.base],
-  });
-
-  const mergeBase = mergeBaseResult.stdout.trim();
+  await readPromisedObjects(host, root, mergeBase);
 
   const gitDir = await readGitPath(host, root, `wringer-${randomUUID()}`);
 
@@ -61,6 +58,8 @@ export async function readFingerprint(
       stdin: staged,
       env,
     });
+
+    await copySkipWorktreeFlags(host, root, env);
 
     await host.runGit({ cwd: root, args: ['add', '--all'], env });
 
@@ -112,6 +111,69 @@ async function readRepoRoot(host: FingerprintHost, cwd: string): Promise<string>
 
   // A folder name may end in a space, so only the line end git adds comes off.
   return resolve(cwd, result.stdout.replace(/\n$/u, ''));
+}
+
+async function readMergeBase(host: FingerprintHost, root: string, base: string): Promise<string> {
+  // `merge-base` names no cause when HEAD is unborn, so a repo with no commit fails here first.
+  const commits = await host.runGit({ cwd: root, args: ['rev-list', '--max-count=1', '--all'] });
+
+  if (commits.stdout.trim() === '') {
+    throw new WringerError('environment', {
+      message: 'The repo has no commit yet, so its change has no fingerprint.',
+      hint: 'Commit once, then run the command again.',
+    });
+  }
+
+  // A missing base fails here with git's own message, so a failed `merge-base` below means the
+  // two share no commit this clone holds.
+  await host.runGit({ cwd: root, args: ['rev-parse', '--verify', `${base}^{commit}`] });
+
+  try {
+    const result = await host.runGit({ cwd: root, args: ['merge-base', 'HEAD', base] });
+
+    return result.stdout.trim();
+  } catch {
+    throw new WringerError('environment', {
+      message: `HEAD and ${base} share no commit in this clone, so the change has no fingerprint.`,
+      hint: 'In a shallow clone, fetch more history, such as with `git fetch --unshallow`.',
+    });
+  }
+}
+
+// The isolated folder below cannot fetch, so in a partial clone the repo's own git fetches each
+// object the diff will read first. A diff of the working tree reads the same base objects.
+async function readPromisedObjects(
+  host: FingerprintHost,
+  root: string,
+  mergeBase: string,
+): Promise<void> {
+  const config = await host.runGit({ cwd: root, args: ['config', '--list', '-z'] });
+
+  if (!isPartialClone(config.stdout)) {
+    return;
+  }
+
+  await host.runGit({
+    cwd: root,
+    args: ['diff', '--binary', '--no-ext-diff', '--no-textconv', '--output=/dev/null', mergeBase],
+  });
+}
+
+const promisorPattern = /^remote\..+\.promisor$/u;
+
+const trueValues = new Set(['', 'true', 'yes', 'on', '1']);
+
+// `config --list -z` prints each entry as the key, a newline and the value, ending in a NUL. A
+// partial clone marks its remote as a promisor, and older clones also set the extension.
+function isPartialClone(configList: string): boolean {
+  return configList.split('\0').some((entry) => {
+    const [key = '', value = ''] = entry.split('\n');
+
+    return (
+      key === 'extensions.partialclone' ||
+      (promisorPattern.test(key) && trueValues.has(value.toLowerCase()))
+    );
+  });
 }
 
 // git prints a path inside the git folder relative to the folder it runs in; the path leaves here
@@ -182,6 +244,45 @@ function buildIsolatedEnv(
 // git splits the alternates list at `:`, unless an entry is quoted the way C quotes a string.
 function toQuotedGitPath(path: string): string {
   return `"${path.replaceAll('\\', String.raw`\\`).replaceAll('"', String.raw`\"`)}"`;
+}
+
+// A sparse checkout leaves a file outside it out of the working tree and marks its entry
+// skip-worktree; without the mark, `add --all` would stage the file as deleted.
+async function copySkipWorktreeFlags(
+  host: FingerprintHost,
+  root: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const tagged = await host.runGitBytes({ cwd: root, args: ['ls-files', '-t', '-z'] });
+
+  const paths = collectSkipWorktreePaths(tagged);
+
+  if (paths.length === 0) {
+    return;
+  }
+
+  await host.runGit({
+    cwd: root,
+    args: ['update-index', '-z', '--skip-worktree', '--stdin'],
+    stdin: paths,
+    env,
+  });
+}
+
+const skipWorktreeTag = 'S ';
+
+// `ls-files -t -z` prints each entry as a tag, a space and the path, ending in a NUL; `S` marks a
+// skip-worktree entry. latin1 maps each byte to one character, so a path that is not UTF-8 keeps
+// its bytes.
+function collectSkipWorktreePaths(tagged: Uint8Array): Uint8Array {
+  const paths = Buffer.from(tagged)
+    .toString('latin1')
+    .split('\0')
+    .flatMap((entry) =>
+      entry.startsWith(skipWorktreeTag) ? [`${entry.slice(skipWorktreeTag.length)}\0`] : [],
+    );
+
+  return Buffer.from(paths.join(''), 'latin1');
 }
 
 async function addSubmodules(

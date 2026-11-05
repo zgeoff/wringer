@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { reverseDiffFiles } from '../test-utils/reverse-diff-files.ts';
 import { emptyFingerprint, readFingerprint } from './read-fingerprint.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit, runGitBytes } from './run-git.ts';
@@ -17,13 +18,26 @@ async function setupTest() {
   await runGit({ cwd: repo, args: ['config', 'user.name', 'Tester'] });
   await runGit({ cwd: repo, args: ['config', 'commit.gpgsign', 'false'] });
 
+  // A clone or a worktree goes in a folder of its own, so it never shows in the repo's change.
+  const elsewhere = await createTestFolder(import.meta.dir, 'read-fingerprint-elsewhere');
+
+  onTestFinished(() => rm(elsewhere, { recursive: true, force: true }));
+
   return {
     repo,
+    elsewhere,
     git: (...args: readonly string[]) => runGit({ cwd: repo, args }),
-    readFingerprint: (cwd = repo) =>
+
+    // Runs git with an author in any folder, such as a clone made in `elsewhere`.
+    gitIn: (cwd: string, ...args: readonly string[]) =>
+      runGit({
+        cwd,
+        args: ['-c', 'user.email=tester@example.com', '-c', 'user.name=Tester', ...args],
+      }),
+    readFingerprint: (cwd = repo, base = 'main') =>
       readFingerprint(
         { runGit, runGitBytes, removeDirectory },
-        { cwd, base: 'main', exclude: ['.wringer'] },
+        { cwd, base, exclude: ['.wringer'] },
       ),
   };
 }
@@ -151,11 +165,18 @@ test('it gives the same fingerprint whatever order the diff lists the files in',
 
   const before = await ctx.readFingerprint();
 
-  await writeFile(join(ctx.repo, '.git', 'order'), 'pears.txt\napples.txt\n');
+  const after = await readFingerprint(
+    {
+      runGit,
+      runGitBytes: async (request) => {
+        const output = await runGitBytes(request);
 
-  await ctx.git('config', 'diff.orderFile', join(ctx.repo, '.git', 'order'));
-
-  const after = await ctx.readFingerprint();
+        return request.args.includes('--cached') ? reverseDiffFiles(output) : output;
+      },
+      removeDirectory,
+    },
+    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'] },
+  );
 
   expect(after).toBe(before);
 });
@@ -940,4 +961,205 @@ test('it leaves the real index untouched', async () => {
   const status = await ctx.git('status', '--porcelain');
 
   expect(status.stdout).toBe('?? new.ts\n');
+});
+
+test.each(['--no-sparse-index', '--sparse-index'])(
+  'it gives a sparse checkout made with %s the fingerprint of the full checkout',
+  async (indexFlag) => {
+    const ctx = await setupTest();
+
+    await mkdir(join(ctx.repo, 'web'));
+    await mkdir(join(ctx.repo, 'api'));
+    await writeFile(join(ctx.repo, 'web', 'app.ts'), 'export const port = 3000;\n');
+    await writeFile(join(ctx.repo, 'api', 'server.ts'), 'export const port = 5000;\n');
+
+    await ctx.git('add', '.');
+    await ctx.git('commit', '--quiet', '-m', 'start');
+    await ctx.git('switch', '--quiet', '-c', 'feature');
+
+    await writeFile(join(ctx.repo, 'web', 'app.ts'), 'export const port = 4000;\n');
+
+    const full = await ctx.readFingerprint();
+
+    await ctx.git('sparse-checkout', 'set', '--cone', indexFlag, 'web');
+
+    const sparse = await ctx.readFingerprint();
+
+    expect({ full, sparse }).toStrictEqual({
+      full: expect.stringMatching(/^[0-9a-f]{40}$/u),
+      sparse: full,
+    });
+  },
+);
+
+test('it gives a linked worktree the same fingerprint before and after the work is committed', async () => {
+  const ctx = await setupTest();
+
+  const tree = join(ctx.elsewhere, 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('worktree', 'add', '--quiet', '-b', 'feature', tree);
+
+  await writeFile(join(tree, 'app.ts'), 'export const port = 4000;\n');
+
+  const before = await ctx.readFingerprint(tree);
+
+  await ctx.gitIn(tree, 'commit', '--quiet', '-am', 'work');
+
+  const after = await ctx.readFingerprint(tree);
+
+  expect({ before, after }).toStrictEqual({
+    before: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    after: before,
+  });
+});
+
+test('it gives a worktree of a bare repo the fingerprint of the same change in the repo', async () => {
+  const ctx = await setupTest();
+
+  const bare = join(ctx.elsewhere, 'shop.git');
+  const tree = join(ctx.elsewhere, 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('clone', '--quiet', '--bare', ctx.repo, bare);
+  await ctx.gitIn(bare, 'worktree', 'add', '--quiet', '-b', 'feature', tree, 'main');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+  await writeFile(join(tree, 'app.ts'), 'export const port = 4000;\n');
+
+  const inRepo = await ctx.readFingerprint();
+  const inTree = await ctx.readFingerprint(tree);
+
+  expect({ inRepo, inTree }).toStrictEqual({
+    inRepo: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    inTree: inRepo,
+  });
+});
+
+test.each([
+  ['a shallow clone that holds the merge base', ['--depth', '2']],
+  ['a partial clone', ['--filter=blob:none']],
+  ['a clone that shares the objects of its source', ['--shared']],
+])('it gives %s the fingerprint of the same change in its source', async (_shape, flags) => {
+  const ctx = await setupTest();
+
+  const clone = join(ctx.elsewhere, 'clone');
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('branch', 'old');
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 6;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'raise');
+  await ctx.git('config', 'uploadpack.allowFilter', 'true');
+
+  await ctx.git(
+    'clone',
+    '--quiet',
+    '--no-local',
+    '--no-single-branch',
+    ...flags,
+    `file://${ctx.repo}`,
+    clone,
+  );
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 7;\n');
+  await writeFile(join(clone, 'prices.ts'), 'export const price = 7;\n');
+
+  const inSource = await ctx.readFingerprint(ctx.repo, 'old');
+  const inClone = await ctx.readFingerprint(clone, 'origin/old');
+
+  expect({ inSource, inClone }).toStrictEqual({
+    inSource: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    inClone: inSource,
+  });
+});
+
+test('it fails with an environment error in a shallow clone too short to hold the merge base', async () => {
+  const ctx = await setupTest();
+
+  const clone = join(ctx.elsewhere, 'clone');
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('branch', 'old');
+
+  await writeFile(join(ctx.repo, 'prices.ts'), 'export const price = 6;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'raise');
+
+  await ctx.git(
+    'clone',
+    '--quiet',
+    '--no-local',
+    '--no-single-branch',
+    '--depth',
+    '1',
+    `file://${ctx.repo}`,
+    clone,
+  );
+
+  const [read] = await Promise.allSettled([ctx.readFingerprint(clone, 'origin/old')]);
+
+  expect(read).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message:
+        'HEAD and origin/old share no commit in this clone, so the change has no fingerprint.',
+    }),
+  });
+});
+
+test('it gives a detached HEAD the fingerprint of the branch it left', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  await ctx.git('commit', '--quiet', '-am', 'work');
+
+  const onBranch = await ctx.readFingerprint();
+
+  await ctx.git('switch', '--quiet', '--detach');
+
+  const detached = await ctx.readFingerprint();
+
+  expect({ onBranch, detached }).toStrictEqual({
+    onBranch: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    detached: onBranch,
+  });
+});
+
+test('it fails with an environment error in a repo with no commit', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  const [read] = await Promise.allSettled([ctx.readFingerprint()]);
+
+  expect(read).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: 'The repo has no commit yet, so its change has no fingerprint.',
+    }),
+  });
 });
