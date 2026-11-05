@@ -12,8 +12,8 @@ export interface ExecQueryInput {
   readonly params: readonly unknown[];
   readonly write: boolean;
 
-  // The ms left before the command's deadline.
-  readonly timeLeftMs: number;
+  // The command's deadline, in ms since the epoch.
+  readonly deadlineAtMs: number;
 }
 
 // A client prints JSON `rows`, or, for a psql write, the `command-tag` such as `UPDATE 3`.
@@ -80,8 +80,9 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
   const options = ['-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', input.database];
 
   // The deadline's abort stops only the local process, so psql inside a container runs on, and a
-  // write could commit after the command reported a timeout. A statement_timeout of 0 means none.
-  const limit = `set statement_timeout = ${Math.max(1, Math.ceil(input.timeLeftMs))};\n`;
+  // write could commit after the command reported a timeout. Postgres reads the time left once the
+  // transport is up, by the database host's clock, and refuses to start with none left.
+  const limit = `do $wringer$ declare left_ms bigint := ${Math.floor(input.deadlineAtMs)} - floor(extract(epoch from clock_timestamp()) * 1000)::bigint; begin if left_ms < 1 then raise exception 'The command''s deadline passed before the statement started.'; end if; perform set_config('statement_timeout', left_ms::text, false); end $wringer$;\n`;
 
   // Without `-q`, psql prints a write's command tag, which carries the count of rows it changed.
   if (input.write) {

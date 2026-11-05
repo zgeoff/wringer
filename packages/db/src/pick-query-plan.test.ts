@@ -5,7 +5,7 @@ test('it runs a SQLite read over Bun.SQL as it was asked', () => {
   const plan = pickQueryPlan(
     { via: 'sql', adapter: 'sqlite', url: '/srv/shop.db' },
     { sql: 'select id from notes where id = ?', params: [2], write: false },
-    30_000,
+    1_800_000_000_000,
   );
 
   expect(plan).toStrictEqual({
@@ -22,7 +22,7 @@ test('it plans a read that copies a SQLite database elsewhere as an undeclared w
   const plan = pickQueryPlan(
     { via: 'sql', adapter: 'sqlite', url: '/srv/shop.db' },
     { sql: "vacuum into '/srv/copy.db'", params: [], write: false },
-    30_000,
+    1_800_000_000_000,
   );
 
   expect(plan).toStrictEqual({ kind: 'undeclared-write' });
@@ -32,7 +32,7 @@ test('it plans a Postgres write sent as a read through psql as an undeclared wri
   const plan = pickQueryPlan(
     { via: 'exec', dialect: 'postgres', database: 'shop' },
     { sql: 'delete from orders', params: [], write: false },
-    30_000,
+    1_800_000_000_000,
   );
 
   expect(plan).toStrictEqual({ kind: 'undeclared-write' });
@@ -47,7 +47,7 @@ test('it runs a granted write through the client as a read of the target', () =>
       readOnly: { allow: ["update notes set text = 'archived' where id = 1"] },
     },
     { sql: "update notes set text = 'archived' where id = 1", params: [], write: true },
-    30_000,
+    1_800_000_000_000,
   );
 
   expect(plan).toStrictEqual({
