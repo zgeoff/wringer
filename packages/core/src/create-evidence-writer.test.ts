@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
@@ -32,6 +32,25 @@ test('it writes a file under a stamped name, relative to the root', async () => 
     kind: 'http',
     path: '.wringer/evidence/2026-03-01T09-30-00-000Z-get.json',
     sha256: new Bun.CryptoHasher('sha256').update('{"ok":true}').digest('hex'),
+  });
+});
+
+test('it records a file that already exists and adds it to the collected list', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.root, 'receipt.png'), 'receipt bytes');
+
+  const evidence = await ctx.evidence.writer.addFile('screenshot', join(ctx.root, 'receipt.png'));
+
+  const expected = {
+    kind: 'screenshot',
+    path: 'receipt.png',
+    sha256: new Bun.CryptoHasher('sha256').update('receipt bytes').digest('hex'),
+  };
+
+  expect({ evidence, collected: ctx.evidence.collected }).toStrictEqual({
+    evidence: expected,
+    collected: [expected],
   });
 });
 
