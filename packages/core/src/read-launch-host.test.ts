@@ -14,6 +14,7 @@ test('it reads the guard that setpriv gives, the folder and the environment of t
     createDirectory: expect.any(Function),
     createSocketFolder: expect.any(Function),
     removeDirectory: expect.any(Function),
+    listenSupervisorSocket: expect.any(Function),
     killProcessGroup: expect.any(Function),
     runProcess: expect.any(Function),
   });
