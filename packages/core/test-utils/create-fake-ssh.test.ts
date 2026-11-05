@@ -1,7 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { readOptionalText } from '@zgeoff/std';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { killProcessGroup } from '../src/kill-process-group.ts';
+import { probeProcess } from '../src/probe-process.ts';
 import { createFakeSSH } from './create-fake-ssh.ts';
+import { waitFor } from './wait-for.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'create-fake-ssh');
@@ -62,6 +67,33 @@ test('it runs setsid through a stand-in that records its process ID on the slow-
     stdout: 'ran\n',
     recorded: expect.stringMatching(/^\d+\n$/u),
   });
+});
+
+test('it stops every process group a remote setsid started', async () => {
+  const ctx = await setupTest();
+
+  const ran = Bun.spawnSync([
+    ctx.fake.binary,
+    '--',
+    'db-host',
+    `setsid sh -c 'echo "$$" > "$0"; exec sleep 30' '${join(ctx.directory, 'remote.pid')}' </dev/null >/dev/null 2>&1 &`,
+  ]);
+
+  const pid = await waitFor(async () => {
+    const text = await readOptionalText(join(ctx.directory, 'remote.pid'));
+
+    return text?.endsWith('\n') === true ? Number(text) : null;
+  });
+
+  onTestFinished(() => {
+    killProcessGroup(pid);
+  });
+
+  await ctx.fake.stopGroups();
+
+  const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
+
+  expect({ exitCode: ran.exitCode, stopped }).toStrictEqual({ exitCode: 0, stopped: true });
 });
 
 test('it refuses more than one command word, as a caller that skips quoting would send', async () => {
