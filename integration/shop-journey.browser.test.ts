@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { dispatch } from '../packages/core/src/index.ts';
 import type { DispatchResult } from '../packages/core/src/index.ts';
 import { createTestSession } from '../packages/core/test-utils/create-test-session.ts';
-import { waitFor } from '../packages/core/test-utils/wait-for.ts';
 import { httpResponseSchema } from '../packages/http/src/index.ts';
 import { parsePublishedEnvelope } from '../test-utils/parse-published-envelope.ts';
 import type { PublishedEnvelopeResult } from '../test-utils/parse-published-envelope.ts';
@@ -48,13 +49,20 @@ test('it drives a page, an http call, a stream read and a db query, then reports
 
     const listed = ordersSchema.parse(httpResponseSchema.parse(result.envelope.data).json);
 
-    return listed.length > 0 ? listed : null;
+    invariant(listed.length > 0, 'The shop lists no order yet.');
+
+    return listed;
   });
 
   const logged = await waitFor(async () => {
     const result = await ctx.run(['stream', 'read'], { name: 'app' });
 
-    return JSON.stringify(result.envelope.data).includes('order 1 placed') ? result : null;
+    invariant(
+      JSON.stringify(result.envelope.data).includes('order 1 placed'),
+      'The app stream has not recorded the order yet.',
+    );
+
+    return result;
   });
 
   const counted = await ctx.run(['db', 'query'], { sql: 'select count(*) as orders from orders' });
@@ -92,7 +100,12 @@ test('it shows on the page that an order failed', async () => {
   const shown = await waitFor(async () => {
     const result = await ctx.run(['browser', 'snapshot']);
 
-    return JSON.stringify(result.envelope.data).includes('The order failed') ? true : null;
+    invariant(
+      JSON.stringify(result.envelope.data).includes('The order failed'),
+      'The page does not show the failed order yet.',
+    );
+
+    return true;
   });
 
   expect(shown).toBeTrue();
