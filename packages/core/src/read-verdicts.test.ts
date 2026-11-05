@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createNodeRepoHost } from './create-node-repo-host.ts';
 import { createRepoState } from './create-repo-state.ts';
 import { readVerdicts } from './read-verdicts.ts';
 
@@ -12,7 +13,7 @@ async function setupTest() {
 
   const state = createRepoState(root, '.wringer');
 
-  return { root, state, readVerdicts: () => readVerdicts(state, root) };
+  return { root, state, readVerdicts: () => readVerdicts(state, createNodeRepoHost(), root) };
 }
 
 test('it reads a verdict whose data went to a payload file over the cap', async () => {

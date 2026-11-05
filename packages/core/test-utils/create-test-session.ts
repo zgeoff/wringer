@@ -1,7 +1,7 @@
 import { onTestFinished } from 'bun:test';
 import { callSupervisor } from '../src/call-supervisor.ts';
 import type { StatePort } from '../src/create-file-state.ts';
-import { createNodeFingerprintHost } from '../src/create-node-fingerprint-host.ts';
+import { createNodeRepoHost } from '../src/create-node-repo-host.ts';
 import { createRepoState } from '../src/create-repo-state.ts';
 import { readLaunchHost } from '../src/read-launch-host.ts';
 import { runSupervisor } from '../src/run-supervisor.ts';
@@ -61,7 +61,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     session: {
       root: repo.root,
       state,
-      fingerprintHost: createNodeFingerprintHost(),
+      repoHost: createNodeRepoHost(),
       output: {
         writeLine: (line) => {
           lines.push(line);

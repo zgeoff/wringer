@@ -305,9 +305,9 @@ async function probeFingerprintChanged(
     return false;
   }
 
-  const base = await readDefaultBase(request.session.root);
+  const base = await readDefaultBase(request.session.repoHost, request.session.root);
 
-  const fingerprint = await readFingerprint(request.session.fingerprintHost, {
+  const fingerprint = await readFingerprint(request.session.repoHost, {
     cwd: request.session.root,
     base,
     exclude: [request.wringer.stateDir],

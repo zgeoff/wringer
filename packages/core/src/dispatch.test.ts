@@ -40,7 +40,8 @@ async function setupTest() {
           ...shop.session,
           target: 'local',
           timeoutMs,
-          fingerprintHost: {
+          repoHost: {
+            ...shop.session.repoHost,
             runGit: async (request) => {
               await gate.promise;
 

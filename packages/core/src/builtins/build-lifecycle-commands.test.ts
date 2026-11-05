@@ -6,7 +6,6 @@ import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorStarter } from '../make-process-supervisor-starter.ts';
-import { removeFile } from '../remove-file.ts';
 import { runGit } from '../run-git.ts';
 
 async function setupTest() {
@@ -32,13 +31,13 @@ async function setupTest() {
           ...shop.session,
           target,
           timeoutMs,
-          fingerprintHost: {
+          repoHost: {
+            ...shop.session.repoHost,
             runGit: async (request) => {
               await gate;
 
               return runGit(request);
             },
-            removeFile,
           },
         },
       ),
