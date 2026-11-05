@@ -65,8 +65,10 @@ A query through `via: 'exec'` has these limits:
 
 A query returns `{ columns, rows, rowCount }`.
 
-- `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
-  through sqlite3, which does not report the count.
+- `rowCount` counts the rows a read returned, or the rows a write changed. It is null in two cases:
+  - a write through sqlite3, which does not report the count;
+  - a Postgres write through psql whose last command tag holds no count. An example is
+    `BEGIN; DELETE FROM notes; COMMIT;`, whose last tag is `COMMIT`.
 - On SQLite over `via: 'sql'`, `columns` holds the statement's column names, also for an empty
   result. Elsewhere, `columns` holds the first row's keys, so an empty result has none.
 
