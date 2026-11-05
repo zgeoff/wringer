@@ -469,6 +469,44 @@ test('it stages a submodule outside the subfolder by its path from the repo root
   });
 });
 
+test.each([
+  { name: 'an edit to a tracked file', file: 'prices.ts' },
+  { name: 'an untracked file', file: 'taxes.ts' },
+])('it refuses a submodule that holds $name it has not committed', async (row) => {
+  const ctx = await setupTest();
+
+  const submoduleGitArgs = [
+    '-C',
+    'lib',
+    '-c',
+    'user.email=tester@example.com',
+    '-c',
+    'user.name=Tester',
+  ];
+
+  await mkdir(join(ctx.repo, 'lib'));
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
+  await ctx.git(...submoduleGitArgs, 'add', '.');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
+  await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'lib', row.file), 'export const price = 6;\n');
+
+  const [read] = await Promise.allSettled([ctx.readFingerprint()]);
+
+  expect(read).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message:
+        'The submodule lib holds work that is not committed in it, so the change has no fingerprint.',
+    }),
+  });
+});
+
 test('it gives a subfolder the fingerprint of the whole repo when a submodule outside it moved', async () => {
   const ctx = await setupTest();
 
@@ -993,6 +1031,29 @@ test.each(['--no-sparse-index', '--sparse-index'])(
   },
 );
 
+test('it counts an edit to a file on disk that the index marks skip-worktree', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const unmarked = await ctx.readFingerprint();
+
+  await ctx.git('update-index', '--skip-worktree', 'app.ts');
+
+  const marked = await ctx.readFingerprint();
+
+  expect({ unmarked, marked }).toStrictEqual({
+    unmarked: expect.stringMatching(/^[0-9a-f]{40}$/u),
+    marked: unmarked,
+  });
+});
+
 test('it gives a linked worktree the same fingerprint before and after the work is committed', async () => {
   const ctx = await setupTest();
 
@@ -1191,6 +1252,25 @@ test('it gives a detached HEAD the fingerprint of the branch it left', async () 
   expect({ onBranch, detached }).toStrictEqual({
     onBranch: expect.stringMatching(/^[0-9a-f]{40}$/u),
     detached: onBranch,
+  });
+});
+
+test("it fails with git's own error when the base names no commit", async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  const [read] = await Promise.allSettled([ctx.readFingerprint(ctx.repo, 'release')]);
+
+  expect(read).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringMatching(/^git rev-parse failed: fatal: /u),
+    }),
   });
 });
 

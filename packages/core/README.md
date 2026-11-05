@@ -35,8 +35,9 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
   adds it, such as `core.autocrlf` or a clean filter, can get another fingerprint once the change is
   committed; the verdict then reads as stale, never as fresh. A sparse checkout, a linked worktree,
   a shallow or partial clone and a detached HEAD get the fingerprint of the same change in a full
-  clone. A repo with no commit, and a shallow clone that lacks the merge base, fail with an
-  `environment` error.
+  clone, and a file on disk that the index marks skip-worktree counts as any other. A repo with no
+  commit, a shallow clone that lacks the merge base, and a submodule that holds work it has not
+  committed fail with an `environment` error.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer.
 

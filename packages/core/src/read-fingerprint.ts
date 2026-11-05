@@ -6,6 +6,7 @@ import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import { parsePatchID } from './parse-patch-id.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
+import { pickSubmoduleRefusal } from './pick-submodule-refusal.ts';
 import type { GitRequest } from './run-git.ts';
 import type { ProcessResult } from './run-process.ts';
 import { WringerError } from './wringer-error.ts';
@@ -45,6 +46,7 @@ export async function readFingerprint(
   const mergeBase = await readMergeBase(host, root, request.base);
 
   await readPromisedObjects(host, root, mergeBase);
+  await readSubmoduleWork(host, root);
 
   const gitDir = await readGitPath(host, root, `wringer-${randomUUID()}`);
 
@@ -64,7 +66,13 @@ export async function readFingerprint(
 
     await copySkipWorktreeFlags(host, root, env);
 
-    await host.runGit({ cwd: root, args: ['add', '--all'], env });
+    // With sparse checkout on, git 2.37 and later clears the skip-worktree mark of each file on disk
+    // as it reads the index, so an edit to a marked file counts and only an absent one stays out.
+    await host.runGit({
+      cwd: root,
+      args: ['-c', 'core.sparseCheckout=true', 'add', '--all'],
+      env,
+    });
 
     await addSubmodules(host, root, env);
 
@@ -143,6 +151,28 @@ async function readPromisedObjects(
 
   for (const request of buildPromisedObjectReads({ root, mergeBase, configList: config.stdout })) {
     await host.runGit(request);
+  }
+}
+
+// `--no-optional-locks` keeps status from writing the repo's own index, and `-uno` skips the
+// repo's own untracked files, which `add --all` counts anyway.
+async function readSubmoduleWork(host: FingerprintHost, root: string): Promise<void> {
+  const status = await host.runGitBytes({
+    cwd: root,
+    args: [
+      '--no-optional-locks',
+      'status',
+      '--porcelain=v2',
+      '-z',
+      '--ignore-submodules=none',
+      '--untracked-files=no',
+    ],
+  });
+
+  const refusal = pickSubmoduleRefusal(status);
+
+  if (refusal !== null) {
+    throw refusal;
   }
 }
 
