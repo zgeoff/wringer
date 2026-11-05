@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { capData } from './cap-data.ts';
@@ -19,6 +19,9 @@ async function setupTest() {
         files: createNodeRepoHost(),
       }),
     readFile: (path: string) => readFile(join(directory, path), 'utf8'),
+
+    // A file where the payload folder goes makes the folder impossible to create.
+    blockPayloadFolder: () => writeFile(join(directory, 'payloads'), 'not a folder\n'),
   };
 }
 
@@ -45,6 +48,21 @@ test('it moves data over 32768 bytes to a payload file and keeps its path', asyn
   expect({ data: capped.data, written }).toStrictEqual({
     data: null,
     written: JSON.stringify({ shelf }),
+  });
+});
+
+test('it carries a failure with no data or evidence when the payload file cannot be written', async () => {
+  const ctx = await setupTest();
+
+  await ctx.blockPayloadFolder();
+
+  const capped = await ctx.capData({ shelf: 'a'.repeat(40_000) });
+
+  expect(capped).toStrictEqual({
+    data: null,
+    evidence: [],
+    truncatedPath: null,
+    failure: expect.objectContaining({ code: 'internal' }),
   });
 });
 
