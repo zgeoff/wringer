@@ -1,5 +1,5 @@
 import { WringerError, dispatch, supervisorCommandName } from '@wringer/core';
-import type { RepoHost, StatePort, SupervisorStarter, Wringer } from '@wringer/core';
+import type { RepoHost, StatePort, SupervisorPort, Wringer } from '@wringer/core';
 import { cli, parseArgs } from 'gunshi';
 import type { ArgToken } from 'gunshi';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
@@ -18,7 +18,7 @@ import { renderHumanEvent } from './render-human-event.ts';
 interface RepoPorts {
   readonly state: StatePort;
   readonly repoHost: RepoHost;
-  readonly supervisor: SupervisorStarter;
+  readonly supervisor: SupervisorPort;
 }
 
 export interface CLIPorts {
