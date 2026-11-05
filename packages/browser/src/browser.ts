@@ -1,4 +1,4 @@
-import { WringerError, defineDriver } from '@wringer/core';
+import { WringerError, defineDriver, findOwnValue } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
 import { chromium } from 'playwright-core';
 import { z } from 'zod';
@@ -278,7 +278,8 @@ function makeElementAction(
 }
 
 function getBaseURL(session: BrowserSession): string {
-  const baseURL = session.config.baseURL ?? session.endpoints[session.config.endpoint];
+  const baseURL =
+    session.config.baseURL ?? findOwnValue(session.endpoints, session.config.endpoint);
 
   if (baseURL === undefined) {
     throw new WringerError('usage', {

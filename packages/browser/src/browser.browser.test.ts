@@ -324,6 +324,24 @@ test('it keeps a screenshot of the page as evidence', async () => {
   });
 });
 
+test('it refuses a goto with a usage error when the endpoint is named after an inherited key', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('inherited', ['attach']);
+  await ctx.run('inherited', ['doctor']);
+
+  const result = await ctx.run('inherited', ['browser', 'goto'], { path: '/' });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 2,
+    error: {
+      code: 'usage',
+      message: 'Target inherited has no endpoint constructor.',
+      hint: 'Set `baseURL` in the browser config of the target, or name an endpoint it has.',
+    },
+  });
+});
+
 test('it rejects a describe of a ref the last snapshot lacks', async () => {
   const ctx = await setupTest();
 

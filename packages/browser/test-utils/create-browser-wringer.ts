@@ -7,9 +7,9 @@ const emptySchema = z.strictObject({});
 const titleSchema = z.strictObject({ title: z.string() });
 const buttonSchema = z.strictObject({ button: z.string() });
 
-// A verify CLI against the shop page at `url`: `local` may write, read-only `prod` grants the Search
-// button and field, and actions claim a read, then click Place order, a button by its snapshot
-// ref, or type an email.
+// A verify CLI against the shop page at `url`: `local` may write, read-only `prod` grants Search,
+// `inherited` names an endpoint every object inherits, and actions claim a read, then click Place
+// order, a button by its snapshot ref, or type an email.
 export function createBrowserWringer(url: string): Wringer {
   const shop = bindDrivers([browser({})] as const);
 
@@ -43,6 +43,16 @@ export function createBrowserWringer(url: string): Wringer {
             },
           }),
         },
+      }),
+    )
+    .target(
+      'inherited',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: url }),
+        drivers: { browser: () => ({ endpoint: 'constructor' }) },
       }),
     )
     .action(
