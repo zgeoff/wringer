@@ -9,13 +9,13 @@ export interface TestSSHPostgres {
   readonly remove: () => void;
 }
 
-const image = 'wringer-test-ssh-postgres:1';
+const image = 'wringer-test-ssh-postgres:2';
 
 // Postgres with sshd beside it, so psql runs on the "remote" host the way a `via: 'exec'` target
 // over ssh runs it. psql reaches the database over its local socket, which the image trusts.
 const dockerfile = `FROM postgres:17-alpine
-RUN apk add --no-cache openssh && ssh-keygen -A && adduser -D shop && passwd -u shop
-CMD ["sh", "-c", "mkdir -p /home/shop/.ssh && cp /run/key.pub /home/shop/.ssh/authorized_keys && chown -R shop /home/shop/.ssh && /usr/sbin/sshd && exec docker-entrypoint.sh postgres"]
+RUN apk add --no-cache openssh && ssh-keygen -A && adduser -D -h /srv/shop shop && passwd -u shop
+CMD ["sh", "-c", "mkdir -p /srv/shop/.ssh && cp /run/key.pub /srv/shop/.ssh/authorized_keys && chown -R shop /srv/shop/.ssh && /usr/sbin/sshd && exec docker-entrypoint.sh postgres"]
 `;
 
 // `directory` holds the key pair and an ssh wrapper that passes the key and the port, so the
