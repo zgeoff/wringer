@@ -56,20 +56,20 @@ A query through `via: 'exec'` has these limits:
 
 - It takes no `params`.
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
-- A statement for psql holds no backslash, and a read holds one statement, with no `;` inside it.
+- A statement for psql runs alone, with no backslash and no `;` inside it.
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
   with a usage error, and any other read counts as a write that did not ask to write.
 - The command's deadline stops only the local process, so a client in a container runs on. psql gets
-  `statement_timeout` set to the time left. A sqlite3 statement can still commit after the timeout,
-  so connect with `via: 'sql'` for a write that can run long.
+  `statement_timeout` set to the time left. A SQLite statement runs to completion once it starts,
+  through sqlite3 and through `via: 'sql'` alike, so it can commit after the timeout.
 
 ## Results
 
 A query returns `{ columns, rows, rowCount }`.
 
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
-  through sqlite3, and for a psql write whose last command tag holds no count, such as `COMMIT`.
+  through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
 - On SQLite over `via: 'sql'`, `columns` holds the statement's column names, also for an empty
   result. Elsewhere, `columns` holds the first row's keys, so an empty result has none.
 
