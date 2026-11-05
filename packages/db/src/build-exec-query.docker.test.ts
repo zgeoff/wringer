@@ -38,7 +38,7 @@ async function setupTest() {
 
       return rows.length === 0 ? true : null;
     },
-    runWrite: (sql: string, signal: AbortSignal) => {
+    runWrite: (sql: string, signal: AbortSignal, timeLeftMs: number) => {
       const query = buildExecQuery({
         dialect: 'postgres',
         program: ['psql'],
@@ -46,6 +46,7 @@ async function setupTest() {
         sql,
         params: [],
         write: true,
+        timeLeftMs,
       });
 
       return host.run({ argv: query.argv, stdin: query.stdin, access: 'read-write', signal });
@@ -62,6 +63,7 @@ test('it never commits a psql write over ssh that ran past its deadline', async 
     ctx.runWrite(
       "insert into notes (text) select 'late' from pg_sleep(4)",
       AbortSignal.timeout(1500),
+      60_000,
     ),
   ]);
 
@@ -70,4 +72,23 @@ test('it never commits a psql write over ssh that ran past its deadline', async 
   const notes = await ctx.readNotes();
 
   expect({ status: written.status, notes }).toStrictEqual({ status: 'rejected', notes: [] });
+});
+
+test('it has postgres stop a psql write at the time left when no abort reaches psql', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes();
+
+  const result = await ctx.runWrite(
+    "insert into notes (text) select 'late' from pg_sleep(4)",
+    new AbortController().signal,
+    1500,
+  );
+
+  const notes = await ctx.readNotes();
+
+  expect({ stderr: result.stderr, notes }).toStrictEqual({
+    stderr: expect.stringContaining('canceling statement due to statement timeout'),
+    notes: [],
+  });
 });

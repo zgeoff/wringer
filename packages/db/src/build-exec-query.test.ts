@@ -9,6 +9,7 @@ test('it opens SQLite read-only and in safe mode for a read', () => {
     sql: 'select * from notes',
     params: [],
     write: false,
+    timeLeftMs: 30_000,
   });
 
   expect(query).toStrictEqual({
@@ -26,6 +27,7 @@ test('it opens SQLite for writing for a write', () => {
     sql: 'delete from notes',
     params: [],
     write: true,
+    timeLeftMs: 30_000,
   });
 
   expect(query.argv).toStrictEqual([
@@ -49,6 +51,7 @@ test('it rejects params for a target that runs the database client', () => {
       sql: 'select * from notes where id = ?',
       params: [7],
       write: false,
+      timeLeftMs: 30_000,
     }),
   ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
@@ -61,6 +64,7 @@ test('it wraps a Postgres read in a read-only transaction that prints JSON', () 
     sql: 'select id from orders;',
     params: [],
     write: false,
+    timeLeftMs: 30_000,
   });
 
   expect(query).toStrictEqual({
@@ -76,7 +80,7 @@ test('it wraps a Postgres read in a read-only transaction that prints JSON', () 
       'postgres://shop@db/shop',
     ],
     stdin:
-      "begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\nselect id from orders\n) q;\ncommit;\n",
+      "set statement_timeout = 30000;\nbegin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\nselect id from orders\n) q;\ncommit;\n",
     output: 'rows',
   });
 });
@@ -92,6 +96,7 @@ test.each(['show server_version', 'explain select id from orders'])(
         sql,
         params: [],
         write: false,
+        timeLeftMs: 30_000,
       }),
     ).toThrow(
       expect.objectContaining({ code: 'usage', hint: 'Connect with `via: sql` to run it.' }),
@@ -108,6 +113,7 @@ test('it rejects a Postgres read that holds a second statement', () => {
       sql: 'select 1) q; commit; delete from orders; --',
       params: [],
       write: false,
+      timeLeftMs: 30_000,
     }),
   ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
@@ -121,11 +127,12 @@ test('it rejects a Postgres statement that holds a psql command', () => {
       sql: 'select 1 \\! touch /tmp/owned',
       params: [],
       write: true,
+      timeLeftMs: 30_000,
     }),
   ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
 
-test('it sends a Postgres write as it is and reads its command tag back', () => {
+test('it sends a Postgres write limited to the time left and reads its command tag back', () => {
   const query = buildExecQuery({
     dialect: 'postgres',
     program: ['psql'],
@@ -133,11 +140,26 @@ test('it sends a Postgres write as it is and reads its command tag back', () => 
     sql: 'delete from orders',
     params: [],
     write: true,
+    timeLeftMs: 1200.4,
   });
 
   expect(query).toStrictEqual({
     argv: ['psql', '-X', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', 'shop'],
-    stdin: 'delete from orders',
+    stdin: 'set statement_timeout = 1201;\ndelete from orders',
     output: 'command-tag',
   });
+});
+
+test('it limits a Postgres statement with no time left to 1 ms, since 0 turns the limit off', () => {
+  const query = buildExecQuery({
+    dialect: 'postgres',
+    program: ['psql'],
+    database: 'shop',
+    sql: 'delete from orders',
+    params: [],
+    write: true,
+    timeLeftMs: 0,
+  });
+
+  expect(query.stdin).toBe('set statement_timeout = 1;\ndelete from orders');
 });

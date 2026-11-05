@@ -30,7 +30,11 @@ export type QueryPlan =
 
 // Decides how a query runs from the target's config alone, so the driver only carries the plan
 // out. A read that the database would not refuse in time is an undeclared write before it runs.
-export function pickQueryPlan(config: DbConfig, query: PlannedQuery): QueryPlan {
+export function pickQueryPlan(
+  config: DbConfig,
+  query: PlannedQuery,
+  timeLeftMs: number,
+): QueryPlan {
   const dialect = config.via === 'sql' ? config.adapter : config.dialect;
 
   if (!query.write && isUndeclaredWrite(dialect, config.via, query.sql)) {
@@ -57,6 +61,7 @@ export function pickQueryPlan(config: DbConfig, query: PlannedQuery): QueryPlan 
       sql: query.sql,
       params: query.params,
       write: query.write,
+      timeLeftMs,
     }),
 
     // The client call already checked this statement against the target's grants.
