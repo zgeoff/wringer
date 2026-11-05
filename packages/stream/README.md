@@ -52,11 +52,12 @@ the doctor check `stream.recording`, which fails when a source has stopped.
 
 The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one
 `{ at, line }` record per line. A record keeps at most 4096 characters of its line. When a source
-logs faster than the disk takes it, the supervisor holds at most 10,000 records per source. It drops
-the rest, and then writes a record that counts the dropped lines. A batch that fails to write stays
-queued for the next write. When the run stops with records still unwritten, the run ends as crashed,
-and its crash reason names the stream file and the write error. The `down` or `detach` that stopped
-the run still succeeds, so read the run's status to learn that records were lost.
+logs faster than the disk takes it, the supervisor holds at most 10,000 pending records per source,
+plus the batch it is writing. It drops the rest, and then writes a record that counts the dropped
+lines. A batch that fails to write stays queued for the next write. When the run stops with records
+still unwritten, or with a source it could not read, the run ends as crashed, and its crash reason
+names the stream and the error. The `down` or `detach` that stopped the run still succeeds, so read
+the run's status to learn that records were lost.
 
 ## Cursors
 
