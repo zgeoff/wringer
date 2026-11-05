@@ -23,23 +23,13 @@ const typeSchema = z.strictObject({ element: elementSchema, value: z.string() })
 // every ref, so it skips the command queue.
 export async function startBrowserPage(options: BrowserPageOptions): Promise<ServiceInstance> {
   const browser = await options.launchBrowser();
-
-  // `browser.newPage` gives each page a context of its own, which dies with the page; one context
-  // per run keeps the cookies and storage of a page that a timeout replaced.
-  const context = await browser.newContext();
-
-  const openPage = async (): Promise<Page> => {
-    const opened = await context.newPage();
-
-    opened.setDefaultTimeout(options.actionTimeoutMs);
-
-    return opened;
-  };
-
-  const firstPage = await openPage();
+  const runPage = await openRunPage(browser, options.actionTimeoutMs);
 
   const pageActor = createActor(browserPageMachine, {
-    input: { page: firstPage, reopen: (stale: Page) => reopenPage(stale, openPage) },
+    input: {
+      page: runPage.firstPage,
+      reopen: (stale: Page) => reopenPage(stale, runPage.openPage),
+    },
   });
 
   pageActor.start();
@@ -116,6 +106,35 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
       await browser.close();
     },
   };
+}
+
+interface RunPage {
+  readonly firstPage: Page;
+  readonly openPage: () => Promise<Page>;
+}
+
+// The supervisor holds no stop for this service until startup returns, so a failed setup closes
+// the browser here, or Chromium outlives the run.
+async function openRunPage(browser: Browser, actionTimeoutMs: number): Promise<RunPage> {
+  try {
+    // `browser.newPage` gives each page a context of its own, which dies with the page; one
+    // context per run keeps the cookies and storage of a page that a timeout replaced.
+    const context = await browser.newContext();
+
+    const openPage = async (): Promise<Page> => {
+      const opened = await context.newPage();
+
+      opened.setDefaultTimeout(actionTimeoutMs);
+
+      return opened;
+    };
+
+    return { firstPage: await openPage(), openPage };
+  } catch (error) {
+    await browser.close();
+
+    throw error;
+  }
 }
 
 async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
