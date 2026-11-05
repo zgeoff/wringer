@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readText } from '@wringer/core';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runAppendUnderSizeLimit } from './run-append-under-size-limit.ts';
 
@@ -11,13 +12,13 @@ async function setupTest() {
 
   const path = join(directory, 'app.ndjson');
 
-  return { path, readText: () => readFile(path, 'utf8') };
+  return { path };
 }
 
 test('it appends text under 2 KiB and exits 0', async () => {
   const ctx = await setupTest();
   const exitCode = await runAppendUnderSizeLimit(ctx.path, '{"line":"up"}\n');
-  const text = await ctx.readText();
+  const text = await readText(ctx.path);
 
   expect({ exitCode, text }).toStrictEqual({ exitCode: 0, text: '{"line":"up"}\n' });
 });

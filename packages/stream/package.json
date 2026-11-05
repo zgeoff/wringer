@@ -34,7 +34,8 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@wringer/core": "workspace:*"
+    "@wringer/core": "workspace:*",
+    "@zgeoff/std": "catalog:"
   },
   "peerDependencies": {
     "@wringer/core": "workspace:*"

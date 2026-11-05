@@ -1,4 +1,5 @@
 import { open } from 'node:fs/promises';
+import { isErrorCode } from '@wringer/core';
 import { z } from 'zod';
 
 export const streamRecordSchema = z.strictObject({ at: z.string(), line: z.string() });
@@ -64,7 +65,7 @@ async function openStreamFile(path: string): Promise<FileHandle | null> {
   try {
     return await open(path, 'r');
   } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+    if (isErrorCode(error, 'ENOENT')) {
       return null;
     }
 
