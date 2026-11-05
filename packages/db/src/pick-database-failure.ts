@@ -1,4 +1,17 @@
-export type DatabaseFailure = 'read-only' | 'timeout' | 'environment' | 'statement';
+export type DatabaseFailure =
+  | 'read-only'
+  | 'write-refused'
+  | 'timeout'
+  | 'environment'
+  | 'statement';
+
+export interface DatabaseFailureInput {
+  readonly code: string | null;
+  readonly message: string;
+
+  // Whether the query declared that it writes.
+  readonly write: boolean;
+}
 
 // Postgres cancels a statement past its `statement_timeout` with SQLSTATE 57014, and psql prints only
 // the message. The driver's own deadline check raises the second message before the statement runs.
@@ -32,19 +45,22 @@ const readOnlyMessagePattern = /attempt to write a readonly database|read-only t
 const environmentMessagePattern =
   /unable to open database|database is locked|file is not a database|disk I\/O error|database or disk is full|access permission denied|could not connect|connection to server|connection refused|no such file|password authentication failed|database "[^"]*" does not exist/iu;
 
-export function pickDatabaseFailure(code: string | null, message: string): DatabaseFailure {
-  if ((code !== null && readOnlyCodes.has(code)) || readOnlyMessagePattern.test(message)) {
-    return 'read-only';
+// A read-only refusal of a read means the read wrote; of a declared write, it means the database,
+// such as a replica, takes no writes.
+export function pickDatabaseFailure(input: DatabaseFailureInput): DatabaseFailure {
+  const code = input.code ?? '';
+
+  if (readOnlyCodes.has(code) || readOnlyMessagePattern.test(input.message)) {
+    return input.write ? 'write-refused' : 'read-only';
   }
 
-  if (code === timeoutCode || timeoutMessagePattern.test(message)) {
+  if (code === timeoutCode || timeoutMessagePattern.test(input.message)) {
     return 'timeout';
   }
 
-  const environmentCode =
-    code !== null && (environmentCodes.has(code) || environmentStatePattern.test(code));
+  const environmentCode = environmentCodes.has(code) || environmentStatePattern.test(code);
 
-  if (environmentCode || environmentMessagePattern.test(message)) {
+  if (environmentCode || environmentMessagePattern.test(input.message)) {
     return 'environment';
   }
 

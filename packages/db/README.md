@@ -97,5 +97,6 @@ A query returns `{ columns, rows, rowCount }`.
 - The driver catches only these statements, so give a read-only target a role with no file rights.
 - A statement that writes without asking fails with a usage error. A read-only target refuses each
   write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.
-- A database the driver cannot reach or open fails with exit code 4 (`environment`), and a statement
-  the database stops at the deadline with exit code 5 (`timeout`).
+- A database the driver cannot reach or open, and a database that refuses a write the query
+  declared, such as a replica, fail with exit code 4 (`environment`). A statement the database stops
+  at the deadline fails with exit code 5 (`timeout`).
