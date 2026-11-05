@@ -61,11 +61,23 @@ export async function readFingerprint(
   };
 
   try {
-    await host.runGit({ cwd: request.cwd, args: ['read-tree', 'HEAD'], env });
+    // The temporary index starts as a copy of the repo's own, so a file staged past an ignore rule
+    // counts as a commit would count it. `--index-info` takes the lines `ls-files --stage` prints.
+    const staged = await host.runGit({ cwd: request.cwd, args: ['ls-files', '--stage', '-z'] });
+
+    await host.runGit({
+      cwd: request.cwd,
+      args: ['update-index', '-z', '--index-info'],
+      stdin: staged.stdout,
+      env,
+    });
+
     await host.runGit({ cwd: request.cwd, args: ['add', '--all'], env });
 
+    await addSubmodules(host, request.cwd, env);
+
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
-    // and a committed change to an excluded path reaches the index through `read-tree` anyway. The
+    // and a committed change to an excluded path reaches the index from the repo's own anyway. The
     // root pathspecs and `--no-relative` make a call from a subfolder see the whole tree.
     const diff = await host.runGit({
       cwd: request.cwd,
@@ -113,4 +125,31 @@ async function readTemporaryIndexPath(host: FingerprintHost, cwd: string): Promi
   });
 
   return resolve(cwd, result.stdout.trim());
+}
+
+// `add --all` skips a submodule that the repo's config marks `ignore = all` on newer git, so its
+// new commit would never reach the diff; `--force` stages it whatever the config says.
+async function addSubmodules(
+  host: FingerprintHost,
+  cwd: string,
+  env: Readonly<Record<string, string>>,
+): Promise<void> {
+  const staged = await host.runGit({ cwd, args: ['ls-files', '--stage', '-z'], env });
+
+  const submodules = collectSubmodulePaths(staged.stdout);
+
+  if (submodules.length > 0) {
+    await host.runGit({ cwd, args: ['add', '--force', '--', ...submodules], env });
+  }
+}
+
+const gitlinkMode = '160000';
+
+// Each entry is `<mode> <object> <stage>\t<path>`, ended by a zero byte.
+function collectSubmodulePaths(stagedEntries: string): string[] {
+  return stagedEntries.split('\0').flatMap((entry) => {
+    const [info = '', path = ''] = entry.split('\t');
+
+    return info.startsWith(`${gitlinkMode} `) ? [`:(top,literal)${path}`] : [];
+  });
 }

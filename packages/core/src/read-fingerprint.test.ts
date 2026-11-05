@@ -226,6 +226,28 @@ test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', as
   expect(after).toBe(before);
 });
 
+test('it gives the same fingerprint before and after committing a staged file that the repo ignores', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, '.gitignore'), '*.log\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'fixture.log'), 'paid 12 orders\n');
+
+  await ctx.git('add', '--force', 'fixture.log');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('commit', '--quiet', '-m', 'fixture');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
 test.each([
   'GIT_LITERAL_PATHSPECS',
   'GIT_GLOB_PATHSPECS',
@@ -264,6 +286,7 @@ test.each([
 test.each([
   ['diff.ignoreSubmodules', 'all'],
   ['diff.submodule', 'log'],
+  ['submodule.lib.ignore', 'all'],
 ])(
   'it keeps a moved submodule in the fingerprint when the repo sets %s to %s',
   async (key, value) => {
