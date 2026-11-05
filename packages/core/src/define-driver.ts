@@ -128,6 +128,7 @@ function openDriver<Options, TargetConfig, Client>(
     exec: request.parts.exec,
     evidence: request.parts.evidence,
     signal: request.parts.signal,
+    timeLeftMs: request.parts.timeLeftMs,
     service: request.parts.service,
   };
 
