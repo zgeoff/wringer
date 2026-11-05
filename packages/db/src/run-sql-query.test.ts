@@ -62,19 +62,14 @@ async function setupTest() {
     refusingPostgresStatements: refusingPostgres.statements,
     runPostgresQuery: (
       sql: string,
-      options: {
-        params?: readonly unknown[];
-        write?: boolean;
-        signal?: AbortSignal;
-        timeLeftMs?: () => number;
-      } = {},
+      options: { write?: boolean; signal?: AbortSignal; timeLeftMs?: () => number } = {},
     ) =>
       runSQLQuery(
         {
           adapter: 'postgres',
           url: postgres.url,
           sql,
-          params: options.params ?? [],
+          params: [],
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
           timeLeftMs: options.timeLeftMs ?? (() => 60_000),
@@ -217,10 +212,10 @@ test('it refuses a Postgres write whose deadline passed while its timeout was se
   });
 });
 
-test('it sets the Postgres timeout again from the time left after a slow round trip', async () => {
+test('it starts a Postgres write after a second timeout when each round trip takes 100 ms', async () => {
   const ctx = await setupTest();
 
-  const timesLeftMs = [60_000, 1000, 1000];
+  const timesLeftMs = [60_000, 59_900, 59_800];
 
   await ctx.runUnpreparedPostgresWrite(
     "insert into notes (text) values ('late')",
