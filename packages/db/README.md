@@ -60,21 +60,16 @@ A query through `via: 'exec'` has these limits:
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
   with a usage error, and any other read counts as a write that did not ask to write.
-- The command's deadline stops the client on the CLI's side, but a client inside a container runs
-  on. The driver sets psql's `statement_timeout` to the time left, so Postgres stops the statement
-  at the deadline.
-- Nothing stops a sqlite3 statement that is still running in a container after the deadline, so a
-  slow write can commit after the command reported a timeout. Connect to SQLite with `via: 'sql'`
-  when a write can run long.
+- The command's deadline stops only the local process, so a client in a container runs on. psql gets
+  `statement_timeout` set to the time left. A sqlite3 statement can still commit after the timeout,
+  so connect with `via: 'sql'` for a write that can run long.
 
 ## Results
 
 A query returns `{ columns, rows, rowCount }`.
 
-- `rowCount` counts the rows a read returned, or the rows a write changed. It is null in two cases:
-  - a write through sqlite3, which does not report the count;
-  - a Postgres write through psql whose last command tag holds no count. An example is
-    `BEGIN; DELETE FROM notes; COMMIT;`, whose last tag is `COMMIT`.
+- `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
+  through sqlite3, and for a psql write whose last command tag holds no count, such as `COMMIT`.
 - On SQLite over `via: 'sql'`, `columns` holds the statement's column names, also for an empty
   result. Elsewhere, `columns` holds the first row's keys, so an empty result has none.
 
@@ -99,8 +94,7 @@ A query returns `{ columns, rows, rowCount }`.
   counts as a write.
 - The driver catches only the statements in this list. Connect a read-only target with a role that
   holds no file or program rights, such as `pg_write_server_files`.
-- A statement that writes without asking fails with a usage error, or on a read-only target with
-  `read-only` and the target's hint.
-- A read-only target refuses each write with exit code 3, unless `readOnly.allow` lists the
-  statement verbatim.
+- A statement that writes without asking fails with a usage error.
+- A read-only target refuses each write with `read-only` and exit code 3, unless `readOnly.allow`
+  lists the statement verbatim.
 - A database the driver cannot reach or open fails with an `environment` error and exit code 4.
