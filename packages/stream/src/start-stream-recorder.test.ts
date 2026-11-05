@@ -29,6 +29,16 @@ async function setupTest() {
     streams,
     createDirectoryCalls,
 
+    readLargestFileRead: async () => {
+      const chunks = await Promise.all(
+        readFileCalls.mock.results.flatMap((result) =>
+          result.type === 'return' ? [result.value] : [],
+        ),
+      );
+
+      return Math.max(...chunks.map((chunk) => chunk.bytes.length));
+    },
+
     // Resolves once the recorder has finished its first read of a file source.
     firstFileRead: async () => {
       await waitFor(() => readFileCalls.mock.results[0] ?? null);
@@ -131,6 +141,25 @@ test('it records the lines a file source gained just before the recorder stopped
   expect(recorded).toBe(
     '{"at":"2026-03-01T09:30:00.000Z","line":"shutting down"}\n{"at":"2026-03-01T09:30:00.000Z","line":"bye"}\n',
   );
+});
+
+test('it records a file source that held a large log before the start in reads of 64 KiB at most', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  await writeFile(log, 'order placed for the spring catalogue\n'.repeat(5000));
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect({
+    lines: recorded.split('\n').length - 1,
+    largestReadBytes: await ctx.readLargestFileRead(),
+  }).toStrictEqual({ lines: 5000, largestReadBytes: 64 * 1024 });
 });
 
 test('it caps a file source line that arrives over several reads at 4096 characters', async () => {

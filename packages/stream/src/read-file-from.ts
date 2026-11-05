@@ -6,9 +6,13 @@ export interface FileChunk {
   readonly bytes: Uint8Array;
 }
 
-// The bytes of a file from the offset `from` to its end. A file that does not exist yet reads as
+// Up to `limitBytes` of a file from the offset `from`. A file that does not exist yet reads as
 // empty, as `tail -F` treats it; a file that shrank, such as a log rotated in place, reads from 0.
-export async function readFileFrom(path: string, from: number): Promise<FileChunk> {
+export async function readFileFrom(
+  path: string,
+  from: number,
+  limitBytes: number,
+): Promise<FileChunk> {
   const handle = await open(path, 'r').catch((error: unknown) => {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
       return null;
@@ -26,7 +30,7 @@ export async function readFileFrom(path: string, from: number): Promise<FileChun
 
     const start = stats.size < from ? 0 : from;
 
-    const bytes = new Uint8Array(stats.size - start);
+    const bytes = new Uint8Array(Math.min(stats.size - start, limitBytes));
 
     // A file truncated after the stat yields fewer bytes than the buffer holds.
     const read = await handle.read(bytes, 0, bytes.length, start);
