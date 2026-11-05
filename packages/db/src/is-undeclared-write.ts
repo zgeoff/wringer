@@ -5,16 +5,28 @@ import type { SQLToken } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
-type Via = 'sql' | 'exec';
-
 const sqliteEscapeWords = new Set(['attach', 'vacuum', 'query_only']);
+
+// A read-only Postgres transaction still runs `NOTIFY`, `LISTEN`, `SET` and `PREPARE`, so a read
+// starts with one of these words or counts as a write.
 const postgresReadWords = new Set(['select', 'with', 'values', 'table', 'show', 'explain']);
-const writeWords = new Set(['insert', 'update', 'delete', 'merge']);
+
+// Each word that makes a read statement run something else: a data-changing `WITH` or `EXPLAIN
+// ANALYZE` target, `SELECT … INTO`, which creates a table, or a prepared or declared statement.
+const nestedWriteWords = new Set([
+  'insert',
+  'update',
+  'delete',
+  'merge',
+  'into',
+  'create',
+  'execute',
+  'declare',
+]);
 
 // Read-only SQLite still runs `VACUUM INTO`, and a read-only Postgres transaction still runs
-// `COPY … TO` and `lo_export`: each writes a file. A psql read runs inside a SELECT wrapper, where a
-// write fails as a syntax error before the transaction can refuse it, so its words decide.
-export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): boolean {
+// `COPY … TO` and `lo_export`: each writes a file.
+export function isUndeclaredWrite(dialect: Dialect, sql: string): boolean {
   const lex = parseSQLTokens(dialect, sql);
 
   // The database refuses SQL whose string or comment never closes; this check refuses it first.
@@ -30,22 +42,11 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return words.some((word) => sqliteEscapeWords.has(word));
   }
 
-  if (
-    lex.tokens.some((token) => isPostgresEscape(token)) ||
-    findUnlistedPostgresCall(lex.tokens) !== null
-  ) {
-    return true;
-  }
-
-  if (via === 'sql') {
-    return false;
-  }
-
-  const leading = findLeadingWord(lex.tokens) ?? '';
-
   return (
-    !postgresReadWords.has(leading) ||
-    (leading === 'with' && words.some((word) => writeWords.has(word)))
+    lex.tokens.some((token) => isPostgresEscape(token)) ||
+    findUnlistedPostgresCall(lex.tokens) !== null ||
+    !postgresReadWords.has(findLeadingWord(lex.tokens) ?? '') ||
+    words.some((word) => nestedWriteWords.has(word))
   );
 }
 

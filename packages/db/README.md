@@ -58,9 +58,7 @@ A query through `via: 'exec'` has these limits:
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
 - A statement for psql runs alone, with no backslash and no `;` inside it.
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
-- A read through psql starts with `select`, `with`, `values` or `table`, and holds no `insert`,
-  `update`, `delete` or `merge` after a `with`. A `show` or `explain` fails with a usage error, and
-  any other read counts as a write that did not ask to write.
+- psql runs a read inside a `select`, so a `show` or `explain` fails with a usage error.
 - At the deadline, the host stops the client's process group, locally or on the `ssh()` host. A
   client that `program` starts in a container, such as through `docker exec`, runs on, so a sqlite3
   write there can commit after the timeout.
@@ -81,11 +79,13 @@ A query returns `{ columns, rows, rowCount }`.
 - A query is a read unless it passes `write: true`, and a read runs read-only in the database. On
   SQLite, `via: 'sql'` opens the file read-only with `query_only` on, and `via: 'exec'` runs sqlite3
   with `-readonly`. Postgres runs a read in a read-only transaction.
-- A query through `via: 'sql'` holds one statement. Postgres refuses a second one, so a read cannot
-  end its read-only transaction with `COMMIT`.
+- A query through `via: 'sql'` holds one statement, so a read cannot end its transaction early.
 - On SQLite, a read that runs `attach`, `vacuum` or `query_only` counts as a write. The words inside
   a string, a quoted name or a comment do not count. A read-only handle still runs `VACUUM INTO`,
   which copies the database to any path.
+- On Postgres, a read starts with `select`, `with`, `values`, `table`, `show` or `explain`, and
+  holds none of `insert`, `update`, `delete`, `merge`, `into`, `create`, `execute` or `declare`. Any
+  other read counts as a write: a read-only transaction still runs `NOTIFY`, `SET` or `PREPARE`.
 - On Postgres, a read that holds the word `copy` or `lo_export` counts as a write, inside a string
   or a quoted name too, but never inside a comment: a read-only transaction still lets both write
   server files. A `DO` block, which runs SQL from a string, and a `U&"…"` name count as writes.
