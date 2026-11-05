@@ -104,10 +104,30 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  // Its service's stop throws before it returns a promise.
+  const brittle = defineDriver({
+    name: 'brittle',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {
+      till: {
+        start: () =>
+          Promise.resolve({
+            methods: {},
+            stop: () => {
+              throw new WringerError('environment', { message: 'The till jammed.' });
+            },
+          }),
+      },
+    },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(leaky({}))
     .use(tardy({}))
     .use(tidy({}))
+    .use(brittle({}))
     .target('box', {
       mode: 'attach',
       access: 'read-write',
@@ -125,6 +145,12 @@ async function setupTest() {
       access: 'read-write',
       host: local(),
       drivers: { tidy: () => ({}) },
+    })
+    .target('brittle-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { brittle: () => ({}), tidy: () => ({}) },
     })
     .build();
 
@@ -321,6 +347,30 @@ test('#runSupervisor answers a call to a method every object inherits with a usa
   });
 
   expect(called).rejects.toMatchObject({ code: 'usage' });
+});
+
+test('#runSupervisor ends the run as crashed and still stops the other services when a stop throws at once', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', undefined, 'brittle-box');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const [ended] = await Promise.all([
+    ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'),
+    supervising,
+  ]);
+
+  expect({ status: ended?.status, stopCalls: ctx.stopCalls }).toStrictEqual({
+    status: 'crashed',
+    stopCalls: ['shelf exited 0'],
+  });
 });
 
 test('#runSupervisor lets a service run a command from its stop', async () => {

@@ -74,7 +74,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
     const settled = await Promise.allSettled(
       cleanups.map(([, cleanup]) =>
-        raceDeadline(cleanup(), AbortSignal.timeout(options.stopWaitMs)),
+        raceDeadline(Promise.try(cleanup), AbortSignal.timeout(options.stopWaitMs)),
       ),
     );
 
