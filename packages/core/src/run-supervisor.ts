@@ -31,6 +31,8 @@ export interface SupervisorOptions {
   readonly signal?: AbortSignal | undefined;
 }
 
+type Cleanup = readonly [string, () => Promise<void>];
+
 // The supervisor owns a run's app and every driver service. It resolves once the run has stopped,
 // by `stop` over the socket or by a crash of the app.
 export async function runSupervisor(options: SupervisorOptions): Promise<void> {
@@ -58,30 +60,30 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const stoppedKeys = new Set<string>();
 
   // Stops each part of the run that is up and not yet stopping, and names each that failed. A part
-  // is marked before its stop starts, so two calls never stop the same part.
+  // is marked before its stop starts, so two calls never stop the same part. The app stops first,
+  // so a service that records its log, such as a stream recorder, sees its last lines.
   const stopStarted = async (): Promise<readonly string[]> => {
     const current = launch;
 
-    const cleanups = [
-      ...(current === undefined ? [] : [['app', () => current.stop()] as const]),
-      ...[...services].map(([key, service]) => [key, () => service.stop()] as const),
-    ].filter(([key]) => !stoppedKeys.has(key));
+    const appCleanups: readonly Cleanup[] =
+      current === undefined ? [] : [['app', () => current.stop()]];
 
-    for (const [key] of cleanups) {
+    const serviceCleanups = [...services].map(([key, service]): Cleanup => [
+      key,
+      () => service.stop(),
+    ]);
+
+    const appPending = appCleanups.filter(([key]) => !stoppedKeys.has(key));
+    const servicePending = serviceCleanups.filter(([key]) => !stoppedKeys.has(key));
+
+    for (const [key] of [...appPending, ...servicePending]) {
       stoppedKeys.add(key);
     }
 
-    const settled = await Promise.allSettled(
-      cleanups.map(([, cleanup]) =>
-        raceDeadline(Promise.try(cleanup), AbortSignal.timeout(options.stopWaitMs)),
-      ),
-    );
+    const appFailures = await runCleanups(appPending, options.stopWaitMs);
+    const serviceFailures = await runCleanups(servicePending, options.stopWaitMs);
 
-    return settled.flatMap((result, index) =>
-      result.status === 'rejected'
-        ? [`${cleanups[index]?.[0] ?? 'unknown'}: ${toWringerError(result.reason).message}`]
-        : [],
-    );
+    return [...appFailures, ...serviceFailures];
   };
 
   // A stop during startup waits a bounded time for the app and services still starting. Every
@@ -239,6 +241,21 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   server.close();
 
   await options.launchHost.removeDirectory(dirname(socket));
+}
+
+// Each cleanup runs, even after one fails, and each failure names its part.
+async function runCleanups(cleanups: readonly Cleanup[], stopWaitMs: number): Promise<string[]> {
+  const settled = await Promise.allSettled(
+    cleanups.map(([, cleanup]) =>
+      raceDeadline(Promise.try(cleanup), AbortSignal.timeout(stopWaitMs)),
+    ),
+  );
+
+  return settled.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [`${cleanups[index]?.[0] ?? 'unknown'}: ${toWringerError(result.reason).message}`]
+      : [],
+  );
 }
 
 interface StopOutcome {

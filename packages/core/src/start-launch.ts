@@ -1,5 +1,6 @@
 import { dirname } from 'node:path';
 import { buildSpawnError } from './build-spawn-error.ts';
+import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
 import { readStreamLines } from './read-stream-lines.ts';
 import type { Endpoints } from './run-events.ts';
@@ -81,7 +82,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     }
   };
 
-  void pumpLog(child.stdout, (line) => {
+  const stdoutLogged = pumpLog(child.stdout, (line) => {
     const endpoints = request.plan.ready(parseLogLine(line));
 
     if (endpoints !== null) {
@@ -89,9 +90,11 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     }
   });
 
-  void pumpLog(child.stderr, () => {
+  const stderrLogged = pumpLog(child.stderr, () => {
     // The log keeps stderr; only stdout carries the ready line.
   });
+
+  const logged = Promise.all([stdoutLogged, stderrLogged]);
 
   const watchExit = async (): Promise<void> => {
     const exitCode = await child.exited;
@@ -122,6 +125,10 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     clearTimeout(forced);
 
     request.host.killProcessGroup(child.pid);
+
+    // The stop ends once the app's last lines are in its log, so a reader of the log after the stop
+    // sees them. A process outside the group can hold the pipes open, so the wait has a bound.
+    await raceDeadline(logged, AbortSignal.timeout(stopGraceMs)).catch(() => null);
   };
 
   try {
