@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { chromium } from 'playwright-core';
 import type { Browser } from 'playwright-core';
+import { createBrokenPageBrowser } from '../test-utils/create-broken-page-browser.ts';
 import { createContextRefusingBrowser } from '../test-utils/create-context-refusing-browser.ts';
 import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { createSlowClosingBrowser } from '../test-utils/create-slow-closing-browser.ts';
@@ -161,7 +162,7 @@ test('it runs a command queued behind a timed-out click on the reopened page', a
 test('it fails a cancelled command only once its page has closed', async () => {
   const ctx = setupTest();
 
-  const launched = await createSlowClosingBrowser(500);
+  const launched = await createSlowClosingBrowser(200);
 
   onTestFinished(() => launched.browser.close());
 
@@ -178,6 +179,86 @@ test('it fails a cancelled command only once its page has closed', async () => {
     staleClosed: true,
   });
 });
+
+test('it fails a cancelled command, and the commands after it, when its page does not close in time', async () => {
+  const ctx = setupTest();
+
+  const launched = await createSlowClosingBrowser(3000);
+
+  onTestFinished(() => launched.browser.close());
+
+  const service = await ctx.startPageOn(launched.slow);
+
+  await service.methods['goto']?.({ url: ctx.url }, new AbortController().signal);
+
+  const [clicked, queued] = await Promise.allSettled([
+    service.methods['click']?.({ role: 'button', name: 'Restock' }, AbortSignal.timeout(300)),
+    service.methods['snapshot']?.(null, new AbortController().signal),
+  ]);
+
+  const [later] = await Promise.allSettled([
+    service.methods['snapshot']?.(null, new AbortController().signal),
+  ]);
+
+  const closeFailure = {
+    status: 'rejected' as const,
+    reason: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringContaining('did not close the page of a cancelled command within'),
+    }),
+  };
+
+  expect({ clicked, queued, later }).toStrictEqual({
+    clicked: closeFailure,
+    queued: closeFailure,
+    later: closeFailure,
+  });
+});
+
+test.each([
+  {
+    name: 'its page fails to close',
+    breaks: 'close' as const,
+    message: 'The browser could not close the page of a cancelled command',
+  },
+  {
+    name: 'no replacement page opens',
+    breaks: 'reopen' as const,
+    message: 'The browser could not open a new page',
+  },
+])(
+  'it fails the commands queued behind a cancelled command, and those after it, when $name',
+  async (row) => {
+    const ctx = setupTest();
+
+    const launched = await createBrokenPageBrowser(row.breaks);
+
+    onTestFinished(() => launched.browser.close());
+
+    const service = await ctx.startPageOn(launched.broken);
+
+    await service.methods['goto']?.({ url: ctx.url }, new AbortController().signal);
+
+    const [, queued] = await Promise.allSettled([
+      service.methods['click']?.({ role: 'button', name: 'Restock' }, AbortSignal.timeout(300)),
+      service.methods['snapshot']?.(null, new AbortController().signal),
+    ]);
+
+    const [later] = await Promise.allSettled([
+      service.methods['snapshot']?.(null, new AbortController().signal),
+    ]);
+
+    const failure = {
+      status: 'rejected' as const,
+      reason: expect.objectContaining({
+        code: 'environment',
+        message: expect.stringContaining(row.message),
+      }),
+    };
+
+    expect({ queued, later }).toStrictEqual({ queued: failure, later: failure });
+  },
+);
 
 test('it reports a failed reload of the replacement page and keeps the page for the next command', async () => {
   const ctx = setupTest();

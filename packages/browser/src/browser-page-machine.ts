@@ -1,5 +1,6 @@
 import { WringerError } from '@wringer/core';
 import type { Page } from 'playwright-core';
+import invariant from 'tiny-invariant';
 import { assign, fromCallback, fromPromise, setup } from 'xstate';
 import { toPageError } from './to-page-error.ts';
 
@@ -35,11 +36,16 @@ type PageEvent =
 
 const pageTypes: { context?: PageContext; events?: PageEvent; input?: PageInput } = {};
 
-// One page serves every command of a run, one command at a time. Playwright cannot cancel one
-// action, so a cancelled command fails only once its page has closed, and a new page at the same
-// URL opens before the next command starts; a command cancelled in the queue never starts.
+// A service call's signal aborts one second before the caller's deadline, so a page that closes
+// within this bound lets the command report before that deadline.
+const pageCloseLimitMs = 500;
+
+// Playwright cannot cancel one action, so a cancelled command fails only once its page has closed,
+// and a page that does not close within the bound may still run the action, so the browser then
+// refuses every later command.
 export const browserPageMachine = setup({
   types: pageTypes,
+  delays: { closeLimit: pageCloseLimitMs },
   actors: {
     runAction: fromPromise<PageActionResult, { page: Page; command: PageCommand }>((args) =>
       args.input.command.action(args.input.page),
@@ -164,6 +170,17 @@ export const browserPageMachine = setup({
           actions: assign({ failure: (args) => toCloseFailure(args.event.error) }),
         },
       },
+      after: {
+        closeLimit: {
+          target: 'broken',
+          actions: assign({
+            failure: new WringerError('environment', {
+              message: `The browser did not close the page of a cancelled command within ${pageCloseLimitMs} ms, so its action may still run.`,
+              hint: 'Run `up --restart` to start a new browser.',
+            }),
+          }),
+        },
+      },
       on: { run: { actions: 'enqueue' }, stop: 'stopped' },
     },
     reopening: {
@@ -202,9 +219,7 @@ export const browserPageMachine = setup({
 function getHead(context: PageContext): PageCommand {
   const [head] = context.queue;
 
-  if (head === undefined) {
-    throw new Error('The browser page ran a command with an empty queue.');
-  }
+  invariant(head, 'The browser page ran a command with an empty queue.');
 
   return head;
 }
