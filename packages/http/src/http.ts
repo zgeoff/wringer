@@ -1,7 +1,7 @@
 import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
-import { buildRequestHeaders } from './build-request-headers.ts';
+import { buildRequestPlan } from './build-request-plan.ts';
 import { pickHttpEffect } from './pick-http-effect.ts';
 
 const methodSchema = z.enum(['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']);
@@ -109,38 +109,19 @@ async function sendRequest(
   transport: HttpTransport,
   request: ParsedRequest,
 ): Promise<HttpResponse> {
-  const base = new URL(getBaseURL(session));
-  const url = new URL(request.path, base);
-
-  // A path such as `//host/` resolves to another origin, which the target's grants never cover.
-  if (url.origin !== base.origin) {
-    throw new WringerError('usage', {
-      message: `${request.path} is not a path of the app at ${base.origin}.`,
-      hint: 'Pass a path that starts with one /, such as /api/search.',
-    });
-  }
-
-  const hasBody = request.json !== undefined;
-
-  // fetch refuses a body on GET or HEAD, which would otherwise read as an app that is down.
-  if (hasBody && (request.method === 'GET' || request.method === 'HEAD')) {
-    throw new WringerError('usage', {
-      message: `A ${request.method} request cannot send a JSON body.`,
-      hint: 'Pass the values in the path, or send the body with POST, PUT or PATCH.',
-    });
-  }
+  const plan = buildRequestPlan({
+    target: session.target,
+    endpoint: session.config.endpoint,
+    baseURL: session.config.baseURL ?? session.endpoints[session.config.endpoint],
+    method: request.method,
+    path: request.path,
+    headers: request.headers,
+    json: request.json,
+  });
 
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
-  const headers = buildRequestHeaders(request.headers, hasBody);
 
-  // A followed 307 or 308 repeats the method and body at a path the target never granted.
-  const fetched = await sendFetch(transport, url, {
-    method: request.method,
-    headers,
-    signal,
-    redirect: 'manual',
-    ...(hasBody ? { body: JSON.stringify(request.json) } : {}),
-  });
+  const fetched = await sendFetch(transport, plan.url, { ...plan.init, signal });
 
   const result: HttpResponse = {
     status: fetched.response.status,
@@ -152,23 +133,10 @@ async function sendRequest(
   await session.evidence.writeFile(
     'http',
     `${request.method.toLowerCase()}.json`,
-    JSON.stringify({ request: { ...request, url: url.href }, response: result }, null, 2),
+    JSON.stringify({ request: { ...request, url: plan.url.href }, response: result }, null, 2),
   );
 
   return result;
-}
-
-function getBaseURL(session: DriverSession<HttpOptions, HttpConfig>): string {
-  const baseURL = session.config.baseURL ?? session.endpoints[session.config.endpoint];
-
-  if (baseURL === undefined) {
-    throw new WringerError('usage', {
-      message: `Target ${session.target} has no endpoint ${session.config.endpoint}.`,
-      hint: 'Set `baseURL` in the http config of the target, or name an endpoint it has.',
-    });
-  }
-
-  return baseURL;
 }
 
 interface FetchedResponse {
