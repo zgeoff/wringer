@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
+import { callSupervisor } from './call-supervisor.ts';
 import { dispatch } from './dispatch.ts';
 import { removeFile } from './remove-file.ts';
 import { runGit } from './run-git.ts';
@@ -22,10 +23,23 @@ async function setupTest() {
   });
 
   const evidenceWrites = mock(writeNewFile);
+  const supervisorCalls = mock(callSupervisor);
   const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate.promise };
 
   return {
     evidenceWrites,
+    supervisorCalls,
+    runRecordingCalls: (path: readonly string[]) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target: 'local',
+          supervisor: { ...shop.session.supervisor, call: supervisorCalls },
+        },
+      ),
     runRecordingWrites: (path: readonly string[]) =>
       dispatch(
         wringer,
@@ -516,6 +530,20 @@ test("it gives a repo command that needs no run the running run's services", asy
     exitCode: 0,
     data: { count: 1 },
   });
+});
+
+test("it reaches a driver's service through the session's supervisor port", async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.runRecordingCalls(['shelf']);
+
+  expect(ctx.supervisorCalls).toHaveBeenCalledWith(
+    expect.objectContaining({
+      request: { service: 'notes/store', method: 'list', args: null },
+    }),
+  );
 });
 
 test('it refuses a driver call from a repo command that needs no run while no run is up', async () => {

@@ -18,7 +18,11 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
       ctx.bindRun(runID);
     }
 
-    const reach = view === undefined ? 'gone' : await callRunSupervisor(view, 'stop', ctx.signal);
+    const reach =
+      view === undefined
+        ? 'gone'
+        : await callRunSupervisor(ctx.session.supervisor, view, 'stop', ctx.signal);
+
     const plan = pickStopPlan({ runID, status: view?.status, reach });
 
     if (runID !== undefined && plan.markCrashed) {

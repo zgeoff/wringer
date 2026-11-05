@@ -374,6 +374,7 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     now: request.now,
     emit: makeEmit(request.session),
     files: request.session.repoHost,
+    callSupervisor: request.session.supervisor.call,
   });
 }
 

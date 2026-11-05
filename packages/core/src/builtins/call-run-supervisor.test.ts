@@ -3,7 +3,9 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../../test-utils/create-test-folder.ts';
 import { buildMockRunView } from '../../test-utils/build-mock-run-view.ts';
+import type { RunView } from '../build-run-view.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
+import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { WringerError } from '../wringer-error.ts';
 import { callRunSupervisor, isSupervisorGone } from './call-run-supervisor.ts';
 
@@ -12,7 +14,17 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { socket: join(directory, 'supervisor.sock') };
+  const supervisor = makeProcessSupervisorPort({
+    selfCommand: ['true'],
+    root: directory,
+    stateDir: '.wringer',
+  });
+
+  return {
+    socket: join(directory, 'supervisor.sock'),
+    callRunSupervisor: (run: RunView, signal: AbortSignal) =>
+      callRunSupervisor(supervisor, run, 'ping', signal),
+  };
 }
 
 test.each([
@@ -25,9 +37,10 @@ test.each([
 });
 
 test('it reads a run that never got a supervisor as gone', async () => {
-  const reach = await callRunSupervisor(
+  const ctx = await setupTest();
+
+  const reach = await ctx.callRunSupervisor(
     buildMockRunView({ supervisor: null }),
-    'ping',
     new AbortController().signal,
   );
 
@@ -37,9 +50,8 @@ test('it reads a run that never got a supervisor as gone', async () => {
 test('it reads a socket that nothing listens on as gone', async () => {
   const ctx = await setupTest();
 
-  const reach = await callRunSupervisor(
+  const reach = await ctx.callRunSupervisor(
     buildMockRunView({ supervisor: { pid: 1, socket: ctx.socket } }),
-    'ping',
     new AbortController().signal,
   );
 
@@ -65,9 +77,8 @@ test('it rejects a call that a live supervisor answers too late', async () => {
     server.close();
   });
 
-  const calling = callRunSupervisor(
+  const calling = ctx.callRunSupervisor(
     buildMockRunView({ supervisor: { pid: process.pid, socket: ctx.socket } }),
-    'ping',
     AbortSignal.timeout(50),
   );
 

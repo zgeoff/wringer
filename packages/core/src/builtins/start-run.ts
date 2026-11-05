@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import type { RunView } from '../build-run-view.ts';
-import { callSupervisor } from '../call-supervisor.ts';
 import { findOwnValue } from '../find-own-value.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { readFingerprint } from '../read-fingerprint.ts';
@@ -136,8 +135,19 @@ async function settleCurrentRun(
 
     facts =
       action === 'ping'
-        ? { ...facts, ping: await callRunSupervisor(current, 'ping', makePingSignal(ctx)) }
-        : { ...facts, stop: await callRunSupervisor(current, 'stop', ctx.signal) };
+        ? {
+            ...facts,
+            ping: await callRunSupervisor(
+              ctx.session.supervisor,
+              current,
+              'ping',
+              makePingSignal(ctx),
+            ),
+          }
+        : {
+            ...facts,
+            stop: await callRunSupervisor(ctx.session.supervisor, current, 'stop', ctx.signal),
+          };
   }
 }
 
@@ -217,7 +227,7 @@ async function stopAbandonedRun(ctx: BuiltinContext, runID: string): Promise<voi
   }
 
   try {
-    await callSupervisor({
+    await ctx.session.supervisor.call({
       socket,
       request: { service: supervisorServiceName, method: 'stop', args: null },
       signal: AbortSignal.timeout(stopTimeoutMs),

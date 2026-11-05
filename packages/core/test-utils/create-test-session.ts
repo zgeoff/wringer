@@ -68,6 +68,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
         },
       },
       supervisor: {
+        call: callSupervisor,
         start: (request) => {
           runIDs.push(request.runID);
 

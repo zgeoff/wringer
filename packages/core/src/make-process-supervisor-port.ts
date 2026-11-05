@@ -2,8 +2,9 @@ import { spawn } from 'node:child_process';
 import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { join } from 'node:path';
 import { buildRunPaths } from './build-state-paths.ts';
+import { callSupervisor } from './call-supervisor.ts';
 import { buildSupervisorArgv } from './supervisor-protocol.ts';
-import type { SupervisorStarter } from './types.ts';
+import type { SupervisorPort } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface ProcessSupervisorOptions {
@@ -13,9 +14,11 @@ export interface ProcessSupervisorOptions {
 }
 
 // The supervisor is the repo's own CLI started again with a hidden command, detached in its own
-// process group, so it outlives the command that started it and loads the same registry.
-export function makeProcessSupervisorStarter(options: ProcessSupervisorOptions): SupervisorStarter {
+// process group, so it outlives the command that started it and loads the same registry. Calls
+// reach it over its Unix socket.
+export function makeProcessSupervisorPort(options: ProcessSupervisorOptions): SupervisorPort {
   return {
+    call: callSupervisor,
     start: (request) => {
       const paths = buildRunPaths(join(options.root, options.stateDir), request.runID);
 

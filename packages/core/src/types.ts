@@ -1,6 +1,7 @@
 import type { z } from 'zod';
 import type { RunView } from './build-run-view.ts';
 import type { RunPaths } from './build-state-paths.ts';
+import type { SupervisorCall } from './call-supervisor.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
@@ -419,8 +420,11 @@ export interface SupervisorStartRequest {
   readonly target: string;
 }
 
-export interface SupervisorStarter {
+// How a command reaches a run's supervisor: it starts one, and sends one request over the run's
+// socket and reads the answer.
+export interface SupervisorPort {
   readonly start: (request: SupervisorStartRequest) => Promise<void>;
+  readonly call: (call: SupervisorCall) => Promise<unknown>;
 }
 
 export interface OutputPort {
@@ -451,6 +455,6 @@ export interface Session {
   readonly feature?: string | undefined;
   readonly timeoutMs?: number | undefined;
   readonly output: OutputPort;
-  readonly supervisor: SupervisorStarter;
+  readonly supervisor: SupervisorPort;
   readonly now?: (() => Date) | undefined;
 }

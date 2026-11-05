@@ -5,7 +5,7 @@ import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { waitFor } from '../../test-utils/wait-for.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
-import { makeProcessSupervisorStarter } from '../make-process-supervisor-starter.ts';
+import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { runGit } from '../run-git.ts';
 
 async function setupTest() {
@@ -57,7 +57,7 @@ async function setupTest() {
         {
           ...shop.session,
           target,
-          supervisor: makeProcessSupervisorStarter({
+          supervisor: makeProcessSupervisorPort({
             selfCommand: [join(shop.repo.root, 'no-such-cli')],
             root: shop.repo.root,
             stateDir: wringer.stateDir,
