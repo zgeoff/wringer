@@ -200,6 +200,32 @@ test.each([
   expect(after).toBe(before);
 });
 
+test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', async () => {
+  const ctx = await setupTest();
+
+  const lines = Array.from({ length: 12 }, (_, index) => `row ${index}`);
+
+  await writeFile(join(ctx.repo, 'rows.txt'), `${lines.join('\n')}\n`);
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'rows.txt'), `${lines.with(6, 'row six').join('\n')}\n`);
+
+  const before = await ctx.readFingerprint();
+
+  const after = await readFingerprint(
+    {
+      runGit: (request) =>
+        runGit({ ...request, env: { GIT_DIFF_OPTS: '--unified=0', ...request.env } }),
+      removeFile,
+    },
+    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'] },
+  );
+
+  expect(after).toBe(before);
+});
+
 test.each([
   ['diff.ignoreSubmodules', 'all'],
   ['diff.submodule', 'log'],
