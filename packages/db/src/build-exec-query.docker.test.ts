@@ -110,6 +110,25 @@ test('it names the columns of a psql read over ssh that returns no rows', async 
   expect(result).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
 });
 
+test('it names the columns of a psql read that returns no rows and ends in a comment', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes();
+
+  const result = await ctx.runRead('select id, text from notes where 1 = 0; -- done');
+
+  expect(result).toStrictEqual({ columns: ['id', 'text'], rows: [], rowCount: 0 });
+});
+
+test('it keeps the SQLSTATE psql prints for a failed read', async () => {
+  const ctx = await setupTest();
+
+  expect(ctx.runRead('select id from orders')).rejects.toMatchObject({
+    errno: '42P01',
+    message: expect.stringContaining('relation "orders" does not exist'),
+  });
+});
+
 test('it never commits a psql write over ssh that ran past its deadline', async () => {
   const ctx = await setupTest();
 

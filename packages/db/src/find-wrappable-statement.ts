@@ -1,4 +1,5 @@
 import { findLeadingWord } from './find-leading-word.ts';
+import { findStatementBody } from './find-statement-body.ts';
 import { parseSQLTokens } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
@@ -9,15 +10,16 @@ const wrappableWords: Readonly<Record<Dialect, ReadonlySet<string>>> = {
   sqlite: new Set(['select', 'with', 'values']),
 };
 
-// The statement without its trailing `;`, when it is a read the driver can wrap to learn its
-// columns. A `;` left inside it would end the wrapper early, so such a statement has none.
+// The statement without what follows its end, when it is a read the driver can wrap to learn its
+// columns.
 export function findWrappableStatement(dialect: Dialect, sql: string): string | null {
-  const statement = sql.trim().replace(/[;\s]+$/u, '');
-  const lex = parseSQLTokens(dialect, statement);
+  const statement = findStatementBody(dialect, sql);
 
-  if (!lex.closed || lex.tokens.some((token) => token.kind === 'symbol' && token.text === ';')) {
+  if (statement === null) {
     return null;
   }
+
+  const lex = parseSQLTokens(dialect, statement);
 
   return wrappableWords[dialect].has(findLeadingWord(lex.tokens) ?? '') ? statement : null;
 }

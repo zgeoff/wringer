@@ -119,6 +119,16 @@ test('it names the columns of a Postgres read with a parameter that returns no r
   expect(result).toStrictEqual({ columns: ['id', 'label'], rows: [], rowCount: 0 });
 });
 
+test('it names the columns of a Postgres read that returns no rows and ends in a comment', async () => {
+  const ctx = await setupTest();
+
+  await ctx.createNotes(['pay']);
+
+  const result = await ctx.runQuery('select id, text from notes where 1 = 0; -- done');
+
+  expect(result).toStrictEqual({ columns: ['id', 'text'], rows: [], rowCount: 0 });
+});
+
 test('it binds a parameter into a Postgres read', async () => {
   const ctx = await setupTest();
   const result = await ctx.runQuery('select $1::text as label', { params: ['parcel'] });

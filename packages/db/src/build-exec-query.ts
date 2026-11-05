@@ -1,5 +1,6 @@
 import { WringerError } from '@wringer/core';
 import { findLeadingWord } from './find-leading-word.ts';
+import { findStatementBody } from './find-statement-body.ts';
 import { findWrappableStatement } from './find-wrappable-statement.ts';
 import { parseSQLTokens } from './parse-sql-tokens.ts';
 
@@ -77,18 +78,29 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
     });
   }
 
-  const statement = input.sql.trim().replace(/[;\s]+$/u, '');
-
-  // A `;` inside the statement could end a read's read-only transaction and run a write after it.
+  // A second statement could end a read's read-only transaction and run a write after it.
   // statement_timeout limits each statement alone, so a script of several runs past the deadline.
-  if (statement.includes(';')) {
+  const statement = findStatementBody('postgres', input.sql);
+
+  if (statement === null) {
     throw new WringerError('usage', {
-      message: 'A statement for psql runs alone, with no `;` inside it.',
+      message: 'A statement for psql runs alone, with no second statement and nothing left open.',
       hint: 'Split the statements into separate queries.',
     });
   }
 
-  const options = ['-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', input.database];
+  // `VERBOSITY=verbose` puts each error's SQLSTATE before its message, so the driver classifies it
+  // by code.
+  const options = [
+    '-t',
+    '-A',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-v',
+    'VERBOSITY=verbose',
+    '-d',
+    input.database,
+  ];
 
   // The deadline's abort stops only the local process, so psql inside a container runs on, and a
   // write could commit after the command reported a timeout. Postgres reads the time left once the
