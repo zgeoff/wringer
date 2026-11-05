@@ -1,6 +1,6 @@
 import type { RunView } from '../build-run-view.ts';
-import { callSupervisor } from '../call-supervisor.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
+import type { SupervisorPort } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 
 export type SupervisorReach = 'answered' | 'gone';
@@ -9,6 +9,7 @@ export type SupervisorReach = 'answered' | 'gone';
 // out or fails in any other way may still reach a live supervisor later, so it rejects, and the
 // caller leaves the run as it is.
 export async function callRunSupervisor(
+  supervisor: SupervisorPort,
   run: RunView,
   method: 'ping' | 'stop',
   signal: AbortSignal,
@@ -18,7 +19,7 @@ export async function callRunSupervisor(
   }
 
   try {
-    await callSupervisor({
+    await supervisor.call({
       socket: run.supervisor.socket,
       request: { service: supervisorServiceName, method, args: null },
       signal,

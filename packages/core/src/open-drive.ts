@@ -2,7 +2,6 @@ import { join } from 'node:path';
 import { buildRunHandle } from './build-run-handle.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildServiceKey } from './build-service-key.ts';
-import { callSupervisor } from './call-supervisor.ts';
 import { collectDriverConfigs } from './collect-driver-configs.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import type { Access } from './host.ts';
@@ -13,6 +12,7 @@ import type {
   Emit,
   EvidenceFiles,
   OpenedDriver,
+  SupervisorPort,
   TargetDefinition,
   Wringer,
 } from './types.ts';
@@ -35,6 +35,7 @@ export interface DriveRequest {
   readonly now: () => Date;
   readonly emit: Emit;
   readonly files: EvidenceFiles;
+  readonly callSupervisor: SupervisorPort['call'];
 }
 
 export const unassignedFeature = 'unassigned';
@@ -81,7 +82,7 @@ export function openDrive(request: DriveRequest): Drive {
         fence,
         service: (service) => ({
           call: (method, args) =>
-            callSupervisor({
+            request.callSupervisor({
               socket: getSocket(request.run),
               request: { service: buildServiceKey(entry.name, service), method, args },
               signal: request.signal,

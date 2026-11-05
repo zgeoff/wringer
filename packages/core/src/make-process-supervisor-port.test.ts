@@ -4,16 +4,16 @@ import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { buildRunPaths } from './build-state-paths.ts';
-import { makeProcessSupervisorStarter } from './make-process-supervisor-starter.ts';
+import { makeProcessSupervisorPort } from './make-process-supervisor-port.ts';
 
 async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'supervisor-starter');
+  const root = await createTestFolder(import.meta.dir, 'supervisor-port');
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
   return {
-    makeStarter: (selfCommand: readonly string[]) =>
-      makeProcessSupervisorStarter({ selfCommand, root, stateDir: '.wringer' }),
+    makePort: (selfCommand: readonly string[]) =>
+      makeProcessSupervisorPort({ selfCommand, root, stateDir: '.wringer' }),
     readLog: async (runID: string) => {
       const text = await readFile(
         buildRunPaths(join(root, '.wringer'), runID).supervisorLog,
@@ -28,9 +28,9 @@ async function setupTest() {
 test('it starts the command with the run and target, writing to the run log', async () => {
   const ctx = await setupTest();
 
-  const starter = ctx.makeStarter(['sh', '-c', 'echo "$1 $2"']);
+  const port = ctx.makePort(['sh', '-c', 'echo "$1 $2"']);
 
-  await starter.start({ runID: 'mf3k2a-7q1z', target: 'box' });
+  await port.start({ runID: 'mf3k2a-7q1z', target: 'box' });
 
   const log = await waitFor(() => ctx.readLog('mf3k2a-7q1z'));
 
@@ -40,9 +40,9 @@ test('it starts the command with the run and target, writing to the run log', as
 test('it rejects with an environment error when the command cannot start', async () => {
   const ctx = await setupTest();
 
-  const starter = ctx.makeStarter(['wringer-no-such-command']);
+  const port = ctx.makePort(['wringer-no-such-command']);
 
-  expect(starter.start({ runID: 'mf3k2a-7q1z', target: 'box' })).rejects.toMatchObject({
+  expect(port.start({ runID: 'mf3k2a-7q1z', target: 'box' })).rejects.toMatchObject({
     code: 'environment',
   });
 });
