@@ -9,14 +9,23 @@ function setupTest() {
 
   onTestFinished(() => server.stop());
 
+  const reported: string[] = [];
+
+  const reportError = (message: string): void => {
+    reported.push(message);
+  };
+
   return {
     url: server.url,
     posts: server.posts,
+    reported,
     revealRestock: server.revealRestock,
+    stopServer: server.stop,
     startPage: async (actionTimeoutMs = 5000) => {
       const service = await startBrowserPage({
         launchBrowser: () => chromium.launch({ headless: true }),
         actionTimeoutMs,
+        reportError,
       });
 
       onTestFinished(() => service.stop());
@@ -24,7 +33,11 @@ function setupTest() {
       return service;
     },
     startPageOn: (browser: Browser) =>
-      startBrowserPage({ launchBrowser: () => Promise.resolve(browser), actionTimeoutMs: 5000 }),
+      startBrowserPage({
+        launchBrowser: () => Promise.resolve(browser),
+        actionTimeoutMs: 5000,
+        reportError,
+      }),
   };
 }
 
@@ -140,6 +153,27 @@ test('it runs a command queued behind a timed-out click on the reopened page', a
   expect({ status: clicked.status, posts: ctx.posts }).toStrictEqual({
     status: 'fulfilled',
     posts: ['/api/restock'],
+  });
+});
+
+test('it reports a failed reload of the replacement page and keeps the page for the next command', async () => {
+  const ctx = setupTest();
+
+  const service = await ctx.startPage();
+
+  await service.methods['goto']?.({ url: ctx.url }, new AbortController().signal);
+  await ctx.stopServer();
+
+  await service.methods['click']?.(
+    { role: 'button', name: 'Restock' },
+    AbortSignal.timeout(300),
+  )?.catch(() => null);
+
+  const status = await service.methods['snapshot']?.({}, AbortSignal.timeout(5000));
+
+  expect({ reported: ctx.reported, status }).toStrictEqual({
+    reported: [expect.stringContaining(`The replacement page could not reload ${ctx.url}: `)],
+    status: { url: expect.any(String), title: expect.any(String), snapshot: expect.any(String) },
   });
 });
 

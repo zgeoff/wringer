@@ -11,6 +11,7 @@ import { pickReopenURL } from './pick-reopen-url.ts';
 export interface BrowserPageOptions {
   readonly launchBrowser: () => Promise<Browser>;
   readonly actionTimeoutMs: number;
+  readonly reportError: (message: string) => void;
 }
 
 const refSchema = z.strictObject({ ref: z.string().min(1) });
@@ -29,7 +30,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
   const pageActor = createActor(browserPageMachine, {
     input: {
       page: runPage.firstPage,
-      reopen: (stale: Page) => reopenPage(stale, runPage.openPage),
+      reopen: (stale: Page) => reopenPage(stale, runPage.openPage, options.reportError),
     },
   });
 
@@ -138,7 +139,11 @@ async function openRunPage(browser: Browser, actionTimeoutMs: number): Promise<R
   }
 }
 
-async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<Page> {
+async function reopenPage(
+  stale: Page,
+  openPage: () => Promise<Page>,
+  reportError: (message: string) => void,
+): Promise<Page> {
   const url = pickReopenURL(stale.url());
 
   // The stale page closes first, so its action cannot land while the new page opens.
@@ -149,7 +154,9 @@ async function reopenPage(stale: Page, openPage: () => Promise<Page>): Promise<P
   // A reload that fails leaves the new page blank, and the next `goto` recovers it; the page
   // itself must still come back, or every later command would fail.
   if (url !== null) {
-    await page.goto(url).catch(() => null);
+    await page.goto(url).catch((error: unknown) => {
+      reportError(`The replacement page could not reload ${url}: ${String(error)}`);
+    });
   }
 
   return page;

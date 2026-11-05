@@ -98,6 +98,11 @@ export const browser = defineDriver({
                 : { executablePath: ctx.options.executablePath }),
             }),
           actionTimeoutMs: ctx.options.actionTimeoutMs,
+
+          // The supervisor holds the page, and its stderr goes to the supervisor's log.
+          reportError: (message) => {
+            process.stderr.write(`${message}\n`);
+          },
         }),
     },
   },
