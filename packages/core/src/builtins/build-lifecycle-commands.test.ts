@@ -91,11 +91,14 @@ test('#up keeps a live run and its pointer when its supervisor answers the ping 
 
   const socket = join(ctx.root, 'late.sock');
   const answer = Promise.withResolvers<null>();
+  const transportErrors: unknown[] = [];
 
   const server = await listenSupervisorSocket({
     path: socket,
     answerRequest: () => answer.promise,
-    onTransportError: () => null,
+    onTransportError: (error) => {
+      transportErrors.push(error);
+    },
   });
 
   onTestFinished(() => {
@@ -319,11 +322,14 @@ test('#down keeps a live run and its pointer when its supervisor answers too lat
 
   const socket = join(ctx.root, 'late.sock');
   const answer = Promise.withResolvers<null>();
+  const transportErrors: unknown[] = [];
 
   const server = await listenSupervisorSocket({
     path: socket,
     answerRequest: () => answer.promise,
-    onTransportError: () => null,
+    onTransportError: (error) => {
+      transportErrors.push(error);
+    },
   });
 
   onTestFinished(() => {
