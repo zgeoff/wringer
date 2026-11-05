@@ -50,11 +50,14 @@ test('it rejects a call that a live supervisor answers too late', async () => {
   const ctx = await setupTest();
 
   const answer = Promise.withResolvers<null>();
+  const transportErrors: unknown[] = [];
 
   const server = await listenSupervisorSocket({
     path: ctx.socket,
     answerRequest: () => answer.promise,
-    onTransportError: () => null,
+    onTransportError: (error) => {
+      transportErrors.push(error);
+    },
   });
 
   onTestFinished(() => {
