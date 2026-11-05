@@ -38,6 +38,10 @@ export async function answerSupervisorConnection(
   try {
     const lines = createInterface({ input: connection });
 
+    // readline re-emits the connection's errors, also after the loop below has stopped listening,
+    // such as an EPIPE once the caller left.
+    lines.on('error', fail);
+
     for await (const line of lines) {
       const response = await answerLine(line, options.answerRequest);
 
