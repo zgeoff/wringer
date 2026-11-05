@@ -1,6 +1,7 @@
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import type { Evidence } from './envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
+import type { EvidenceFiles } from './types.ts';
 import type { WringerError } from './wringer-error.ts';
 
 export const dataCapBytes = 32 * 1024;
@@ -9,6 +10,7 @@ export interface CapRequest {
   readonly root: string;
   readonly directory: string;
   readonly now: () => Date;
+  readonly files: EvidenceFiles;
 }
 
 export interface CappedData {

@@ -413,8 +413,18 @@ export interface OutputPort {
   readonly writeLine: (line: string) => void;
 }
 
-// Everything the built-in commands read from the repo: its git, and the files a command names.
-export interface RepoHost extends FingerprintHost {
+// The disk operations that keep a command's evidence in the run's folder.
+export interface EvidenceFiles {
+  readonly createDirectory: (path: string) => Promise<void>;
+
+  // False, with nothing written, when the path exists.
+  readonly writeNewFile: (path: string, bytes: Uint8Array) => Promise<boolean>;
+  readonly readBytes: (path: string) => Promise<Uint8Array>;
+}
+
+// Everything a command reads from or writes to the repo: its git, the files a command names, and
+// its evidence.
+export interface RepoHost extends FingerprintHost, EvidenceFiles {
   readonly readText: (path: string) => Promise<string>;
 }
 

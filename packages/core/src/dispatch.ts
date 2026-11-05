@@ -138,6 +138,7 @@ export async function dispatch(
         ? join(stateDir, 'payloads')
         : join(buildRunPaths(stateDir, run.runID).features, feature ?? unassignedFeature),
     now,
+    files: session.repoHost,
   });
 
   const input = settleEnvelope({
@@ -341,6 +342,7 @@ function openCommandDrive(
       signal: request.deadline,
       now: request.now,
       emit: makeEmit(request.session),
+      files: request.session.repoHost,
     });
   }
 
@@ -368,6 +370,7 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     signal: options.signal ?? request.deadline,
     now: request.now,
     emit: makeEmit(request.session),
+    files: request.session.repoHost,
   });
 }
 

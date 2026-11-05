@@ -1,12 +1,12 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join, relative } from 'node:path';
 import type { Evidence } from './envelope.ts';
-import type { EvidenceWriter } from './types.ts';
+import type { EvidenceFiles, EvidenceWriter } from './types.ts';
 
 export interface EvidenceWriterOptions {
   readonly root: string;
   readonly directory: string;
   readonly now: () => Date;
+  readonly files: EvidenceFiles;
 }
 
 export interface CollectingEvidenceWriter {
@@ -37,9 +37,10 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
       writeFile: async (kind, name, content) => {
         const bytes = typeof content === 'string' ? Buffer.from(content) : content;
 
-        await mkdir(options.directory, { recursive: true });
+        await options.files.createDirectory(options.directory);
 
-        const path = await writeNewFile(
+        const path = await writeNumberedFile(
+          options.files,
           options.directory,
           `${formatStamp(options.now())}-${basename(name)}`,
           bytes,
@@ -48,7 +49,7 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
         return record(kind, path, bytes);
       },
       addFile: async (kind, path) => {
-        const bytes = await readFile(path);
+        const bytes = await options.files.readBytes(path);
 
         return record(kind, path, bytes);
       },
@@ -58,35 +59,22 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
 
 // Two writes in one millisecond, from this process or another, can share a name, so the write
 // creates the file exclusively and numbers the name until one is free.
-async function writeNewFile(directory: string, name: string, bytes: Uint8Array): Promise<string> {
+async function writeNumberedFile(
+  files: EvidenceFiles,
+  directory: string,
+  name: string,
+  bytes: Uint8Array,
+): Promise<string> {
   for (let attempt = 0; ; attempt += 1) {
     const numbered = attempt === 0 ? name : `${attempt}-${name}`;
     const path = join(directory, numbered);
 
-    const created = await writeExclusive(path, bytes);
+    const created = await files.writeNewFile(path, bytes);
 
     if (created) {
       return path;
     }
   }
-}
-
-async function writeExclusive(path: string, bytes: Uint8Array): Promise<boolean> {
-  try {
-    await writeFile(path, bytes, { flag: 'wx' });
-
-    return true;
-  } catch (error) {
-    if (isAlreadyThere(error)) {
-      return false;
-    }
-
-    throw error;
-  }
-}
-
-function isAlreadyThere(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST';
 }
 
 function formatStamp(date: Date): string {

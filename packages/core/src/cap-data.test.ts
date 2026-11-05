@@ -3,6 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { capData } from './cap-data.ts';
+import { createNodeRepoHost } from './create-node-repo-host.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'cap-data');
@@ -15,6 +16,7 @@ async function setupTest() {
         root: directory,
         directory: join(directory, 'payloads'),
         now: () => new Date('2026-11-04T10:00:00.000Z'),
+        files: createNodeRepoHost(),
       }),
     readFile: (path: string) => readFile(join(directory, path), 'utf8'),
   };

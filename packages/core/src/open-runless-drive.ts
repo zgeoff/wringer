@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import type { Access } from './host.ts';
 import { makeRepoExec } from './make-fenced-exec.ts';
-import type { Drive, Emit, TargetDefinition, Wringer } from './types.ts';
+import type { Drive, Emit, EvidenceFiles, TargetDefinition, Wringer } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface RunlessDriveRequest {
@@ -17,6 +17,7 @@ export interface RunlessDriveRequest {
   readonly signal: AbortSignal;
   readonly now: () => Date;
   readonly emit: Emit;
+  readonly files: EvidenceFiles;
 }
 
 // A repo command that declares it needs no run still gets the fenced exec and an evidence folder.
@@ -26,6 +27,7 @@ export function openRunlessDrive(request: RunlessDriveRequest): Drive {
     root: request.root,
     directory: join(request.stateDir, 'payloads'),
     now: request.now,
+    files: request.files,
   });
 
   const clients = Object.fromEntries(
