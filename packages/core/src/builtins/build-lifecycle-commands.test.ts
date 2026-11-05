@@ -157,7 +157,7 @@ test('#up keeps a live run and its pointer when its supervisor answers the ping 
   onTestFinished(() => {
     answer.resolve(null);
 
-    return server.close();
+    return server.close(1000);
   });
 
   await ctx.state.appendEvent('late-run', {
@@ -453,7 +453,7 @@ test('#down keeps a live run and its pointer when its supervisor answers too lat
   onTestFinished(() => {
     answer.resolve(null);
 
-    return server.close();
+    return server.close(1000);
   });
 
   await ctx.state.appendEvent('late-run', {

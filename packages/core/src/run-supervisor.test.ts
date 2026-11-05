@@ -22,6 +22,7 @@ async function setupTest() {
 
   const stopGate = Promise.withResolvers<undefined>();
   const startGate = Promise.withResolvers<undefined>();
+  const holdGate = Promise.withResolvers<undefined>();
   const stopCalls: string[] = [];
   const reports: string[] = [];
   const supervisors: Promise<void>[] = [];
@@ -32,6 +33,7 @@ async function setupTest() {
   onTestFinished(async () => {
     stopGate.resolve(undefined);
     startGate.resolve(undefined);
+    holdGate.resolve(undefined);
     teardown.abort();
 
     await Promise.allSettled(supervisors);
@@ -146,8 +148,34 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  // Its service's `hold` method settles only once the test ends.
+  const stuck = defineDriver({
+    name: 'stuck',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {
+      counter: {
+        start: () =>
+          Promise.resolve({
+            methods: {
+              hold: async () => {
+                stopCalls.push('hold');
+
+                await holdGate.promise;
+
+                return null;
+              },
+            },
+            stop: () => Promise.resolve(),
+          }),
+      },
+    },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(leaky({}))
+    .use(stuck({}))
     .use(tardy({}))
     .use(tidy({}))
     .use(brittle({}))
@@ -157,6 +185,12 @@ async function setupTest() {
       access: 'read-write',
       host: local(),
       drivers: { leaky: () => ({}) },
+    })
+    .target('stuck-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { stuck: () => ({}) },
     })
     .target('late', {
       mode: 'attach',
@@ -218,6 +252,12 @@ async function setupTest() {
       callSupervisor({
         socket,
         request: { service: supervisorServiceName, method: 'stop', args: null },
+        signal: AbortSignal.timeout(5000),
+      }),
+    callHold: (socket: string) =>
+      callSupervisor({
+        socket,
+        request: { service: 'stuck/counter', method: 'hold', args: null },
         signal: AbortSignal.timeout(5000),
       }),
     openStopGate: () => {
@@ -541,6 +581,34 @@ test('#runSupervisor ends a connection that sent no request when the run stops',
   await waitFor(() => (idle.closed ? true : null));
 
   expect(idle.closed).toBeTrue();
+});
+
+test('#runSupervisor ends the run and frees its socket when a service call never settles', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', undefined, 'stuck-box');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const socket = ready.supervisor?.socket ?? '';
+  const holding = Promise.allSettled([ctx.callHold(socket)]);
+
+  await waitFor(() => (ctx.stopCalls.includes('hold') ? true : null));
+
+  await Promise.all([ctx.callStop(socket), supervising]);
+
+  const [held] = await holding;
+
+  expect({ removed: ctx.removeDirectory.mock.calls, held: held.status }).toStrictEqual({
+    removed: [[dirname(socket)]],
+    held: 'rejected',
+  });
 });
 
 test('#runSupervisor listens on its socket through the launch host', async () => {
