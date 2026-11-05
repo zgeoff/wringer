@@ -46,10 +46,13 @@ test('it fails a shell command sent to the real sqlite3 client without running i
 
   ctx.seedNotes(['pay']);
 
-  await ctx.run('box', ['attach']);
-  await ctx.run('box', ['doctor']);
+  await ctx.run('bench', ['attach']);
+  await ctx.run('bench', ['doctor']);
 
-  const result = await ctx.run('box', ['db', 'query'], { sql: `.shell touch ${flag}` });
+  const result = await ctx.run('bench', ['db', 'query'], {
+    sql: `.shell touch ${flag}`,
+    write: true,
+  });
 
   expect({ code: result.envelope.error?.code, ran: await Bun.file(flag).exists() }).toStrictEqual({
     code: 'usage',
