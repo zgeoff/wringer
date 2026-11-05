@@ -1,5 +1,6 @@
 import { WringerError } from '@wringer/core';
 import { findLeadingWord } from './find-leading-word.ts';
+import { findWrappableStatement } from './find-wrappable-statement.ts';
 import { parseSQLTokens } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
@@ -16,8 +17,10 @@ export interface ExecQueryInput {
   readonly deadlineAtMs: number;
 }
 
-// A client prints JSON `rows`, or, for a psql write, the `command-tag` such as `UPDATE 3`.
-export type ExecOutput = 'rows' | 'command-tag';
+// A client prints JSON `rows`; or, for a read, `columns-and-rows`, one JSON object of both; or
+// `columns-then-rows`, a line of the columns, then the rows; or, for a psql write, the
+// `command-tag` such as `UPDATE 3`.
+export type ExecOutput = 'rows' | 'columns-and-rows' | 'columns-then-rows' | 'command-tag';
 
 export interface ExecQuery {
   readonly argv: readonly string[];
@@ -47,11 +50,19 @@ export function buildExecQuery(input: ExecQueryInput): ExecQuery {
 // which would reopen the file for writing.
 function buildSqliteQuery(input: ExecQueryInput): ExecQuery {
   const readOnly = input.write ? [] : ['-readonly'];
+  const argv = [...input.program, '-safe', '-json', ...readOnly, input.database];
+  const statement = input.write ? null : findWrappableStatement('sqlite', input.sql);
 
+  if (statement === null) {
+    return { argv, stdin: input.sql, output: 'rows' };
+  }
+
+  // sqlite3 prints nothing for a read with no rows, so a temporary view names the columns first.
+  // The view lives in the connection's own temporary database, which a read-only file still allows.
   return {
-    argv: [...input.program, '-safe', '-json', ...readOnly, input.database],
-    stdin: input.sql,
-    output: 'rows',
+    argv,
+    stdin: `create temp view wringer_read as\n${statement}\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('wringer_read');\nselect * from wringer_read;\n`,
+    output: 'columns-then-rows',
   };
 }
 
@@ -105,9 +116,11 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
     });
   }
 
+  // The statement runs once, in a CTE. The left join gives one row of nulls for an empty result,
+  // and `to_json` of that row still names each column, in order.
   return {
     argv,
-    stdin: `${limit}begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\n${statement}\n) q;\ncommit;\n`,
-    output: 'rows',
+    stdin: `${limit}begin read only;\nwith q as materialized (\n${statement}\n) select json_build_object('columns', (select coalesce(json_agg(k), '[]'::json) from json_object_keys((select to_json(r) from (select q.* from (values (1)) d(x) left join q on true limit 1) r)) k), 'rows', (select coalesce(json_agg(q), '[]'::json) from q));\ncommit;\n`,
+    output: 'columns-and-rows',
   };
 }

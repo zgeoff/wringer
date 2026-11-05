@@ -4,6 +4,7 @@ import { WringerError } from '@wringer/core';
 import type { SQL } from 'bun';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import { buildColumnProbe } from './build-column-probe.ts';
 import { buildPostgresResult } from './build-postgres-result.ts';
 import { rowSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
@@ -141,9 +142,9 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
       });
     }
 
-    const result: unknown = await runPostgresStatement(client, input);
+    const ran = await runPostgresStatement(client, input);
 
-    return buildPostgresResult(result, input.write);
+    return buildPostgresResult(ran.result, input.write, ran.probed);
   } finally {
     progress.settled = true;
 
@@ -240,18 +241,42 @@ async function runCancelAttempt(
   }
 }
 
-function runPostgresStatement(client: SQL, input: SQLQueryInput): Promise<unknown> {
-  // Bun.SQL sends `unsafe` with no parameters as a simple query, which runs every statement in the
-  // text, so `COMMIT; DELETE …` would end the read-only transaction. A tagged query always takes the
-  // extended protocol, where Postgres refuses a second statement.
-  const start = (sql: SQL): SQL.Query<unknown> =>
-    input.params.length === 0
-      ? sql<unknown>(Object.assign([input.sql], { raw: [input.sql] }))
-      : sql.unsafe<unknown>(input.sql, [...input.params]);
+interface PostgresRun {
+  readonly result: unknown;
 
+  // The column probe's result, or null when the read needed none.
+  readonly probed: unknown;
+}
+
+async function runPostgresStatement(client: SQL, input: SQLQueryInput): Promise<PostgresRun> {
   if (input.write) {
-    return start(client);
+    const result: unknown = await startPostgresQuery(client, input.sql, input.params);
+
+    return { result, probed: null };
   }
 
-  return client.begin('read only', (transaction) => start(transaction));
+  return client.begin('read only', async (transaction) => {
+    const result: unknown = await startPostgresQuery(transaction, input.sql, input.params);
+
+    const rowCount = Array.isArray(result) ? result.length : 0;
+    const probe = buildColumnProbe(input.sql, rowCount);
+
+    const probed: unknown =
+      probe === null ? null : await startPostgresQuery(transaction, probe, input.params);
+
+    return { result, probed };
+  });
+}
+
+// Bun.SQL sends `unsafe` with no parameters as a simple query, which runs every statement in the
+// text, so `COMMIT; DELETE …` would end the read-only transaction. A tagged query always takes the
+// extended protocol, where Postgres refuses a second statement.
+function startPostgresQuery(
+  sql: SQL,
+  text: string,
+  params: readonly unknown[],
+): SQL.Query<unknown> {
+  return params.length === 0
+    ? sql<unknown>(Object.assign([text], { raw: [text] }))
+    : sql.unsafe<unknown>(text, [...params]);
 }

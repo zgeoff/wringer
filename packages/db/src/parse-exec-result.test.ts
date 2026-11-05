@@ -28,6 +28,55 @@ test('it reads empty output as no rows', () => {
   expect(parsed).toStrictEqual({ columns: [], rows: [], rowCount: 0 });
 });
 
+test.each([
+  {
+    name: 'psql columns and rows',
+    stdout: '{"columns" : ["id","text"], "rows" : [{"id":1,"text":"pay"}]}\n',
+    output: 'columns-and-rows',
+    rows: [{ id: 1, text: 'pay' }],
+  },
+  {
+    name: 'psql columns with no rows',
+    stdout: '{"columns" : ["id","text"], "rows" : []}\n',
+    output: 'columns-and-rows',
+    rows: [],
+  },
+  {
+    name: 'a sqlite3 column line, then rows',
+    stdout: '[{"wringer_columns":"[\\"id\\",\\"text\\"]"}]\n[{"id":1,"text":"pay"}]\n',
+    output: 'columns-then-rows',
+    rows: [{ id: 1, text: 'pay' }],
+  },
+  {
+    name: 'a sqlite3 column line with no rows after it',
+    stdout: '[{"wringer_columns":"[\\"id\\",\\"text\\"]"}]\n',
+    output: 'columns-then-rows',
+    rows: [],
+  },
+] as const)('it names the columns of $name', (row) => {
+  const parsed = parseExecResult({
+    result: { exitCode: 0, stdout: row.stdout, stderr: '' },
+    output: row.output,
+    write: false,
+  });
+
+  expect(parsed).toStrictEqual({
+    columns: ['id', 'text'],
+    rows: [...row.rows],
+    rowCount: row.rows.length,
+  });
+});
+
+test('it fails with an environment error on a sqlite3 column line it cannot read', () => {
+  expect(() =>
+    parseExecResult({
+      result: { exitCode: 0, stdout: '[{"id":1}]\n', stderr: '' },
+      output: 'columns-then-rows',
+      write: false,
+    }),
+  ).toThrow(expect.objectContaining({ code: 'environment' }));
+});
+
 test('it leaves the count of a write through sqlite3 unknown', () => {
   const parsed = parseExecResult({
     result: { exitCode: 0, stdout: '[{"id":7}]\n', stderr: '' },

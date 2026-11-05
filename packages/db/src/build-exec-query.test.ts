@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { buildExecQuery } from './build-exec-query.ts';
 
-test('it opens SQLite read-only and in safe mode for a read', () => {
+test('it opens SQLite read-only and in safe mode for a read, and names its columns first', () => {
   const query = buildExecQuery({
     dialect: 'sqlite',
     program: ['sqlite3'],
     database: '/srv/shop.db',
-    sql: 'select * from notes',
+    sql: 'select * from notes;',
     params: [],
     write: false,
     deadlineAtMs: 1_800_000_000_000,
@@ -14,7 +14,26 @@ test('it opens SQLite read-only and in safe mode for a read', () => {
 
   expect(query).toStrictEqual({
     argv: ['sqlite3', '-safe', '-json', '-readonly', '/srv/shop.db'],
-    stdin: 'select * from notes',
+    stdin:
+      "create temp view wringer_read as\nselect * from notes\n;\nselect json_group_array(name) as wringer_columns from pragma_table_info('wringer_read');\nselect * from wringer_read;\n",
+    output: 'columns-then-rows',
+  });
+});
+
+test('it sends a SQLite read that no view can hold as it is', () => {
+  const query = buildExecQuery({
+    dialect: 'sqlite',
+    program: ['sqlite3'],
+    database: '/srv/shop.db',
+    sql: 'pragma table_info(notes)',
+    params: [],
+    write: false,
+    deadlineAtMs: 1_800_000_000_000,
+  });
+
+  expect(query).toStrictEqual({
+    argv: ['sqlite3', '-safe', '-json', '-readonly', '/srv/shop.db'],
+    stdin: 'pragma table_info(notes)',
     output: 'rows',
   });
 });
@@ -56,7 +75,7 @@ test('it rejects params for a target that runs the database client', () => {
   ).toThrow(expect.objectContaining({ code: 'usage' }));
 });
 
-test('it wraps a Postgres read in a read-only transaction that prints JSON', () => {
+test('it wraps a Postgres read in a read-only transaction that prints its columns and rows as JSON', () => {
   const query = buildExecQuery({
     dialect: 'postgres',
     program: ['psql'],
@@ -80,8 +99,8 @@ test('it wraps a Postgres read in a read-only transaction that prints JSON', () 
       'postgres://shop@db/shop',
     ],
     stdin:
-      "do $wringer$ declare left_ms bigint := 1800000000000 - floor(extract(epoch from clock_timestamp()) * 1000)::bigint; begin if left_ms < 1 then raise exception 'The command''s deadline passed before the statement started.'; end if; perform set_config('statement_timeout', left_ms::text, false); end $wringer$;\nbegin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\nselect id from orders\n) q;\ncommit;\n",
-    output: 'rows',
+      "do $wringer$ declare left_ms bigint := 1800000000000 - floor(extract(epoch from clock_timestamp()) * 1000)::bigint; begin if left_ms < 1 then raise exception 'The command''s deadline passed before the statement started.'; end if; perform set_config('statement_timeout', left_ms::text, false); end $wringer$;\nbegin read only;\nwith q as materialized (\nselect id from orders\n) select json_build_object('columns', (select coalesce(json_agg(k), '[]'::json) from json_object_keys((select to_json(r) from (select q.* from (values (1)) d(x) left join q on true limit 1) r)) k), 'rows', (select coalesce(json_agg(q), '[]'::json) from q));\ncommit;\n",
+    output: 'columns-and-rows',
   });
 });
 

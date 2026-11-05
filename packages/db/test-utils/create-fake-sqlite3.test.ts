@@ -43,6 +43,19 @@ test('it prints the rows of a read as JSON', async () => {
   expect(result).toStrictEqual({ exitCode: 0, stdout: '[{"text":"pay"}]\n', stderr: '' });
 });
 
+test('it runs each statement of a script and prints the rows of each read that has any', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay', 'ship']);
+
+  const result = await ctx.run(
+    ['-json', '-readonly', ctx.file],
+    "create temp view open_notes as\nselect text from notes\n;\nselect count(*) as total from open_notes;\nselect text from open_notes where text = 'none';\n",
+  );
+
+  expect(result).toStrictEqual({ exitCode: 0, stdout: '[{"total":2}]\n', stderr: '' });
+});
+
 test('it refuses a write with -readonly as sqlite3 does', async () => {
   const ctx = await setupTest();
 
