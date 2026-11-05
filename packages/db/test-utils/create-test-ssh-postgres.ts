@@ -1,6 +1,7 @@
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 
 export interface TestSSHPostgres {
   readonly url: string;
@@ -86,16 +87,17 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
     await chmod(sshBinary, 0o755);
 
     await waitFor(
-      () =>
-        Bun.spawnSync([
+      () => {
+        const ready = Bun.spawnSync([
           sshBinary,
           '-o',
           'BatchMode=yes',
           'shop@127.0.0.1',
           'pg_isready -h 127.0.0.1',
-        ]).exitCode === 0
-          ? true
-          : null,
+        ]);
+
+        invariant(ready.exitCode === 0, 'Postgres is not ready over ssh yet.');
+      },
       { timeoutMs: 10_000 },
     );
 

@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
+import invariant from 'tiny-invariant';
 import { createFakePostgres } from './create-fake-postgres.ts';
 
 function setupTest() {
@@ -36,7 +37,9 @@ test('it runs a pg_sleep statement until pg_cancel_backend names its application
 
   const sleeping = sleeper.unsafe('select pg_sleep(60)', [1]).execute();
 
-  await waitFor(() => (ctx.postgres.statements.length > 0 ? true : null));
+  await waitFor(() => {
+    invariant(ctx.postgres.statements.length > 0, 'No statement has reached postgres yet.');
+  });
 
   await ctx.client.unsafe('select pg_cancel_backend(pid) where name = $1', ['shop-other']);
   await ctx.client.unsafe('select pg_cancel_backend(pid) where name = $1', ['shop-sleeper']);

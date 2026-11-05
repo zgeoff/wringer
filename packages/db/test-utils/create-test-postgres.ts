@@ -1,4 +1,5 @@
-import { waitFor } from '../../core/test-utils/wait-for.ts';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 
 export interface TestPostgres {
   readonly url: string;
@@ -39,11 +40,20 @@ export async function createTestPostgres(): Promise<TestPostgres> {
     const port = published.trim().split('\n')[0]?.split(':').at(-1) ?? '';
 
     await waitFor(
-      () =>
-        Bun.spawnSync(['docker', 'exec', id, 'pg_isready', '-h', '127.0.0.1', '-U', 'shop'])
-          .exitCode === 0
-          ? true
-          : null,
+      () => {
+        const ready = Bun.spawnSync([
+          'docker',
+          'exec',
+          id,
+          'pg_isready',
+          '-h',
+          '127.0.0.1',
+          '-U',
+          'shop',
+        ]);
+
+        invariant(ready.exitCode === 0, 'Postgres is not ready yet.');
+      },
       { timeoutMs: 10_000 },
     );
 

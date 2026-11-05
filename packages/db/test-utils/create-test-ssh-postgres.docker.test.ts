@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
+import { waitFor } from '@zgeoff/testing/helpers';
 import { $, SQL } from 'bun';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { createTestSSHPostgres } from './create-test-ssh-postgres.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the connection,
@@ -50,7 +51,9 @@ test('it keeps the database connections open when a process an ssh session left 
 
   ctx.ssh('(sleep 0.3; exit 3) > /dev/null 2>&1 < /dev/null &');
 
-  await waitFor(() => (ctx.ssh('pgrep -f "sleep 0.3"').exitCode === 0 ? null : true));
+  await waitFor(() => {
+    invariant(ctx.ssh('pgrep -f "sleep 0.3"').exitCode !== 0, 'The remote sleep still runs.');
+  });
 
   const rows: { answer: number }[] = await connection`select 2 as answer`;
 

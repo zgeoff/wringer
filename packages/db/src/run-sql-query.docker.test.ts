@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
-import { waitFor } from '../../core/test-utils/wait-for.ts';
+import invariant from 'tiny-invariant';
 import { createTestPostgres } from '../test-utils/create-test-postgres.ts';
 import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
@@ -67,7 +68,7 @@ async function setupTest() {
         select pid from pg_stat_activity
         where state = 'active' and pid <> pg_backend_pid() and query like ${`%${fragment}%`}`;
 
-      return rows.length > 0 ? true : null;
+      return rows.length > 0;
     },
     runQuery: (
       sql: string,
@@ -257,7 +258,14 @@ test('it cancels a running Postgres write when its signal aborts, and the write 
     signal: controller.signal,
   });
 
-  await waitFor(() => ctx.probeRunning('pg_sleep(30)'), { timeoutMs: 10_000 });
+  await waitFor(
+    async () => {
+      const running = await ctx.probeRunning('pg_sleep(30)');
+
+      invariant(running, 'Postgres has not started the sleep yet.');
+    },
+    { timeoutMs: 10_000 },
+  );
 
   controller.abort();
 
