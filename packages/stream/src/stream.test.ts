@@ -117,6 +117,23 @@ test('it records a command source on an attach target', async () => {
   expect(lines).toStrictEqual(['job 1 done']);
 });
 
+test('it reads a stream named after an inherited key from its start when use marked no cursor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const lines = await waitFor(async () => {
+    const result = await ctx.run('box', ['stream', 'read'], { name: 'constructor' });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    return slice.records.length > 0 ? slice.records.map((record) => record.line) : null;
+  });
+
+  expect(lines).toStrictEqual(['shelf built']);
+});
+
 test('it rejects a read of a stream the target does not record', async () => {
   const ctx = await setupTest();
 
@@ -130,7 +147,7 @@ test('it rejects a read of a stream the target does not record', async () => {
     error: {
       code: 'usage',
       message: 'Target box records no stream named app.',
-      hint: 'Read one of: jobs.',
+      hint: 'Read one of: jobs, constructor.',
     },
   });
 });

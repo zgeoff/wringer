@@ -3,9 +3,9 @@ import { bindDrivers, createWringer, local } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { stream } from '../src/stream.ts';
 
-// A repo's verify CLI for the stream driver's tests. Target `local` launches an app that logs
-// `booted`, then `order placed` each time a file named `order` appears in `triggerDirectory`.
-// Target `box` records a command on its host, and target `dead` a command that exits at once.
+// A verify CLI for the stream tests: `local` launches an app that logs `booted`, then `order placed`
+// per `order` file in `triggerDirectory`; `box` records commands, one in a stream named for an
+// inherited key; `dead` records a command that exits at once.
 export function createStreamWringer(triggerDirectory: string): Wringer {
   const shop = bindDrivers([stream({})] as const);
   const trigger = join(triggerDirectory, 'order');
@@ -40,7 +40,10 @@ export function createStreamWringer(triggerDirectory: string): Wringer {
         host: local(),
         drivers: {
           stream: () => ({
-            sources: { jobs: { command: ['sh', '-c', 'echo job 1 done; exec sleep 60'] } },
+            sources: {
+              jobs: { command: ['sh', '-c', 'echo job 1 done; exec sleep 60'] },
+              constructor: { command: ['sh', '-c', 'echo shelf built; exec sleep 60'] },
+            },
           }),
         },
       }),
