@@ -10,8 +10,8 @@ import type { StatePaths } from './build-state-paths.ts';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { getLockValue } from './get-lock-value.ts';
 import { parseRunLog } from './parse-run-log.ts';
-import { runEventSchema, runIDSchema } from './run-events.ts';
-import type { RunEvent, RunID } from './run-events.ts';
+import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
+import type { LateFailureEvent, RunEvent, RunID } from './run-events.ts';
 import { WringerError } from './wringer-error.ts';
 
 export const pointersSchema = z.strictObject({
@@ -30,6 +30,7 @@ export interface StatePort {
   readonly withTargetLock: <T>(target: string, work: () => Promise<T>) => Promise<T>;
   readonly writePointers: (change: (current: Pointers) => Pointers) => Promise<Pointers>;
   readonly appendEvent: (runID: RunID, event: RunEvent) => Promise<void>;
+  readonly appendLateFailure: (event: LateFailureEvent) => Promise<void>;
   readonly readRunEvents: (runID: RunID) => Promise<readonly RunEvent[]>;
   readonly readRun: (runID: RunID) => Promise<RunView | undefined>;
   readonly listRuns: () => Promise<readonly RunID[]>;
@@ -121,6 +122,12 @@ export function createFileState(options: FileStateOptions): StatePort {
         event: parsed,
       });
     },
+    appendLateFailure: (event) =>
+      withLock('late-failures.lock', async () => {
+        const parsed = lateFailureEventSchema.parse(event);
+
+        await fs.appendText(paths.lateFailures, `${JSON.stringify(parsed)}\n`);
+      }),
     readRunEvents,
     readRun,
     listRuns: async () => {

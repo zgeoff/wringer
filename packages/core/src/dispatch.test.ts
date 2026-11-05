@@ -285,6 +285,28 @@ test("it writes a failure that a timed-out command's work hits after the answer 
   });
 });
 
+test('it writes a late failure of a command that ran with no run to the late-failure log', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runWithin(50, ['recount'], {});
+
+  await result.late;
+
+  const log = await readFile(ctx.state.paths.lateFailures, 'utf8');
+
+  const logged: unknown = JSON.parse(log);
+
+  expect({ code: result.envelope.error?.code, log: logged }).toStrictEqual({
+    code: 'timeout',
+    log: {
+      type: 'late-failure',
+      at: expect.any(String),
+      command: 'recount',
+      code: 'internal',
+      message: 'wringer failed with an internal error: The recount lost its place.',
+    },
+  });
+});
+
 test('it writes no event that a timed-out command emits after the answer', async () => {
   const ctx = await setupTest();
 
