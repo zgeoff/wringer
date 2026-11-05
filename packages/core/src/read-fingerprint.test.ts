@@ -482,6 +482,46 @@ test('it changes the fingerprint when only a byte that is not UTF-8 changes', as
   expect(after).not.toBe(before);
 });
 
+test('it gives the same fingerprint whatever big-file threshold the repo sets', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'rows.txt'), 'row 1\n'.repeat(400));
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'rows.txt'), `${'row 1\n'.repeat(399)}row 2\n`);
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', 'core.bigFileThreshold', '1k');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
+test('it reads the fingerprint of a repo whose folder name ends in a space', async () => {
+  const ctx = await setupTest();
+
+  const shop = join(ctx.repo, 'shop ');
+  const git = (...args: readonly string[]) => runGit({ cwd: shop, args });
+
+  await mkdir(shop);
+  await git('init', '--quiet', '--initial-branch=main');
+  await git('config', 'user.email', 'tester@example.com');
+  await git('config', 'user.name', 'Tester');
+  await git('config', 'commit.gpgsign', 'false');
+  await writeFile(join(shop, 'app.ts'), 'export const port = 3000;\n');
+  await git('add', '.');
+  await git('commit', '--quiet', '-m', 'start');
+  await writeFile(join(shop, 'app.ts'), 'export const port = 4000;\n');
+
+  const fingerprint = await ctx.readFingerprint(shop);
+
+  expect(fingerprint).toMatch(/^[0-9a-f]{40}$/u);
+});
+
 test('it reads the fingerprint of a repo given by a relative path', async () => {
   const ctx = await setupTest();
 

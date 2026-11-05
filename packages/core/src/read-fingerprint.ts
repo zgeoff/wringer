@@ -20,7 +20,15 @@ export const emptyFingerprint = 'empty';
 
 // The patch ID hashes every line of the diff, so each git setting that shapes the diff is pinned,
 // and the same change gets the same fingerprint in any clone.
-const pinnedDiffConfig = ['-c', 'diff.suppressBlankEmpty=false', '-c', 'core.quotePath=true'];
+// `core.bigFileThreshold` decides when a file diffs as binary, so it stays at git's default.
+const pinnedDiffConfig = [
+  '-c',
+  'diff.suppressBlankEmpty=false',
+  '-c',
+  'core.quotePath=true',
+  '-c',
+  'core.bigFileThreshold=512m',
+];
 
 const pinnedDiffOptions = [
   '--unified=3',
@@ -120,7 +128,8 @@ export async function readFingerprint(
 async function readRepoRoot(host: FingerprintHost, cwd: string): Promise<string> {
   const result = await host.runGit({ cwd, args: ['rev-parse', '--show-toplevel'] });
 
-  return resolve(cwd, result.stdout.trim());
+  // A folder name may end in a space, so only the line end git adds comes off.
+  return resolve(cwd, result.stdout.replace(/\n$/u, ''));
 }
 
 // git resolves a relative GIT_INDEX_FILE against the folder it runs in. The path goes to git
@@ -131,7 +140,7 @@ async function readTemporaryIndexPath(host: FingerprintHost, root: string): Prom
     args: ['rev-parse', '--git-path', `wringer-index-${randomUUID()}`],
   });
 
-  return resolve(root, result.stdout.trim());
+  return resolve(root, result.stdout.replace(/\n$/u, ''));
 }
 
 async function addSubmodules(
