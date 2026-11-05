@@ -28,7 +28,17 @@ export interface HttpClient {
   readonly request: (request: HttpRequest) => Promise<HttpResponse>;
 }
 
-const optionsSchema = z.strictObject({ timeoutMs: z.number().int().positive().default(30_000) });
+export type HttpTransport = (url: URL, init: RequestInit) => Promise<Response>;
+
+const optionsSchema = z.strictObject({
+  timeoutMs: z.number().int().positive().default(30_000),
+
+  // Sends each request. A repo passes its own, such as one that goes through a proxy.
+  transport: z
+    .custom<HttpTransport>((value) => typeof value === 'function')
+    .default(() => (url: URL, init: RequestInit) => fetch(url, init)),
+});
+
 const grantSchema = z.strictObject({ method: methodSchema, path: z.string().startsWith('/') });
 
 const targetConfigSchema = z.strictObject({
@@ -51,7 +61,7 @@ const requestArgsSchema = z.strictObject({
 
 // Requests the target's app over HTTP. GET, HEAD and OPTIONS are reads; any other method is a write,
 // which a read-only target refuses unless its `readOnly.allow` grants that method and path. Each
-// response is kept as evidence. The client is the driver's entry point, so it picks the transport.
+// response is kept as evidence.
 export const http = defineDriver({
   name: 'http',
   options: optionsSchema,
@@ -61,7 +71,7 @@ export const http = defineDriver({
       effect: (request: HttpRequest) =>
         pickHttpEffect(request.method ?? 'GET', request.path, session.config.readOnly?.allow ?? []),
       describe: (request) => `${request.method ?? 'GET'} ${request.path}`,
-      run: (request) => sendRequest(session, fetch, httpRequestSchema.parse(request)),
+      run: (request) => sendRequest(session, httpRequestSchema.parse(request)),
     }),
   }),
   commands: (command) => [
@@ -104,11 +114,8 @@ type HttpConfig = z.infer<typeof targetConfigSchema>;
 
 type ParsedRequest = z.infer<typeof httpRequestSchema>;
 
-type HttpTransport = (url: URL, init: RequestInit) => Promise<Response>;
-
 async function sendRequest(
   session: DriverSession<HttpOptions, HttpConfig>,
-  transport: HttpTransport,
   request: ParsedRequest,
 ): Promise<HttpResponse> {
   const plan = buildRequestPlan({
@@ -121,9 +128,13 @@ async function sendRequest(
     json: request.json,
   });
 
+  if (plan.kind === 'refuse') {
+    throw new WringerError('usage', { message: plan.message, hint: plan.hint });
+  }
+
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
 
-  const fetched = await sendFetch(transport, plan.url, plan.init, signal);
+  const fetched = await sendFetch(session.options.transport, plan.url, plan.init, signal);
 
   const result: HttpResponse = {
     status: fetched.response.status,

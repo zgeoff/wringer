@@ -5,15 +5,37 @@ import { HttpResponse, delay, http } from 'msw';
 import { server } from '../../../test-utils/mocks/node.ts';
 import { createTestSession } from '../../core/test-utils/create-test-session.ts';
 import { createHttpWringer } from '../test-utils/create-http-wringer.ts';
+import { readUnusedPort } from '../test-utils/read-unused-port.ts';
 import { SHOP_API_URL, shopRequests } from '../test-utils/shop-handlers.ts';
+import type { HttpTransport } from './http.ts';
 
 async function setupTest() {
   const wringer = createHttpWringer(SHOP_API_URL);
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
+  const transport = mock<HttpTransport>(() => Promise.resolve(Response.json({ via: 'transport' })));
+  const transportWringer = createHttpWringer(SHOP_API_URL, transport);
+
+  const transportShop = await createTestSession({
+    parent: import.meta.dir,
+    wringer: transportWringer,
+  });
+
+  const refusingWringer = createHttpWringer(`http://127.0.0.1:${await readUnusedPort()}`);
+
+  const refusingShop = await createTestSession({
+    parent: import.meta.dir,
+    wringer: refusingWringer,
+  });
+
   return {
     root: shop.repo.root,
+    transport,
+    runWithTransport: (path: readonly string[], args: unknown = {}) =>
+      dispatch(transportWringer, path, args, { ...transportShop.session, target: 'local' }),
+    runOnRefusingPort: (path: readonly string[], args: unknown = {}) =>
+      dispatch(refusingWringer, path, args, { ...refusingShop.session, target: 'local' }),
     readEvidence: async (path: string) => {
       const evidence: unknown = await Bun.file(join(shop.repo.root, path)).json();
 
@@ -306,19 +328,41 @@ test('it returns a redirect from a granted POST without following it', async () 
   });
 });
 
-test('it answers a connection failure with an environment error', async () => {
+test('it fails the doctor with the refusal when nothing listens on the app port', async () => {
   const ctx = await setupTest();
 
-  server.use(http.get(`${SHOP_API_URL}/api/cart`, () => HttpResponse.error()));
+  await ctx.runOnRefusingPort(['attach']);
 
-  await ctx.run('local', ['attach']);
-  await ctx.run('local', ['doctor']);
+  const result = await ctx.runOnRefusingPort(['doctor']);
 
-  const result = await ctx.run('local', ['http', 'request'], { path: '/api/cart' });
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 1,
+    data: {
+      passed: false,
+      results: [
+        {
+          name: 'http.reachable',
+          status: 'failed',
+          code: 'environment',
+          message: expect.stringContaining('ECONNREFUSED'),
+          durationMs: expect.any(Number),
+        },
+      ],
+    },
+  });
+});
 
-  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
-    exitCode: 4,
-    code: 'environment',
+test('it sends each request through the transport the repo passes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runWithTransport(['attach']);
+  await ctx.runWithTransport(['doctor']);
+
+  const result = await ctx.runWithTransport(['http', 'request'], { path: '/api/cart' });
+
+  expect({ data: result.envelope.data, call: ctx.transport.mock.lastCall }).toStrictEqual({
+    data: expect.objectContaining({ status: 200, json: { via: 'transport' } }),
+    call: [new URL(`${SHOP_API_URL}/api/cart`), expect.objectContaining({ method: 'GET' })],
   });
 });
 

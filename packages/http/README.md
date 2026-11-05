@@ -43,6 +43,10 @@ An action calls `ctx.drivers.http.request({ method, path, headers, json })`. The
 picks the output. It also adds the doctor check `http.reachable`. A JSON body on a GET or HEAD
 request fails with a usage error before the driver sends it.
 
+`http()` takes `timeoutMs`, 30 seconds by default, and `transport`, a function of a `URL` and its
+`RequestInit` that returns a `Response`. The driver sends each request through `transport`, which is
+`fetch` unless the repo passes its own.
+
 ## Target config
 
 | Field        | Default | Meaning                                                     |
