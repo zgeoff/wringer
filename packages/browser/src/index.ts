@@ -11,4 +11,4 @@ export type {
 } from './browser.ts';
 
 export type { SnapshotElement } from './find-snapshot-element.ts';
-export type { ElementTarget } from './start-browser-page.ts';
+export type { ElementTarget } from './page-service-contract.ts';

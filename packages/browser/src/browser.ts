@@ -3,10 +3,12 @@ import type { DriverSession, Evidence, Fence } from '@wringer/core';
 import { chromium } from 'playwright-core';
 import { z } from 'zod';
 import { buildAppURL } from './build-app-url.ts';
+import { callPage } from './call-page.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
+import { pageStateSchema, snapshotSchema } from './page-service-contract.ts';
+import type { ElementTarget, PageArgs } from './page-service-contract.ts';
 import { pickBrowserEffect } from './pick-browser-effect.ts';
-import { pageStateSchema, snapshotSchema, startBrowserPage } from './start-browser-page.ts';
-import type { ElementTarget } from './start-browser-page.ts';
+import { startBrowserPage } from './start-browser-page.ts';
 
 export type PageState = z.infer<typeof pageStateSchema>;
 
@@ -47,10 +49,6 @@ const targetConfigSchema = z.strictObject({
   baseURL: z.url().optional(),
   readOnly: z.strictObject({ allow: z.array(grantSchema) }).optional(),
 });
-
-const describedSchema = z.strictObject({ ref: z.string(), role: z.string(), name: z.string() });
-const screenshotSchema = z.strictObject({ png: z.string() });
-const statusSchema = z.strictObject({ connected: z.boolean() });
 
 const elementArgsSchema = z
   .strictObject({
@@ -112,11 +110,7 @@ export const browser = defineDriver({
     const describe = fence({
       effect: () => 'read',
       describe: (request: DescribeRequest) => `browser describe ${request.ref}`,
-      run: async (request) => {
-        const answer = await page.call('describe', request);
-
-        return describedSchema.parse(answer);
-      },
+      run: (request) => callPage(page, 'describe', request),
     });
 
     const describeTarget = (element: ElementTarget): Promise<SnapshotElement> =>
@@ -128,9 +122,7 @@ export const browser = defineDriver({
       effect: () => 'read',
       describe: () => 'browser snapshot',
       run: async (request: null) => {
-        const answer = await page.call('snapshot', request);
-
-        const parsed = snapshotSchema.parse(answer);
+        const parsed = await callPage(page, 'snapshot', request);
 
         await session.evidence.writeFile('browser', 'snapshot.yaml', parsed.snapshot);
 
@@ -142,9 +134,7 @@ export const browser = defineDriver({
       effect: () => 'read',
       describe: () => 'browser screenshot',
       run: async (request: null) => {
-        const answer = await page.call('screenshot', request);
-
-        const parsed = screenshotSchema.parse(answer);
+        const parsed = await callPage(page, 'screenshot', request);
 
         return session.evidence.writeFile(
           'screenshot',
@@ -165,9 +155,9 @@ export const browser = defineDriver({
             throw url;
           }
 
-          const answer = await page.call('goto', { url });
+          const state = await callPage(page, 'goto', { url });
 
-          return pageStateSchema.parse(answer);
+          return state;
         },
       }),
       snapshot: () => snapshot(null),
@@ -175,19 +165,14 @@ export const browser = defineDriver({
       click: async (element) => {
         const described = await describeTarget(element);
 
-        return act({ method: 'click', element, described, args: element });
+        return act({ method: 'click', described, args: element });
       },
       type: async (request) => {
         const element = pickElementTarget(request);
 
         const described = await describeTarget(element);
 
-        return act({
-          method: 'type',
-          element,
-          described,
-          args: { element, value: request.value },
-        });
+        return act({ method: 'type', described, args: { element, value: request.value } });
       },
       screenshot: () => screenshot(null),
     };
@@ -240,9 +225,7 @@ export const browser = defineDriver({
       name: 'launched',
       timeoutMs: 5000,
       run: async (ctx) => {
-        const answer = await ctx.session.service('page').call('status', null);
-
-        const status = statusSchema.parse(answer);
+        const status = await callPage(ctx.session.service('page'), 'status', null);
 
         if (!status.connected) {
           throw new WringerError('check-failed', { message: 'The browser has closed.' });
@@ -258,12 +241,10 @@ type BrowserConfig = z.infer<typeof targetConfigSchema>;
 
 type BrowserSession = DriverSession<BrowserOptions, BrowserConfig>;
 
-interface ElementAction {
-  readonly method: 'click' | 'type';
-  readonly element: ElementTarget;
-  readonly described: SnapshotElement;
-  readonly args: unknown;
-}
+type ElementAction = { readonly described: SnapshotElement } & (
+  | { readonly method: 'click'; readonly args: PageArgs<'click'> }
+  | { readonly method: 'type'; readonly args: PageArgs<'type'> }
+);
 
 // The fence decides on the element's role and name, so a ref is described before the call.
 function makeElementAction(
@@ -274,11 +255,7 @@ function makeElementAction(
     effect: (action: ElementAction) =>
       pickBrowserEffect(action.described, session.config.readOnly?.allow ?? []),
     describe: (action) => `${action.method} on ${action.described.role} "${action.described.name}"`,
-    run: async (action) => {
-      const answer = await session.service('page').call(action.method, action.args);
-
-      return pageStateSchema.parse(answer);
-    },
+    run: (action) => callPage(session.service('page'), action.method, action.args),
   });
 }
 
