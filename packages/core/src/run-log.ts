@@ -113,13 +113,12 @@ function foldRunStatus(events: readonly RunEvent[]): RunStatus | null {
 // An event counts once its line ends: the next append cuts a last line with no newline, even one
 // that parses, so a reader skips it too. A whole line that is no event is corruption.
 export function parseRunLog(text: string): readonly RunEvent[] {
-  const whole = text.slice(0, text.lastIndexOf('\n') + 1);
+  const lines = text
+    .slice(0, text.lastIndexOf('\n') + 1)
+    .split('\n')
+    .slice(0, -1);
 
-  return whole.split('\n').flatMap((line, index) => {
-    if (line === '') {
-      return [];
-    }
-
+  return lines.map((line, index) => {
     const parsed = runEventSchema.safeParse(parseJSONLine(line));
 
     if (!parsed.success) {
@@ -128,7 +127,7 @@ export function parseRunLog(text: string): readonly RunEvent[] {
       });
     }
 
-    return [parsed.data];
+    return parsed.data;
   });
 }
 

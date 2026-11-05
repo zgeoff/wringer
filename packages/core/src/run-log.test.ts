@@ -160,6 +160,7 @@ test('#parseRunLog skips a torn last line', () => {
 
 test.each([
   ['a line that is no JSON', '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\nnot json\n'],
+  ['an empty whole line', '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n\n'],
   [
     'a line that is no run event',
     '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"lunch"}\n',
