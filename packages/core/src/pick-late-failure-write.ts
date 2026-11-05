@@ -15,7 +15,8 @@ export interface LateFailureWrite {
   readonly event: LateFailureEvent;
 }
 
-// Null when the work succeeded, or failed with the error the envelope already answered with.
+// Null when the work succeeded, failed with the error the envelope already answered with, or ran
+// into the same deadline the envelope answered as a timeout, such as a body refused at its start.
 export function pickLateFailureWrite(
   settled: PromiseSettledResult<unknown>,
   facts: LateFailureFacts,
@@ -25,6 +26,10 @@ export function pickLateFailureWrite(
   }
 
   const failure = toWringerError(settled.reason);
+
+  if (failure.code === 'timeout' && facts.answered?.code === 'timeout') {
+    return null;
+  }
 
   return {
     runID: facts.runID,

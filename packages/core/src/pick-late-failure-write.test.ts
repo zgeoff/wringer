@@ -22,6 +22,20 @@ test('#pickLateFailureWrite writes nothing for the failure the envelope answered
   ).toBeNull();
 });
 
+test('#pickLateFailureWrite writes nothing for work that hit the deadline the envelope answered', () => {
+  expect(
+    pickLateFailureWrite(
+      { status: 'rejected', reason: new WringerError('timeout') },
+      {
+        runID: 'mf3k2a-7q1z',
+        command: 'restock',
+        answered: new WringerError('timeout'),
+        at: new Date('2026-11-05T09:00:00Z'),
+      },
+    ),
+  ).toBeNull();
+});
+
 test('#pickLateFailureWrite writes a late failure to the run that the command drove', () => {
   expect(
     pickLateFailureWrite(
