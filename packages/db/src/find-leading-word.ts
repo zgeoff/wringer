@@ -1,9 +1,9 @@
-const leadingNoisePattern = /^(?:\s+|--[^\n]*\n?|\/\*[\s\S]*?\*\/|\()*/u;
-const wordPattern = /^(?<word>[a-z]+)\b/iu;
+import type { SQLToken } from './parse-sql-tokens.ts';
 
-// The first word of a statement in lower case, past any spaces, comments and opening brackets.
-export function findLeadingWord(sql: string): string | null {
-  const match = wordPattern.exec(sql.replace(leadingNoisePattern, ''));
+// The first word of a statement in lower case, past any opening brackets. The lexer has already
+// dropped the comments and spaces.
+export function findLeadingWord(tokens: readonly SQLToken[]): string | null {
+  const first = tokens.find((token) => !(token.kind === 'symbol' && token.text === '('));
 
-  return match?.groups?.['word']?.toLowerCase() ?? null;
+  return first?.kind === 'word' ? first.text.toLowerCase() : null;
 }

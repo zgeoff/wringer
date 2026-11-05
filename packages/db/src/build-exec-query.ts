@@ -1,5 +1,6 @@
 import { WringerError } from '@wringer/core';
 import { findLeadingWord } from './find-leading-word.ts';
+import { parseSQLTokens } from './parse-sql-tokens.ts';
 
 type Dialect = 'sqlite' | 'postgres';
 
@@ -73,7 +74,9 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
   const statement = input.sql.trim().replace(/[;\s]+$/u, '');
 
   // Postgres refuses SHOW and EXPLAIN inside the subquery that turns the rows into JSON.
-  if (unwrappableReadWords.has(findLeadingWord(statement) ?? '')) {
+  const leading = findLeadingWord(parseSQLTokens('postgres', statement).tokens);
+
+  if (unwrappableReadWords.has(leading ?? '')) {
     throw new WringerError('usage', {
       message: 'A read through psql cannot run `show` or `explain`.',
       hint: 'Connect with `via: sql` to run it.',
