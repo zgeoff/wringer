@@ -13,6 +13,6 @@ export function createNodeRepoHost(): RepoHost {
     readText: (path) => readFile(path, 'utf8'),
     createDirectory,
     writeNewFile,
-    readBytes: (path) => readFile(path),
+    readBytes: readFile,
   };
 }
