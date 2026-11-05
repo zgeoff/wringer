@@ -280,6 +280,34 @@ test('#runSupervisor answers a second stop only once the first has ended the run
   expect([afterFirst?.status, afterSecond?.status]).toStrictEqual(['crashed', 'crashed']);
 });
 
+test('#runSupervisor reports a failed final log write when a signal stopped the run', async () => {
+  const ctx = await setupTest();
+
+  const signal = new AbortController();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', signal.signal);
+
+  await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  await rm(join(ctx.runFolder('shelf-run'), 'manifest.json'));
+  await mkdir(join(ctx.runFolder('shelf-run'), 'manifest.json', 'blocked'), { recursive: true });
+
+  ctx.openStopGate();
+  signal.abort();
+
+  await supervising;
+
+  expect(ctx.reports).toSatisfyAny((report: string) =>
+    report.startsWith("The run's final log write failed:"),
+  );
+});
+
 test('#runSupervisor ends and frees its socket when its final log write fails', async () => {
   const ctx = await setupTest();
 

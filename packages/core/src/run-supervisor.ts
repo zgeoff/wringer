@@ -114,7 +114,12 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
       return null;
     } catch (error) {
-      return toWringerError(error);
+      const failure = toWringerError(error);
+
+      // A stop that a crash or a signal began has no caller to take the failure.
+      options.reportError(`The run's final log write failed: ${failure.message}`);
+
+      return failure;
     } finally {
       stopped.resolve(undefined);
     }
