@@ -21,6 +21,25 @@ test('it rejects an ok envelope that carries an error', () => {
   expect(result.error?.issues).toPartiallyContain({ path: ['error'] });
 });
 
+test('it rejects an envelope with undefined data, which a JSON log line would lose', () => {
+  const result = envelopeSchema.safeParse({
+    wringer: 1,
+    ok: true,
+    command: 'status',
+    target: null,
+    instance: null,
+    feature: null,
+    sha: null,
+    durationMs: 3,
+    data: undefined,
+    evidence: [],
+    cursors: {},
+    error: null,
+  });
+
+  expect(result.error?.issues).toPartiallyContain({ path: ['data'] });
+});
+
 test('it rejects a truncated envelope that names no path for its data', () => {
   const result = envelopeSchema.safeParse({
     wringer: 1,

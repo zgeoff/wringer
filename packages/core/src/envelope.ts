@@ -26,7 +26,11 @@ export const envelopeSchema = z
     feature: z.string().nullable(),
     sha: z.string().nullable(),
     durationMs: z.number().int().nonnegative(),
-    data: z.unknown(),
+
+    // JSON drops a field that is undefined, so a logged envelope with no data would not read back.
+    data: z.unknown().refine((value) => value !== undefined, {
+      message: 'an envelope holds its data, or null for none',
+    }),
     evidence: z.array(evidenceSchema),
     cursors: z.record(z.string(), z.number().int().nonnegative()),
     truncated: z.literal(true).optional(),
