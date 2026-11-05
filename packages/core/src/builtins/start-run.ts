@@ -49,9 +49,9 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     ctx.bindRun(runID);
 
-    const base = await readDefaultBase(ctx.session.root);
+    const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
 
-    const fingerprint = await readFingerprint(ctx.session.fingerprintHost, {
+    const fingerprint = await readFingerprint(ctx.session.repoHost, {
       cwd: ctx.session.root,
       base,
       exclude: [ctx.wringer.stateDir],

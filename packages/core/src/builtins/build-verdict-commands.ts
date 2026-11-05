@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
 import { buildBuiltinCommand } from '../build-commands.ts';
@@ -107,7 +106,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 
   // The run took its fingerprint against the default base, so the tree check uses that base; the
   // verdict takes the base the PR's gate will use.
-  const defaultBase = await readDefaultBase(ctx.session.root);
+  const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
   const treeFingerprint = await readCurrentFingerprint(ctx, defaultBase);
 
   if (ctx.target.mode === 'launch' && treeFingerprint !== ctx.run.fingerprint) {
@@ -141,7 +140,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 }
 
 function readCurrentFingerprint(ctx: BuiltinContext, base: string): Promise<string> {
-  return readFingerprint(ctx.session.fingerprintHost, {
+  return readFingerprint(ctx.session.repoHost, {
     cwd: ctx.session.root,
     base,
     exclude: [ctx.wringer.stateDir],
@@ -153,8 +152,12 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
 
   const [fingerprint, changedPaths, verdicts] = await Promise.all([
     readCurrentFingerprint(ctx, base),
-    readChangedPaths({ cwd: ctx.session.root, base, exclude: [ctx.wringer.stateDir] }),
-    readVerdicts(ctx.state, ctx.session.root),
+    readChangedPaths(ctx.session.repoHost, {
+      cwd: ctx.session.root,
+      base,
+      exclude: [ctx.wringer.stateDir],
+    }),
+    readVerdicts(ctx.state, ctx.session.repoHost, ctx.session.root),
   ]);
 
   return buildReport({ base, fingerprint, features: ctx.wringer.features, changedPaths, verdicts });
@@ -165,7 +168,7 @@ function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<s
     return Promise.resolve(givenBase);
   }
 
-  return readDefaultBase(ctx.session.root);
+  return readDefaultBase(ctx.session.repoHost, ctx.session.root);
 }
 
 // The repo's upload hook turns each local evidence file into a link; the local files never leave
@@ -202,13 +205,17 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     ? args.bodyFile
     : join(ctx.session.root, args.bodyFile);
 
-  const body = await readFile(bodyPath, 'utf8');
+  const body = await ctx.session.repoHost.readText(bodyPath);
 
   const block = parseReportBlock(body);
 
   const [fingerprint, changedPaths] = await Promise.all([
     readCurrentFingerprint(ctx, args.base),
-    readChangedPaths({ cwd: ctx.session.root, base: args.base, exclude: [ctx.wringer.stateDir] }),
+    readChangedPaths(ctx.session.repoHost, {
+      cwd: ctx.session.root,
+      base: args.base,
+      exclude: [ctx.wringer.stateDir],
+    }),
   ]);
 
   const claimed = block.ok

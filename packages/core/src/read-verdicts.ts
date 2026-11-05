@@ -3,12 +3,14 @@ import type { StatePort } from './create-file-state.ts';
 import type { Envelope } from './envelope.ts';
 import { verdictSchema } from './report-schema.ts';
 import type { Verdict } from './report-schema.ts';
+import type { RepoHost } from './types.ts';
 
 export const doneCommand = 'done';
 
 // Merges the verdicts of every run in the worktree: the latest `done` per feature wins.
 export async function readVerdicts(
   state: StatePort,
+  host: Pick<RepoHost, 'readText'>,
   root: string,
 ): Promise<ReadonlyMap<string, Verdict>> {
   const runs = await state.listRuns();
@@ -22,7 +24,9 @@ export async function readVerdicts(
         : [],
     );
 
-  const verdicts = await Promise.all(envelopes.map((envelope) => readVerdict(envelope, root)));
+  const verdicts = await Promise.all(
+    envelopes.map((envelope) => readVerdict(host, envelope, root)),
+  );
 
   const latest = new Map<string, Verdict>();
 
@@ -36,12 +40,17 @@ export async function readVerdicts(
 }
 
 // A verdict over the data cap sits in the payload file the envelope names, not in the envelope.
-async function readVerdict(envelope: Envelope, root: string): Promise<readonly Verdict[]> {
-  const data: unknown =
+async function readVerdict(
+  host: Pick<RepoHost, 'readText'>,
+  envelope: Envelope,
+  root: string,
+): Promise<readonly Verdict[]> {
+  const payload =
     envelope.truncatedPath === undefined
-      ? envelope.data
-      : await Bun.file(join(root, envelope.truncatedPath)).json();
+      ? null
+      : await host.readText(join(root, envelope.truncatedPath));
 
+  const data: unknown = payload === null ? envelope.data : JSON.parse(payload);
   const parsed = verdictSchema.safeParse(data);
 
   return parsed.success ? [parsed.data] : [];

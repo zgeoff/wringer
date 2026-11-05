@@ -413,11 +413,16 @@ export interface OutputPort {
   readonly writeLine: (line: string) => void;
 }
 
+// Everything the built-in commands read from the repo: its git, and the files a command names.
+export interface RepoHost extends FingerprintHost {
+  readonly readText: (path: string) => Promise<string>;
+}
+
 // What the CLI adapter knows about one invocation.
 export interface Session {
   readonly root: string;
   readonly state: StatePort;
-  readonly fingerprintHost: FingerprintHost;
+  readonly repoHost: RepoHost;
   readonly target?: string | undefined;
   readonly feature?: string | undefined;
   readonly timeoutMs?: number | undefined;
