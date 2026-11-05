@@ -203,11 +203,13 @@ export function createShopWringer(): Wringer {
         name: 'linger',
         summary: 'Run past the timeout, report its cleanup, then fail it',
         effect: 'read',
-        timeoutMs: 50,
+
+        // Long enough that a loaded machine still starts the body before the deadline.
+        timeoutMs: 500,
         input: emptySchema,
         data: emptySchema,
         run: async (_input, ctx) => {
-          await Bun.sleep(200);
+          await Bun.sleep(800);
 
           ctx.emit('cleanup', { step: 'remote work' });
           throw new Error('The cleanup could not stop the remote work.');
