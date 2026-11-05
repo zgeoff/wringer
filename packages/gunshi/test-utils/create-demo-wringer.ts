@@ -28,6 +28,8 @@ const tiltArgsSchema = z.strictObject({
   steps: z.array(z.number()).default([]),
 });
 
+const leanArgsSchema = z.strictObject({ degrees: z.number() });
+
 // A repo's verify CLI for the adapter's tests: targets `local` and read-only `prod`, an action with
 // every flag type, commands with positionals, union arguments or signed numbers, a command that
 // never finishes, and a doctor check that passes.
@@ -89,6 +91,17 @@ export function createDemoWringer(): Wringer {
       summary: 'Tilt a shelf by signed degrees, in steps',
       args: tiltArgsSchema,
       data: tiltArgsSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve(args),
+    })
+    .command({
+      path: ['lean'],
+      summary: 'Lean a shelf by signed degrees',
+      args: leanArgsSchema,
+      positionals: ['degrees'],
+      data: leanArgsSchema,
       effect: 'read',
       needsRun: false,
       needsDoctor: false,

@@ -1,5 +1,5 @@
 import {
-  createNodeFingerprintHost,
+  createNodeRepoHost,
   createRepoState,
   makeProcessSupervisorStarter,
   runSupervisorProcess,
@@ -27,7 +27,7 @@ export async function runVerify(wringer: Wringer): Promise<void> {
     readRepoRoot,
     openRepo: (root) => ({
       state: createRepoState(root, wringer.stateDir),
-      fingerprintHost: createNodeFingerprintHost(),
+      repoHost: createNodeRepoHost(),
       supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
     }),
     runSupervisor: runSupervisorProcess,
