@@ -43,8 +43,10 @@ export function createCLIRunner(options: CLIRunnerOptions): CLIRunner {
         killProcessGroup(child.pid);
       });
 
-      const [stdout, exitCode] = await Promise.all([
+      // A CLI blocks once a pipe nobody reads fills, so stderr drains too.
+      const [stdout, , exitCode] = await Promise.all([
         new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
         child.exited,
       ]);
 
@@ -57,7 +59,11 @@ export function createCLIRunner(options: CLIRunnerOptions): CLIRunner {
         killProcessGroup(child.pid);
       }, deadlineMs);
 
-      await child.exited;
+      await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
 
       clearTimeout(deadline);
     },
