@@ -2,9 +2,12 @@ import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'node:crypto';
 import { WringerError } from '@wringer/core';
 import type { SQL } from 'bun';
+import { match } from 'ts-pattern';
 import { z } from 'zod';
 import { rowSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
+import { initialCancelState, pickCancelStep } from './pick-cancel-step.ts';
+import type { CancelEvent } from './pick-cancel-step.ts';
 
 // A write opens an existing file read-write, so a mistyped path fails, never makes a new database.
 export type SqliteMode = 'readonly' | 'readwrite';
@@ -130,47 +133,59 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
   }
 }
 
-const cancelSQL = 'select pg_cancel_backend(pid) from pg_stat_activity where application_name = $1';
 const cancelRetryMs = 100;
 
-// Bun.SQL's `cancel()` never reaches a running query, so a second session cancels it by name. A
-// cancel that lands early, or that the server refuses, stops nothing, so the loop tries again on a
-// fresh session until the statement settles, and reports each failure to the caller's operator.
+interface CancelSession {
+  canceller: SQL | null;
+}
+
+// Bun.SQL's `cancel()` never reaches a running query, so a second session cancels it by name. The
+// loop only carries out the effects each step picks.
 async function runCancelLoop(
   clients: SQLClients,
   url: string,
   sessionName: string,
   progress: Readonly<QueryProgress>,
 ): Promise<void> {
-  let canceller: SQL | null = null;
-  let failing = false;
+  const session: CancelSession = { canceller: null };
+  let state = initialCancelState;
+  let event: CancelEvent = { kind: 'tick', settled: progress.settled };
 
-  while (!progress.settled) {
-    try {
-      canceller ??= clients.openPostgres(url, `${sessionName}-cancel`);
+  for (;;) {
+    const step = pickCancelStep(state, event);
 
-      await canceller.unsafe(cancelSQL, [sessionName]);
+    state = step.state;
 
-      failing = false;
-    } catch (error) {
-      // One report per run of failures, so a server that refuses for a while is named once.
-      if (!failing) {
-        clients.reportCancelFailure(
-          `The query could not be cancelled yet, and runs on until it can be: ${String(error)}`,
-        );
+    for (const effect of step.effects) {
+      const next = await match(effect)
+        .with({ kind: 'stop' }, () => Promise.resolve('stop' as const))
+        .with({ kind: 'report' }, (report) => {
+          clients.reportCancelFailure(report.message);
+
+          return Promise.resolve(null);
+        })
+        .with({ kind: 'close' }, async () => {
+          await closeSession(clients, session.canceller);
+
+          session.canceller = null;
+
+          return null;
+        })
+        .with({ kind: 'wait' }, async (): Promise<CancelEvent> => {
+          await Bun.sleep(cancelRetryMs);
+
+          return { kind: 'tick', settled: progress.settled };
+        })
+        .with({ kind: 'attempt' }, () => runCancelAttempt(clients, session, { url, sessionName }))
+        .exhaustive();
+
+      if (next === 'stop') {
+        return;
       }
 
-      failing = true;
-
-      await closeSession(clients, canceller);
-
-      canceller = null;
+      event = next ?? event;
     }
-
-    await Bun.sleep(cancelRetryMs);
   }
-
-  await closeSession(clients, canceller);
 }
 
 // Nothing awaits the loop, so a failed close is reported, never thrown.
@@ -179,6 +194,29 @@ async function closeSession(clients: SQLClients, session: SQL | null): Promise<v
     await session?.close();
   } catch (error) {
     clients.reportCancelFailure(`The cancel session could not be closed: ${String(error)}`);
+  }
+}
+
+interface CancelTarget {
+  readonly url: string;
+  readonly sessionName: string;
+}
+
+const cancelSQL = 'select pg_cancel_backend(pid) from pg_stat_activity where application_name = $1';
+
+async function runCancelAttempt(
+  clients: SQLClients,
+  session: CancelSession,
+  target: CancelTarget,
+): Promise<CancelEvent> {
+  try {
+    session.canceller ??= clients.openPostgres(target.url, `${target.sessionName}-cancel`);
+
+    await session.canceller.unsafe(cancelSQL, [target.sessionName]);
+
+    return { kind: 'cancelled' };
+  } catch (error) {
+    return { kind: 'failed', message: String(error) };
   }
 }
 
