@@ -17,6 +17,15 @@ async function setupTest() {
       buildRunPaths(join(shop.repo.root, wringer.stateDir), runID).streams,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
+
+    // The registry as a later version of the repo declares it, with one target removed.
+    runWithoutTarget: (removed: string, path: readonly string[], args: unknown) =>
+      dispatch(
+        { ...wringer, targets: new Map([...wringer.targets].filter(([name]) => name !== removed)) },
+        path,
+        args,
+        { ...shop.session, target: undefined },
+      ),
   };
 }
 
@@ -35,6 +44,20 @@ test('#use marks the cursors of the current target run', async () => {
     target: null,
     feature: 'checkout',
     cursors: { app: 27 },
+  });
+});
+
+test('#use --target selects a target after the registry dropped the saved one', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['use'], { target: 'archive' });
+
+  const result = await ctx.runWithoutTarget('archive', ['use'], { target: 'local' });
+  const pointers = await ctx.readPointers();
+
+  expect({ exitCode: result.exitCode, target: pointers.target }).toStrictEqual({
+    exitCode: 0,
+    target: 'local',
   });
 });
 
