@@ -80,6 +80,24 @@ test('it drives a page, an http call, a stream read and a db query, then reports
   });
 });
 
+test('it shows on the page that an order failed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['db', 'query'], { sql: 'drop table orders', write: true });
+  await ctx.run(['browser', 'goto'], { path: '/' });
+  await ctx.run(['browser', 'click'], { role: 'button', name: 'Place order' });
+
+  const shown = await waitFor(async () => {
+    const result = await ctx.run(['browser', 'snapshot']);
+
+    return JSON.stringify(result.envelope.data).includes('The order failed') ? true : null;
+  });
+
+  expect(shown).toBeTrue();
+});
+
 test('it writes every envelope of the journey in the published schema', async () => {
   const ctx = await setupTest();
 

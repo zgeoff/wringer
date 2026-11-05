@@ -13,10 +13,14 @@ const shop: ContractRouterClient<typeof shopContract> = createORPCClient(
 const heading = document.querySelector('h1');
 
 async function placeOrder(): Promise<void> {
-  const order = await shop.orders.place();
+  const text = await shop.orders.place().then(
+    (order) => `Order ${order.id} placed`,
+    (error: unknown) =>
+      `The order failed: ${error instanceof Error ? error.message : String(error)}`,
+  );
 
   if (heading !== null) {
-    heading.textContent = `Order ${order.id} placed`;
+    heading.textContent = text;
   }
 }
 
