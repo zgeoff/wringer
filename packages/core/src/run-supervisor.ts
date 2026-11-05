@@ -1,8 +1,6 @@
-import { rm } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { buildRunHandle } from './build-run-handle.ts';
 import type { StatePort } from './create-file-state.ts';
-import { createSocketFolder } from './create-socket-folder.ts';
 import { getTarget } from './get-target.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
 import { defaultRefusalHint } from './make-fence.ts';
@@ -39,7 +37,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const target = getTarget(options.wringer, options.target);
   const run = buildRunHandle(options.state.paths.root, options.runID);
 
-  const socket = await createSocketFolder(run.paths.socket);
+  const socket = await options.launchHost.createSocketFolder(run.paths.socket);
 
   const services = new Map<string, ServiceInstance>();
   const lifetime = new AbortController();
@@ -224,7 +222,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   server.close();
 
-  await rm(dirname(socket), { recursive: true, force: true });
+  await options.launchHost.removeDirectory(dirname(socket));
 }
 
 interface StopOutcome {

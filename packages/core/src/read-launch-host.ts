@@ -1,6 +1,8 @@
 import { appendText } from './append-text.ts';
 import { createDirectory } from './create-directory.ts';
+import { createSocketFolder } from './create-socket-folder.ts';
 import { killProcessGroup } from './kill-process-group.ts';
+import { removeDirectory } from './remove-directory.ts';
 import { runProcess } from './run-process.ts';
 import type { ProcessRequest, ProcessResult } from './run-process.ts';
 
@@ -24,6 +26,10 @@ export interface LaunchHost {
   readonly spawnApp: (argv: readonly string[], options: AppSpawnOptions) => AppProcess;
   readonly appendLog: (path: string, text: string) => Promise<void>;
   readonly createDirectory: (path: string) => Promise<void>;
+
+  // Returns the socket's path, in the temp folder when the preferred path is too long for a socket.
+  readonly createSocketFolder: (preferredSocket: string) => Promise<string>;
+  readonly removeDirectory: (path: string) => Promise<void>;
   readonly killProcessGroup: (pid: number, signal?: NodeJS.Signals) => void;
   readonly runProcess: (request: ProcessRequest) => Promise<ProcessResult>;
 }
@@ -49,6 +55,8 @@ export function readLaunchHost(): LaunchHost {
       }),
     appendLog: appendText,
     createDirectory,
+    createSocketFolder,
+    removeDirectory,
     killProcessGroup,
     runProcess,
   };
