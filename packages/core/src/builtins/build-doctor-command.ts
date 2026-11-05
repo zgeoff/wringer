@@ -5,6 +5,7 @@ import type { CheckResult } from '../run-events.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext, Drive, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
+import { pickDoctorOutcome } from './pick-doctor-outcome.ts';
 
 const doctorDataSchema = z.strictObject({
   passed: z.boolean(),
@@ -33,27 +34,17 @@ export function buildDoctorCommand(): RegisteredCommand {
         ctx.emit('check', result);
       }
 
-      const passed = results.every((result) => result.status === 'passed');
+      const outcome = pickDoctorOutcome(results, ctx.now().toISOString());
       const runID = ctx.run?.runID ?? '';
 
-      await ctx.state.appendEvent(runID, {
-        type: passed ? 'doctor-passed' : 'doctor-failed',
-        at: ctx.now().toISOString(),
-        results,
-      });
-
+      await ctx.state.appendEvent(runID, outcome.event);
       await ctx.state.writeManifest(runID);
 
-      if (!passed) {
-        const failed = results.filter((result) => result.status === 'failed');
-
-        throw new WringerError('check-failed', {
-          message: `The doctor failed: ${failed.map((result) => result.name).join(', ')}.`,
-          data: { passed, results },
-        });
+      if (outcome.failure !== null) {
+        throw outcome.failure;
       }
 
-      return { passed, results };
+      return outcome.data;
     },
   });
 }
