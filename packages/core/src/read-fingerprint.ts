@@ -19,7 +19,7 @@ export const emptyFingerprint = 'empty';
 
 // The patch ID hashes every line of the diff, so each git setting that shapes the diff is pinned,
 // and the same change gets the same fingerprint in any clone.
-const pinnedDiffConfig = ['-c', 'diff.suppressBlankEmpty=false'];
+const pinnedDiffConfig = ['-c', 'diff.suppressBlankEmpty=false', '-c', 'core.quotePath=true'];
 
 const pinnedDiffOptions = [
   '--unified=3',
@@ -29,6 +29,7 @@ const pinnedDiffOptions = [
   '--src-prefix=a/',
   '--dst-prefix=b/',
   '--ignore-submodules=none',
+  '--submodule=short',
 ];
 
 // The fingerprint is `git patch-id --stable` of the working tree against the merge base. A commit
