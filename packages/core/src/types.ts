@@ -367,6 +367,9 @@ export interface BuiltinContext {
   // The command's deadline, in ms since the epoch on the `now` clock.
   readonly deadlineAt: number;
   readonly now: () => Date;
+
+  // A poll waits between reads through this, the timer that goes with `now`.
+  readonly wait: (delayMs: number) => Promise<void>;
   readonly emit: Emit;
   readonly openDrive: (access: Access, deadline?: Deadline) => Drive;
 
@@ -461,4 +464,5 @@ export interface Session {
   readonly output: OutputPort;
   readonly supervisor: SupervisorPort;
   readonly now?: (() => Date) | undefined;
+  readonly wait?: ((delayMs: number) => Promise<void>) | undefined;
 }

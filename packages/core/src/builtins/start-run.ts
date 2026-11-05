@@ -208,7 +208,7 @@ async function waitForReady(
       });
     }
 
-    await Bun.sleep(readyPollMs);
+    await ctx.wait(readyPollMs);
   }
 
   throw new WringerError('timeout', {
@@ -257,7 +257,7 @@ async function readSupervisorSocket(ctx: BuiltinContext, runID: string): Promise
       return view.supervisor.socket;
     }
 
-    await Bun.sleep(readyPollMs);
+    await ctx.wait(readyPollMs);
   }
 
   return null;
