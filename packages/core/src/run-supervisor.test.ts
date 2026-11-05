@@ -190,6 +190,20 @@ async function setupTest() {
       }),
       drivers: { scribe: () => ({}) },
     })
+    .target('slow-scribe-box', {
+      mode: 'launch',
+      access: 'read-write',
+      host: local(),
+      launch: () => ({
+        command: [
+          'sh',
+          '-c',
+          `trap 'sleep 0.6; echo closing late; exit 0' TERM; echo '{"port":4300}'; while :; do sleep 0.05; done`,
+        ],
+        ready: (line) => (line['port'] === 4300 ? { web: 'http://127.0.0.1:4300' } : null),
+      }),
+      drivers: { scribe: () => ({}) },
+    })
     .target('mixed-box', {
       mode: 'attach',
       access: 'read-write',
@@ -493,6 +507,26 @@ test('#runSupervisor stops the app before the services, so a service sees what t
   await Promise.all([ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'), supervising]);
 
   expect(ctx.stopCalls).toContain('closing');
+});
+
+test('#runSupervisor stops the services only once the app has exited, even past the cleanup wait', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run', undefined, 'slow-scribe-box', 200);
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    invariant(view?.status === 'running', 'The run is not running yet.');
+
+    return view;
+  });
+
+  await Promise.allSettled([ctx.callStop(ready.supervisor?.socket ?? ''), supervising]);
+
+  expect(ctx.stopCalls).toContain('closing late');
 });
 
 test('#runSupervisor lets a service run a command from its stop', async () => {

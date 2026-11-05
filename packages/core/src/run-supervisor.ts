@@ -64,6 +64,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   // stop that cancelled it, so the stop takes these from here.
   const startupLeftovers: string[] = [];
 
+  // Settles once the app's stop has, past its cleanup wait too, so no service, such as a stream
+  // recorder, stops while the app can still log.
+  let appStopped: Promise<unknown> = Promise.resolve();
+
   // Names each part whose stop failed. A part is marked before its stop starts, so two calls never
   // stop the same part.
   const stopStarted = async (): Promise<readonly string[]> => {
@@ -80,7 +84,20 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     }
 
     const appCleanups = pending.app.flatMap((key): Cleanup[] =>
-      current === undefined ? [] : [[key, () => current.stop()]],
+      current === undefined
+        ? []
+        : [
+            [
+              key,
+              () => {
+                const stoppingApp = current.stop();
+
+                appStopped = Promise.allSettled([stoppingApp]);
+
+                return stoppingApp;
+              },
+            ],
+          ],
     );
 
     const serviceCleanups = pending.services.flatMap((key): Cleanup[] => {
@@ -90,6 +107,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     });
 
     const appFailures = await runCleanups(appCleanups, options.stopWaitMs);
+
+    // The app's own stop ends within its limit, so this wait has a bound.
+    await appStopped;
+
     const serviceFailures = await runCleanups(serviceCleanups, options.stopWaitMs);
 
     return [...startupLeftovers.splice(0), ...appFailures, ...serviceFailures];
