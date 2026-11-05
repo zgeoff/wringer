@@ -182,6 +182,51 @@ test.each([
   });
 });
 
+test.each([
+  {
+    argv: ['tilt', '--degrees', '-15'],
+    data: { degrees: -15, steps: [] },
+  },
+  {
+    argv: ['tilt', '--degrees', '-0.5', '--steps', '-5', '--steps', '10', '--steps', '-.25'],
+    data: { degrees: -0.5, steps: [-5, 10, -0.25] },
+  },
+])('it passes the negative numbers in $argv to the command', async (row) => {
+  const ctx = await setupTest();
+  const result = await ctx.run(row.argv);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, data: envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: row.data,
+  });
+});
+
+test.each([
+  ['--loud=false', '--loud'],
+  ['--loud=maybe', '--loud'],
+  ['--no-loud=true', '--no-loud'],
+])(
+  'it answers the boolean flag %s given a value with a usage envelope and exit code 2',
+  async (word, flag) => {
+    const ctx = await setupTest();
+    const result = await ctx.run(['action', 'greet', '--name', 'Ines', word]);
+
+    const envelope = ctx.parseEnvelope(result.stdout);
+
+    expect({
+      exitCode: result.exitCode,
+      code: envelope.error?.code,
+      message: envelope.error?.message,
+    }).toStrictEqual({
+      exitCode: 2,
+      code: 'usage',
+      message: `${flag} takes no value.`,
+    });
+  },
+);
+
 test('it answers malformed JSON in an object flag with one usage envelope and exit code 2', async () => {
   const ctx = await setupTest();
   const result = await ctx.run(['ship', '--mode', 'post', '--address', '{']);

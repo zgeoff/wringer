@@ -23,9 +23,14 @@ const postSchema = z.strictObject({ mode: z.literal('post'), address: addressSch
 const pickupSchema = z.strictObject({ mode: z.literal('pickup'), counter: z.string().min(1) });
 const shipArgsSchema = z.discriminatedUnion('mode', [postSchema, pickupSchema]);
 
-// A repo's verify CLI for the adapter's tests: an app target `local`, a read-only target `prod`, a
-// read action with every flag type, a command with two positionals, a command whose arguments are a
-// union, a command that never finishes, and a doctor check that passes.
+const tiltArgsSchema = z.strictObject({
+  degrees: z.number(),
+  steps: z.array(z.number()).default([]),
+});
+
+// A repo's verify CLI for the adapter's tests: targets `local` and read-only `prod`, an action with
+// every flag type, commands with positionals, union arguments or signed numbers, a command that
+// never finishes, and a doctor check that passes.
 export function createDemoWringer(): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -75,6 +80,16 @@ export function createDemoWringer(): Wringer {
       args: shipArgsSchema,
       data: shipArgsSchema,
       decideEffect: (args) => (args.mode === 'post' ? 'write' : 'read'),
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve(args),
+    })
+    .command({
+      path: ['tilt'],
+      summary: 'Tilt a shelf by signed degrees, in steps',
+      args: tiltArgsSchema,
+      data: tiltArgsSchema,
+      effect: 'read',
       needsRun: false,
       needsDoctor: false,
       run: (args) => Promise.resolve(args),
