@@ -11,6 +11,9 @@ export interface ExecQueryInput {
   readonly sql: string;
   readonly params: readonly unknown[];
   readonly write: boolean;
+
+  // The ms left before the command's deadline.
+  readonly timeLeftMs: number;
 }
 
 // A client prints JSON `rows`, or, for a psql write, the `command-tag` such as `UPDATE 3`.
@@ -65,9 +68,17 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
 
   const options = ['-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', input.database];
 
+  // The deadline's abort stops only the local process, so psql inside a container runs on, and a
+  // write could commit after the command reported a timeout. A statement_timeout of 0 means none.
+  const limit = `set statement_timeout = ${Math.max(1, Math.ceil(input.timeLeftMs))};\n`;
+
   // Without `-q`, psql prints a write's command tag, which carries the count of rows it changed.
   if (input.write) {
-    return { argv: [...input.program, '-X', ...options], stdin: input.sql, output: 'command-tag' };
+    return {
+      argv: [...input.program, '-X', ...options],
+      stdin: `${limit}${input.sql}`,
+      output: 'command-tag',
+    };
   }
 
   const argv = [...input.program, '-X', '-q', ...options];
@@ -93,7 +104,7 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
 
   return {
     argv,
-    stdin: `begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\n${statement}\n) q;\ncommit;\n`,
+    stdin: `${limit}begin read only;\nselect coalesce(json_agg(q), '[]'::json) from (\n${statement}\n) q;\ncommit;\n`,
     output: 'rows',
   };
 }

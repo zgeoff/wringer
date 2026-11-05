@@ -60,6 +60,12 @@ A query through `via: 'exec'` has these limits:
 - A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
 - A read through psql starts with `select`, `with`, `values` or `table`. A `show` or `explain` fails
   with a usage error, and any other read counts as a write that did not ask to write.
+- The command's deadline stops the client on the CLI's side, but a client inside a container runs
+  on. The driver sets psql's `statement_timeout` to the time left, so Postgres stops the statement
+  at the deadline.
+- Nothing stops a sqlite3 statement that is still running in a container after the deadline, so a
+  slow write can commit after the command reported a timeout. Connect to SQLite with `via: 'sql'`
+  when a write can run long.
 
 ## Results
 
