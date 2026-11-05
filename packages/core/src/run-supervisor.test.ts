@@ -102,6 +102,8 @@ async function setupTest() {
 
   const state = createRepoState(directory, wringer.stateDir);
   const appendEvent = spyOn(state, 'appendEvent');
+  const launchHost = readLaunchHost();
+  const removeDirectory = spyOn(launchHost, 'removeDirectory');
 
   return {
     stopCalls,
@@ -132,6 +134,7 @@ async function setupTest() {
     readRun: (runID: string) => state.readRun(runID),
     runFolder: (runID: string) => buildRunPaths(state.paths.root, runID).directory,
     appendEvent,
+    removeDirectory,
     seedRun: (runID: string) =>
       state.appendEvent(runID, {
         type: 'run-started',
@@ -143,7 +146,7 @@ async function setupTest() {
     runSupervisor: (runID: string, signal: AbortSignal = teardown.signal, target = 'box') => {
       const supervising = runSupervisor({
         wringer,
-        launchHost: readLaunchHost(),
+        launchHost,
         state,
         runID,
         target,
@@ -270,6 +273,28 @@ test('#runSupervisor ends and closes its socket when its first log write fails',
   expect(ctx.callStatus(socket)).rejects.toThrow();
 });
 
+test('#runSupervisor removes its socket folder through the launch host once the run ends', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  ctx.openStopGate();
+
+  const socket = ready.supervisor?.socket ?? '';
+
+  await Promise.all([ctx.stopThenRead(socket, 'shelf-run'), supervising]);
+
+  expect(ctx.removeDirectory).toHaveBeenCalledExactlyOnceWith(dirname(socket));
+});
+
 test('#runSupervisor lets only its owner reach the socket, whatever the umask', async () => {
   const ctx = await setupTest();
 
@@ -281,7 +306,7 @@ test('#runSupervisor lets only its owner reach the socket, whatever the umask', 
 
   await ctx.seedRun('shelf-run');
 
-  ctx.runSupervisor('shelf-run');
+  void ctx.runSupervisor('shelf-run');
 
   const ready = await waitFor(async () => {
     const view = await ctx.readRun('shelf-run');
