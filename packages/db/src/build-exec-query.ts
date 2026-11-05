@@ -66,6 +66,17 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
     });
   }
 
+  const statement = input.sql.trim().replace(/[;\s]+$/u, '');
+
+  // A `;` inside the statement could end a read's read-only transaction and run a write after it.
+  // statement_timeout limits each statement alone, so a script of several runs past the deadline.
+  if (statement.includes(';')) {
+    throw new WringerError('usage', {
+      message: 'A statement for psql runs alone, with no `;` inside it.',
+      hint: 'Split the statements into separate queries.',
+    });
+  }
+
   const options = ['-t', '-A', '-v', 'ON_ERROR_STOP=1', '-d', input.database];
 
   // The deadline's abort stops only the local process, so psql inside a container runs on, and a
@@ -82,7 +93,6 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
   }
 
   const argv = [...input.program, '-X', '-q', ...options];
-  const statement = input.sql.trim().replace(/[;\s]+$/u, '');
 
   // Postgres refuses SHOW and EXPLAIN inside the subquery that turns the rows into JSON.
   const leading = findLeadingWord(parseSQLTokens('postgres', statement).tokens);
@@ -91,14 +101,6 @@ function buildPostgresQuery(input: ExecQueryInput): ExecQuery {
     throw new WringerError('usage', {
       message: 'A read through psql cannot run `show` or `explain`.',
       hint: 'Connect with `via: sql` to run it.',
-    });
-  }
-
-  // A `;` inside the statement could end the read-only transaction and run a write after it.
-  if (statement.includes(';')) {
-    throw new WringerError('usage', {
-      message: 'A read runs one statement, with no `;` inside it.',
-      hint: 'Split the statements into separate reads.',
     });
   }
 

@@ -104,15 +104,18 @@ test.each(['show server_version', 'explain select id from orders'])(
   },
 );
 
-test('it rejects a Postgres read that holds a second statement', () => {
+test.each([
+  { name: 'read', sql: 'select 1) q; commit; delete from orders; --', write: false },
+  { name: 'write', sql: 'update orders set paid = true; select pg_sleep(60);', write: true },
+])('it rejects a Postgres $name that holds a second statement', (row) => {
   expect(() =>
     buildExecQuery({
       dialect: 'postgres',
       program: ['psql'],
       database: 'shop',
-      sql: 'select 1) q; commit; delete from orders; --',
+      sql: row.sql,
       params: [],
-      write: false,
+      write: row.write,
       timeLeftMs: 30_000,
     }),
   ).toThrow(expect.objectContaining({ code: 'usage' }));
