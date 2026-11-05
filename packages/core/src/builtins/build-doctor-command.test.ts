@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { setImmediate } from 'node:timers/promises';
 import { z } from 'zod';
 import { createTestFolder } from '../../../../test-utils/create-test-folder.ts';
 import { createTestSession } from '../../test-utils/create-test-session.ts';
@@ -19,6 +20,7 @@ async function setupTest() {
 
   const pidPath = join(directory, 'check.pid');
   const scribblePath = join(directory, 'scribble.txt');
+  const shelfGate = Promise.withResolvers<void>();
 
   const clock = defineDriver({
     name: 'clock',
@@ -66,6 +68,17 @@ async function setupTest() {
         return {};
       },
     })
+    .check({
+      name: 'shelf',
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 100,
+      run: async () => {
+        await shelfGate.promise;
+
+        throw new WringerError('check-failed', { message: 'The shelf count came back short.' });
+      },
+    })
     .build();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
@@ -73,6 +86,10 @@ async function setupTest() {
   return {
     probeScribble: () => Bun.file(scribblePath).exists(),
     readRun: (runID: string) => shop.state.readRun(runID),
+    readEvents: (runID: string) => shop.state.readRunEvents(runID),
+    releaseShelf: () => {
+      shelfGate.resolve();
+    },
     runWithin: (path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
     readPID: async () => {
@@ -95,6 +112,37 @@ test('it stops the work of a check that ran past its own deadline', async () => 
   const stopped = await waitFor(() => (probeProcess(pid) ? null : true));
 
   expect({ exitCode: result.exitCode, stopped }).toStrictEqual({ exitCode: 1, stopped: true });
+});
+
+test('it logs the failure of a check that ends after its own deadline to the run', async () => {
+  const ctx = await setupTest();
+  const attached = await ctx.run(['attach']);
+  const result = await ctx.run(['doctor']);
+  const early = await Promise.race([result.late, setImmediate('pending')]);
+
+  ctx.releaseShelf();
+
+  await result.late;
+
+  const events = await ctx.readEvents(attached.envelope.instance ?? '');
+
+  expect({
+    early,
+    shelf: events.filter(
+      (event) => event.type === 'late-failure' && event.command.endsWith('shelf'),
+    ),
+  }).toStrictEqual({
+    early: 'pending',
+    shelf: [
+      {
+        type: 'late-failure',
+        at: expect.any(String),
+        command: 'doctor shelf',
+        code: 'check-failed',
+        message: 'The shelf count came back short.',
+      },
+    ],
+  });
 });
 
 test('it lists the evidence a failed check kept in the doctor envelope', async () => {
@@ -127,6 +175,7 @@ test('it starts no check once the doctor ran past its own deadline', async () =>
     ['clock.hang', 'timeout'],
     ['note', 'timeout'],
     ['scribble', 'timeout'],
+    ['shelf', 'timeout'],
   ]);
 });
 

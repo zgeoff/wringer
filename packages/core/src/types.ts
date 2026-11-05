@@ -373,6 +373,10 @@ export interface BuiltinContext {
   // A lifecycle command names the run it started, reused or stopped while it holds the target's
   // lock, and its envelope belongs to that run, whatever the pointers say once the lock is free.
   readonly bindRun: (runID: RunID) => void;
+
+  // Work the command gave up on before it answered, such as a check past its timeout. The caller
+  // awaits it after the answer, so a failure it logs still reaches the run's log.
+  readonly keepLate: (work: Promise<void>) => void;
 }
 
 export interface BuiltinCommandSpec<Args, Data> extends CommandShape<Args, Data> {
