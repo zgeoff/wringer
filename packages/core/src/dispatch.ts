@@ -21,6 +21,7 @@ import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
+import { raceDeadline } from './race-deadline.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
@@ -474,22 +475,6 @@ function getDrive(drive: Drive | undefined): Drive {
   }
 
   return drive;
-}
-
-async function raceDeadline<T>(work: Promise<T>, deadline: AbortSignal): Promise<T> {
-  const aborted = Promise.withResolvers<T>();
-
-  const onAbort = (): void => {
-    aborted.reject(new WringerError('timeout'));
-  };
-
-  deadline.addEventListener('abort', onAbort, { once: true });
-
-  try {
-    return await Promise.race([work, aborted.promise]);
-  } finally {
-    deadline.removeEventListener('abort', onAbort);
-  }
 }
 
 // A bound run whose log cannot be read leaves the envelope to the run the pointers name.
