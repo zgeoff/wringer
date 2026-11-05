@@ -107,8 +107,10 @@ function collectValuesBeforeTerminator(
   const kept = filled.slice(0, filled.length - movedCount);
 
   return Object.fromEntries([
-    ...given.flatMap((name) => (args[name]?.type === 'positional' ? [] : [[name, values[name]]])),
-    ...given.flatMap((name) => {
+    ...given.flatMap((name): [string, unknown][] =>
+      args[name]?.type === 'positional' ? [] : [[name, values[name]]],
+    ),
+    ...given.flatMap((name): [string, unknown][] => {
       const words = kept.filter(([keptName]) => keptName === name).map(([, value]) => value);
 
       if (words.length === 0) {
