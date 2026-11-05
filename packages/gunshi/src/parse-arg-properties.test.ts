@@ -20,6 +20,25 @@ test('it reads the type and description of each argument from its JSON Schema', 
   });
 });
 
+test('it reads the arguments of a schema, a branch and a field that each carry an id', () => {
+  const pickup = z.strictObject({ mode: z.literal('pickup'), counter: z.string() });
+  const post = z.strictObject({ mode: z.literal('post'), shelf: z.string().meta({ id: 'Shelf' }) });
+  const shipArgs = z.union([pickup.meta({ id: 'Pickup' }), post]).meta({ id: 'ShipArgs' });
+
+  const properties = parseArgProperties({
+    path: ['ship'],
+    summary: 'Ship an order',
+    args: shipArgs,
+    data: z.strictObject({}),
+  });
+
+  expect(properties).toStrictEqual({
+    mode: { type: 'string', const: 'pickup' },
+    counter: { type: 'string' },
+    shelf: { type: 'string' },
+  });
+});
+
 test('it reads an argument named after a key every object inherits', () => {
   const properties = parseArgProperties({
     path: ['seed'],
