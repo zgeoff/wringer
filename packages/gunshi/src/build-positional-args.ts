@@ -2,7 +2,7 @@ import type { CommandInfo } from '@wringer/core';
 import type { ArgSchema } from 'gunshi';
 import type { GunshiArgs } from './build-gunshi-args.ts';
 import { parseArgProperties, scalarTypeSchema } from './parse-arg-properties.ts';
-import type { ScalarType } from './parse-arg-properties.ts';
+import type { ArgProperty, ScalarType } from './parse-arg-properties.ts';
 
 // gunshi gives the words that no declared positional takes to this hidden one, so the adapter can
 // refuse them.
@@ -18,8 +18,7 @@ export function buildPositionalArgs(info: CommandInfo | null): GunshiArgs {
     const property = properties[name];
     const list = property?.type === 'array';
     const wordType = list ? property.items?.type : property?.type;
-    const parsed = scalarTypeSchema.safeParse(wordType);
-    const type = parsed.success ? parsed.data : 'string';
+    const type = pickWordType(property, wordType);
 
     const described =
       property?.description === undefined ? {} : { description: property.description };
@@ -42,8 +41,26 @@ export function buildPositionalArgs(info: CommandInfo | null): GunshiArgs {
   ]);
 }
 
+type WordType = ScalarType | 'json';
+
+// A field the schema gives no one scalar type, such as an object, takes JSON text, as its flag
+// would.
+function pickWordType(property: ArgProperty | undefined, wordType: unknown): WordType {
+  const parsed = scalarTypeSchema.safeParse(wordType);
+
+  if (parsed.success) {
+    return parsed.data;
+  }
+
+  return property === undefined ? 'string' : 'json';
+}
+
 // A word that does not convert stays text, so the command's schema rejects it with its path.
-function toTyped(word: string, type: ScalarType): unknown {
+function toTyped(word: string, type: WordType): unknown {
+  if (type === 'json') {
+    return parseJSONWord(word);
+  }
+
   if (type === 'number' || type === 'integer') {
     const value = Number(word);
 
@@ -55,4 +72,12 @@ function toTyped(word: string, type: ScalarType): unknown {
   }
 
   return word;
+}
+
+function parseJSONWord(word: string): unknown {
+  try {
+    return JSON.parse(word);
+  } catch {
+    return word;
+  }
 }
