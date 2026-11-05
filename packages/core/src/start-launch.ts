@@ -5,6 +5,7 @@ import { createActor, waitFor } from 'xstate';
 import type { AppStart } from './app-machine.ts';
 import { appMachine } from './app-machine.ts';
 import { buildSpawnError } from './build-spawn-error.ts';
+import { parseLaunchLine } from './parse-launch-line.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
 import { readStreamLineBatches } from './read-stream-line-batches.ts';
@@ -101,7 +102,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   logs.resolve(
     Promise.all([
       pumpLog(child.stdout, (line) => {
-        const endpoints = request.plan.ready(parseLogLine(line));
+        const endpoints = request.plan.ready(parseLaunchLine(line));
 
         if (endpoints !== null) {
           app.send({ type: 'ready', endpoints });
@@ -248,18 +249,6 @@ async function pipeLines(
     for (const line of lines) {
       onLine(line);
     }
-  }
-}
-
-function parseLogLine(line: string): Readonly<Record<string, unknown>> {
-  try {
-    const parsed: unknown = JSON.parse(line);
-
-    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
-      ? Object.fromEntries(Object.entries(parsed))
-      : { message: line };
-  } catch {
-    return { message: line };
   }
 }
 

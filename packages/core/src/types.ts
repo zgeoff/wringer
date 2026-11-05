@@ -5,6 +5,7 @@ import type { SupervisorCall } from './call-supervisor.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
+import type { LaunchLine } from './launch-line-schema.ts';
 import type { FingerprintHost } from './read-fingerprint.ts';
 import type { Endpoints, RunID } from './run-events.ts';
 import type { ProcessResult } from './run-process.ts';
@@ -310,7 +311,7 @@ export interface LaunchPlan {
   readonly command: readonly string[];
   readonly env?: Readonly<Record<string, string>> | undefined;
   readonly cwd?: string | undefined;
-  readonly ready: (line: Readonly<Record<string, unknown>>) => Endpoints | null;
+  readonly ready: (line: LaunchLine) => Endpoints | null;
   readonly stop?: readonly string[] | undefined;
 }
 
