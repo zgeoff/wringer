@@ -1,5 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, open, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
 import { readOptionalText } from '@zgeoff/std';
@@ -8,6 +8,7 @@ import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
 import { readFileFrom } from './read-file-from.ts';
+import type { FilePosition } from './read-file-from.ts';
 import { buildSourceStatus, startStreamRecorder } from './start-stream-recorder.ts';
 import type { StreamSource } from './start-stream-recorder.ts';
 import { waitOrAbort } from './wait-or-abort.ts';
@@ -25,7 +26,11 @@ async function setupTest() {
 
   const streams = join(directory, 'streams');
   const createDirectoryCalls = mock(createDirectory);
-  const readFileCalls = mock(readFileFrom);
+
+  const readFileCalls = mock((path: string, from: FilePosition, limitBytes: number) =>
+    readFileFrom(path, from, limitBytes, (file) => open(file, 'r')),
+  );
+
   const clock = buildStubClock();
 
   return {

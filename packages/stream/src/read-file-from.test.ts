@@ -1,15 +1,23 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rename, rm, writeFile } from 'node:fs/promises';
+import { open, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { readFileFrom } from './read-file-from.ts';
+import type { FilePosition } from './read-file-from.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'read-file-from');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  return { directory, logPath: join(directory, 'app.log') };
+  const logPath = join(directory, 'app.log');
+
+  return {
+    directory,
+    logPath,
+    readFrom: (from: FilePosition, limitBytes: number) =>
+      readFileFrom(logPath, from, limitBytes, (path) => open(path, 'r')),
+  };
 }
 
 test('it reads a file from the offset to its end', async () => {
@@ -17,7 +25,7 @@ test('it reads a file from the offset to its end', async () => {
 
   await writeFile(ctx.logPath, 'booted\nready\n');
 
-  const chunk = await readFileFrom(ctx.logPath, { offset: 7, identity: null }, 1024);
+  const chunk = await ctx.readFrom({ offset: 7, identity: null }, 1024);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 7,
@@ -27,7 +35,7 @@ test('it reads a file from the offset to its end', async () => {
 
 test('it reads a file that does not exist yet as empty', async () => {
   const ctx = await setupTest();
-  const chunk = await readFileFrom(ctx.logPath, { offset: 0, identity: null }, 1024);
+  const chunk = await ctx.readFrom({ offset: 0, identity: null }, 1024);
 
   expect(chunk).toStrictEqual({ start: 0, identity: null, bytes: new Uint8Array() });
 });
@@ -37,7 +45,7 @@ test('it reads a file that shrank below the offset from its start', async () => 
 
   await writeFile(ctx.logPath, 'new\n');
 
-  const chunk = await readFileFrom(ctx.logPath, { offset: 40, identity: null }, 1024);
+  const chunk = await ctx.readFrom({ offset: 40, identity: null }, 1024);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 0,
@@ -52,12 +60,12 @@ test('it reads a longer file that replaced the one it read from its start', asyn
 
   await writeFile(ctx.logPath, 'booted\n');
 
-  const first = await readFileFrom(ctx.logPath, { offset: 0, identity: null }, 1024);
+  const first = await ctx.readFrom({ offset: 0, identity: null }, 1024);
 
   await writeFile(replacement, 'rotated and serving\n');
   await rename(replacement, ctx.logPath);
 
-  const chunk = await readFileFrom(ctx.logPath, { offset: 7, identity: first.identity }, 1024);
+  const chunk = await ctx.readFrom({ offset: 7, identity: first.identity }, 1024);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 0,
@@ -70,7 +78,7 @@ test('it reads at most the limit from the offset', async () => {
 
   await writeFile(ctx.logPath, 'booted\nready\nserving\n');
 
-  const chunk = await readFileFrom(ctx.logPath, { offset: 7, identity: null }, 5);
+  const chunk = await ctx.readFrom({ offset: 7, identity: null }, 5);
 
   expect({ start: chunk.start, text: new TextDecoder().decode(chunk.bytes) }).toStrictEqual({
     start: 7,
