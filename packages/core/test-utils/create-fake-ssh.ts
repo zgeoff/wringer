@@ -8,7 +8,7 @@ export interface FakeSSH {
 
 // Keeps ssh's contract for the caller: options before `--`, then the destination and one command
 // string, which the "remote" login shell parses with `sh -c`. The destination `unreachable` fails
-// the way ssh fails to connect, with exit code 255.
+// to connect, with exit code 255, and `drops-stops` fails that way for the group stop script.
 export async function createFakeSSH(directory: string): Promise<FakeSSH> {
   const binary = join(directory, 'fake-ssh');
   const loginsPath = join(directory, 'logins.log');
@@ -30,6 +30,11 @@ if [ "$destination" = unreachable ]; then
   echo "ssh: connect to host unreachable port 22: Connection refused" >&2
   exit 255
 fi
+case "$destination:$1" in
+  drops-stops:*"for signal in"*)
+    echo "ssh: connect to host drops-stops port 22: Connection timed out" >&2
+    exit 255 ;;
+esac
 echo "$user@$destination" >> '${loginsPath}'
 exec sh -c "$1"
 `;

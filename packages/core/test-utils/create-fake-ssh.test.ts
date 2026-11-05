@@ -40,6 +40,17 @@ test('it exits 255 for the unreachable destination', async () => {
   expect(result.exitCode).toBe(255);
 });
 
+test.each([
+  ['for signal in INT TERM; do :; done', 255],
+  ['kill -0 $$', 0],
+])('it exits for the command %p on the drops-stops destination with %p', async (command, code) => {
+  const ctx = await setupTest();
+
+  const result = Bun.spawnSync([ctx.fake.binary, '--', 'drops-stops', command]);
+
+  expect(result.exitCode).toBe(code);
+});
+
 test('it refuses more than one command word, as a caller that skips quoting would send', async () => {
   const ctx = await setupTest();
 

@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
+import { findRemoteStopFailure } from './find-remote-stop-failure.ts';
 import type { Host } from './host.ts';
 import { quoteShellWord } from './quote-shell-word.ts';
 import { runProcess } from './run-process.ts';
+import type { ProcessResult } from './run-process.ts';
+import { toWringerError } from './to-wringer-error.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface PrefixLayer {
@@ -47,7 +50,7 @@ export function ssh(options: SSHOptions): Host {
           ...io,
         });
 
-      const stops: Promise<unknown>[] = [];
+      const stops: Promise<ProcessResult>[] = [];
 
       const stopRemote = (): void => {
         stops.push(
@@ -57,25 +60,39 @@ export function ssh(options: SSHOptions): Host {
 
       request.signal?.addEventListener('abort', stopRemote, { once: true });
 
-      try {
-        const result = await sendRemote(buildGroupedArgv(request.argv, groupFile), {
-          stdin: request.stdin,
-          signal: request.signal,
-        });
+      const running = sendRemote(buildGroupedArgv(request.argv, groupFile), {
+        stdin: request.stdin,
+        signal: request.signal,
+      });
 
-        if (result.exitCode === sshConnectionFailedExitCode) {
-          throw new WringerError('environment', {
-            message: `ssh could not reach ${options.destination}: ${result.stderr.trim()}`,
-            hint: 'Check that the host is up and that ssh logs in without a prompt.',
-          });
-        }
+      const [ran] = await Promise.allSettled([running]);
 
-        return result;
-      } finally {
-        request.signal?.removeEventListener('abort', stopRemote);
+      request.signal?.removeEventListener('abort', stopRemote);
 
-        await Promise.allSettled(stops);
+      const stopped = await Promise.allSettled(stops);
+
+      const stopFailure = findRemoteStopFailure(stopped);
+
+      // A stop that failed can leave the remote command running, so the caller hears of it.
+      if (ran.status === 'rejected') {
+        const failure = toWringerError(ran.reason);
+
+        throw stopFailure === null
+          ? failure
+          : new WringerError(failure.code, {
+              message: `${failure.message} The remote command may still run: ${stopFailure}`,
+              hint: `Check ${options.destination} for the command, and stop it by hand.`,
+            });
       }
+
+      if (ran.value.exitCode === sshConnectionFailedExitCode) {
+        throw new WringerError('environment', {
+          message: `ssh could not reach ${options.destination}: ${ran.value.stderr.trim()}`,
+          hint: 'Check that the host is up and that ssh logs in without a prompt.',
+        });
+      }
+
+      return ran.value;
     },
   };
 }
