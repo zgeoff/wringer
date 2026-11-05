@@ -28,8 +28,8 @@ export interface RecorderRequest {
     limitBytes: number,
   ) => Promise<FileChunk>;
 
-  // At most this many records wait for the disk; a source that logs faster loses the excess, and
-  // the stream says how many lines it lost.
+  // At most this many records wait behind the batch being written; a source that logs faster loses
+  // the excess, and the stream says how many lines it lost.
   readonly pendingLimit: number;
 }
 
@@ -62,13 +62,15 @@ export async function startStreamRecorder(request: RecorderRequest): Promise<Str
     stop: async () => {
       lifetime.abort();
 
-      await Promise.all(followers.map((follower) => follower.done));
-
+      const readFailures = await Promise.all(followers.map((follower) => follower.done));
       const settled = await Promise.allSettled(followers.map((follower) => follower.drain()));
 
-      const failures = settled.flatMap((result) =>
-        result.status === 'rejected' ? [String(result.reason)] : [],
-      );
+      const failures = [
+        ...readFailures.flatMap((failure) => (failure === null ? [] : [failure])),
+        ...settled.flatMap((result) =>
+          result.status === 'rejected' ? [String(result.reason)] : [],
+        ),
+      ];
 
       if (failures.length > 0) {
         throw new WringerError('environment', {
@@ -87,7 +89,9 @@ interface FollowSourceRequest extends RecorderRequest {
 
 interface Follower {
   readonly status: () => SourceStatus;
-  readonly done: Promise<void>;
+
+  // Settles once the source ends, with why reading it failed, or null when it ended without a fault.
+  readonly done: Promise<string | null>;
   readonly drain: () => Promise<void>;
 }
 
@@ -129,13 +133,17 @@ function followSource(request: FollowSourceRequest): Follower {
     writer.add(JSON.stringify({ at: request.now().toISOString(), line: capLine(line) }));
   };
 
-  const watch = async (): Promise<void> => {
+  const watch = async (): Promise<string | null> => {
     try {
       const exitCode = await runFollow(request, onLine);
 
       move('exited', `exit code ${exitCode}`);
+
+      return null;
     } catch (error) {
       move('failed', String(error));
+
+      return `${request.name} could not be read: ${String(error)}`;
     }
   };
 
