@@ -35,6 +35,7 @@
   "dependencies": {
     "@zgeoff/std": "catalog:",
     "ts-pattern": "catalog:",
+    "xstate": "catalog:",
     "zod": "catalog:"
   },
   "engines": {

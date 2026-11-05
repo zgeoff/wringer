@@ -1,7 +1,7 @@
 import type { CheckResult, RunEvent } from '../run-events.ts';
 import { WringerError } from '../wringer-error.ts';
 
-export interface DoctorData {
+interface DoctorData {
   readonly passed: boolean;
   readonly results: CheckResult[];
 }
