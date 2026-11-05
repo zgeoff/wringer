@@ -1,3 +1,5 @@
+import { open } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { WringerError, createDirectory, defineDriver, findOwnValue } from '@wringer/core';
 import type { DriverSession, Fence, RunHandle } from '@wringer/core';
@@ -67,7 +69,8 @@ export const stream = defineDriver({
           now: () => new Date(),
           createDirectory,
           appendText: appendWholeText,
-          readFileFrom,
+          readFileFrom: (path, from, limitBytes) =>
+            readFileFrom(path, from, limitBytes, openForRead),
           wait: waitOrAbort,
           pendingLimit: 10_000,
         });
@@ -79,7 +82,8 @@ export const stream = defineDriver({
       },
     },
   },
-  client: (session, fence) => createStreamClient(session, fence, readStreamSlice),
+  client: (session, fence) =>
+    createStreamClient(session, fence, (request) => readStreamSlice(request, openForRead)),
   commands: (command) => [
     command({
       path: ['stream', 'read'],
@@ -117,6 +121,10 @@ function pickSources(
   run: RunHandle,
 ): Readonly<Record<string, StreamSource>> {
   return sources ?? { app: { file: run.childLog('app').path } };
+}
+
+function openForRead(path: string): Promise<FileHandle> {
+  return open(path, 'r');
 }
 
 type StreamSession = DriverSession<

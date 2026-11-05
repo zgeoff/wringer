@@ -1,6 +1,6 @@
-import { open } from 'node:fs/promises';
 import { isErrorCode } from '@wringer/core';
 import { pickFileRead } from './pick-file-read.ts';
+import type { OpenFile } from './types.ts';
 
 // Where a reader left a file: the byte offset, and the device and inode of the file it read, or
 // null before it read one.
@@ -22,8 +22,9 @@ export async function readFileFrom(
   path: string,
   from: FilePosition,
   limitBytes: number,
+  openFile: OpenFile,
 ): Promise<FileChunk> {
-  const handle = await open(path, 'r').catch((error: unknown) => {
+  const handle = await openFile(path).catch((error: unknown) => {
     if (isErrorCode(error, 'ENOENT')) {
       return null;
     }

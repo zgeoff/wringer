@@ -1,7 +1,8 @@
-import { open } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { WringerError, isErrorCode } from '@wringer/core';
 import { buildStreamSlice } from './build-stream-slice.ts';
 import type { StreamSlice } from './build-stream-slice.ts';
+import type { OpenFile } from './types.ts';
 
 export interface StreamSliceRequest {
   readonly path: string;
@@ -11,9 +12,12 @@ export interface StreamSliceRequest {
 
 // Reads whole records from the byte offset `from`, up to `maxBytes`. A file the machine refuses to
 // read, such as a folder at the stream's path, is a fault of the environment, not of wringer.
-export async function readStreamSlice(request: StreamSliceRequest): Promise<StreamSlice> {
+export async function readStreamSlice(
+  request: StreamSliceRequest,
+  openFile: OpenFile,
+): Promise<StreamSlice> {
   try {
-    return await readSlice(request);
+    return await readSlice(request, openFile);
   } catch (error) {
     throw new WringerError('environment', {
       message: `The stream file ${request.path} could not be read: ${String(error)}`,
@@ -23,8 +27,8 @@ export async function readStreamSlice(request: StreamSliceRequest): Promise<Stre
 
 // The recorder caps each record well under the smallest slice, so a full slice always ends on a
 // line end. A cursor past the end of the file comes from an older run, so the read starts over at 0.
-async function readSlice(request: StreamSliceRequest): Promise<StreamSlice> {
-  const handle = await openStreamFile(request.path);
+async function readSlice(request: StreamSliceRequest, openFile: OpenFile): Promise<StreamSlice> {
+  const handle = await openStreamFile(openFile, request.path);
 
   if (handle === null) {
     return { records: [], cursor: 0, more: false };
@@ -49,12 +53,10 @@ async function readSlice(request: StreamSliceRequest): Promise<StreamSlice> {
   }
 }
 
-type FileHandle = Awaited<ReturnType<typeof open>>;
-
 // A stream that has recorded nothing yet has no file. Any other failure, such as EACCES, rejects.
-async function openStreamFile(path: string): Promise<FileHandle | null> {
+async function openStreamFile(openFile: OpenFile, path: string): Promise<FileHandle | null> {
   try {
-    return await open(path, 'r');
+    return await openFile(path);
   } catch (error) {
     if (isErrorCode(error, 'ENOENT')) {
       return null;

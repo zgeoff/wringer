@@ -1,7 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, open, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
+import { buildStreamSeeder } from '../test-utils/build-stream-seeder.ts';
 import { readStreamSlice } from './read-stream-slice.ts';
 
 async function setupTest() {
@@ -9,18 +11,16 @@ async function setupTest() {
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
-  const path = join(directory, 'app.ndjson');
+  const streams = join(directory, 'streams');
+  const path = join(streams, 'app.ndjson');
+  const clock = buildStubClock();
 
   return {
     path,
-    writeStream: (lines: readonly string[]) =>
-      writeFile(
-        path,
-        lines
-          .map((line) => `${JSON.stringify({ at: '2026-03-01T09:30:00.000Z', line })}\n`)
-          .join(''),
-      ),
-    read: (from: number, maxBytes = 64 * 1024) => readStreamSlice({ path, from, maxBytes }),
+    clock,
+    seed: buildStreamSeeder({ streams, now: clock.now }),
+    read: (from: number, maxBytes = 64 * 1024) =>
+      readStreamSlice({ path, from, maxBytes }, (file) => open(file, 'r')),
   };
 }
 
@@ -34,7 +34,7 @@ test('it reads nothing from a stream that has no file yet', async () => {
 test('it rejects a stream path that is a folder with an environment error', async () => {
   const ctx = await setupTest();
 
-  await mkdir(ctx.path);
+  await mkdir(ctx.path, { recursive: true });
 
   expect(ctx.read(0)).rejects.toMatchObject({ code: 'environment' });
 });
@@ -42,7 +42,9 @@ test('it rejects a stream path that is a folder with an environment error', asyn
 test('it reads every record and returns the end of the file as the cursor', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeStream(['booted', 'order 7 placed']);
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
+  await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
   const slice = await ctx.read(0);
 
@@ -59,7 +61,9 @@ test('it reads every record and returns the end of the file as the cursor', asyn
 test('it stops at the last whole record within maxBytes and says there is more', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeStream(['booted', 'order 7 placed']);
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
+  await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
   const firstLength = `${JSON.stringify({ at: '2026-03-01T09:30:00.000Z', line: 'booted' })}\n`
     .length;
@@ -76,7 +80,9 @@ test('it stops at the last whole record within maxBytes and says there is more',
 test('it starts at the next record when the cursor lands inside one', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeStream(['booted', 'order 7 placed']);
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
+  await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
   const slice = await ctx.read(3);
 
@@ -86,7 +92,9 @@ test('it starts at the next record when the cursor lands inside one', async () =
 test('it starts over at 0 when the cursor is past the end of the file', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeStream(['booted']);
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
+  await ctx.seed.stream('app', ['booted']);
 
   const slice = await ctx.read(10_000);
 
