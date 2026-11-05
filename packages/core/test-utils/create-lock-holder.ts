@@ -33,7 +33,14 @@ export async function createLockHolder(lockPath: string): Promise<LockHolder> {
     await holder.exited;
   };
 
-  const first = await holder.stdout.getReader().read();
+  // The caller gets `kill` only once this returns, so a failed read stops the group here.
+  try {
+    const first = await holder.stdout.getReader().read();
 
-  return { held: !first.done, kill };
+    return { held: !first.done, kill };
+  } catch (error) {
+    await kill();
+
+    throw error;
+  }
 }
