@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
 import { killProcessGroup } from '../src/kill-process-group.ts';
+import { waitFor } from './wait-for.ts';
 
 export interface GuardedApp {
   readonly appPID: number;
@@ -36,7 +37,7 @@ export async function createGuardedApp(): Promise<GuardedApp> {
     await parent.exited;
   };
 
-  const appPID = await readAppPID(parent.stdout).catch(async (error: unknown) => {
+  const appPID = await readStartedAppPID(parent.stdout).catch(async (error: unknown) => {
     // The caller gets no way to stop the parent until this returns, so a failed read stops it here.
     await killParent();
 
@@ -60,8 +61,18 @@ export async function createGuardedApp(): Promise<GuardedApp> {
   };
 }
 
-async function readAppPID(stdout: ReadableStream<Uint8Array>): Promise<number> {
+// setpriv asks for the death signal just before it runs the app, so a parent killed before then
+// leaves the app running. The ID comes back once the app has replaced setpriv.
+async function readStartedAppPID(stdout: ReadableStream<Uint8Array>): Promise<number> {
   const first = await stdout.getReader().read();
 
-  return Number(new TextDecoder().decode(first.value).trim());
+  const appPID = Number(new TextDecoder().decode(first.value).trim());
+
+  await waitFor(async () => {
+    const command = await readOptionalText(`/proc/${appPID}/comm`);
+
+    return command?.trim() === 'sleep' ? true : null;
+  });
+
+  return appPID;
 }
