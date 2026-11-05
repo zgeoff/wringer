@@ -1,9 +1,10 @@
 import type { Socket } from 'bun';
-
-interface PostgresStatement {
-  readonly protocol: 'simple' | 'extended';
-  readonly sql: string;
-}
+import { pickPostgresMessagePlan } from './pick-postgres-message-plan.ts';
+import type {
+  PostgresConnectionState,
+  PostgresMessage,
+  PostgresStatement,
+} from './pick-postgres-message-plan.ts';
 
 export interface FakePostgres {
   readonly url: string;
@@ -11,21 +12,51 @@ export interface FakePostgres {
   readonly stop: () => void;
 }
 
+export interface FakePostgresOptions {
+  // How many of the connections a cancel loop opens the server refuses, from the first.
+  readonly cancelRefusals?: number | undefined;
+}
+
 interface Connection {
   buffer: Uint8Array;
   started: boolean;
-  applicationName: string | null;
-  statement: string;
-  hanging: boolean;
+  state: PostgresConnectionState;
 }
 
 // A Postgres server for tests that records each statement and its wire protocol, and answers with no
-// rows. It speaks only enough of the protocol for Bun.SQL: no TLS, no password, and a transaction
-// state of "in a transaction" after each query.
-export function createFakePostgres(): FakePostgres {
+// rows. It speaks only enough of the protocol for Bun.SQL: no TLS and no password.
+// `pickPostgresMessagePlan` decides each answer; this server only reads and writes the sockets.
+export function createFakePostgres(options: FakePostgresOptions = {}): FakePostgres {
   const statements: PostgresStatement[] = [];
 
   const connections = new Set<Socket<Connection>>();
+
+  let cancelRefusalsLeft = options.cancelRefusals ?? 0;
+
+  const apply = (socket: Socket<Connection>, message: PostgresMessage): void => {
+    const plan = pickPostgresMessagePlan(socket.data.state, cancelRefusalsLeft, message);
+
+    socket.data.state = plan.connection;
+    cancelRefusalsLeft = plan.cancelRefusalsLeft;
+
+    statements.push(...plan.statements);
+
+    for (const reply of plan.replies) {
+      socket.write(reply);
+    }
+
+    if (plan.close) {
+      socket.end();
+    }
+
+    if (plan.cancel !== null) {
+      const body = new TextEncoder().encode(plan.cancel);
+
+      for (const connection of connections) {
+        apply(connection, { type: 'cancel', body });
+      }
+    }
+  };
 
   const server = Bun.listen<Connection>({
     hostname: '127.0.0.1',
@@ -35,9 +66,7 @@ export function createFakePostgres(): FakePostgres {
         socket.data = {
           buffer: new Uint8Array(),
           started: false,
-          applicationName: null,
-          statement: '',
-          hanging: false,
+          state: { applicationName: null, statement: '', hanging: false },
         };
 
         connections.add(socket);
@@ -52,7 +81,7 @@ export function createFakePostgres(): FakePostgres {
         socket.data.started = read.started;
 
         for (const message of read.messages) {
-          answerMessage(socket, message, statements, connections);
+          apply(socket, message);
         }
       },
     },
@@ -67,19 +96,14 @@ export function createFakePostgres(): FakePostgres {
   };
 }
 
-interface Message {
-  readonly type: string;
-  readonly body: Uint8Array;
-}
-
 const tlsRequestCode = 80_877_103;
 
 // The startup and TLS requests carry no type byte; every later message does.
 function collectMessages(
   bytes: Uint8Array,
   started: boolean,
-): { messages: Message[]; rest: Uint8Array; started: boolean } {
-  const messages: Message[] = [];
+): { messages: PostgresMessage[]; rest: Uint8Array; started: boolean } {
+  const messages: PostgresMessage[] = [];
   let offset = 0;
   let isStarted = started;
 
@@ -127,144 +151,4 @@ function joinBytes(first: Uint8Array, second: Uint8Array): Uint8Array {
   joined.set(second, first.length);
 
   return joined;
-}
-
-function answerMessage(
-  socket: Socket<Connection>,
-  message: Message,
-  statements: PostgresStatement[],
-  connections: ReadonlySet<Socket<Connection>>,
-): void {
-  if (message.type === 'startup') {
-    socket.data.applicationName =
-      parseStartupParameters(message.body).get('application_name') ?? null;
-  }
-
-  const statement = pickStatement(message);
-
-  statements.push(...statement);
-
-  if (message.type === 'P') {
-    socket.data.statement = statement[0]?.sql ?? '';
-  }
-
-  if (message.type === 'B' && socket.data.statement.includes('pg_cancel_backend')) {
-    writeCancels(connections, parseFirstParameter(message.body));
-  }
-
-  if (message.type === 'E' && socket.data.statement.includes('pg_sleep')) {
-    socket.data.hanging = true;
-  }
-
-  if (socket.data.hanging) {
-    return;
-  }
-
-  writeReplies(socket, message);
-}
-
-// The startup body holds name and value pairs, each ending in a zero byte, then one more zero byte.
-function parseStartupParameters(body: Uint8Array): Map<string, string> {
-  const words = new TextDecoder().decode(body).split('\0');
-
-  return new Map(
-    words.flatMap((word, index) =>
-      index % 2 === 0 && word !== '' ? [[word, words[index + 1] ?? '']] : [],
-    ),
-  );
-}
-
-// A Parse message holds the statement's name, then its text, each ending in a zero byte.
-function pickStatement(message: Message): PostgresStatement[] {
-  const decoder = new TextDecoder();
-
-  if (message.type === 'Q') {
-    return [{ protocol: 'simple', sql: decoder.decode(message.body.subarray(0, -1)) }];
-  }
-
-  if (message.type === 'P') {
-    const nameEnd = message.body.indexOf(0);
-    const textEnd = message.body.indexOf(0, nameEnd + 1);
-
-    return [
-      { protocol: 'extended', sql: decoder.decode(message.body.subarray(nameEnd + 1, textEnd)) },
-    ];
-  }
-
-  return [];
-}
-
-// The status bytes of a ReadyForQuery message: `I` for idle, `T` for in a transaction.
-const idle = 73;
-
-// Postgres answers a cancelled statement with SQLSTATE 57014, then waits for the client's Sync.
-function writeCancels(connections: ReadonlySet<Socket<Connection>>, applicationName: string): void {
-  for (const connection of connections) {
-    if (connection.data.hanging && connection.data.applicationName === applicationName) {
-      connection.data.hanging = false;
-
-      connection.write(
-        buildFrame('E', buildText('SERROR\0C57014\0Mcanceling statement due to user request\0')),
-      );
-
-      connection.write(buildFrame('Z', new Uint8Array([idle])));
-    }
-  }
-}
-
-function buildFrame(type: string, body: Uint8Array = new Uint8Array()): Uint8Array {
-  const frame = new Uint8Array(5 + body.length);
-
-  frame[0] = type.codePointAt(0) ?? 0;
-
-  new DataView(frame.buffer).setInt32(1, 4 + body.length);
-
-  frame.set(body, 5);
-
-  return frame;
-}
-
-function buildText(value: string): Uint8Array {
-  return new TextEncoder().encode(`${value}\0`);
-}
-
-// A Bind message holds the portal and statement names, the parameter formats, then each parameter
-// as a length and its bytes.
-function parseFirstParameter(body: Uint8Array): string {
-  const portalEnd = body.indexOf(0);
-  const statementEnd = body.indexOf(0, portalEnd + 1);
-
-  const view = new DataView(body.buffer, body.byteOffset);
-
-  const formatCount = view.getInt16(statementEnd + 1);
-  const parameterStart = statementEnd + 3 + formatCount * 2 + 2;
-  const length = view.getInt32(parameterStart);
-
-  return new TextDecoder().decode(body.subarray(parameterStart + 4, parameterStart + 4 + length));
-}
-
-const inTransaction = 84;
-
-function writeReplies(socket: Socket<Connection>, message: Message): void {
-  const replies = new Map<string, readonly Uint8Array[]>([
-    ['tls', [new TextEncoder().encode('N')]],
-    ['startup', [buildFrame('R', new Uint8Array(4)), buildFrame('Z', new Uint8Array([idle]))]],
-    [
-      'Q',
-      [buildFrame('C', buildText('SELECT 0')), buildFrame('Z', new Uint8Array([inTransaction]))],
-    ],
-    ['P', [buildFrame('1')]],
-    ['B', [buildFrame('2')]],
-    ['D', [buildFrame('t', new Uint8Array(2)), buildFrame('n')]],
-    ['E', [buildFrame('C', buildText('SELECT 0'))]],
-    ['S', [buildFrame('Z', new Uint8Array([inTransaction]))]],
-  ]);
-
-  for (const reply of replies.get(message.type) ?? []) {
-    socket.write(reply);
-  }
-
-  if (message.type === 'X') {
-    socket.end();
-  }
 }

@@ -21,16 +21,30 @@ async function setupTest() {
     postgres.stop();
   });
 
+  // This server refuses the first session a cancel opens.
+  const refusingPostgres = createFakePostgres({ cancelRefusals: 1 });
+
+  onTestFinished(() => {
+    refusingPostgres.stop();
+  });
+
+  const cancelFailures: string[] = [];
+
   const clients = {
     openSqlite: (path: string, mode: SqliteMode) => new Database(path, { [mode]: true }),
     openPostgres: (url: string, sessionName: string) =>
-      new SQL(url, { connection: { application_name: sessionName } }),
+      new SQL(url, { max: 1, connection: { application_name: sessionName } }),
+    reportCancelFailure: (message: string) => {
+      cancelFailures.push(message);
+    },
   };
 
   return {
     directory,
     file,
+    cancelFailures,
     postgresStatements: postgres.statements,
+    refusingPostgresStatements: refusingPostgres.statements,
     runPostgresQuery: (
       sql: string,
       options: { params?: readonly unknown[]; write?: boolean; signal?: AbortSignal } = {},
@@ -44,6 +58,11 @@ async function setupTest() {
           write: options.write ?? false,
           signal: options.signal ?? new AbortController().signal,
         },
+        clients,
+      ),
+    runOnRefusingPostgres: (sql: string, signal: AbortSignal) =>
+      runSQLQuery(
+        { adapter: 'postgres', url: refusingPostgres.url, sql, params: [], write: true, signal },
         clients,
       ),
 
@@ -139,6 +158,29 @@ test.each([
   controller.abort();
 
   expect(running).rejects.toMatchObject({ errno: '57014' });
+});
+
+test('it reports a refused cancel once, then cancels the Postgres write on a new session', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  const running = ctx.runOnRefusingPostgres('select pg_sleep(60)', controller.signal);
+
+  await waitFor(() =>
+    ctx.refusingPostgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)')
+      ? true
+      : null,
+  );
+
+  controller.abort();
+
+  const failure = await running.catch((error: unknown) => error);
+
+  expect({ failure, reports: ctx.cancelFailures }).toStrictEqual({
+    failure: expect.objectContaining({ errno: '57014' }),
+    reports: [expect.stringContaining('sorry, too many clients already')],
+  });
 });
 
 test('it reads rows with bound parameters, their columns and their count', async () => {
