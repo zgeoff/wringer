@@ -256,6 +256,12 @@ async function setupTest() {
         request: { service: 'stuck/counter', method: 'hold', args: null },
         signal: AbortSignal.timeout(5000),
       }),
+    callWatch: (socket: string, deadlineAt: number) =>
+      callSupervisor({
+        socket,
+        request: { service: 'stuck/counter', method: 'watch', args: null, deadlineAt },
+        signal: AbortSignal.timeout(5000),
+      }),
     openStopGate: () => {
       stopGate.resolve(undefined);
     },
@@ -656,6 +662,28 @@ test('#runSupervisor ends the run and frees its socket when a service call never
   expect({ removed: ctx.removeDirectory.mock.calls, held: held.status }).toStrictEqual({
     removed: [[dirname(socket)]],
     held: 'rejected',
+  });
+});
+
+test('#runSupervisor cancels a service call a second before its deadline while the caller still waits', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  void ctx.runSupervisor('shelf-run', undefined, 'stuck-box');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  const deadlineAt = Date.now() + 1500;
+
+  const watched = await ctx.callWatch(ready.supervisor?.socket ?? '', deadlineAt);
+
+  expect(watched).toStrictEqual({
+    cancelledAtMs: expect.toBeWithin(deadlineAt - 1000, deadlineAt - 500),
   });
 });
 

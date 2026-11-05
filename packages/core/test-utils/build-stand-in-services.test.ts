@@ -115,6 +115,24 @@ test('it settles the counter hold once the hold gate opens, and records the call
   expect({ held, calls: ctx.services.calls }).toStrictEqual({ held: null, calls: ['hold'] });
 });
 
+test('it answers the counter watch with the time its signal aborted', async () => {
+  const ctx = await setupTest();
+  const counter = await ctx.services.counter.start(ctx.context);
+
+  const cancel = new AbortController();
+
+  const watching = counter.methods['watch']?.(null, cancel.signal);
+  const abortedAtMs = Date.now();
+
+  cancel.abort();
+
+  const watched = await watching;
+
+  expect(watched).toStrictEqual({
+    cancelledAtMs: expect.toBeWithin(abortedAtMs, abortedAtMs + 1000),
+  });
+});
+
 test('it starts the press once its command finishes, and records that it finished', async () => {
   const ctx = await setupTest();
 
