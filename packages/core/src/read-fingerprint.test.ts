@@ -114,6 +114,48 @@ test('it changes the fingerprint when a file changes that a textconv filter hide
   expect(after).not.toBe(before);
 });
 
+test('it changes the fingerprint when only the whitespace inside a string changes', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "";\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "good day";\n');
+
+  const before = await ctx.readFingerprint();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "goodday";\n');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).not.toBe(before);
+});
+
+test('it gives the same fingerprint whatever order the diff lists the files in', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'apples.txt'), 'red\n');
+  await writeFile(join(ctx.repo, 'pears.txt'), 'green\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'apples.txt'), 'yellow\n');
+  await writeFile(join(ctx.repo, 'pears.txt'), 'brown\n');
+
+  const before = await ctx.readFingerprint();
+
+  await writeFile(join(ctx.repo, '.git', 'order'), 'pears.txt\napples.txt\n');
+
+  await ctx.git('config', 'diff.orderFile', join(ctx.repo, '.git', 'order'));
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
 test.each([
   ['diff.context', '0'],
   ['diff.interHunkContext', '20'],
