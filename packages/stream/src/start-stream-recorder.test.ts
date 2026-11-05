@@ -133,6 +133,26 @@ test('it records the lines a file source gained just before the recorder stopped
   );
 });
 
+test('it caps a file source line that arrives over several reads at 4096 characters', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  await writeFile(log, 'x'.repeat(6000));
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  await ctx.firstFileRead();
+
+  await appendFile(log, `${'x'.repeat(6000)}\n`);
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(`{"at":"2026-03-01T09:30:00.000Z","line":"${'x'.repeat(4096)}..."}\n`);
+});
+
 test('it caps a long line at 4096 characters', async () => {
   const ctx = await setupTest();
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
