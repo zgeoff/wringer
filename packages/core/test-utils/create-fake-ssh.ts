@@ -16,7 +16,7 @@ export interface FakeSSH {
 
 // Keeps ssh's contract: options before `--`, then the destination and one command string for
 // `sh -c`. `unreachable` exits 255 as ssh does, `drops-stops` does so for the group stop script,
-// and `-tt` ends each line in `\r` as a terminal.
+// and `-tt` sends stderr down stdout and ends each line in `\r`, as a terminal does.
 export async function createFakeSSH(directory: string): Promise<FakeSSH> {
   const binary = join(directory, 'fake-ssh');
   const loginsPath = join(directory, 'logins.log');
@@ -84,7 +84,7 @@ if [ "$destination" = slow-setsid ]; then
 fi
 export PATH
 if [ -n "$terminal" ]; then
-  sh -c "$1" | sed 's/$/\\r/'
+  sh -c "$1" 2>&1 | sed 's/$/\\r/'
   exit
 fi
 exec sh -c "$1"
