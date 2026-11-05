@@ -106,7 +106,7 @@ test('it settles the counter hold once the hold gate opens, and records the call
   const ctx = await setupTest();
   const counter = await ctx.services.counter.start(ctx.context);
 
-  const holding = counter.methods['hold']?.(null);
+  const holding = counter.methods['hold']?.(null, new AbortController().signal);
 
   ctx.openHoldGate();
 
