@@ -252,18 +252,8 @@ test('it reports the failed stop of an app that never got ready to its caller', 
 test('it fails a stop with the log failure that came while the app stopped', async () => {
   const ctx = await setupTest();
 
-  const real = readLaunchHost();
-
-  const host: LaunchHost = {
-    ...real,
-    appendLog: (path, text) =>
-      text.includes('closing')
-        ? Promise.reject(new Error('the disk is full'))
-        : real.appendLog(path, text),
-  };
-
   const launch = await startLaunch({
-    host,
+    host: readLaunchHost(),
     plan: {
       command: [
         'sh',
@@ -280,13 +270,16 @@ test('it fails a stop with the log failure that came while the app stopped', asy
     stopGraceMs: 5000,
   });
 
+  await rm(ctx.logPath);
+  await mkdir(ctx.logPath);
+
   const [stopped] = await Promise.allSettled([launch.stop()]);
 
   expect(stopped).toStrictEqual({
     status: 'rejected',
     reason: expect.objectContaining({
       code: 'environment',
-      message: expect.stringMatching(/^The app's output could not be logged: .*the disk is full$/u),
+      message: expect.stringMatching(/^The app's output could not be logged: .*EISDIR/u),
     }),
   });
 });
@@ -451,6 +444,40 @@ test('it starts the app in the host folder with the host environment and the pla
   });
 
   expect(launch.endpoints).toStrictEqual({ cwd: ctx.directory, shelf: 'herbs', row: '3' });
+});
+
+test('it runs the plan’s stop command with the host environment and the plan’s own', async () => {
+  const ctx = await setupTest();
+
+  const host = {
+    ...readLaunchHost(),
+    guard: [],
+    cwd: ctx.directory,
+    env: { PATH: process.env['PATH'], SHELF: 'herbs' },
+  };
+
+  const stoppedPath = join(ctx.directory, 'stop-env');
+
+  const launch = await ctx.startAppOn(host, {
+    plan: {
+      command: ['sh', '-c', `echo '{"port":4100}'; exec sleep 60`],
+      env: { ROW: '3' },
+      stop: ['sh', '-c', 'echo "$SHELF $ROW" > "$0"', stoppedPath],
+      ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+    },
+    logPath: ctx.logPath,
+    readyTimeoutMs: 10_000,
+    signal: new AbortController().signal,
+    onCrash: mock<(reason: string) => void>(),
+    onStopFailed: mock<(reason: string) => void>(),
+    stopGraceMs: 5000,
+  });
+
+  await launch.stop();
+
+  const stopEnv = await readFile(stoppedPath, 'utf8');
+
+  expect(stopEnv).toBe('herbs 3\n');
 });
 
 test('it creates the log folder, runs the stop command and signals the app through its host', async () => {
