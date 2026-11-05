@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
 import { readOptionalText } from '@zgeoff/std';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
 import { waitFor } from '../../core/test-utils/wait-for.ts';
 import { appendWholeText } from './append-whole-text.ts';
 import { readFileFrom } from './read-file-from.ts';
@@ -25,10 +26,12 @@ async function setupTest() {
   const streams = join(directory, 'streams');
   const createDirectoryCalls = mock(createDirectory);
   const readFileCalls = mock(readFileFrom);
+  const clock = buildStubClock();
 
   return {
     directory,
     streams,
+    clock,
     createDirectoryCalls,
 
     readLargestFileRead: async () => {
@@ -53,7 +56,7 @@ async function setupTest() {
         directory: streams,
         host: local(),
         access: 'read-only',
-        now: () => new Date('2026-03-01T09:30:00.000Z'),
+        now: clock.now,
         createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
         readFileFrom: readFileCalls,
@@ -87,6 +90,9 @@ test('it creates its folder through the folder creator it is given', async () =>
 
 test('it records each line of a command source with the time it arrived', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted', 'ready'] } });
 
   await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
@@ -102,6 +108,8 @@ test('it records each line of a command source with the time it arrived', async 
 
 test('it records the lines appended to a file source', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
 
   const log = join(ctx.directory, 'app.log');
 
@@ -125,6 +133,8 @@ test('it records the lines appended to a file source', async () => {
 test('it records the lines a file source gained just before the recorder stopped', async () => {
   const ctx = await setupTest();
 
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
   const log = join(ctx.directory, 'app.log');
 
   await writeFile(log, '');
@@ -146,6 +156,8 @@ test('it records the lines a file source gained just before the recorder stopped
 
 test('it records a longer file that replaced a file source from its start, without the old unfinished line', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
 
   const log = join(ctx.directory, 'app.log');
   const replacement = join(ctx.directory, 'app.log.new');
@@ -191,6 +203,8 @@ test('it records a file source that held a large log before the start in reads o
 test('it caps a file source line that arrives over several reads at 4096 characters', async () => {
   const ctx = await setupTest();
 
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
   const log = join(ctx.directory, 'app.log');
 
   await writeFile(log, 'x'.repeat(6000));
@@ -210,6 +224,9 @@ test('it caps a file source line that arrives over several reads at 4096 charact
 
 test('it caps a long line at 4096 characters', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
 
   await waitFor(() => (recorder.status()[0]?.state === 'exited' ? true : null));
@@ -294,6 +311,8 @@ test('it fails its stop with an environment error when a file source cannot be r
 
 test('it keeps a batch that failed to write and writes it once the disk recovers', async () => {
   const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
 
   await mkdir(ctx.streamPath('app'), { recursive: true });
 
