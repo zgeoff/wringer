@@ -200,16 +200,24 @@ async function setupTest() {
     stopCalls,
     reports,
 
-    // Reads the run as it stands the moment the stop call returns.
+    // Reads the run as it stands the moment the stop call answers, with success or an error.
     stopThenRead: async (socket: string, runID: string) => {
-      await callSupervisor({
-        socket,
-        request: { service: supervisorServiceName, method: 'stop', args: null },
-        signal: AbortSignal.timeout(5000),
-      });
+      await Promise.allSettled([
+        callSupervisor({
+          socket,
+          request: { service: supervisorServiceName, method: 'stop', args: null },
+          signal: AbortSignal.timeout(5000),
+        }),
+      ]);
 
       return state.readRun(runID);
     },
+    callStop: (socket: string) =>
+      callSupervisor({
+        socket,
+        request: { service: supervisorServiceName, method: 'stop', args: null },
+        signal: AbortSignal.timeout(5000),
+      }),
     openStopGate: () => {
       stopGate.resolve(undefined);
     },
@@ -367,7 +375,7 @@ test('#runSupervisor ends and frees its socket when its final log write fails', 
   const socket = ready.supervisor?.socket ?? '';
 
   const [stopFailure] = await Promise.all([
-    ctx.stopThenRead(socket, 'shelf-run').catch((error: unknown) => error),
+    ctx.callStop(socket).catch((error: unknown) => error),
     supervising,
   ]);
 
@@ -428,10 +436,9 @@ test('#runSupervisor ends the run as crashed and still stops the other services 
     return view?.status === 'running' ? view : null;
   });
 
-  const [ended] = await Promise.all([
-    ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'),
-    supervising,
-  ]);
+  await Promise.allSettled([ctx.callStop(ready.supervisor?.socket ?? ''), supervising]);
+
+  const ended = await ctx.readRun('shelf-run');
 
   expect({ status: ended?.status, stopCalls: ctx.stopCalls }).toStrictEqual({
     status: 'crashed',
@@ -630,10 +637,32 @@ test('#runSupervisor records a service that failed to stop in the crash reason',
 
   ctx.openStopGate();
 
-  const [ended] = await Promise.all([
-    ctx.stopThenRead(ready.supervisor?.socket ?? '', 'shelf-run'),
+  await Promise.allSettled([ctx.callStop(ready.supervisor?.socket ?? ''), supervising]);
+
+  const ended = await ctx.readRun('shelf-run');
+
+  expect(ended?.crashReason).toBe('cleanup failed for leaky/store: The store kept its lock.');
+});
+
+test('#runSupervisor answers a stop with an environment error when a service fails to stop', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('shelf-run');
+
+  const supervising = ctx.runSupervisor('shelf-run');
+
+  const ready = await waitFor(async () => {
+    const view = await ctx.readRun('shelf-run');
+
+    return view?.status === 'running' ? view : null;
+  });
+
+  ctx.openStopGate();
+
+  const [answer] = await Promise.allSettled([
+    ctx.callStop(ready.supervisor?.socket ?? ''),
     supervising,
   ]);
 
-  expect(ended?.crashReason).toBe('cleanup failed for leaky/store: The store kept its lock.');
+  expect(answer).toMatchObject({ status: 'rejected', reason: { code: 'environment' } });
 });

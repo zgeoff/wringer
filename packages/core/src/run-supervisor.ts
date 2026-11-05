@@ -85,7 +85,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   };
 
   // Every cleanup runs, even after one fails, and the supervisor ends even when the final log write
-  // fails; that failure goes to the stop's caller.
+  // fails. A failed cleanup or log write goes to the stop's caller, as a part may still be up.
   const shutDown = async (plan: ShutDownPlan): Promise<WringerError | null> => {
     const failures = await stopStarted();
 
@@ -101,8 +101,6 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
       }
 
       await options.state.writeManifest(options.runID);
-
-      return null;
     } catch (error) {
       const failure = toWringerError(error);
 
@@ -111,6 +109,15 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
       return failure;
     }
+
+    if (failures.length > 0) {
+      return new WringerError('environment', {
+        message: `The run ended, and a part may still be up. Cleanup failed for ${failures.join('; ')}`,
+        hint: 'Stop each part the message names by hand before the next `up`.',
+      });
+    }
+
+    return null;
   };
 
   // The run's log is already closed, so a late part's failure goes to the supervisor's own log.
