@@ -27,6 +27,7 @@ export type Pointers = z.infer<typeof pointersSchema>;
 export interface StatePort {
   readonly paths: StatePaths;
   readonly readPointers: () => Promise<Pointers>;
+  readonly withTargetLock: <T>(target: string, work: () => Promise<T>) => Promise<T>;
   readonly writePointers: (change: (current: Pointers) => Pointers) => Promise<Pointers>;
   readonly appendEvent: (runID: RunID, event: RunEvent) => Promise<void>;
   readonly readRunEvents: (runID: RunID) => Promise<readonly RunEvent[]>;
@@ -85,6 +86,7 @@ export function createFileState(options: FileStateOptions): StatePort {
   return {
     paths,
     readPointers,
+    withTargetLock: (target, work) => withLock(`target-${target}.lock`, work),
     writePointers: (change) =>
       withLock('state.lock', async () => {
         const current = await readPointers();
