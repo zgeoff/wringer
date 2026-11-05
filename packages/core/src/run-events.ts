@@ -49,6 +49,15 @@ export const runEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('envelope'), at, drive: z.boolean(), envelope: envelopeSchema }),
   z.strictObject({ type: z.literal('internal-error'), at, command: z.string(), stack: z.string() }),
+
+  // A command's work that failed after the envelope had already answered with a timeout.
+  z.strictObject({
+    type: z.literal('late-failure'),
+    at,
+    command: z.string(),
+    code: z.string(),
+    message: z.string(),
+  }),
   z.strictObject({ type: z.literal('crashed'), at, reason: z.string() }),
   z.strictObject({ type: z.literal('run-ended'), at }),
 ]);

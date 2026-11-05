@@ -261,6 +261,30 @@ test('it times out a command past its deadline with exit code 5', async () => {
   });
 });
 
+test("it writes a failure that a timed-out command's work hits after the answer to the run's log", async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'linger']);
+
+  await result.late;
+
+  const events = await ctx.state.readRunEvents(result.envelope.instance ?? '');
+
+  expect({ code: result.envelope.error?.code, last: events.at(-1) }).toStrictEqual({
+    code: 'timeout',
+    last: {
+      type: 'late-failure',
+      at: expect.any(String),
+      command: 'action.linger',
+      code: 'internal',
+      message: 'wringer failed with an internal error: The cleanup could not stop the remote work.',
+    },
+  });
+});
+
 test('it never runs the body of a command whose deadline passed while its guards ran', async () => {
   const ctx = await setupTest();
 
