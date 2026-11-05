@@ -54,9 +54,10 @@ The doctor check `browser.launched` fails when the browser has closed.
 
 One second before a command's deadline, the driver starts to close the page under a browser action
 that is still running. When the page closes within half a second, the command fails with a timeout,
-and the next command finds a new page at the same URL, without the input the old page held. When the
-page does not close in that time, the action may still land: the command fails with an environment
-error, and the browser refuses every later command until `up --restart`.
+and the driver opens a new page and tries to load the old page's URL in it, without the input the
+old page held. When that load fails, the new page stays blank until a `browser goto`. When the page
+does not close in that time, the action may still land: the command fails with an environment error,
+and the browser refuses every later command until `up --restart`.
 
 The command's deadline can still pass before the page has closed, such as on a host too busy to run
 the close in time. The caller then reports a timeout while the late action may still land.
