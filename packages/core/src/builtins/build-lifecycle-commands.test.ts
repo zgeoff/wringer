@@ -66,6 +66,12 @@ async function setupTest() {
     },
     runWithClock: (target: string, path: readonly string[], now: () => Date) =>
       dispatch(wringer, path, {}, { ...shop.session, target, now }),
+    runWithTimer: (
+      target: string,
+      path: readonly string[],
+      timeoutMs: number,
+      wait: (delayMs: number) => Promise<void>,
+    ) => dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs, wait }),
 
     // The supervisor's own stop goes to the socket that closes mid-call, while every other call
     // and the start reach the run's supervisor.
@@ -283,6 +289,24 @@ test('#up gives up on readiness when its clock passes the ready timeout', async 
   });
 
   expect(result.envelope.error).toMatchObject({ code: 'timeout' });
+});
+
+test('#up waits between its readiness reads on the session timer', async () => {
+  const ctx = await setupTest();
+
+  onTestFinished(async () => {
+    await ctx.run('slow', ['down']);
+  });
+
+  const waits: number[] = [];
+
+  await ctx.runWithTimer('slow', ['up'], 300, (delayMs) => {
+    waits.push(delayMs);
+
+    return Promise.resolve();
+  });
+
+  expect(new Set(waits)).toStrictEqual(new Set([50]));
 });
 
 test('#up logs a failed stop of the run it abandoned at its deadline to the run', async () => {

@@ -495,6 +495,7 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     signal: request.deadline,
     deadlineAt: request.deadlineAt,
     now: request.now,
+    wait: request.session.wait ?? ((delayMs) => Bun.sleep(delayMs)),
     emit: makeEmit(request.session, request.trace),
     openDrive: (access, deadline) => {
       const drive = openRunDrive(request, {
