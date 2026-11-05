@@ -12,6 +12,7 @@ export type SqliteMode = 'readonly' | 'readwrite';
 export interface SQLClients {
   readonly openSqlite: (file: string, mode: SqliteMode) => Database;
   readonly openPostgres: (url: string, sessionName: string) => SQL;
+  readonly reportCancelFailure: (message: string) => void;
 }
 
 export interface SQLQueryInput {
@@ -132,26 +133,52 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
 const cancelSQL = 'select pg_cancel_backend(pid) from pg_stat_activity where application_name = $1';
 const cancelRetryMs = 100;
 
-// Bun.SQL's own `cancel()` never reaches a query the server is running, so a second session cancels
-// it by its `application_name`. A cancel that lands before the statement starts stops nothing, so
-// it repeats until the statement settles. A failed cancel ends the loop; the statement then runs on.
+// Bun.SQL's `cancel()` never reaches a running query, so a second session cancels it by name. A
+// cancel that lands early, or that the server refuses, stops nothing, so the loop tries again on a
+// fresh session until the statement settles, and reports each failure to the caller's operator.
 async function runCancelLoop(
   clients: SQLClients,
   url: string,
   sessionName: string,
   progress: Readonly<QueryProgress>,
 ): Promise<void> {
-  const canceller = clients.openPostgres(url, `${sessionName}-cancel`);
+  let canceller: SQL | null = null;
+  let failing = false;
 
-  try {
-    while (!progress.settled) {
+  while (!progress.settled) {
+    try {
+      canceller ??= clients.openPostgres(url, `${sessionName}-cancel`);
+
       await canceller.unsafe(cancelSQL, [sessionName]);
-      await Bun.sleep(cancelRetryMs);
+
+      failing = false;
+    } catch (error) {
+      // One report per run of failures, so a server that refuses for a while is named once.
+      if (!failing) {
+        clients.reportCancelFailure(
+          `The query could not be cancelled yet, and runs on until it can be: ${String(error)}`,
+        );
+      }
+
+      failing = true;
+
+      await closeSession(clients, canceller);
+
+      canceller = null;
     }
-  } catch {
-    // The statement's own result still reaches the caller; this loop has no caller to tell.
-  } finally {
-    await canceller.close();
+
+    await Bun.sleep(cancelRetryMs);
+  }
+
+  await closeSession(clients, canceller);
+}
+
+// Nothing awaits the loop, so a failed close is reported, never thrown.
+async function closeSession(clients: SQLClients, session: SQL | null): Promise<void> {
+  try {
+    await session?.close();
+  } catch (error) {
+    clients.reportCancelFailure(`The cancel session could not be closed: ${String(error)}`);
   }
 }
 

@@ -41,8 +41,16 @@ export const db = defineDriver({
   client: (session, fence): DbClient => {
     const clients: SQLClients = {
       openSqlite: (file, mode) => new Database(file, { [mode]: true }),
+
+      // Each session runs one statement or one transaction, so it needs one connection. With more,
+      // Bun.SQL retries a refused connection on each spare slot before the call fails.
       openPostgres: (url, sessionName) =>
-        new SQL(url, { connection: { application_name: sessionName } }),
+        new SQL(url, { max: 1, connection: { application_name: sessionName } }),
+
+      // The command's envelope has gone to stdout by the time a late cancel fails.
+      reportCancelFailure: (message) => {
+        process.stderr.write(`${message}\n`);
+      },
     };
 
     return {

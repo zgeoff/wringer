@@ -44,6 +44,29 @@ test('it runs a pg_sleep statement until pg_cancel_backend names its application
   expect(sleeping).rejects.toMatchObject({ errno: '57014' });
 });
 
+test('it refuses the first connection a cancel loop opens, then lets the next one in', async () => {
+  const postgres = createFakePostgres({ cancelRefusals: 1 });
+
+  onTestFinished(() => {
+    postgres.stop();
+  });
+
+  const first = new SQL(postgres.url, { max: 1, connection: { application_name: 'shop-cancel' } });
+  const second = new SQL(postgres.url, { max: 1, connection: { application_name: 'shop-cancel' } });
+
+  onTestFinished(() => first.close());
+  onTestFinished(() => second.close());
+
+  const refused = await first
+    .unsafe('select 1', [])
+    .execute()
+    .catch((error: unknown) => error);
+
+  await second.unsafe('select 1', []);
+
+  expect(refused).toMatchObject({ errno: '53300' });
+});
+
 test('it records a simple query as a simple-protocol statement', async () => {
   const ctx = setupTest();
 
