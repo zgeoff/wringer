@@ -114,6 +114,63 @@ test('it changes the fingerprint when a file changes that a textconv filter hide
   expect(after).not.toBe(before);
 });
 
+test('it changes the fingerprint when only the whitespace inside a string changes', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "";\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "good day";\n');
+
+  const before = await ctx.readFingerprint();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const greeting = "goodday";\n');
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).not.toBe(before);
+});
+
+test.each([
+  ['diff.context', '0'],
+  ['diff.interHunkContext', '20'],
+  ['diff.noprefix', 'true'],
+  ['diff.mnemonicPrefix', 'true'],
+  ['diff.renames', 'false'],
+  ['diff.algorithm', 'histogram'],
+  ['diff.suppressBlankEmpty', 'true'],
+])('it gives the same fingerprint whatever the repo sets %s to', async (key, value) => {
+  const ctx = await setupTest();
+
+  const lines = Array.from({ length: 40 }, (_, index) => (index % 4 === 0 ? '' : `row ${index}`));
+
+  await writeFile(join(ctx.repo, 'rows.txt'), `${lines.join('\n')}\n`);
+  await writeFile(join(ctx.repo, 'moved.ts'), 'export const moved = true;\n'.repeat(8));
+  await writeFile(join(ctx.repo, 'letters.txt'), 'a\nb\nc\na\nb\nb\na\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'letters.txt'), 'c\nb\na\nb\na\nc\n');
+
+  await writeFile(
+    join(ctx.repo, 'rows.txt'),
+    `${lines.with(10, 'row ten').with(22, 'row twenty-two').join('\n')}\n`,
+  );
+
+  await ctx.git('mv', 'moved.ts', 'renamed.ts');
+
+  const before = await ctx.readFingerprint();
+
+  await ctx.git('config', key, value);
+
+  const after = await ctx.readFingerprint();
+
+  expect(after).toBe(before);
+});
+
 test('it gives a subfolder of the repo the fingerprint of the whole repo', async () => {
   const ctx = await setupTest();
 

@@ -17,7 +17,20 @@ export interface FingerprintRequest {
 
 export const emptyFingerprint = 'empty';
 
-// The fingerprint is `git patch-id --stable` of the working tree against the merge base. A commit
+// The patch ID hashes every line of the diff, so each git setting that shapes the diff is pinned,
+// and the same change gets the same fingerprint in any clone.
+const pinnedDiffConfig = ['-c', 'diff.suppressBlankEmpty=false'];
+
+const pinnedDiffOptions = [
+  '--unified=3',
+  '--inter-hunk-context=0',
+  '--no-renames',
+  '--diff-algorithm=myers',
+  '--src-prefix=a/',
+  '--dst-prefix=b/',
+];
+
+// The fingerprint is `git patch-id --verbatim` of the working tree against the merge base. A commit
 // leaves the diff against the merge base as it was, and a clean rebase moves both ends of it, so
 // neither changes the fingerprint. Untracked files join the diff through a temporary index.
 export async function readFingerprint(
@@ -45,6 +58,7 @@ export async function readFingerprint(
     const diff = await host.runGit({
       cwd: request.cwd,
       args: [
+        ...pinnedDiffConfig,
         'diff',
         '--cached',
         '--binary',
@@ -52,6 +66,7 @@ export async function readFingerprint(
         '--no-ext-diff',
         '--no-textconv',
         '--no-relative',
+        ...pinnedDiffOptions,
         mergeBase,
         '--',
         ':(top)',
@@ -62,7 +77,9 @@ export async function readFingerprint(
 
     const patchID = await host.runGit({
       cwd: request.cwd,
-      args: ['patch-id', '--stable'],
+
+      // `--stable` drops all whitespace, so `"a b"` and `"ab"` would hash alike.
+      args: ['patch-id', '--verbatim'],
       stdin: diff.stdout,
     });
 
