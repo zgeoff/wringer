@@ -3,6 +3,7 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
+import { createNodeRepoHost } from './create-node-repo-host.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'evidence-writer');
@@ -13,6 +14,7 @@ async function setupTest() {
     root,
     directory: join(root, '.wringer', 'evidence'),
     now: () => new Date('2026-03-01T09:30:00.000Z'),
+    files: createNodeRepoHost(),
   });
 
   return {

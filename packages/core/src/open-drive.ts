@@ -8,7 +8,14 @@ import { createEvidenceWriter } from './create-evidence-writer.ts';
 import type { Access } from './host.ts';
 import { makeFence } from './make-fence.ts';
 import { makeDriverExec, makeRepoExec } from './make-fenced-exec.ts';
-import type { Drive, Emit, OpenedDriver, TargetDefinition, Wringer } from './types.ts';
+import type {
+  Drive,
+  Emit,
+  EvidenceFiles,
+  OpenedDriver,
+  TargetDefinition,
+  Wringer,
+} from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface DriveRequest {
@@ -24,6 +31,7 @@ export interface DriveRequest {
   readonly signal: AbortSignal;
   readonly now: () => Date;
   readonly emit: Emit;
+  readonly files: EvidenceFiles;
 }
 
 export const unassignedFeature = 'unassigned';
@@ -37,6 +45,7 @@ export function openDrive(request: DriveRequest): Drive {
     root: request.root,
     directory: join(run.paths.features, request.feature ?? unassignedFeature),
     now: request.now,
+    files: request.files,
   });
 
   const execOptions = {

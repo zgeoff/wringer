@@ -1,4 +1,4 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, mock, onTestFinished, test } from 'bun:test';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
@@ -7,6 +7,7 @@ import { createTestSession } from '../test-utils/create-test-session.ts';
 import { dispatch } from './dispatch.ts';
 import { removeFile } from './remove-file.ts';
 import { runGit } from './run-git.ts';
+import { writeNewFile } from './write-new-file.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -20,7 +21,21 @@ async function setupTest() {
     gate.resolve(undefined);
   });
 
+  const evidenceWrites = mock(writeNewFile);
+
   return {
+    evidenceWrites,
+    runRecordingWrites: (path: readonly string[]) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target: 'local',
+          repoHost: { ...shop.session.repoHost, writeNewFile: evidenceWrites },
+        },
+      ),
     root: shop.repo.root,
     lines: shop.lines,
     state: shop.state,
@@ -74,6 +89,18 @@ test('it answers an unknown command with a usage error and exit code 2', async (
     exitCode: 2,
     error: { code: 'usage', message: 'There is no command `teleport`.', hint: null },
   });
+});
+
+test('it writes a command evidence through the session repo host', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.runRecordingWrites(['action', 'receipt']);
+
+  expect(ctx.evidenceWrites.mock.calls.map(([path]) => path)).toStrictEqual([
+    expect.stringMatching(/-receipt\.txt$/u),
+  ]);
 });
 
 test('it answers arguments that fail the schema with a usage error', async () => {

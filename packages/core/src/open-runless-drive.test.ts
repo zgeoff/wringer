@@ -3,6 +3,7 @@ import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
+import { createNodeRepoHost } from './create-node-repo-host.ts';
 import { getTarget } from './get-target.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 
@@ -29,6 +30,7 @@ async function setupTest() {
         emit: () => {
           // The drive emits nothing here.
         },
+        files: createNodeRepoHost(),
       }),
   };
 }
