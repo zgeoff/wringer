@@ -4,6 +4,9 @@ import { WringerError } from '@wringer/core';
 import type { Access, Host } from '@wringer/core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
+import { buildFileStep } from './build-file-step.ts';
+import type { FileFollowState } from './build-file-step.ts';
+import { collectLines } from './collect-lines.ts';
 import type { FileChunk, FilePosition } from './read-file-from.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
@@ -224,29 +227,30 @@ async function followFile(
 ): Promise<number> {
   let decoder = new TextDecoder();
 
-  let position: FilePosition = { offset: 0, identity: null };
-  let carry = '';
+  let state: FileFollowState = { position: { offset: 0, identity: null }, carry: '' };
 
   const readNew = async (): Promise<void> => {
-    let readBytes = fileReadLimitBytes;
+    let more = true;
 
-    while (readBytes === fileReadLimitBytes) {
-      const chunk = await request.readFileFrom(path, position, fileReadLimitBytes);
+    while (more) {
+      const chunk = await request.readFileFrom(path, state.position, fileReadLimitBytes);
 
-      // A file that shrank or was replaced starts over, so the old file's unfinished line and
-      // unfinished character never join the new file's text.
-      if (chunk.start < position.offset) {
+      const step = buildFileStep(
+        state,
+        { start: chunk.start, identity: chunk.identity, byteCount: chunk.bytes.length },
+        fileReadLimitBytes,
+      );
+
+      // A fresh decoder drops the old file's unfinished character along with its line.
+      if (step.restarted) {
         decoder = new TextDecoder();
-
-        carry = '';
       }
 
-      position = { offset: chunk.start + chunk.bytes.length, identity: chunk.identity };
-      readBytes = chunk.bytes.length;
+      const text = decoder.decode(chunk.bytes, { stream: true });
+      const split = collectLines(step.state.carry, text, recordLineCap);
 
-      const split = collectLines(carry, decoder.decode(chunk.bytes, { stream: true }));
-
-      carry = split.carry;
+      state = { position: step.state.position, carry: split.carry };
+      more = step.more;
 
       for (const line of split.lines) {
         onLine(line);
@@ -263,22 +267,9 @@ async function followFile(
 
   await readNew();
 
-  if (carry !== '') {
-    onLine(carry);
+  if (state.carry !== '') {
+    onLine(state.carry);
   }
 
   return 0;
-}
-
-interface LineSplit {
-  readonly lines: readonly string[];
-  readonly carry: string;
-}
-
-// The text after the last newline waits for the rest of its line. It keeps one character past the
-// record cap, enough for the record to show the cut, so a file that never ends its line stays small.
-function collectLines(carry: string, text: string): LineSplit {
-  const parts = `${carry}${text}`.split('\n');
-
-  return { lines: parts.slice(0, -1), carry: (parts.at(-1) ?? '').slice(0, recordLineCap + 1) };
 }
