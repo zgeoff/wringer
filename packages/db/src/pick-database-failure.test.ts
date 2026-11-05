@@ -87,5 +87,21 @@ test.each([
     failure: 'timeout',
   },
 ])('it reads $name as $failure', (row) => {
-  expect(pickDatabaseFailure(row.code, row.message)).toBe(row.failure);
+  expect(pickDatabaseFailure({ code: row.code, message: row.message, write: false })).toBe(
+    row.failure,
+  );
+});
+
+test.each([
+  { name: 'the SQLite read-only code', code: 'SQLITE_READONLY', message: '' },
+  { name: 'the Postgres read-only SQLSTATE', code: '25006', message: '' },
+  {
+    name: 'the psql read-only message',
+    code: null,
+    message: 'ERROR:  cannot execute INSERT in a read-only transaction',
+  },
+])('it reads $name on a declared write as a refused write', (row) => {
+  expect(pickDatabaseFailure({ code: row.code, message: row.message, write: true })).toBe(
+    'write-refused',
+  );
 });

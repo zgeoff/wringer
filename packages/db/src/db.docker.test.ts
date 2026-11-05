@@ -91,6 +91,28 @@ test('it reads a table named like the view that names the columns, through the r
   });
 });
 
+test('it fails a declared write that the real sqlite3 client refuses as read-only with an environment error', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  await ctx.run('bench', ['attach']);
+  await ctx.run('bench', ['doctor']);
+
+  const result = await ctx.run('bench', ['db', 'query'], {
+    sql: "pragma query_only = on; insert into notes (text) values ('ship')",
+    write: true,
+  });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 4,
+    error: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringContaining('The database refused a write the query declared'),
+    }),
+  });
+});
+
 test('it fails a shell command sent to the real sqlite3 client without running it', async () => {
   const ctx = await setupTest();
 

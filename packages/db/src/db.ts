@@ -7,6 +7,7 @@ import { dbResultSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
 import { parseExecResult } from './parse-exec-result.ts';
 import { pickDatabaseFailure } from './pick-database-failure.ts';
+import type { DatabaseFailure } from './pick-database-failure.ts';
 import { dbConfigSchema, pickQueryEffect } from './pick-query-effect.ts';
 import type { DbConfig } from './pick-query-effect.ts';
 import { pickQueryPlan } from './pick-query-plan.ts';
@@ -96,7 +97,7 @@ async function runQuery(
   try {
     return await readResult(session, clients, plan);
   } catch (error) {
-    return rejectDatabaseError(error, fence, query.sql);
+    return rejectDatabaseError(error, fence, query);
   }
 }
 
@@ -134,16 +135,16 @@ async function readResult(
   return parseExecResult({ result, output: plan.exec.output, write: plan.write });
 }
 
-function rejectDatabaseError(error: unknown, fence: Fence, sql: string): Promise<never> {
+function rejectDatabaseError(error: unknown, fence: Fence, query: ParsedQuery): Promise<never> {
   if (error instanceof WringerError) {
     return Promise.reject(error);
   }
 
   const message = error instanceof Error ? error.message : String(error);
-  const failure = pickDatabaseFailure(pickErrorCode(error), message);
+  const failure = pickDatabaseFailure({ code: pickErrorCode(error), message, write: query.write });
 
   if (failure === 'read-only') {
-    return rejectUndeclaredWrite(fence, sql);
+    return rejectUndeclaredWrite(fence, query.sql);
   }
 
   return Promise.reject(buildDatabaseError(failure, message));
@@ -161,10 +162,18 @@ function pickErrorCode(error: unknown): string | null {
 }
 
 function buildDatabaseError(
-  failure: 'timeout' | 'environment' | 'statement',
+  failure: Exclude<DatabaseFailure, 'read-only'>,
   message: string,
 ): WringerError {
   return match(failure)
+    .with(
+      'write-refused',
+      () =>
+        new WringerError('environment', {
+          message: `The database refused a write the query declared: ${message}`,
+          hint: 'Point the target at a database that takes writes, such as the primary over a replica.',
+        }),
+    )
     .with(
       'timeout',
       () =>
