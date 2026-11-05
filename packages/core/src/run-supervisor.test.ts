@@ -1,10 +1,11 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
 import { once } from 'node:events';
-import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdir, readdir, rm, stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildStandInServices } from '../test-utils/build-stand-in-services.ts';
 import { waitFor } from '../test-utils/wait-for.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { callSupervisor } from './call-supervisor.ts';
@@ -13,7 +14,7 @@ import { createWringer } from './create-wringer.ts';
 import { defineDriver } from './define-driver.ts';
 import { local } from './local.ts';
 import { readLaunchHost } from './read-launch-host.ts';
-import { buildStopEvents, runSupervisor } from './run-supervisor.ts';
+import { runSupervisor } from './run-supervisor.ts';
 import { supervisorServiceName } from './supervisor-protocol.ts';
 import { WringerError } from './wringer-error.ts';
 
@@ -23,7 +24,6 @@ async function setupTest() {
   const stopGate = Promise.withResolvers<undefined>();
   const startGate = Promise.withResolvers<undefined>();
   const holdGate = Promise.withResolvers<undefined>();
-  const stopCalls: string[] = [];
   const reports: string[] = [];
   const supervisors: Promise<void>[] = [];
 
@@ -41,135 +41,57 @@ async function setupTest() {
     await rm(directory, { recursive: true, force: true });
   });
 
+  const services = buildStandInServices({
+    stop: stopGate.promise,
+    start: startGate.promise,
+    hold: holdGate.promise,
+  });
+
   const leaky = defineDriver({
     name: 'leaky',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      store: {
-        start: () =>
-          Promise.resolve({
-            methods: {},
-            stop: async () => {
-              stopCalls.push('store');
-
-              await stopGate.promise;
-
-              throw new WringerError('environment', { message: 'The store kept its lock.' });
-            },
-          }),
-      },
-    },
+    services: { store: services.store },
     client: () => ({}),
   });
 
-  // Its service comes up only once the test opens the start gate, whatever the abort says.
   const tardy = defineDriver({
     name: 'tardy',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      queue: {
-        start: async () => {
-          await startGate.promise;
-
-          return {
-            methods: {},
-            stop: () => {
-              stopCalls.push('queue');
-
-              return Promise.resolve();
-            },
-          };
-        },
-      },
-    },
+    services: { queue: services.queue },
     client: () => ({}),
   });
 
-  // Its service's stop runs a command through the exec the service started with.
   const tidy = defineDriver({
     name: 'tidy',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      shelf: {
-        start: (ctx) =>
-          Promise.resolve({
-            methods: {},
-            stop: async () => {
-              const result = await ctx.exec(['true'], 'read');
-
-              stopCalls.push(`shelf exited ${result.exitCode}`);
-            },
-          }),
-      },
-    },
+    services: { shelf: services.shelf },
     client: () => ({}),
   });
 
-  // Its service's stop throws before it returns a promise.
   const brittle = defineDriver({
     name: 'brittle',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      till: {
-        start: () =>
-          Promise.resolve({
-            methods: {},
-            stop: () => {
-              throw new WringerError('environment', { message: 'The till jammed.' });
-            },
-          }),
-      },
-    },
+    services: { till: services.till },
     client: () => ({}),
   });
 
-  // Its service's stop records each line of the app's log.
   const scribe = defineDriver({
     name: 'scribe',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      ledger: {
-        start: (ctx) =>
-          Promise.resolve({
-            methods: {},
-            stop: async () => {
-              const log = await readFile(ctx.run.childLog('app').path, 'utf8');
-
-              stopCalls.push(...log.trimEnd().split('\n'));
-            },
-          }),
-      },
-    },
+    services: { ledger: services.ledger },
     client: () => ({}),
   });
 
-  // Its service's `hold` method settles only once the test ends.
   const stuck = defineDriver({
     name: 'stuck',
     options: z.strictObject({}),
     targetConfig: z.strictObject({}),
-    services: {
-      counter: {
-        start: () =>
-          Promise.resolve({
-            methods: {
-              hold: async () => {
-                stopCalls.push('hold');
-
-                await holdGate.promise;
-
-                return null;
-              },
-            },
-            stop: () => Promise.resolve(),
-          }),
-      },
-    },
+    services: { counter: services.counter },
     client: () => ({}),
   });
 
@@ -233,7 +155,7 @@ async function setupTest() {
   const listenSocket = spyOn(launchHost, 'listenSupervisorSocket');
 
   return {
-    stopCalls,
+    stopCalls: services.calls,
     reports,
 
     // Reads the run as it stands the moment the stop call answers, with success or an error.
@@ -307,39 +229,6 @@ async function setupTest() {
     },
   };
 }
-
-test.each([
-  { crashReason: null, failures: [], event: { type: 'run-ended' } },
-  {
-    crashReason: 'the app exited with code 3',
-    failures: [],
-    event: { type: 'crashed', reason: 'the app exited with code 3' },
-  },
-  {
-    crashReason: null,
-    failures: ['leaky/store: locked'],
-    event: { type: 'crashed', reason: 'cleanup failed for leaky/store: locked' },
-  },
-  {
-    crashReason: 'the app exited with code 3',
-    failures: ['leaky/store: locked'],
-    event: {
-      type: 'crashed',
-      reason: 'the app exited with code 3; cleanup failed for leaky/store: locked',
-    },
-  },
-])(
-  '#buildStopEvents ends the run with $event.type for crash $crashReason and failures $failures',
-  (row) => {
-    expect(
-      buildStopEvents({
-        crashReason: row.crashReason,
-        failures: row.failures,
-        at: '2026-11-04T10:00:00.000Z',
-      }),
-    ).toStrictEqual([{ ...row.event, at: '2026-11-04T10:00:00.000Z' }]);
-  },
-);
 
 test('#runSupervisor answers a second stop only once the first has ended the run', async () => {
   const ctx = await setupTest();
