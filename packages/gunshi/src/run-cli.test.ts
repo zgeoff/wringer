@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import {
+  createNodeFingerprintHost,
   createRepoState,
   envelopeSchema,
   makeProcessSupervisorStarter,
@@ -34,6 +35,7 @@ async function setupTest() {
       readRepoRoot,
       openRepo: (root) => ({
         state: createRepoState(root, wringer.stateDir),
+        fingerprintHost: createNodeFingerprintHost(),
         supervisor: makeProcessSupervisorStarter({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
       runSupervisor: (_wringer, supervisorArgv) => {
@@ -277,6 +279,30 @@ test('it runs a command against the target --target names', async () => {
       services: [],
       cursors: {},
     },
+  });
+});
+
+test('it answers a --timeout-ms of 0 with a usage envelope and exit code 2', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['status', '--timeout-ms', '0']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, code: envelope.error?.code }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+  });
+});
+
+test('it answers a command that outlasts its --timeout-ms with a timeout envelope', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['wait', '--timeout-ms', '50']);
+
+  const envelope = ctx.parseEnvelope(result.stdout);
+
+  expect({ exitCode: result.exitCode, code: envelope.error?.code }).toStrictEqual({
+    exitCode: 5,
+    code: 'timeout',
   });
 });
 
