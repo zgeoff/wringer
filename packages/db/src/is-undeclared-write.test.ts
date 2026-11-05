@@ -106,6 +106,55 @@ test.each([
   { dialect: 'postgres', via: 'sql', sql: 'select 1 /* a /* b */ do', write: true },
   { dialect: 'postgres', via: 'sql', sql: "select 'unclosed", write: true },
   { dialect: 'sqlite', via: 'sql', sql: "/* /* */ attach '/srv/other.db' as other", write: true },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: 'select pg_terminate_backend(pid) from pg_stat_activity where pid <> pg_backend_pid()',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'exec',
+    sql: 'select pg_cancel_backend(pid) from pg_stat_activity',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: "select set_config('statement_timeout', '0', false)",
+    write: true,
+  },
+  { dialect: 'postgres', via: 'exec', sql: 'select pg_sleep(600)', write: true },
+  { dialect: 'postgres', via: 'sql', sql: 'select "pg_sleep"(600)', write: true },
+  { dialect: 'postgres', via: 'sql', sql: 'select pg_catalog.pg_reload_conf()', write: true },
+  { dialect: 'postgres', via: 'sql', sql: 'select pg_advisory_lock(42)', write: true },
+  { dialect: 'postgres', via: 'sql', sql: "select pg_notify('orders', 'paid')", write: true },
+  { dialect: 'postgres', via: 'sql', sql: 'select shop.lower(name) from items', write: true },
+  { dialect: 'postgres', via: 'sql', sql: 'select "Lower"(name) from items', write: true },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: 'with totals(day, amount) as (select 1, 2) select * from totals',
+    write: true,
+  },
+  {
+    dialect: 'postgres',
+    via: 'exec',
+    sql: 'select count(*), pg_catalog.max(total), lower(name) from orders group by lower(name)',
+    write: false,
+  },
+  {
+    dialect: 'postgres',
+    via: 'exec',
+    sql: 'select cast(total as numeric(10, 2)) from orders where id in (select id from paid)',
+    write: false,
+  },
+  {
+    dialect: 'postgres',
+    via: 'sql',
+    sql: 'select row_number() over (partition by day order by total) from orders',
+    write: false,
+  },
 ] as const)('it reads `$sql` on $dialect over $via as a write: $write', (row) => {
   expect(isUndeclaredWrite(row.dialect, row.via, row.sql)).toBe(row.write);
 });

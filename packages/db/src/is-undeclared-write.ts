@@ -1,4 +1,5 @@
 import { findLeadingWord } from './find-leading-word.ts';
+import { findUnlistedPostgresCall } from './find-unlisted-postgres-call.ts';
 import { parseSQLTokens } from './parse-sql-tokens.ts';
 import type { SQLToken } from './parse-sql-tokens.ts';
 
@@ -29,7 +30,10 @@ export function isUndeclaredWrite(dialect: Dialect, via: Via, sql: string): bool
     return words.some((word) => sqliteEscapeWords.has(word));
   }
 
-  if (lex.tokens.some((token) => isPostgresEscape(token))) {
+  if (
+    lex.tokens.some((token) => isPostgresEscape(token)) ||
+    findUnlistedPostgresCall(lex.tokens) !== null
+  ) {
     return true;
   }
 
