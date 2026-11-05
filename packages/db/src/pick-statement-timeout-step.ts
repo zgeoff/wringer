@@ -14,13 +14,9 @@ export type StatementTimeoutStep =
   | SetTimeoutStep
   | { readonly kind: 'run' };
 
-// Setting the timeout takes a round trip, which a slow database can stretch past the deadline, so
-// the time left is read again after each one. The statement runs once the timeout set is no more
-// than this over the time left.
-const statementTimeoutSlackMs = 50;
-
-// A round trip that keeps growing would set the timeout forever. Past this many, the statement runs
-// with the last timeout, and the cancel at the deadline stops it.
+// A cancel may never reach a role at its connection limit, so the database's own timeout is the
+// only bound. The statement runs only under a timeout no longer than the time left; a database
+// whose round trips keep growing fails the query rather than run it past its deadline.
 const maxTimeoutSets = 3;
 
 // `previous` is the last timeout the connection set, or null before the first one.
@@ -39,12 +35,17 @@ export function pickStatementTimeoutStep(
     return { kind: 'set', timeoutMs: leftMs, leftMs, sets: 1 };
   }
 
-  if (previous.timeoutMs - leftMs <= statementTimeoutSlackMs || previous.sets >= maxTimeoutSets) {
+  if (previous.timeoutMs <= leftMs) {
     return { kind: 'run' };
   }
 
-  // The next set takes about as long as the last, so the timeout leaves out one more round trip.
-  const timeoutMs = leftMs - (previous.leftMs - leftMs);
+  if (previous.sets >= maxTimeoutSets) {
+    return { kind: 'expired' };
+  }
+
+  // The next set takes about as long as the last, so the timeout leaves out two round trips: the
+  // set's own, and room for one that runs slower.
+  const timeoutMs = leftMs - 2 * (previous.leftMs - leftMs);
 
   if (timeoutMs < 1) {
     return { kind: 'expired' };
