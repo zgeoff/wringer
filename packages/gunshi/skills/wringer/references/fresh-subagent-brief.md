@@ -1,17 +1,17 @@
 # Fresh subagent brief
 
-Fill in `<skill path>` and `<features>`, and send the brief as the subagent's whole prompt. Add
-nothing about the app, the registry or how you built them: the run shows whether the `verify` skill
-alone is enough.
+Fill in `<repo root>`, `<skill path>` and `<features>`, and send the brief as the subagent's whole
+prompt. Add nothing about the app, the registry or how you built them: the run shows whether the
+`verify` skill alone is enough.
 
 ```text
 Load the skill at <skill path> and read it whole. It tells you how to drive this repo's app with
 its verify CLI.
 
-Your task: reach a passing `done` on each of these features, in this worktree: <features>.
+Your task: reach a passing `done` on each of these features: <features>.
 
 - Use only what the skill says and what the CLI prints, `--help` included. Read no source code.
-- Run every command from the repo root.
+- Run every command from the repo root, <repo root>.
 - Leave the app's code and the skill unchanged.
 - Stop the run when you finish.
 
