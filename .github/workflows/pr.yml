@@ -26,6 +26,6 @@ jobs:
       pull-requests: write
     uses: zgeoff/tools/.github/workflows/bun-checks.yml@46b52f288f7390a7912e1a4ad4241ad918964560 # main
     with:
-      scripts: ${{ vars.BUN_CHECK_SCRIPTS }}
+      scripts: audit deadcode format:check lint:full typecheck prose test test:browser test:docker
       node-version: ${{ vars.NODE_VERSION }}
       timeout-minutes: ${{ fromJSON(vars.BUN_CHECK_TIMEOUT_MINUTES || '20') }}
