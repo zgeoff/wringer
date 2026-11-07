@@ -90,7 +90,7 @@
   },
   "catalog": {
     "@mswjs/interceptors": "0.45.10",
-    "@zgeoff/std": "0.4.1",
+    "@zgeoff/std": "0.4.2",
     "@zgeoff/testing": "0.2.1",
     "gunshi": "0.37.3",
     "msw": "3.0.3",
@@ -470,7 +470,7 @@
 
     "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.22", "", { "dependencies": { "@zgeoff/agent-hooks": "0.2.6" } }, "sha512-1BTjYDiFaGEvhSbZ/wWIh7KU/CW5NYFSHkEskDtI9lUW6NZXKop3w4Vml21LkdFwe66l7OQKs5m3SxX4egcRgg=="],
 
-    "@zgeoff/std": ["@zgeoff/std@0.4.1", "", {}, "sha512-Vr0Y8ZeRjaTmJAT0K+llbXpf5EazkGhL0zV8yRoACbbfqJdR+9Cql2MHqnr96uUSgu5vdqbknrRQtcsJYIa7oA=="],
+    "@zgeoff/std": ["@zgeoff/std@0.4.2", "", {}, "sha512-GZnnOkrYHe6p071BWYe7XIq5klqhvVb4j/JWOrrUTSj76uLA/ZnzlqDKIq16LblMcuRF9tjfvKvGK8sLRN8fMg=="],
 
     "@zgeoff/testing": ["@zgeoff/testing@0.2.1", "", { "dependencies": { "bun-pty": "0.5.2" } }, "sha512-i/x931QYNWJJEydeGCDhlIBEm+SuXhjmLzmiZWP/jyQlsCXYy7AFv0RAVRktltEPNdGnHlcCZqKZeWNkIjH3Lg=="],
 

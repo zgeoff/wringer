@@ -13,7 +13,7 @@
     ],
     "catalog": {
       "@mswjs/interceptors": "0.45.10",
-      "@zgeoff/std": "0.4.1",
+      "@zgeoff/std": "0.4.2",
       "@zgeoff/testing": "0.2.1",
       "gunshi": "0.37.3",
       "msw": "3.0.3",
