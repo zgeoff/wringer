@@ -155,9 +155,9 @@ checks and features, with each feature's `paths`.
 <!-- /repo -->
 
 - When a Drive block no longer works because the feature changed, fix it in the same PR.
-- In this file, edit only inside the `<!-- repo -->` blocks. The lines outside them come from the
-  wringer template, and an upgrade of the template replaces them. The repo owns the feature map
-  whole.
+- In this file, edit only the frontmatter's `name` and `description`, the `#` title, and the lines
+  inside the `<!-- repo -->` blocks. An upgrade of the template keeps those and replaces every other
+  line. The repo owns the feature map whole.
 - After you change this skill, its feature map or the registry, run `bun verify lint`. It fails on:
   - a `paths` glob that matches no file;
   - a command in a code block that would fail before it ran, such as one with an unknown flag,
