@@ -76,7 +76,12 @@ async function setupTest() {
 
     // The supervisor's own stop goes to the socket that closes mid-call, while every other call
     // and the start reach the run's supervisor.
-    runWithFailingStop: (target: string, path: readonly string[], timeoutMs: number) =>
+    runWithFailingStop: (
+      target: string,
+      path: readonly string[],
+      timeoutMs: number,
+      wait: (delayMs: number) => Promise<void>,
+    ) =>
       dispatch(
         wringer,
         path,
@@ -85,6 +90,7 @@ async function setupTest() {
           ...shop.session,
           target,
           timeoutMs,
+          wait,
           supervisor: {
             start: shop.session.supervisor.start,
             call: (call) => {
@@ -259,7 +265,13 @@ test('#up fails with an environment error when the app exits before it is ready'
 test('#up stops a run that becomes ready only after the command missed its deadline', async () => {
   const ctx = await setupTest();
 
-  await ctx.runWithin('slow', ['up'], 100);
+  const answered = Promise.withResolvers<void>();
+
+  // Each readiness wait lasts until `up` has answered with its timeout, so the deadline passes
+  // after the run started and before `up` reads it ready, however long the start took.
+  await ctx.runWithTimer('slow', ['up'], 1000, () => answered.promise);
+
+  answered.resolve();
 
   const pointers = await ctx.state.readPointers();
 
@@ -303,7 +315,7 @@ test('#up waits between its readiness reads on the session timer', async () => {
 
   const waits: number[] = [];
 
-  await ctx.runWithTimer('slow', ['up'], 300, (delayMs) => {
+  await ctx.runWithTimer('slow', ['up'], 10_000, (delayMs) => {
     waits.push(delayMs);
 
     return Promise.resolve();
@@ -319,7 +331,13 @@ test('#up logs a failed stop of the run it abandoned at its deadline to the run'
     await ctx.run('slow', ['down']);
   });
 
-  await ctx.runWithFailingStop('slow', ['up'], 100);
+  const answered = Promise.withResolvers<void>();
+
+  // Each readiness wait lasts until `up` has answered with its timeout, so the run has started
+  // when `up` abandons it.
+  await ctx.runWithFailingStop('slow', ['up'], 1000, () => answered.promise);
+
+  answered.resolve();
 
   const pointers = await ctx.state.readPointers();
 
