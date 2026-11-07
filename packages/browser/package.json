@@ -1,6 +1,6 @@
 {
   "name": "@wringer/browser",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "The browser driver for wringer: drives a page of a target's app in a headless browser",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/browser#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
