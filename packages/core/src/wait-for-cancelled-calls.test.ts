@@ -34,6 +34,14 @@ test('it keeps a cancel failure that came before the bound while another call ne
   expect(failure?.message).toBe('The page did not close.');
 });
 
+test('it answers a call that never settles with an environment error, as its work may still run', async () => {
+  const ctx = setupTest();
+
+  const failure = await waitForCancelledCalls([ctx.neverSettles]);
+
+  expect(failure?.code).toBe('environment');
+});
+
 test('it answers a call that failed with a plain error as an internal failure', async () => {
   setupTest();
 

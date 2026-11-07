@@ -59,8 +59,10 @@ old page held. When that load fails, the new page stays blank until a `browser g
 does not close in that time, the action may still land: the command fails with an environment error,
 and the browser refuses every later command until `up --restart`.
 
-The command's deadline can still pass before the page has closed, such as on a host too busy to run
-the close in time. The caller then reports a timeout while the late action may still land.
+A command that runs past its deadline answers only once the driver has answered for its cancelled
+action, so a timeout means the action stopped. When the run's supervisor gives no answer within 2 s
+of the deadline, such as on a host too busy to run the close, the command fails with an environment
+error, because the action may still land.
 
 ## Snapshots and refs
 

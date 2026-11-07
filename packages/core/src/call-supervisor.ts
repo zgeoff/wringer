@@ -45,7 +45,11 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
   const onAbort = (): void => {
     giveUp = setTimeout(() => {
       connection.destroy();
-      reply.reject(buildLateError());
+
+      const failure =
+        call.request.deadlineAt === undefined ? buildLateError() : buildUnconfirmedError();
+
+      reply.reject(failure);
     }, supervisorCancelWaitMs);
   };
 
@@ -83,6 +87,15 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
 
 function buildLateError(): WringerError {
   return new WringerError('timeout', { message: 'The supervisor did not answer in time.' });
+}
+
+// A timeout tells the caller the cancelled work stopped, so a cancel the supervisor never answered
+// fails with an environment error.
+export function buildUnconfirmedError(): WringerError {
+  return new WringerError('environment', {
+    message: `The run's supervisor did not confirm within ${supervisorCancelWaitMs} ms that the cancelled call stopped, so its work may still run.`,
+    hint: 'Run `up --restart` to start a new run.',
+  });
 }
 
 function toConnectionError(error: Error): WringerError {

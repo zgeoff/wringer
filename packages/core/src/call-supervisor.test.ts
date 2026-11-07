@@ -102,6 +102,32 @@ test('it times out a call whose supervisor does not answer within the wait after
   expect(calling).rejects.toMatchObject({ code: 'timeout' });
 });
 
+test('it fails a service call with a deadline whose cancel the supervisor never confirms with an environment error', async () => {
+  const ctx = await setupTest();
+
+  const caller = new AbortController();
+
+  const held = Promise.withResolvers<unknown>();
+
+  onTestFinished(() => {
+    held.resolve(null);
+  });
+
+  ctx.handle.mockImplementationOnce(() => {
+    caller.abort();
+
+    return held.promise;
+  });
+
+  const calling = callSupervisor({
+    socket: ctx.socket,
+    request: { service: 'store', method: 'count', args: {}, deadlineAt: Date.now() },
+    signal: caller.signal,
+  });
+
+  expect(calling).rejects.toMatchObject({ code: 'environment' });
+});
+
 test('it refuses a call whose signal aborted before the call, and sends no request', async () => {
   const ctx = await setupTest();
 

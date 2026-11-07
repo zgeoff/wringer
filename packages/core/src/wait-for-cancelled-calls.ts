@@ -1,11 +1,15 @@
-import { supervisorCancelWaitMs } from './call-supervisor.ts';
+import { buildUnconfirmedError, supervisorCancelWaitMs } from './call-supervisor.ts';
 import { findCancelFailure } from './find-cancel-failure.ts';
 import { raceDeadline } from './race-deadline.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { WringerError } from './wringer-error.ts';
 
+// A call gives up on its supervisor's answer after its own wait, so this bound only ends a port
+// that never settles.
+const cancelBoundMs = supervisorCancelWaitMs + 1000;
+
 // A service call the deadline cancelled, such as a browser action, answers once its work has
-// stopped. Resolves within a bound with the failure of a cancel that could not stop its work.
+// stopped. Resolves with the failure of a cancel that could not stop its work, or null.
 export async function waitForCancelledCalls(
   calls: readonly Promise<unknown>[],
 ): Promise<WringerError | null> {
@@ -21,7 +25,13 @@ export async function waitForCancelledCalls(
 
   const watched = Promise.all(calls.map((call) => watch(call)));
 
-  await Promise.allSettled([raceDeadline(watched, AbortSignal.timeout(supervisorCancelWaitMs))]);
+  const [settled] = await Promise.allSettled([
+    raceDeadline(watched, AbortSignal.timeout(cancelBoundMs)),
+  ]);
+
+  if (settled.status === 'rejected') {
+    failures.push(buildUnconfirmedError());
+  }
 
   return findCancelFailure(failures);
 }
