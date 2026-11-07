@@ -60,6 +60,17 @@ async function setupTest() {
       });
     },
 
+    // Every file read returns one more line, as a file whose writer never stops would.
+    feedEndlessFile: () => {
+      readFileCalls.mockImplementation((_path, from) =>
+        Promise.resolve({
+          start: from.offset,
+          identity: '1:7',
+          bytes: new TextEncoder().encode('tick\n'),
+        }),
+      );
+    },
+
     // Resolves once the recorder has finished its first read of a file source.
     firstFileRead: async () => {
       await waitFor(() => {
@@ -105,6 +116,37 @@ test('it creates its folder through the folder creator it is given', async () =>
   await ctx.start({});
 
   expect(ctx.createDirectoryCalls).toHaveBeenCalledExactlyOnceWith(ctx.streams);
+});
+
+test('it records the lines a command source printed as the recorder stopped', async () => {
+  const ctx = await setupTest();
+
+  const gate = join(ctx.directory, 'gate');
+
+  const recorder = await ctx.start({
+    app: {
+      command: [
+        'sh',
+        '-c',
+        'echo ready; while [ ! -e "$0" ]; do sleep 0.01; done; seq 1 3000; exec sleep 30',
+        gate,
+      ],
+    },
+  });
+
+  await waitFor(async () => {
+    const recorded = await ctx.readStream('app');
+
+    invariant(recorded.includes('"ready"'), 'The command has not printed its first line yet.');
+  });
+
+  await writeFile(gate, '');
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded.split('\n').at(-2)).toInclude('"line":"3000"');
 });
 
 test('it records each line of a command source with the time it arrived', async () => {
@@ -201,6 +243,18 @@ test('it records the rest of a file source after a read that stopped short of it
   expect(recorded).toBe(
     '{"at":"2026-03-01T09:30:00.000Z","line":"first"}\n{"at":"2026-03-01T09:30:00.000Z","line":"last"}\n',
   );
+});
+
+test('it ends its stop when a file source never reaches its end', async () => {
+  const ctx = await setupTest();
+
+  const log = join(ctx.directory, 'app.log');
+
+  ctx.feedEndlessFile();
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  expect(recorder.stop()).resolves.toBeUndefined();
 });
 
 test('it records a longer file that replaced a file source from its start, without the old unfinished line', async () => {

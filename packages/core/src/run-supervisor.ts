@@ -316,6 +316,7 @@ async function startTarget(target: TargetDefinition, start: TargetStart): Promis
     });
   }
 
+  // The run owns no app of an attach target, so its stop is a no-op, and the services stop at once.
   if (target.endpoints === undefined) {
     return { endpoints: {}, stop: () => Promise.resolve() };
   }

@@ -45,10 +45,14 @@ write.
 
 ## Sources
 
-- `{ command: [...] }` runs the command on the target's host and records each line it prints.
+- `{ command: [...] }` runs the command on the target's host and records each line it prints. At the
+  stop, the recorder reads on until the command prints nothing for 200 ms, for at most 2 s, then
+  kills it.
 - `{ file: '<path>' }` follows a file on the machine where the run lives. The supervisor stops the
   app first, then reads the file to its end, so the lines the app logs while it shuts down are
   recorded.
+- On an `attach` target, the run owns no app, so the recorder stops without waiting for one. A line
+  the app writes after the recorder's final read stays out of the stream.
 - A target with no `sources` records `app`: the log of the app that the run launched.
 
 The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one

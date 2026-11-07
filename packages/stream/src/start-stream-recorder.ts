@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { buildFileStep } from './build-file-step.ts';
 import type { FileFollowState } from './build-file-step.ts';
 import { collectLines } from './collect-lines.ts';
+import { pickCommandStopDelay } from './pick-command-stop-delay.ts';
 import type { FileChunk, FilePosition } from './read-file-from.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 import { sourcePhaseMachine } from './source-phase-machine.ts';
@@ -229,15 +230,60 @@ function capLine(line: string): string {
 
 function runFollow(request: FollowSourceRequest, onLine: (line: string) => void): Promise<number> {
   if ('command' in request.source) {
-    return request.host.follow({
-      argv: request.source.command,
-      access: request.access,
-      signal: request.signal,
-      onLine,
-    });
+    return followCommand(request, request.source.command, onLine);
   }
 
   return followFile(request, request.source.file, onLine);
+}
+
+// A follow command, such as `tail -F`, prints each line as it reads it, so the recorder reads on
+// until the command's output goes quiet before it kills the command.
+async function followCommand(
+  request: FollowSourceRequest,
+  argv: readonly string[],
+  onLine: (line: string) => void,
+): Promise<number> {
+  const follow = new AbortController();
+
+  let lastLineMs: number | null = null;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const checkQuiet = (stopMs: number): void => {
+    const delayMs = pickCommandStopDelay({ nowMs: performance.now(), stopMs, lastLineMs });
+
+    if (delayMs === 0) {
+      follow.abort();
+    } else {
+      timer = setTimeout(checkQuiet, delayMs, stopMs);
+    }
+  };
+
+  const onStop = (): void => {
+    checkQuiet(performance.now());
+  };
+
+  request.signal.addEventListener('abort', onStop, { once: true });
+
+  if (request.signal.aborted) {
+    follow.abort();
+  }
+
+  try {
+    return await request.host.follow({
+      argv,
+      access: request.access,
+      signal: follow.signal,
+      onLine: (line) => {
+        lastLineMs = performance.now();
+
+        onLine(line);
+      },
+    });
+  } finally {
+    clearTimeout(timer);
+
+    request.signal.removeEventListener('abort', onStop);
+  }
 }
 
 const filePollMs = 100;
@@ -245,6 +291,10 @@ const filePollMs = 100;
 // A file source can hold a large log before the run starts, so each read takes at most this much,
 // and the recorder reads again until it reaches the end.
 const fileReadLimitBytes = 64 * 1024;
+
+// A file that a writer keeps growing never reads to its end, so one pass, the final one at a stop
+// included, takes at most this many reads.
+const fileReadsPerPass = 256;
 
 // The recorder reads a file source itself, so its stop can read the file to its end once the app
 // has stopped writing; a killed `tail` would drop what it had yet to read. A file source ends with
@@ -261,7 +311,7 @@ async function followFile(
   const readNew = async (): Promise<void> => {
     let more = true;
 
-    while (more) {
+    for (let reads = 0; more && reads < fileReadsPerPass; reads += 1) {
       const chunk = await request.readFileFrom(path, state.position, fileReadLimitBytes);
 
       const step = buildFileStep(state, {
