@@ -23,8 +23,8 @@
    its reply lists a `done` envelope with `ok: true` for every feature, and no gap in the skill. For
    each gap it names, fix the skill and run this step again.
 3. With the run still up and the doctor passed, change one file under a feature's `paths`, and run
-   one drive command of that feature. Expect: exit code 3, `error.code` `doctor-required`, and the
-   hint `Run \`up --restart\`, then \`doctor\`.`. Undo the change.
+   one drive command of that feature. Expect: exit code 3, `error.code` `doctor-required`, and a
+   hint to run `up --restart`. Undo the change.
 4. When the repo has a read-only target, attach to it, run the doctor, and run one write, such as a
    write action. Expect: exit code 3 and `error.code` `read-only`. Then detach.
 5. After the subagent's run, from the same worktree:

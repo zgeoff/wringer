@@ -27,5 +27,8 @@ Thumbs.db
 # packed tarballs
 *.tgz
 
+# the verify CLI's run state and evidence
+.wringer/
+
 # test temp trees, which a test makes beside its own file
 .test-*/

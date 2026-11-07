@@ -35,12 +35,16 @@ async function setupTest() {
 test('it drives a page, an http call, a stream read and a db query, then reports the feature verified', async () => {
   const ctx = await setupTest();
 
-  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
-  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+  await mkdir(join(ctx.root, 'packages', 'shop-example', 'src'), { recursive: true });
+
+  await writeFile(
+    join(ctx.root, 'packages', 'shop-example', 'src', 'shop-page.html'),
+    '<button type="button">Place order</button>\n',
+  );
 
   await ctx.run(['up']);
   await ctx.run(['doctor']);
-  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['use'], { feature: 'place-order' });
   await ctx.run(['browser', 'goto'], { path: '/' });
   await ctx.run(['browser', 'click'], { role: 'button', name: 'Place order' });
 
@@ -69,7 +73,12 @@ test('it drives a page, an http call, a stream read and a db query, then reports
   const done = await ctx.run(['done']);
   const report = await ctx.run(['report']);
 
-  const checkout = expect.objectContaining({ name: 'checkout', status: 'verified' });
+  const features = [
+    expect.objectContaining({ name: 'place-order', status: 'verified' }),
+    expect.objectContaining({ name: 'order-failure', status: 'unchanged' }),
+    expect.objectContaining({ name: 'list-orders', status: 'unchanged' }),
+    expect.objectContaining({ name: 'order-log', status: 'unchanged' }),
+  ];
 
   expect({
     orders,
@@ -81,9 +90,9 @@ test('it drives a page, an http call, a stream read and a db query, then reports
     orders: [{ id: 1, item: 'mug' }],
     logged: 0,
     counted: { columns: ['orders'], rows: [{ orders: 1 }], rowCount: 1 },
-    done: expect.objectContaining({ feature: 'checkout', run: done.envelope.instance }),
+    done: expect.objectContaining({ feature: 'place-order', run: done.envelope.instance }),
     report: expect.objectContaining({
-      report: expect.objectContaining({ complete: true, features: [checkout] }),
+      report: expect.objectContaining({ complete: true, features }),
     }),
   });
 });
@@ -116,7 +125,7 @@ test('it writes every envelope of the journey in the published schema', async ()
 
   await ctx.run(['up']);
   await ctx.run(['doctor']);
-  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['use'], { feature: 'place-order' });
   await ctx.run(['browser', 'goto'], { path: '/' });
   await ctx.run(['browser', 'snapshot']);
   await ctx.run(['http', 'request'], { path: '/api/orders' });

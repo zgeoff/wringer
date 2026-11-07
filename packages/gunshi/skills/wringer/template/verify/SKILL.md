@@ -88,6 +88,8 @@ overrides it.
 Run `bun verify --help` for the list, and `bun verify <command> --help` for a command's flags. The
 help marks each command `[read]` or `[write]`.
 
+- Run `bun verify <group> --help` to list the commands in a group, such as `action`. The top-level
+  list shows the group alone.
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
 
