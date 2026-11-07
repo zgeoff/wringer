@@ -14,7 +14,8 @@
     "src",
     "!src/**/*.test.ts",
     "dist",
-    "envelope.schema.json"
+    "envelope.schema.json",
+    "!src/test-utils"
   ],
   "type": "module",
   "exports": {
@@ -22,7 +23,8 @@
       "types": "./dist/index.d.ts",
       "default": "./src/index.ts"
     },
-    "./envelope.schema.json": "./envelope.schema.json"
+    "./envelope.schema.json": "./envelope.schema.json",
+    "./test-utils/*": "./src/test-utils/*"
   },
   "publishConfig": {
     "access": "public"
@@ -40,6 +42,7 @@
   },
   "devDependencies": {
     "@zgeoff/testing": "catalog:",
+    "ajv": "catalog:",
     "tiny-invariant": "catalog:"
   },
   "engines": {

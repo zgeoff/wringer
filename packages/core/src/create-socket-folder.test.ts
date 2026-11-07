@@ -2,8 +2,8 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createSocketFolder } from './create-socket-folder.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'create-socket-folder');

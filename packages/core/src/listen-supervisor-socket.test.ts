@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import type { SupervisorRequestHandler } from './answer-supervisor-connection.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const stack = new AsyncDisposableStack();

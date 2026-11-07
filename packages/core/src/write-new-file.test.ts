@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 import { writeNewFile } from './write-new-file.ts';
 
 async function setupTest() {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildChunkStream } from '../test-utils/build-chunk-stream.ts';
 import { readStreamLines, streamLineCapChars } from './read-stream-lines.ts';
+import { buildChunkStream } from './test-utils/build-chunk-stream.ts';
 
 function setupTest() {
   return {

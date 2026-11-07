@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { createStubGH } from '../../test-utils/create-stub-gh.ts';
-import { createTestFolder } from '../../test-utils/create-test-folder.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { runCommand } from '../ci/run-command.ts';
+import { createStubGH } from '../test-utils/create-stub-gh.ts';
 import { dispatchReleasePublish } from './dispatch-release-publish.ts';
 
 async function setupTest() {

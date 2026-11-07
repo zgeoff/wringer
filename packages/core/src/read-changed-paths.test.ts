@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestRepo } from '../test-utils/create-test-repo.ts';
 import { readChangedPaths } from './read-changed-paths.ts';
 import { runGit } from './run-git.ts';
+import { createTestRepo } from './test-utils/create-test-repo.ts';
 
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);

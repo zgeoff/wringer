@@ -1,11 +1,11 @@
 import { expect, test } from 'bun:test';
 import { z } from 'zod';
-import { createTestSession } from '../test-utils/create-test-session.ts';
 import { bindDrivers } from './bind-drivers.ts';
 import { createWringer } from './create-wringer.ts';
 import { defineDriver } from './define-driver.ts';
 import { dispatch } from './dispatch.ts';
 import { local } from './local.ts';
+import { createTestSession } from './test-utils/create-test-session.ts';
 
 async function setupTest() {
   let nowMs = Date.parse('2026-11-05T09:00:00.000Z');

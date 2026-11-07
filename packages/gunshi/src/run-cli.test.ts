@@ -7,11 +7,11 @@ import {
   makeProcessSupervisorPort,
   supervisorCommandName,
 } from '@wringer/core';
-import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
-import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
-import { createDemoWringer } from '../test-utils/create-demo-wringer.ts';
+import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
+import { parsePublishedEnvelope } from '@wringer/core/test-utils/parse-published-envelope.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 import { runCLI } from './run-cli.ts';
+import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);
@@ -21,7 +21,7 @@ async function setupTest() {
   const wringer = createDemoWringer();
   const written: string[] = [];
   const supervised: (readonly string[])[] = [];
-  const selfCommand = [process.execPath, join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts')];
+  const selfCommand = [process.execPath, join(import.meta.dir, 'test-utils', 'demo-cli.ts')];
 
   const run = async (argv: readonly string[], cwd = repo.root) => {
     const exitCode = await runCLI(wringer, {

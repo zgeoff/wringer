@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestRepo } from '../test-utils/create-test-repo.ts';
 import { readHeadSHA } from './read-head-sha.ts';
 import { runGit } from './run-git.ts';
+import { createTestRepo } from './test-utils/create-test-repo.ts';
 
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);

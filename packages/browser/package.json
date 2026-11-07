@@ -13,7 +13,8 @@
   "files": [
     "src",
     "!src/**/*.test.ts",
-    "dist"
+    "dist",
+    "!src/test-utils"
   ],
   "type": "module",
   "exports": {

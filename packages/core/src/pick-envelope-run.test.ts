@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { runIDSchema } from './run-events.ts';
+import { buildMockRunView } from './test-utils/build-mock-run-view.ts';
 
 test.each([
   {

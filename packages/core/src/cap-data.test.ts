@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { capData } from './cap-data.ts';
 import { createNodeRepoHost } from './create-node-repo-host.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'cap-data');

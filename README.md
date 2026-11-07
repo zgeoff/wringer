@@ -49,9 +49,9 @@ rehearsal of the npm publish of each package.
 
 ## Layout
 
-- `packages/`: the `@wringer/*` packages, one folder each.
-- `integration/`: an example shop app and its verify registry, which the browser lane drives end to
-  end with every driver.
+- `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
+  it holds an example shop app and its verify registry, which the browser lane drives end to end
+  with every driver.
 - `docs/`: the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
 - `.claude/`: the shared agent skills and the skill-gate hook.

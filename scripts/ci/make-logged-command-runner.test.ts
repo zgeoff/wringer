@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildStubOutputSink } from '../../test-utils/build-stub-output-sink.ts';
-import { createCommandStarter } from '../../test-utils/create-command-starter.ts';
-import { createTestFolder } from '../../test-utils/create-test-folder.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { buildStubOutputSink } from '../test-utils/build-stub-output-sink.ts';
+import { createCommandStarter } from '../test-utils/create-command-starter.ts';
 import { makeLoggedCommandRunner } from './make-logged-command-runner.ts';
 
 async function setupTest() {

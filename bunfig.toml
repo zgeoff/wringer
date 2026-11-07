@@ -24,4 +24,4 @@ minimumReleaseAgeExcludes = [
 
 [test]
 # registers the jest-extended matchers, then starts the MSW server for HTTP tests
-preload = ["@zgeoff/bun-test-extended", "./test-utils/test-preload.ts"]
+preload = ["@zgeoff/bun-test-extended", "./packages/http/src/test-utils/test-preload.ts"]

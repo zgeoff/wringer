@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
 import { buildEnvelopeJSONSchema } from './build-envelope-json-schema.ts';
+import { parsePublishedEnvelope } from './test-utils/parse-published-envelope.ts';
 
 test('it matches the envelope schema the package publishes', async () => {
   const published: unknown = await Bun.file(

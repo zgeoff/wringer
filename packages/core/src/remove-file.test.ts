@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { removeFile } from './remove-file.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'remove-file');

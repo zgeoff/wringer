@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { dispatch, readText } from '@wringer/core';
+import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { createBrowserWringer } from '../test-utils/create-browser-wringer.ts';
-import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
 import { snapshotSchema } from './page-service-contract.ts';
+import { createBrowserWringer } from './test-utils/create-browser-wringer.ts';
+import { createShopPageServer } from './test-utils/create-shop-page-server.ts';
 
 async function setupTest() {
   const server = createShopPageServer();

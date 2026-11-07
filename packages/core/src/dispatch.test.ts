@@ -2,13 +2,13 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
-import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
-import { createTestSession } from '../test-utils/create-test-session.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { dispatch } from './dispatch.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit } from './run-git.ts';
+import { createShopWringer } from './test-utils/create-shop-wringer.ts';
+import { createTestSession } from './test-utils/create-test-session.ts';
+import { parsePublishedEnvelope } from './test-utils/parse-published-envelope.ts';
 import { WringerError } from './wringer-error.ts';
 import { writeNewFile } from './write-new-file.ts';
 

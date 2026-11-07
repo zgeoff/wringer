@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createTestSSHPostgres } from '../../db/test-utils/create-test-ssh-postgres.ts';
 import { ssh } from './ssh.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
+import { createTestSSHPostgres } from './test-utils/create-test-ssh-postgres.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the container, then
 // the folder. The host runs a real sshd, so a follow gets a real terminal.

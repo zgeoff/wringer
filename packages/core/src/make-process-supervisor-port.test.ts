@@ -3,9 +3,9 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { makeProcessSupervisorPort } from './make-process-supervisor-port.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'supervisor-port');

@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { reverseDiffFiles } from '../test-utils/reverse-diff-files.ts';
 import { emptyFingerprint } from './parse-patch-id.ts';
 import { readFingerprint } from './read-fingerprint.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit, runGitBytes } from './run-git.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
+import { reverseDiffFiles } from './test-utils/reverse-diff-files.ts';
 
 async function setupTest() {
   const repo = await createTestFolder(import.meta.dir, 'read-fingerprint');

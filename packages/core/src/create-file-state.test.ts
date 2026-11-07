@@ -2,11 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock } from '@zgeoff/std/with-file-lock';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');

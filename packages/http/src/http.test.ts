@@ -1,15 +1,15 @@
 import { expect, mock, test } from 'bun:test';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
+import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { HttpResponse, delay, http } from 'msw';
-import { server } from '../../../test-utils/mocks/node.ts';
-import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { createHttpWringer } from '../test-utils/create-http-wringer.ts';
-import { createLoopbackApp } from '../test-utils/create-loopback-app.ts';
-import { SHOP_API_URL, shopRequests } from '../test-utils/shop-handlers.ts';
 import type { HttpTransport } from './http.ts';
 import { buildBrokenBody } from './test-utils/build-broken-body.ts';
 import { buildStalledBody } from './test-utils/build-stalled-body.ts';
+import { createHttpWringer } from './test-utils/create-http-wringer.ts';
+import { createLoopbackApp } from './test-utils/create-loopback-app.ts';
+import { server } from './test-utils/mocks/node.ts';
+import { SHOP_API_URL, shopRequests } from './test-utils/shop-handlers.ts';
 
 async function setupTest() {
   const wringer = createHttpWringer(SHOP_API_URL);

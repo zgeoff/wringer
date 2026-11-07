@@ -9,21 +9,14 @@
   // types that only their own file uses
   // the test script names its roots, so knip reads no package's tests from it
   "workspaces": {
-    // the journey test launches the example app as a process, so no module imports it, and the
-    // app's page loads its script from HTML
-    ".": {
-      "entry": [
-        "scripts/**/*.test.ts",
-        "test-utils/**/*.test.ts",
-        "integration/**/*.test.ts",
-        "integration/shop-app.ts",
-        "integration/shop-page.ts"
-      ]
-    },
+    ".": { "entry": ["scripts/**/*.test.ts"] },
     "packages/*": { "entry": ["src/**/*.test.ts"] },
     // the verify CLI tests start this script as a process, so no module imports it
-    "packages/gunshi": {
-      "entry": ["src/**/*.test.ts", "test-utils/**/*.test.ts", "test-utils/demo-cli.ts"]
+    "packages/gunshi": { "entry": ["src/**/*.test.ts", "src/test-utils/demo-cli.ts"] },
+    // the journey test launches the example app as a process, so no module imports it, and the
+    // app's page loads its script from HTML
+    "packages/shop-example": {
+      "entry": ["src/**/*.test.ts", "e2e/**/*.test.ts", "src/shop-app.ts", "src/shop-page.ts"]
     }
   },
   "ignoreIssues": {

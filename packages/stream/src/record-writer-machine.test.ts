@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { createActor } from 'xstate';
-import { buildStubClock } from '../../core/test-utils/build-stub-clock.ts';
 import { recordWriterMachine } from './record-writer-machine.ts';
 
 interface Write {

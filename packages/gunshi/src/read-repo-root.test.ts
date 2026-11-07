@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runProcess } from '@wringer/core';
-import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
+import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 
 async function setupTest() {

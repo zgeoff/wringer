@@ -2,14 +2,14 @@ import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
 import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 import type { SQLClients } from './run-sql-query.ts';
+import { createFakePostgres } from './test-utils/create-fake-postgres.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-sql-query');

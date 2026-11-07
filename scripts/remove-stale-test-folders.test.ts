@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 import { pickStaleTestFolders, removeStaleTestFolders } from './remove-stale-test-folders.ts';
 

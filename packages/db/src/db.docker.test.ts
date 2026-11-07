@@ -3,10 +3,10 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { createDbWringer } from '../test-utils/create-db-wringer.ts';
-import { createDockerSqlite3 } from '../test-utils/create-docker-sqlite3.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
+import { createDbWringer } from './test-utils/create-db-wringer.ts';
+import { createDockerSqlite3 } from './test-utils/create-docker-sqlite3.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'db-docker');

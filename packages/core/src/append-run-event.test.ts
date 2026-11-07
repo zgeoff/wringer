@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createLockHolder } from '../test-utils/create-lock-holder.ts';
 import { appendRunEvent, canMoveRunStatus, findRunStatusMove } from './append-run-event.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { parseRunLog } from './parse-run-log.ts';
 import type { RunEvent } from './run-events.ts';
+import { createLockHolder } from './test-utils/create-lock-holder.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 import { WringerError } from './wringer-error.ts';
 
 // The stack kills each process that holds the lock before it removes the folder the lock sits in.

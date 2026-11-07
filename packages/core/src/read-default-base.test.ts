@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { createTestRepo } from '../test-utils/create-test-repo.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { runGit } from './run-git.ts';
+import { createTestRepo } from './test-utils/create-test-repo.ts';
 
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);

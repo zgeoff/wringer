@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestRepo } from '../../core/test-utils/create-test-repo.ts';
-import { createCLIRunner } from '../test-utils/create-cli-runner.ts';
+import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
+import { createCLIRunner } from './test-utils/create-cli-runner.ts';
 
 // These tests start the demo repo's verify script as a process, so `up` and `attach` start the real
 // supervisor process, detached, as they do for a repo. Each event line and the final envelope the
@@ -10,7 +10,7 @@ async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);
 
   const cli = createCLIRunner({
-    script: join(import.meta.dir, '..', 'test-utils', 'demo-cli.ts'),
+    script: join(import.meta.dir, 'test-utils', 'demo-cli.ts'),
     cwd: repo.root,
     onCleanup: onTestFinished,
   });

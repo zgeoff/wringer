@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { chromium } from 'playwright-core';
 import type { Browser } from 'playwright-core';
-import { createBrokenPageBrowser } from '../test-utils/create-broken-page-browser.ts';
-import { createContextRefusingBrowser } from '../test-utils/create-context-refusing-browser.ts';
-import { createShopPageServer } from '../test-utils/create-shop-page-server.ts';
-import { createSlowClosingBrowser } from '../test-utils/create-slow-closing-browser.ts';
 import { startBrowserPage } from './start-browser-page.ts';
+import { createBrokenPageBrowser } from './test-utils/create-broken-page-browser.ts';
+import { createContextRefusingBrowser } from './test-utils/create-context-refusing-browser.ts';
+import { createShopPageServer } from './test-utils/create-shop-page-server.ts';
+import { createSlowClosingBrowser } from './test-utils/create-slow-closing-browser.ts';
 
 function setupTest() {
   const server = createShopPageServer();
