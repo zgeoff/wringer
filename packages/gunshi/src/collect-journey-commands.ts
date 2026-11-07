@@ -47,7 +47,7 @@ function collectFencedLines(text: string): readonly FencedLine[] {
 
     if (fence === null) {
       fence = marker ?? null;
-    } else if (marker !== undefined && marker.startsWith(fence) && marker[0] === fence[0]) {
+    } else if (marker?.startsWith(fence) === true) {
       fence = null;
     } else {
       const joined: FencedLine =
