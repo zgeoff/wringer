@@ -1,5 +1,7 @@
 export { bindDrivers } from './bind-drivers.ts';
 export type { BoundHelpers } from './bind-drivers.ts';
+export { buildEnvelope } from './build-envelope.ts';
+export type { EnvelopeInput } from './build-envelope.ts';
 export { buildEnvelopeJSONSchema } from './build-envelope-json-schema.ts';
 export { buildRunView } from './build-run-view.ts';
 export type { DoctorState, RunView, SupervisorInfo } from './build-run-view.ts';
@@ -8,6 +10,7 @@ export type { RunPaths, StatePaths } from './build-state-paths.ts';
 export { createFileState, eventSizeCapBytes, pointersSchema } from './create-file-state.ts';
 export type { FileStateOptions, Pointers, StatePort } from './create-file-state.ts';
 export { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+export { createRepoState } from './create-repo-state.ts';
 export type { StateFileSystem } from './create-node-state-file-system.ts';
 export { createWringer, defaultStateDir } from './create-wringer.ts';
 export type { WringerBuilder, WringerOptions } from './create-wringer.ts';
@@ -55,7 +58,8 @@ export {
 } from './run-events.ts';
 
 export type { CheckResult, Endpoints, Mode, RunEvent, RunID } from './run-events.ts';
-export type { ProcessResult } from './run-process.ts';
+export { runProcess } from './run-process.ts';
+export type { ProcessRequest, ProcessResult } from './run-process.ts';
 export type { RunStatus } from './append-run-event.ts';
 export { runSupervisorProcess } from './run-supervisor-process.ts';
 export { ssh } from './ssh.ts';

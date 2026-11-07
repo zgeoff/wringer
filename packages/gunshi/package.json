@@ -1,0 +1,47 @@
+{
+  "name": "@wringer/gunshi",
+  "version": "0.0.0",
+  "description": "The gunshi adapter for wringer: turns a wringer registry into a CLI",
+  "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/gunshi#readme",
+  "bugs": "https://github.com/zgeoff/wringer/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgeoff/wringer.git",
+    "directory": "packages/gunshi"
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsrs -p tsconfig.build.json",
+    "typecheck": "tsrs --noEmit"
+  },
+  "dependencies": {
+    "gunshi": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@wringer/core": "workspace:*",
+    "@zgeoff/testing": "catalog:",
+    "tiny-invariant": "catalog:"
+  },
+  "peerDependencies": {
+    "@wringer/core": "workspace:*"
+  },
+  "engines": {
+    "bun": ">=1.3"
+  }
+}
