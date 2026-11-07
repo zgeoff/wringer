@@ -1,12 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { readPIDNamespace } from '../packages/core/src/read-pid-namespace.ts';
 import type { CommandResult } from '../scripts/ci/run-command.ts';
 import { runCommand } from '../scripts/ci/run-command.ts';
 import { createCommandStarter } from './create-command-starter.ts';
+import { createTestFolder } from './create-test-folder.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-create-command-starter-'));
+  const directory = await createTestFolder(import.meta.dir, 'create-command-starter');
 
   const starter = createCommandStarter(runCommand, {
     cwd: directory,
@@ -26,8 +27,15 @@ test('it runs a command in the given folder and returns its result', async () =>
   const ctx = await setupTest();
   const result = await ctx.starter.startCommand(['sh', '-c', 'basename "$PWD"; exit 3']);
 
-  expect(result.exitCode).toBe(3);
-  expect(result.stdout).toStartWith('.test-create-command-starter-');
+  const folderPattern = new RegExp(
+    `^\\.test-n${readPIDNamespace()}-p${process.pid}-create-command-starter-`,
+    'v',
+  );
+
+  expect({ exitCode: result.exitCode, stdout: result.stdout }).toStrictEqual({
+    exitCode: 3,
+    stdout: expect.stringMatching(folderPattern),
+  });
 });
 
 test('it stops every started command and settles once each has exited', async () => {

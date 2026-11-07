@@ -1,12 +1,13 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildStubOutputSink } from '../../test-utils/build-stub-output-sink.ts';
 import { createCommandStarter } from '../../test-utils/create-command-starter.ts';
+import { createTestFolder } from '../../test-utils/create-test-folder.ts';
 import { makeLoggedCommandRunner } from './make-logged-command-runner.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-make-logged-command-runner-'));
+  const directory = await createTestFolder(import.meta.dir, 'make-logged-command-runner');
 
   const stdout = buildStubOutputSink();
   const stderr = buildStubOutputSink();

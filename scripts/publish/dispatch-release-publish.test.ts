@@ -1,12 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { join } from 'node:path';
+import { rm } from 'node:fs/promises';
 import { createStubGH } from '../../test-utils/create-stub-gh.ts';
+import { createTestFolder } from '../../test-utils/create-test-folder.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { dispatchReleasePublish } from './dispatch-release-publish.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-dispatch-release-publish-'));
+  const directory = await createTestFolder(import.meta.dir, 'dispatch-release-publish');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

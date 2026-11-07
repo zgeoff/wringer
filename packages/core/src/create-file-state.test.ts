@@ -1,0 +1,325 @@
+import { expect, onTestFinished, test } from 'bun:test';
+import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { withFileLock } from '@zgeoff/std/with-file-lock';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { buildRunPaths } from './build-state-paths.ts';
+import { createFileState } from './create-file-state.ts';
+import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+import { runEventSchema, runIDSchema } from './run-events.ts';
+
+async function setupTest() {
+  const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
+
+  onTestFinished(() => rm(stateDir, { recursive: true, force: true }));
+
+  const state = createFileState({
+    stateDir,
+    lockTimeoutMs: 2000,
+    fs: createNodeStateFileSystem(),
+  });
+
+  return {
+    stateDir,
+    state,
+    holdRunLock: async (runID: string, work: () => Promise<void>) => {
+      await mkdir(state.paths.locks, { recursive: true });
+
+      return withFileLock(join(state.paths.locks, `run-${runID}.lock`), work);
+    },
+    readLog: (runID: string) =>
+      readFile(buildRunPaths(stateDir, runIDSchema.parse(runID)).log, 'utf8'),
+    readManifest: (runID: string) =>
+      readFile(buildRunPaths(stateDir, runIDSchema.parse(runID)).manifest, 'utf8'),
+  };
+}
+
+test('it reads empty pointers before any command wrote state', async () => {
+  const ctx = await setupTest();
+  const pointers = await ctx.state.readPointers();
+
+  expect(pointers).toStrictEqual({ currentRun: {}, cursors: {} });
+});
+
+test('it keeps both changes when two commands write the pointers at once', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await Promise.all([
+    ctx.state.writePointers((current) => ({ ...current, feature: 'checkout' })),
+    ctx.state.writePointers((current) => ({
+      ...current,
+      currentRun: { ...current.currentRun, local: runID },
+    })),
+  ]);
+
+  const pointers = await ctx.state.readPointers();
+
+  expect(pointers).toStrictEqual({
+    currentRun: { local: 'mf3k2a-7q1z' },
+    feature: 'checkout',
+    cursors: {},
+  });
+});
+
+test('it keeps the run that the saved cursors belong to', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.writePointers((current) => ({
+    ...current,
+    cursors: { app: 120 },
+    cursorsRun: runIDSchema.parse('mf3k2a-7q1z'),
+  }));
+
+  const pointers = await ctx.state.readPointers();
+
+  expect(pointers).toStrictEqual({
+    currentRun: {},
+    cursors: { app: 120 },
+    cursorsRun: 'mf3k2a-7q1z',
+  });
+});
+
+test('it never interleaves events that many writers append at once', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+  const reason = 'x'.repeat(16 * 1024);
+
+  await Promise.all(
+    Array.from({ length: 20 }, () =>
+      ctx.state.appendEvent(runID, { type: 'crashed', at: '2026-11-04T10:00:01.000Z', reason }),
+    ),
+  );
+
+  const log = await ctx.readLog('mf3k2a-7q1z');
+
+  const lines = log.trimEnd().split('\n');
+
+  expect(lines).toHaveLength(20);
+  expect(lines).toSatisfyAll((line: string) => runEventSchema.safeParse(JSON.parse(line)).success);
+});
+
+test('it refuses an event over the size cap with an internal error', async () => {
+  const ctx = await setupTest();
+
+  expect(
+    ctx.state.appendEvent(runIDSchema.parse('mf3k2a-7q1z'), {
+      type: 'crashed',
+      at: '2026-11-04T10:00:01.000Z',
+      reason: 'x'.repeat(70 * 1024),
+    }),
+  ).rejects.toMatchObject({ code: 'internal' });
+});
+
+test('it reads the events before a torn last line of the log', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'attach',
+    fingerprint: 'f00d',
+  });
+
+  await appendFile(buildRunPaths(ctx.stateDir, runID).log, '{"type":"launch-re');
+
+  const events = await ctx.state.readRunEvents(runID);
+
+  expect(events).toStrictEqual([
+    {
+      type: 'run-started',
+      at: '2026-11-04T10:00:00.000Z',
+      target: 'local',
+      mode: 'attach',
+      fingerprint: 'f00d',
+    },
+  ]);
+});
+
+test('it starts the next event on a line of its own after a torn last line', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'attach',
+    fingerprint: 'f00d',
+  });
+
+  await appendFile(buildRunPaths(ctx.stateDir, runID).log, '{"type":"launch-re');
+
+  await ctx.state.appendEvent(runID, { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' });
+
+  const events = await ctx.state.readRunEvents(runID);
+
+  expect(events).toStrictEqual([
+    {
+      type: 'run-started',
+      at: '2026-11-04T10:00:00.000Z',
+      target: 'local',
+      mode: 'attach',
+      fingerprint: 'f00d',
+    },
+    { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' },
+  ]);
+});
+
+test('it leaves out a crash that arrives after the run ended', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'attach',
+    fingerprint: 'f00d',
+  });
+
+  await ctx.state.appendEvent(runID, { type: 'run-ended', at: '2026-11-04T10:00:02.000Z' });
+
+  await ctx.state.appendEvent(runID, {
+    type: 'crashed',
+    at: '2026-11-04T10:00:03.000Z',
+    reason: 'the launch exited',
+  });
+
+  const events = await ctx.state.readRunEvents(runID);
+
+  expect(events.map((event) => event.type)).toStrictEqual(['run-started', 'run-ended']);
+});
+
+test('it rejects a read of a log that is not a file', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await mkdir(buildRunPaths(ctx.stateDir, runID).log, { recursive: true });
+
+  expect(ctx.state.readRunEvents(runID)).rejects.toMatchObject({ code: 'EISDIR' });
+});
+
+test('it writes a manifest of the run from its log', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'f00d',
+  });
+
+  await ctx.state.appendEvent(runID, {
+    type: 'doctor-passed',
+    at: '2026-11-04T10:00:01.000Z',
+    results: [{ name: 'health', status: 'passed', durationMs: 3, code: null, message: null }],
+  });
+
+  await ctx.state.writeManifest(runID);
+
+  const manifest = await ctx.readManifest('mf3k2a-7q1z');
+
+  expect(JSON.parse(manifest)).toStrictEqual({
+    target: 'local',
+    instance: 'mf3k2a-7q1z',
+    mode: 'launch',
+    fingerprint: 'f00d',
+    status: 'starting',
+    doctor: {
+      state: 'passed',
+      results: [{ name: 'health', status: 'passed', durationMs: 3, code: null, message: null }],
+    },
+    startedAt: '2026-11-04T10:00:00.000Z',
+    endedAt: null,
+  });
+});
+
+test('it reads the log for a manifest only once the run lock is free', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'f00d',
+  });
+
+  let written: Promise<void> | undefined;
+
+  await ctx.holdRunLock('mf3k2a-7q1z', async () => {
+    written = ctx.state.writeManifest(runID);
+
+    await appendFile(
+      buildRunPaths(ctx.stateDir, runID).log,
+      '{"type":"run-ended","at":"2026-11-04T10:00:05.000Z"}\n',
+    );
+  });
+
+  await written;
+
+  const manifest = await ctx.readManifest('mf3k2a-7q1z');
+
+  expect(JSON.parse(manifest)).toHaveProperty('status', 'ended');
+});
+
+test('it reads each stream file size of a run as its cursor', async () => {
+  const ctx = await setupTest();
+
+  const streams = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z')).streams;
+
+  await mkdir(streams, { recursive: true });
+  await writeFile(join(streams, 'orders.ndjson'), '{"line":"paid"}\n');
+  await writeFile(join(streams, 'notes.txt'), 'kale\n');
+
+  const cursors = await ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'));
+
+  expect(cursors).toStrictEqual({ orders: 16 });
+});
+
+test('it reads no cursors for a run whose streams have not started', async () => {
+  const ctx = await setupTest();
+  const cursors = await ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'));
+
+  expect(cursors).toStrictEqual({});
+});
+
+test('it rejects a cursor read when the streams path is a file', async () => {
+  const ctx = await setupTest();
+
+  const runPaths = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z'));
+
+  await mkdir(runPaths.directory, { recursive: true });
+  await writeFile(runPaths.streams, 'kale\n');
+
+  expect(ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'))).rejects.toMatchObject({
+    code: 'ENOTDIR',
+  });
+});
+
+test('it lists the runs that have a log folder', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.appendEvent(runIDSchema.parse('mf3k2a-7q1z'), {
+    type: 'run-ended',
+    at: '2026-11-04T10:00:00.000Z',
+  });
+
+  const runs = await ctx.state.listRuns();
+
+  expect(runs).toStrictEqual(['mf3k2a-7q1z']);
+});

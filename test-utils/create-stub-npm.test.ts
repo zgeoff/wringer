@@ -1,11 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { $ } from 'bun';
 import { createStubNPM } from './create-stub-npm.ts';
+import { createTestFolder } from './create-test-folder.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-create-stub-npm-'));
+  const directory = await createTestFolder(import.meta.dir, 'create-stub-npm');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 

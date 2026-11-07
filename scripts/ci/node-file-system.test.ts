@@ -1,10 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTestFolder } from '../../test-utils/create-test-folder.ts';
 import { nodeFileSystem } from './node-file-system.ts';
 
 async function setupTest() {
-  const directory = await mkdtemp(join(import.meta.dir, '.test-node-file-system-'));
+  const directory = await createTestFolder(import.meta.dir, 'node-file-system');
 
   onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
@@ -43,6 +44,27 @@ test('it lists a folder it created and probes a path before and after its remova
   expect(listed).toStrictEqual(['blue']);
   expect(before).toBeTrue();
   expect(after).toBeFalse();
+});
+
+test('it lists only the folders in a folder', async () => {
+  const ctx = await setupTest();
+
+  await nodeFileSystem.createDirectory(join(ctx.directory, 'cups'));
+  await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
+
+  const names = await nodeFileSystem.readFolderNames(ctx.directory);
+
+  expect(names).toStrictEqual(['cups']);
+});
+
+test('it rejects a probe of a path below a file', async () => {
+  const ctx = await setupTest();
+
+  await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
+
+  expect(nodeFileSystem.probePath(join(ctx.directory, 'tea.txt/leaf'))).rejects.toMatchObject({
+    code: 'ENOTDIR',
+  });
 });
 
 test('it removes a missing path with no error', async () => {

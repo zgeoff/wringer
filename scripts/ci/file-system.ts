@@ -3,6 +3,7 @@ export interface FileSystem {
   readonly readText: (path: string) => Promise<string>;
   readonly readBytes: (path: string) => Promise<Uint8Array>;
   readonly readDirectory: (path: string) => Promise<string[]>;
+  readonly readFolderNames: (path: string) => Promise<readonly string[]>;
 
   // Writes the text in place of the file's contents, and creates its folders first.
   readonly writeText: (path: string, text: string) => Promise<void>;

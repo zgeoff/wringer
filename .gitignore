@@ -27,7 +27,5 @@ Thumbs.db
 # packed tarballs
 *.tgz
 
-# test temp trees
-scripts/*/.test-*
-test-utils/.test-*
-scripts/.test-*
+# test temp trees, which a test makes beside its own file
+.test-*/

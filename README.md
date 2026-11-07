@@ -18,8 +18,8 @@ workspace publishes to npm.
 
 ## Packages
 
-- [`@wringer/core`](./packages/core/README.md): the version of the JSON envelope that every wringer
-  command writes.
+- [`@wringer/core`](./packages/core/README.md): the JSON envelope, the error codes, the run state,
+  the fingerprint and the exec hosts.
 
 ## Quick start
 
