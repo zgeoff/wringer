@@ -435,7 +435,7 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     callSupervisor: (call) => {
       const calling = request.session.supervisor.call(call);
 
-      keepCancelledCall(request.trace.calls, calling, call.signal);
+      keepCancelledCall(request.trace.calls, calling, request.deadline);
 
       return calling;
     },

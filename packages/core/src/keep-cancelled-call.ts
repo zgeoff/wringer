@@ -1,5 +1,5 @@
-// Keeps a call in `cancelled` only when its signal aborts while the call still runs, so a call that
-// failed before the deadline, which the command may have handled, never answers for the timeout.
+// Keeps a call in `cancelled` only when the command's deadline fires while the call still runs. A
+// call that failed earlier, such as at a doctor check's own deadline, never answers for the timeout.
 export function keepCancelledCall(
   cancelled: Promise<unknown>[],
   calling: Promise<unknown>,
