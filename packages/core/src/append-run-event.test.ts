@@ -3,15 +3,10 @@ import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createLockHolder } from '../test-utils/create-lock-holder.ts';
+import { appendRunEvent, canMoveRunStatus, findRunStatusMove } from './append-run-event.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
+import { parseRunLog } from './parse-run-log.ts';
 import type { RunEvent } from './run-events.ts';
-import {
-  appendRunEvent,
-  canMoveRunStatus,
-  findRunStatusMove,
-  parseRunLog,
-  pickLogAppend,
-} from './run-log.ts';
 
 // The stack kills each process that holds the lock before it removes the folder the lock sits in.
 async function setupTest() {
@@ -19,7 +14,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'run-log');
+  const directory = await createTestFolder(import.meta.dir, 'append-run-event');
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
@@ -101,6 +96,37 @@ test('#appendRunEvent cuts a torn last line before it writes', async () => {
   );
 });
 
+test('#appendRunEvent cuts a torn last line of characters that take more than one byte each', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(
+    ctx.logPath,
+    '{"type":"crashed","at":"2026-11-04T10:00:00.000Z","reason":"café"}\n{"type":"cra',
+  );
+
+  await ctx.append({ type: 'run-ended', at: '2026-11-04T10:00:05.000Z' });
+
+  const log = await ctx.readLog();
+
+  expect(log).toBe(
+    '{"type":"crashed","at":"2026-11-04T10:00:00.000Z","reason":"café"}\n{"type":"run-ended","at":"2026-11-04T10:00:05.000Z"}\n',
+  );
+});
+
+test('#appendRunEvent keeps a log that ends on a whole line as it was before the new event', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(ctx.logPath, '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n');
+
+  await ctx.append({ type: 'run-ended', at: '2026-11-04T10:00:05.000Z' });
+
+  const log = await ctx.readLog();
+
+  expect(log).toBe(
+    '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"run-ended","at":"2026-11-04T10:00:05.000Z"}\n',
+  );
+});
+
 test('#appendRunEvent refuses a move that the status table does not allow', async () => {
   const ctx = await setupTest();
 
@@ -126,55 +152,6 @@ test('#appendRunEvent refuses a move that the status table does not allow', asyn
     wrote: false,
     types: ['run-started', 'run-ended'],
   });
-});
-
-test('#pickLogAppend cuts a torn last line to the bytes of the whole lines', () => {
-  const plan = pickLogAppend('{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"cr', {
-    type: 'run-ended',
-    at: '2026-11-04T10:00:05.000Z',
-  });
-
-  expect(plan).toStrictEqual({ truncateBytes: 53, append: true });
-});
-
-test('#pickLogAppend leaves a log that ends on a whole line uncut', () => {
-  const plan = pickLogAppend('', { type: 'run-ended', at: '2026-11-04T10:00:05.000Z' });
-
-  expect(plan).toStrictEqual({ truncateBytes: null, append: true });
-});
-
-test('#pickLogAppend drops a crash that arrives after the run ended', () => {
-  const plan = pickLogAppend(
-    '{"type":"run-started","at":"2026-11-04T10:00:00.000Z","target":"local","mode":"launch","fingerprint":"f00d"}\n{"type":"run-ended","at":"2026-11-04T10:00:01.000Z"}\n',
-    { type: 'crashed', at: '2026-11-04T10:00:02.000Z', reason: 'the launch exited' },
-  );
-
-  expect(plan).toStrictEqual({ truncateBytes: null, append: false });
-});
-
-test('#parseRunLog skips a torn last line', () => {
-  expect(
-    parseRunLog('{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"cra'),
-  ).toStrictEqual([{ type: 'run-ended', at: '2026-11-04T10:00:00.000Z' }]);
-});
-
-test.each([
-  ['a line that is no JSON', '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\nnot json\n'],
-  ['an empty whole line', '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n\n'],
-  [
-    'a line that is no run event',
-    '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n{"type":"lunch"}\n',
-  ],
-])('#parseRunLog refuses %s with an environment error', (_name, text) => {
-  expect(() => parseRunLog(text)).toThrow(expect.objectContaining({ code: 'environment' }));
-});
-
-test('#parseRunLog skips a whole last event that has no newline yet', () => {
-  expect(
-    parseRunLog(
-      '{"type":"launch-ready","at":"2026-11-04T10:00:00.000Z","endpoints":{}}\n{"type":"run-ended","at":"2026-11-04T10:01:00.000Z"}',
-    ),
-  ).toStrictEqual([{ type: 'launch-ready', at: '2026-11-04T10:00:00.000Z', endpoints: {} }]);
 });
 
 test.each([
