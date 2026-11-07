@@ -7,6 +7,7 @@ import { appendRunEvent, canMoveRunStatus, findRunStatusMove } from './append-ru
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { parseRunLog } from './parse-run-log.ts';
 import type { RunEvent } from './run-events.ts';
+import { WringerError } from './wringer-error.ts';
 
 // The stack kills each process that holds the lock before it removes the folder the lock sits in.
 async function setupTest() {
@@ -31,6 +32,17 @@ async function setupTest() {
         lockTimeoutMs,
         line: `${JSON.stringify(event)}\n`,
         event,
+        refuse: null,
+      }),
+    appendRefused: (event: RunEvent, refusal: WringerError) =>
+      appendRunEvent({
+        fs: createNodeStateFileSystem(),
+        logPath,
+        lockPath,
+        lockTimeoutMs: 2000,
+        line: `${JSON.stringify(event)}\n`,
+        event,
+        refuse: () => refusal,
       }),
     readLog: () => readFile(logPath, 'utf8'),
 
@@ -127,6 +139,23 @@ test('#appendRunEvent keeps a log that ends on a whole line as it was before the
   );
 });
 
+test('#appendRunEvent rejects with the refusal its check returns and writes nothing', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(ctx.logPath, '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n');
+
+  const refusal = new WringerError('doctor-required', { message: 'The doctor ran again.' });
+
+  const [settled] = await Promise.allSettled([
+    ctx.appendRefused({ type: 'run-ended', at: '2026-11-04T10:00:05.000Z' }, refusal),
+  ]);
+
+  expect({ settled, log: await ctx.readLog() }).toStrictEqual({
+    settled: { status: 'rejected', reason: refusal },
+    log: '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n',
+  });
+});
+
 test('#appendRunEvent refuses a move that the status table does not allow', async () => {
   const ctx = await setupTest();
 
@@ -170,7 +199,8 @@ test.each([
 });
 
 test.each([
-  ['launch-ready', 'running'],
+  ['run-ready', 'running'],
+  ['launch-ready', null],
   ['crashed', 'crashed'],
   ['run-ended', 'ended'],
   ['doctor-passed', null],

@@ -21,8 +21,39 @@ bun add @wringer/core
 
 The package runs on [Bun](https://bun.sh) 1.3 or newer.
 
+## Usage
+
+A repo builds its registry with the typed builder, then hands it to a CLI adapter:
+
+```ts
+import { createWringer, local } from '@wringer/core';
+
+export const registry = createWringer({ name: 'shop' })
+  .target('local', {
+    mode: 'launch',
+    access: 'read-write',
+    host: local(),
+    launch: () => ({
+      command: ['bun', 'run', 'dev'],
+      ready: (line) => (line['event'] === 'listening' ? { web: 'http://127.0.0.1:3000' } : null),
+    }),
+  })
+  .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
+  .build();
+```
+
+Add drivers with `.use(...)`. `bindDrivers(drivers)` returns `defineAction`, `defineTarget`,
+`defineCommand` and `defineCheck`, typed against those drivers, so a repo can define each one in its
+own file.
+
 ## Features
 
+- The typed builder. Each action and command declares `effect: 'read' | 'write'`, and is a write
+  unless it says otherwise.
+- Read-only targets: each driver client and exec refuses a write there with `read-only` and the
+  target's hint. A target's driver config lists the writes it grants.
+- One supervisor process per run, which owns the app and every driver service.
+- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`.
 - The envelope's zod schema, and the JSON Schema built from it.
 - A closed set of error codes, each mapped to one exit code.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
@@ -43,7 +74,8 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
 
 ## Error codes
 
-An envelope's `error.code` is one of these, and the command exits with its exit code:
+A command that passes exits `0`. A command that fails puts one of these in the envelope's
+`error.code`, and exits with its exit code:
 
 | Code                 | Exit | Meaning                                        |
 | -------------------- | ---- | ---------------------------------------------- |
@@ -56,5 +88,3 @@ An envelope's `error.code` is one of these, and the command exits with its exit 
 | `environment`        | 4    | A tool, a host or the network failed.          |
 | `internal`           | 4    | wringer failed; the stack is in the run's log. |
 | `timeout`            | 5    | The command ran past its deadline.             |
-
-A command that passes exits `0`.

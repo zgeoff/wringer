@@ -1,0 +1,301 @@
+import { dirname } from 'node:path';
+import { match } from 'ts-pattern';
+import { createActor, waitFor } from 'xstate';
+import { buildRunHandle } from './build-run-handle.ts';
+import { buildShutDownSteps } from './build-shut-down-steps.ts';
+import type { StatePort } from './create-file-state.ts';
+import { getTarget } from './get-target.ts';
+import { defaultRefusalHint } from './make-fence.ts';
+import { pickPendingCleanups } from './pick-pending-cleanups.ts';
+import { pickSupervisorOperation } from './pick-supervisor-operation.ts';
+import { raceDeadline } from './race-deadline.ts';
+import type { LaunchHost } from './read-launch-host.ts';
+import type { Endpoints, RunEvent } from './run-events.ts';
+import { appStopGraceMs, startLaunch } from './start-launch.ts';
+import type { Launch } from './start-launch.ts';
+import { startServices } from './start-services.ts';
+import { supervisorMachine } from './supervisor-machine.ts';
+import type { ShutDownPlan } from './supervisor-machine.ts';
+import type { SupervisorRequest } from './supervisor-protocol.ts';
+import { toWringerError } from './to-wringer-error.ts';
+import type { ServiceInstance, TargetDefinition, Wringer } from './types.ts';
+import type { WringerError } from './wringer-error.ts';
+
+export interface SupervisorOptions {
+  readonly wringer: Wringer;
+  readonly launchHost: LaunchHost;
+  readonly state: StatePort;
+  readonly runID: string;
+  readonly target: string;
+  readonly readyTimeoutMs: number;
+
+  // The longest a stop waits for a startup step, or for one cleanup, that ignores the abort.
+  readonly stopWaitMs: number;
+  readonly now: () => Date;
+  readonly reportError: (message: string) => void;
+  readonly signal?: AbortSignal | undefined;
+}
+
+type Cleanup = readonly [string, () => Promise<void>];
+
+// The supervisor owns a run's app and every driver service. It resolves once the run has stopped,
+// by `stop` over the socket or by a crash of the app. Its lifecycle is the supervisor machine; the
+// functions here are the I/O the machine runs.
+export async function runSupervisor(options: SupervisorOptions): Promise<void> {
+  const target = getTarget(options.wringer, options.target);
+  const run = buildRunHandle(options.state.paths.root, options.runID);
+
+  const socket = await options.launchHost.createSocketFolder(run.paths.socket);
+
+  const services = new Map<string, ServiceInstance>();
+  const lifetime = new AbortController();
+  const serviceCommands = new AbortController();
+  const startupCommands = new AbortController();
+
+  const append = (event: RunEvent): Promise<void> =>
+    options.state.appendEvent(options.runID, event);
+
+  const at = (): string => options.now().toISOString();
+  let launch: Launch | undefined;
+
+  const stopping = new Set<string>();
+
+  // Each part a failed startup tried to stop and could not. The startup's error never reaches the
+  // stop that cancelled it, so the stop takes these from here.
+  const startupLeftovers: string[] = [];
+
+  // Names each part whose stop failed. A part is marked before its stop starts, so two calls never
+  // stop the same part.
+  const stopStarted = async (): Promise<readonly string[]> => {
+    const current = launch;
+
+    const pending = pickPendingCleanups({
+      launched: current !== undefined,
+      serviceKeys: [...services.keys()],
+      stopping,
+    });
+
+    for (const key of [...pending.app, ...pending.services]) {
+      stopping.add(key);
+    }
+
+    const appCleanups = pending.app.flatMap((key): Cleanup[] =>
+      current === undefined ? [] : [[key, () => current.stop()]],
+    );
+
+    const serviceCleanups = pending.services.flatMap((key): Cleanup[] => {
+      const service = services.get(key);
+
+      return service === undefined ? [] : [[key, () => service.stop()]];
+    });
+
+    const appFailures = await runCleanups(appCleanups, options.stopWaitMs);
+    const serviceFailures = await runCleanups(serviceCleanups, options.stopWaitMs);
+
+    return [...startupLeftovers.splice(0), ...appFailures, ...serviceFailures];
+  };
+
+  // Every cleanup runs, even after one fails, and the supervisor ends even when the final log write
+  // fails. A failed cleanup or log write goes to the stop's caller, as a part may still be up.
+  const shutDown = async (plan: ShutDownPlan): Promise<WringerError | null> => {
+    // The commands of a startup the stop gave up on end before the cleanups, so that startup settles
+    // early. A service that came up has left this signal, so its stop can still run a command.
+    if (plan.gaveUpOnStartup) {
+      startupCommands.abort();
+    }
+
+    const failures = await stopStarted();
+
+    const steps = buildShutDownSteps({ ...plan, failures, at: at() });
+
+    if (steps.abortCommands) {
+      serviceCommands.abort();
+    }
+
+    try {
+      for (const event of steps.events) {
+        await append(event);
+      }
+
+      await options.state.writeManifest(options.runID);
+    } catch (error) {
+      const failure = toWringerError(error);
+
+      // A stop that a crash or a signal began has no caller to take the failure.
+      options.reportError(`The run's final log write failed: ${failure.message}`);
+
+      return failure;
+    }
+
+    return steps.failure;
+  };
+
+  // The run's log is already closed, so a late part's failure goes to the supervisor's own log.
+  const cleanUpLate = async (): Promise<void> => {
+    for (const failure of await stopStarted()) {
+      options.reportError(`A late cleanup failed for ${failure}`);
+    }
+
+    serviceCommands.abort();
+  };
+
+  // A failed first write stops the run like any startup failure, so the socket still closes.
+  const startUp = async (): Promise<void> => {
+    await append({ type: 'supervisor-ready', at: at(), pid: process.pid, socket });
+
+    launch = await startTarget(target, {
+      launchHost: options.launchHost,
+      runDirectory: run.paths.directory,
+      appLog: run.childLog('app').path,
+      targetName: options.target,
+      readyTimeoutMs: options.readyTimeoutMs,
+      signal: lifetime.signal,
+      onCrash: (reason) => {
+        void stop(reason);
+      },
+      onStopFailed: (reason) => {
+        startupLeftovers.push(`app: ${reason}`);
+      },
+    });
+
+    lifetime.signal.throwIfAborted();
+
+    await append({ type: 'launch-ready', at: at(), endpoints: launch.endpoints });
+
+    await startServices({
+      wringer: options.wringer,
+      targetName: options.target,
+      target,
+      endpoints: launch.endpoints,
+      run,
+      hint: target.refusalHint ?? defaultRefusalHint,
+      signal: lifetime.signal,
+      commandSignal: serviceCommands.signal,
+      startupCommandSignal: startupCommands.signal,
+      started: services,
+      onReady: (key) => append({ type: 'service-ready', at: at(), service: key }),
+    });
+
+    lifetime.signal.throwIfAborted();
+
+    await append({ type: 'run-ready', at: at() });
+
+    await options.state.writeManifest(options.runID);
+  };
+
+  const lifecycle = createActor(supervisorMachine, {
+    input: {
+      stopWaitMs: options.stopWaitMs,
+      startUp,
+      abortStartup: () => {
+        lifetime.abort();
+      },
+      shutDown,
+      cleanUpLate,
+    },
+  });
+
+  const waitForClosed = () =>
+    waitFor(lifecycle, (snapshot) => snapshot.hasTag('closed'), { timeout: Infinity });
+
+  // A second stop, such as a `down` while a crash is still stopping the run, waits for the first.
+  const stop = async (crashReason: string | null): Promise<WringerError | null> => {
+    lifecycle.send({ type: 'stop', reason: crashReason });
+
+    const closed = await waitForClosed();
+
+    return closed.context.failure;
+  };
+
+  const answerRequest = (request: SupervisorRequest): Promise<unknown> =>
+    match(pickSupervisorOperation(request, services))
+      .with({ kind: 'stop' }, async () => {
+        const failure = await stop(null);
+
+        if (failure !== null) {
+          throw failure;
+        }
+
+        return { pid: process.pid };
+      })
+      .with({ kind: 'status' }, () => Promise.resolve({ pid: process.pid }))
+      .with({ kind: 'call' }, (operation) => operation.call())
+      .with({ kind: 'refuse' }, (operation) => Promise.reject(operation.error))
+      .exhaustive();
+
+  const server = await options.launchHost.listenSupervisorSocket({
+    path: socket,
+    answerRequest,
+    onTransportError: (error) => {
+      options.reportError(`The supervisor socket failed: ${toWringerError(error).message}`);
+    },
+  });
+
+  // The startup writes the socket into the run's log, so it starts once the socket listens.
+  lifecycle.start();
+
+  const onSignal = (): void => {
+    void stop('the supervisor was signalled to stop');
+  };
+
+  options.signal?.addEventListener('abort', onSignal, { once: true });
+
+  // A signal that came while the socket opened fired before the listener, which never sees it.
+  if (options.signal?.aborted === true) {
+    onSignal();
+  }
+
+  await waitForClosed();
+
+  await server.close(options.stopWaitMs);
+  await options.launchHost.removeDirectory(dirname(socket));
+}
+
+// Each cleanup runs, even after one fails, and each failure names its part.
+async function runCleanups(cleanups: readonly Cleanup[], stopWaitMs: number): Promise<string[]> {
+  const settled = await Promise.allSettled(
+    cleanups.map(([, cleanup]) =>
+      raceDeadline(Promise.try(cleanup), AbortSignal.timeout(stopWaitMs)),
+    ),
+  );
+
+  return settled.flatMap((result, index) =>
+    result.status === 'rejected'
+      ? [`${cleanups[index]?.[0] ?? 'unknown'}: ${toWringerError(result.reason).message}`]
+      : [],
+  );
+}
+
+interface TargetStart {
+  readonly launchHost: LaunchHost;
+  readonly runDirectory: string;
+  readonly appLog: string;
+  readonly targetName: string;
+  readonly readyTimeoutMs: number;
+  readonly signal: AbortSignal;
+  readonly onCrash: (reason: string) => void;
+  readonly onStopFailed: (reason: string) => void;
+}
+
+async function startTarget(target: TargetDefinition, start: TargetStart): Promise<Launch> {
+  if (target.mode === 'launch') {
+    return startLaunch({
+      host: start.launchHost,
+      plan: target.launch({ runDirectory: start.runDirectory }),
+      logPath: start.appLog,
+      readyTimeoutMs: start.readyTimeoutMs,
+      signal: start.signal,
+      onCrash: start.onCrash,
+      onStopFailed: start.onStopFailed,
+      stopGraceMs: appStopGraceMs,
+    });
+  }
+
+  if (target.endpoints === undefined) {
+    return { endpoints: {}, stop: () => Promise.resolve() };
+  }
+
+  const endpoints: Endpoints = await target.endpoints({ target: start.targetName });
+
+  return { endpoints, stop: () => Promise.resolve() };
+}

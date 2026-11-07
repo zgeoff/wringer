@@ -25,6 +25,17 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
 
 const at = z.iso.datetime();
 
+// A command's work that failed after the envelope had already answered with a timeout.
+export const lateFailureEventSchema = z.strictObject({
+  type: z.literal('late-failure'),
+  at,
+  command: z.string(),
+  code: z.string(),
+  message: z.string(),
+});
+
+export type LateFailureEvent = z.infer<typeof lateFailureEventSchema>;
+
 export const runEventSchema = z.discriminatedUnion('type', [
   z.strictObject({
     type: z.literal('run-started'),
@@ -41,12 +52,16 @@ export const runEventSchema = z.discriminatedUnion('type', [
   }),
   z.strictObject({ type: z.literal('launch-ready'), at, endpoints: endpointsSchema }),
   z.strictObject({ type: z.literal('service-ready'), at, service: z.string() }),
+  z.strictObject({ type: z.literal('run-ready'), at }),
   z.strictObject({
     type: z.enum(['doctor-passed', 'doctor-failed']),
     at,
     results: z.array(checkResultSchema),
   }),
   z.strictObject({ type: z.literal('envelope'), at, drive: z.boolean(), envelope: envelopeSchema }),
+  z.strictObject({ type: z.literal('internal-error'), at, command: z.string(), stack: z.string() }),
+
+  lateFailureEventSchema,
   z.strictObject({ type: z.literal('crashed'), at, reason: z.string() }),
   z.strictObject({ type: z.literal('run-ended'), at }),
 ]);

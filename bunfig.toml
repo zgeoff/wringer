@@ -19,6 +19,7 @@ minimumReleaseAgeExcludes = [
   "@zgeoff/oxlint-config",
   "@zgeoff/skill-gate",
   "@zgeoff/std",
+  "@zgeoff/testing",
 ]
 
 [test]

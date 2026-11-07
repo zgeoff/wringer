@@ -1,17 +1,55 @@
-import { chmod, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { readOptionalText } from '@zgeoff/std';
+import { killProcessGroup } from '../src/kill-process-group.ts';
 
 export interface FakeSSH {
   readonly binary: string;
   readonly loginsPath: string;
+
+  // Where the `slow-setsid` destination's setsid writes its process ID.
+  readonly setsidPIDPath: string;
+
+  // Kills every process group the "remote" side started, whatever the transport's own stop did.
+  readonly stopGroups: () => Promise<void>;
 }
 
-// Keeps ssh's contract for the caller: options before `--`, then the destination and one command
-// string, which the "remote" login shell parses with `sh -c`. The destination `unreachable` fails
-// the way ssh fails to connect, with exit code 255.
+// Keeps ssh's contract: options before `--`, then the destination and one command string for
+// `sh -c`. `unreachable` fails to connect with exit code 255, and `drops-stops` fails that way for
+// the group stop script.
 export async function createFakeSSH(directory: string): Promise<FakeSSH> {
   const binary = join(directory, 'fake-ssh');
   const loginsPath = join(directory, 'logins.log');
+  const groupsPath = join(directory, 'groups.log');
+  const groupBin = join(directory, 'group-setsid-bin');
+  const slowBin = join(directory, 'slow-setsid-bin');
+  const setsidPIDPath = join(directory, 'setsid.pid');
+  const realSetsid = Bun.which('setsid') ?? 'setsid';
+
+  // Every "remote" setsid records the session it starts from inside it, where its PID is the
+  // group's ID even when setsid had to fork.
+  const recordGroup = `sh -c 'echo "$$" >> "$0"; exec "$@"' '${groupsPath}'`;
+
+  await mkdir(groupBin, { recursive: true });
+
+  await writeFile(
+    join(groupBin, 'setsid'),
+    `#!/bin/sh\nexec '${realSetsid}' ${recordGroup} "$@"\n`,
+  );
+
+  await chmod(join(groupBin, 'setsid'), 0o755);
+
+  // On `slow-setsid` the "remote" shell gets a session of its own, so a local kill leaves it running
+  // as on a real host, and its setsid writes its PID, then waits 0.5 s before the real one.
+
+  await mkdir(slowBin, { recursive: true });
+
+  await writeFile(
+    join(slowBin, 'setsid'),
+    `#!/bin/sh\necho "$$" > '${setsidPIDPath}'\nsleep 0.5\nexec '${join(groupBin, 'setsid')}' "$@"\n`,
+  );
+
+  await chmod(join(slowBin, 'setsid'), 0o755);
 
   const script = `#!/bin/sh
 user="$(id -un)"
@@ -30,12 +68,35 @@ if [ "$destination" = unreachable ]; then
   echo "ssh: connect to host unreachable port 22: Connection refused" >&2
   exit 255
 fi
+case "$destination:$1" in
+  drops-stops:*"for signal in"*)
+    echo "ssh: connect to host drops-stops port 22: Connection timed out" >&2
+    exit 255 ;;
+esac
 echo "$user@$destination" >> '${loginsPath}'
+PATH='${groupBin}':"$PATH"
+if [ "$destination" = slow-setsid ]; then
+  PATH='${slowBin}':"$PATH"
+  export PATH
+  exec '${realSetsid}' -w ${recordGroup} sh -c "$1"
+fi
+export PATH
 exec sh -c "$1"
 `;
 
   await writeFile(binary, script);
   await chmod(binary, 0o755);
 
-  return { binary, loginsPath };
+  return {
+    binary,
+    loginsPath,
+    setsidPIDPath,
+    stopGroups: async () => {
+      const groups = await readOptionalText(groupsPath);
+
+      for (const group of (groups ?? '').split('\n').filter((line) => line !== '')) {
+        killProcessGroup(Number(group));
+      }
+    },
+  };
 }

@@ -6,7 +6,7 @@ import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
-import { runEventSchema, runIDSchema } from './run-events.ts';
+import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
 
 async function setupTest() {
   const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
@@ -19,9 +19,17 @@ async function setupTest() {
     fs: createNodeStateFileSystem(),
   });
 
+  // A second command on the same state folder that gives up on a held lock at once.
+  const impatientState = createFileState({
+    stateDir,
+    lockTimeoutMs: 50,
+    fs: createNodeStateFileSystem(),
+  });
+
   return {
     stateDir,
     state,
+    impatientState,
     holdRunLock: async (runID: string, work: () => Promise<void>) => {
       await mkdir(state.paths.locks, { recursive: true });
 
@@ -63,6 +71,26 @@ test('it keeps both changes when two commands write the pointers at once', async
   });
 });
 
+test('#withTargetLock refuses a second command on a target another command holds', async () => {
+  const ctx = await setupTest();
+
+  const tryLocal = () => ctx.impatientState.withTargetLock('local', () => Promise.resolve('ran'));
+
+  const [second] = await ctx.state.withTargetLock('local', () => Promise.allSettled([tryLocal()]));
+
+  expect(second).toMatchObject({ status: 'rejected', reason: { code: 'environment' } });
+});
+
+test('#withTargetLock runs a command on one target while another command holds a second', async () => {
+  const ctx = await setupTest();
+
+  const second = await ctx.state.withTargetLock('local', () =>
+    ctx.impatientState.withTargetLock('prod', () => Promise.resolve('ran')),
+  );
+
+  expect(second).toBe('ran');
+});
+
 test('it keeps the run that the saved cursors belong to', async () => {
   const ctx = await setupTest();
 
@@ -99,6 +127,36 @@ test('it never interleaves events that many writers append at once', async () =>
 
   expect(lines).toHaveLength(20);
   expect(lines).toSatisfyAll((line: string) => runEventSchema.safeParse(JSON.parse(line)).success);
+});
+
+test('#appendLateFailure keeps each late failure on its own line of the state folder log', async () => {
+  const ctx = await setupTest();
+
+  await Promise.all([
+    ctx.state.appendLateFailure({
+      type: 'late-failure',
+      at: '2026-11-05T10:00:00.000Z',
+      command: 'recount',
+      code: 'internal',
+      message: 'The recount lost its place.',
+    }),
+    ctx.state.appendLateFailure({
+      type: 'late-failure',
+      at: '2026-11-05T10:00:01.000Z',
+      command: 'tally',
+      code: 'environment',
+      message: 'The tally sheet was missing.',
+    }),
+  ]);
+
+  const lines = await readFile(ctx.state.paths.lateFailures, 'utf8');
+
+  const commands = lines
+    .trimEnd()
+    .split('\n')
+    .map((line) => lateFailureEventSchema.parse(JSON.parse(line)).command);
+
+  expect(commands.toSorted()).toStrictEqual(['recount', 'tally']);
 });
 
 test('it refuses an event over the size cap with an internal error', async () => {

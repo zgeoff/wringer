@@ -66,7 +66,7 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
   return match(event)
     .returnType<RunView>()
     .with({ type: 'launch-ready' }, (ready) =>
-      moved === view ? view : { ...moved, endpoints: ready.endpoints },
+      view.status === 'starting' ? { ...moved, endpoints: ready.endpoints } : moved,
     )
     .with({ type: 'service-ready' }, (ready) => ({
       ...moved,
@@ -99,7 +99,13 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
     .with({ type: 'run-ended' }, (ended) =>
       moved === view ? view : { ...moved, endedAt: ended.at },
     )
-    .with({ type: 'run-started' }, () => moved)
+    .with(
+      { type: 'run-started' },
+      { type: 'run-ready' },
+      { type: 'internal-error' },
+      { type: 'late-failure' },
+      () => moved,
+    )
     .exhaustive();
 }
 

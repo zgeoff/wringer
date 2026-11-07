@@ -1,15 +1,28 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { waitFor } from '@zgeoff/testing/helpers';
+import invariant from 'tiny-invariant';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
+import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
 
+// The stack stops the remote process groups before it removes the folder their logs sit in.
 async function setupTest() {
+  const stack = new AsyncDisposableStack();
+
+  onTestFinished(() => stack.disposeAsync());
+
   const directory = await createTestFolder(import.meta.dir, 'ssh');
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  return { fake: await createFakeSSH(directory) };
+  const fake = await createFakeSSH(directory);
+
+  stack.defer(() => fake.stopGroups());
+
+  return { directory, fake };
 }
 
 test('it quotes the argv once per shell layer of a three-layer prefix', async () => {
@@ -57,6 +70,140 @@ test('it passes stdin through to the remote command', async () => {
   const result = await host.run({ argv: ['cat'], access: 'read-write', stdin: 'select 1;' });
 
   expect(result.stdout).toBe('select 1;');
+});
+
+test('it stops the remote command and every process it started when the run times out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const pidPath = join(ctx.directory, 'remote.pid');
+
+  const running = host.run({
+    argv: ['sh', '-c', 'sleep 30 & echo $! > "$0"; wait', pidPath],
+    access: 'read-write',
+    signal: AbortSignal.timeout(1000),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+  const pidText = await readFile(pidPath, 'utf8');
+
+  const pid = Number(pidText);
+
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
+
+  expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
+});
+
+test('it stops a remote command whose process group starts only after the run timed out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'slow-setsid', binary: ctx.fake.binary });
+  const latePath = join(ctx.directory, 'late.txt');
+
+  await Promise.allSettled([
+    host.run({
+      argv: ['sh', '-c', 'sleep 3; echo late > "$0"', latePath],
+      access: 'read-write',
+      signal: AbortSignal.timeout(150),
+    }),
+  ]);
+
+  const leaderText = await waitFor(() => readFile(ctx.fake.setsidPIDPath, 'utf8'));
+
+  const leader = Number(leaderText);
+
+  await waitFor(
+    () => {
+      invariant(!probeProcess(leader), 'The remote process group is still running.');
+    },
+    { timeoutMs: 8000 },
+  );
+
+  const late = await readFile(latePath, 'utf8').catch(() => null);
+
+  expect(late).toBeNull();
+});
+
+test('it stops a background process that outlived the remote command when the run times out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const pidPath = join(ctx.directory, 'remote.pid');
+
+  const running = host.run({
+    argv: ['sh', '-c', 'sleep 30 & echo $! > "$0"', pidPath],
+    access: 'read-write',
+    signal: AbortSignal.timeout(1000),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+  const pidText = await readFile(pidPath, 'utf8');
+
+  const pid = Number(pidText);
+
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
+
+  expect({ status: settled.status, exited }).toStrictEqual({ status: 'rejected', exited: true });
+});
+
+test('it kills a remote command that ignores SIGINT and SIGTERM when the run times out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const pidPath = join(ctx.directory, 'remote.pid');
+
+  const running = host.run({
+    argv: ['sh', '-c', 'trap "" INT TERM; sleep 30 & echo $! > "$0"; wait', pidPath],
+    access: 'read-write',
+    signal: AbortSignal.timeout(500),
+  });
+
+  await Promise.allSettled([running]);
+
+  const pidText = await readFile(pidPath, 'utf8');
+
+  const pid = Number(pidText);
+
+  const exited = await waitFor(() => {
+    invariant(!probeProcess(pid), 'The remote command is still running.');
+
+    return true;
+  });
+
+  expect(exited).toBe(true);
+});
+
+test('it names a failed stop connection in the error of a run that timed out', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'drops-stops', binary: ctx.fake.binary });
+
+  // The fake runs the remote side here and holds ssh's pipes until it ends, so it ends soon.
+  const running = host.run({
+    argv: ['sleep', '2'],
+    access: 'read-write',
+    signal: AbortSignal.timeout(300),
+  });
+
+  const [settled] = await Promise.allSettled([running]);
+
+  expect(settled).toStrictEqual({
+    status: 'rejected',
+    reason: expect.objectContaining({
+      code: 'timeout',
+      message: expect.stringContaining(
+        'The remote command may still run: the stop exited with code 255',
+      ),
+    }),
+  });
 });
 
 test('it returns the exit code of a remote command that fails', async () => {
