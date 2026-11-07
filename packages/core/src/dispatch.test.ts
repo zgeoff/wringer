@@ -1,4 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { once } from 'node:events';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { parsePublishedEnvelope } from '../../../test-utils/parse-published-envelope.ts';
@@ -8,6 +9,7 @@ import { callSupervisor } from './call-supervisor.ts';
 import { dispatch } from './dispatch.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit } from './run-git.ts';
+import { WringerError } from './wringer-error.ts';
 import { writeNewFile } from './write-new-file.ts';
 
 async function setupTest() {
@@ -38,6 +40,30 @@ async function setupTest() {
           ...shop.session,
           target: 'local',
           supervisor: { ...shop.session.supervisor, call: supervisorCalls },
+        },
+      ),
+
+    // Each service call settles 300 ms after the command's deadline, as a browser does once it has
+    // closed the page of a cancelled action.
+    runWithSlowCancel: (path: readonly string[], timeoutMs: number, onSettled: () => void) =>
+      dispatch(
+        wringer,
+        path,
+        {},
+        {
+          ...shop.session,
+          target: 'local',
+          timeoutMs,
+          supervisor: {
+            ...shop.session.supervisor,
+            call: async (call) => {
+              await once(call.signal, 'abort');
+              await once(AbortSignal.timeout(300), 'abort');
+
+              onSettled();
+              throw new WringerError('timeout', { message: 'The page closed.' });
+            },
+          },
         },
       ),
     runRecordingWrites: (path: readonly string[]) =>
@@ -613,6 +639,26 @@ test("it reaches a driver's service through the session's supervisor port", asyn
       },
     }),
   );
+});
+
+test('it answers a timeout only after the service call that the deadline cancelled has settled', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const order: string[] = [];
+
+  const result = await ctx.runWithSlowCancel(['shelf'], 50, () => {
+    order.push('call settled');
+  });
+
+  order.push('answered');
+
+  expect({ code: result.envelope.error?.code, order }).toStrictEqual({
+    code: 'timeout',
+    order: ['call settled', 'answered'],
+  });
 });
 
 test('it refuses a driver call from a repo command that needs no run while no run is up', async () => {

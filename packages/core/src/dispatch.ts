@@ -3,6 +3,7 @@ import { match } from 'ts-pattern';
 import { buildEnvelope } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
+import { supervisorCancelWaitMs } from './call-supervisor.ts';
 import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
 import { envelopeVersion } from './envelope-version.ts';
@@ -72,6 +73,9 @@ interface DriveTrace {
   boundRun: RunID | null;
   readonly late: Promise<void>[];
 
+  // Each service call the command sent to the run's supervisor.
+  readonly calls: Promise<unknown>[];
+
   // Set once the command's outcome is settled, so the work's later events never follow the answer.
   answered: boolean;
 }
@@ -104,6 +108,7 @@ export async function dispatch(
     ranOnRun: false,
     boundRun: null,
     late: [],
+    calls: [],
     answered: false,
   };
 
@@ -148,6 +153,14 @@ export async function dispatch(
     if (failure.code !== 'timeout') {
       pending = null;
     }
+  }
+
+  // A service call the deadline cancelled, such as a browser action, answers once its work has
+  // stopped, so a timeout never reaches the caller while that work can still land.
+  if (failure?.code === 'timeout') {
+    await Promise.allSettled([
+      raceDeadline(Promise.allSettled(trace.calls), AbortSignal.timeout(supervisorCancelWaitMs)),
+    ]);
   }
 
   trace.answered = true;
@@ -418,7 +431,13 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     now: request.now,
     emit: makeEmit(request.session, request.trace),
     files: request.session.repoHost,
-    callSupervisor: request.session.supervisor.call,
+    callSupervisor: (call) => {
+      const calling = request.session.supervisor.call(call);
+
+      request.trace.calls.push(calling);
+
+      return calling;
+    },
   });
 }
 

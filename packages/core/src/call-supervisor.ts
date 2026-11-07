@@ -26,6 +26,9 @@ export async function callSupervisor(call: SupervisorCall): Promise<unknown> {
   return response.result;
 }
 
+// The longest a call waits for the supervisor's answer once the caller's signal aborts.
+export const supervisorCancelWaitMs = 2000;
+
 async function exchangeLine(call: SupervisorCall): Promise<string> {
   // An abort that came before the listener never fires it, so a late call would still run.
   if (call.signal.aborted) {
@@ -35,10 +38,15 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
   const connection = createConnection({ path: call.socket });
   const lines = createInterface({ input: connection });
   const reply = Promise.withResolvers<string>();
+  let giveUp: ReturnType<typeof setTimeout> | undefined;
 
+  // The supervisor cancels the call itself before the caller's deadline, and its answer tells the
+  // caller the cancelled work has stopped, so the caller waits a bounded time for that answer.
   const onAbort = (): void => {
-    connection.destroy();
-    reply.reject(buildLateError());
+    giveUp = setTimeout(() => {
+      connection.destroy();
+      reply.reject(buildLateError());
+    }, supervisorCancelWaitMs);
   };
 
   call.signal.addEventListener('abort', onAbort, { once: true });
@@ -65,6 +73,8 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
   try {
     return await reply.promise;
   } finally {
+    clearTimeout(giveUp);
+
     call.signal.removeEventListener('abort', onAbort);
     lines.close();
     connection.destroy();
