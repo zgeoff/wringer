@@ -102,7 +102,8 @@ help marks each command `[read]` or `[write]`.
 - `bun verify orders count` counts the rows of the `orders` table.
 - `bun verify browser snapshot` returns the page's accessibility tree, with a ref for each element
   that `browser click --ref` takes.
-- `bun verify stream read app` returns the app's log lines from the start of the run.
+- `bun verify stream read app` returns the app's log lines since `use` last ran. Add `--from 0` to
+  read from the start of the run.
 
 <!-- /repo -->
 
@@ -118,6 +119,7 @@ help marks each command `[read]` or `[write]`.
 
   ```bash
   bun verify use --feature place-order
+  bun verify orders count
   bun verify browser goto /
   bun verify browser click --role button --name 'Place order'
   bun verify browser snapshot
@@ -170,8 +172,9 @@ help marks each command `[read]` or `[write]`.
   bun verify browser snapshot
   ```
 
-- **End state:** the snapshot's heading starts with `The order failed`. Run
-  `bun verify up --restart` and `bun verify doctor` before you drive another feature.
+- **End state:** the snapshot's heading starts with `The order failed`. When you drive another
+  feature after this one, run `bun verify up --restart` and `bun verify doctor` first. When this is
+  the last, run `done` and stop the run.
 
 <!-- /repo -->
 
