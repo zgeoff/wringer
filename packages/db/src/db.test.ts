@@ -1,0 +1,330 @@
+import { Database } from 'bun:sqlite';
+import { expect, onTestFinished, test } from 'bun:test';
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { dispatch } from '@wringer/core';
+import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createTestSession } from '../../core/test-utils/create-test-session.ts';
+import { createDbWringer } from '../test-utils/create-db-wringer.ts';
+import { createFakeSqlite3 } from '../test-utils/create-fake-sqlite3.ts';
+
+async function setupTest() {
+  const directory = await createTestFolder(import.meta.dir, 'db');
+
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+
+  const file = join(directory, 'shop.db');
+
+  const sqlite3 = await createFakeSqlite3(directory);
+
+  const wringer = createDbWringer({ file, sqlite3 });
+
+  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+
+  return {
+    directory,
+    file,
+    seedNotes: (texts: readonly string[]) => {
+      using database = new Database(file);
+
+      database.run('create table notes (id integer primary key, text text not null)');
+
+      for (const text of texts) {
+        database.run('insert into notes (text) values (?)', [text]);
+      }
+    },
+    run: (target: string, path: readonly string[], args: unknown = {}) =>
+      dispatch(wringer, path, args, { ...shop.session, target }),
+    runWithin: (timeoutMs: number, target: string, path: readonly string[], args: unknown) =>
+      dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
+  };
+}
+
+test('it reads rows with their column names', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay', 'ship']);
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['db', 'query'], { sql: 'select id, text from notes' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['id', 'text'],
+    rows: [
+      { id: 1, text: 'pay' },
+      { id: 2, text: 'ship' },
+    ],
+    rowCount: 2,
+  });
+});
+
+test('it keeps the column names of a read that returns no rows', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['db', 'query'], {
+    sql: 'select id, text from notes where 1 = 0',
+  });
+
+  expect(result.envelope.data).toStrictEqual({ columns: ['id', 'text'], rows: [], rowCount: 0 });
+});
+
+test('it refuses a read that copies the database to another file on a read-only target', async () => {
+  const ctx = await setupTest();
+
+  const copy = join(ctx.directory, 'copy.db');
+
+  ctx.seedNotes([]);
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['db', 'query'], { sql: `vacuum into '${copy}'` });
+  const copied = await Bun.file(copy).exists();
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code, copied }).toStrictEqual({
+    exitCode: 3,
+    code: 'read-only',
+    copied: false,
+  });
+});
+
+test('it answers a database file that went away with an environment error', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  await rm(ctx.file);
+
+  const result = await ctx.run('local', ['db', 'query'], { sql: 'select id from notes' });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 4,
+    code: 'environment',
+  });
+});
+
+test('it runs a write that asks to write on a target that may write', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['db', 'query'], {
+    sql: "insert into notes (text) values ('pay') returning id",
+    write: true,
+  });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { columns: ['id'], rows: [{ id: 1 }], rowCount: 1 },
+  });
+});
+
+test('it refuses a write that did not ask to write, with a usage error', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['db', 'query'], {
+    sql: "insert into notes (text) values ('pay')",
+  });
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 2,
+    error: {
+      code: 'usage',
+      message:
+        "The statement `insert into notes (text) values ('pay')` writes, but the query did not ask to write.",
+      hint: 'Add `--write`, or `write: true`, to a statement that writes.',
+    },
+  });
+});
+
+test.each([
+  {
+    name: 'a write that asks to write, at the command',
+    args: { sql: "insert into notes (text) values ('pay')", write: true },
+    message: '`db query` is a write, and target prod is read-only.',
+  },
+  {
+    name: 'a write that did not ask to write, in the database',
+    args: { sql: "insert into notes (text) values ('pay')" },
+    message:
+      "The statement `insert into notes (text) values ('pay')` is a write, and the target is read-only.",
+  },
+])('it refuses $name on a read-only target with exit code 3 and the hint', async (row) => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['db', 'query'], row.args);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 3,
+    error: {
+      code: 'read-only',
+      message: row.message,
+      hint: 'prod is read-only: reproduce it on local.',
+    },
+  });
+});
+
+test('it refuses a write inside an action that declared a read, at the client call', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'sneak-insert']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 3,
+    code: 'read-only',
+  });
+});
+
+test('it runs the write a read-only target grants', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  await ctx.run('prod', ['db', 'query'], {
+    sql: "update notes set text = 'archived' where id = 1",
+    write: true,
+  });
+
+  const result = await ctx.run('prod', ['db', 'query'], { sql: 'select text from notes' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['text'],
+    rows: [{ text: 'archived' }],
+    rowCount: 1,
+  });
+});
+
+test('it reads rows through the database client on the target host', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay']);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: 'select text from notes' });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['text'],
+    rows: [{ text: 'pay' }],
+    rowCount: 1,
+  });
+});
+
+test.each([
+  { name: 'a missing table, with no rows', table: 'receipts', rows: [] },
+  {
+    name: 'a table, with a row per column',
+    table: 'notes',
+    rows: [
+      { cid: 0, name: 'id', type: 'INTEGER', notnull: 0, dflt_value: null, pk: 1 },
+      { cid: 1, name: 'text', type: 'TEXT', notnull: 1, dflt_value: null, pk: 0 },
+    ],
+  },
+])('it names the columns of a pragma read of $name through the database client', async (row) => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], { sql: `pragma table_info(${row.table})` });
+
+  expect(result.envelope.data).toStrictEqual({
+    columns: ['cid', 'name', 'type', 'notnull', 'dflt_value', 'pk'],
+    rows: row.rows,
+    rowCount: row.rows.length,
+  });
+});
+
+test.each(['table', 'view'])(
+  'it reads a %s named like the view that names the columns, through the database client',
+  async (kind) => {
+    const ctx = await setupTest();
+
+    ctx.seedNotes([]);
+
+    using database = new Database(ctx.file);
+
+    database.run(`create ${kind} wringer_read as select 'kept' as label`);
+
+    await ctx.run('box', ['attach']);
+    await ctx.run('box', ['doctor']);
+
+    const result = await ctx.run('box', ['db', 'query'], { sql: 'select label from wringer_read' });
+
+    expect(result.envelope.data).toStrictEqual({
+      columns: ['label'],
+      rows: [{ label: 'kept' }],
+      rowCount: 1,
+    });
+  },
+);
+
+test('it answers a read through the database client that runs past the deadline with exit code 5', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.runWithin(300, 'box', ['db', 'query'], {
+    sql: 'with recursive c(x) as (select 1 union all select x + 1 from c where x < 1000000000) select count(*) as total from c',
+  });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 5,
+    code: 'timeout',
+  });
+});
+
+test('it refuses an undeclared write through the database client with exit code 3', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  await ctx.run('box', ['attach']);
+  await ctx.run('box', ['doctor']);
+
+  const result = await ctx.run('box', ['db', 'query'], {
+    sql: "insert into notes (text) values ('pay')",
+  });
+
+  expect({ exitCode: result.exitCode, hint: result.envelope.error?.hint }).toStrictEqual({
+    exitCode: 3,
+    hint: 'prod is read-only: reproduce it on local.',
+  });
+});

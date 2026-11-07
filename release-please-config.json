@@ -17,6 +17,14 @@
     "packages/gunshi": {
       "component": "@wringer/gunshi",
       "initial-version": "0.1.0"
+    },
+    "packages/http": {
+      "component": "@wringer/http",
+      "initial-version": "0.1.0"
+    },
+    "packages/db": {
+      "component": "@wringer/db",
+      "initial-version": "0.1.0"
     }
   }
 }
