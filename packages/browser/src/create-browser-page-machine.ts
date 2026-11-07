@@ -35,7 +35,7 @@ type PageEvent<PageHandle> =
 
 // A service call's signal aborts one second before the caller's deadline, so a page that closes
 // within this bound lets the command report before that deadline.
-export const pageCloseLimitMs = 500;
+const pageCloseLimitMs = 500;
 
 // Playwright cannot cancel one action, so a cancelled command fails only once its page has closed,
 // and a page that does not close within the bound may still run the action, so the browser then
