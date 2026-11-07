@@ -2,16 +2,15 @@
 
 ## 0.1.0 (2026-11-07)
 
-
 ### Features
 
-* **http,db:** add the http and db drivers ([#37](https://github.com/zgeoff/wringer/issues/37)) ([08c18ae](https://github.com/zgeoff/wringer/commit/08c18ae620f8f0a88a85aa79e75df0262354503b))
-
+- **http,db:** add the http and db drivers ([#37](https://github.com/zgeoff/wringer/issues/37))
+  ([08c18ae](https://github.com/zgeoff/wringer/commit/08c18ae620f8f0a88a85aa79e75df0262354503b))
 
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.1.1
-  * peerDependencies
-    * @wringer/core bumped to 0.1.1
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.1.1
+  - peerDependencies
+    - @wringer/core bumped to 0.1.1
