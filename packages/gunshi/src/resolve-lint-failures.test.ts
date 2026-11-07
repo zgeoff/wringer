@@ -123,3 +123,64 @@ test('it fails a missing verify skill', async () => {
     ],
   });
 });
+
+test.each([
+  ['the `use` command', 'bun verify use --target nowhere'],
+  ['a repo command', 'bun verify action greet --name Wren --target nowhere'],
+])('it fails a journey line that names an unknown target in %s', async (_case, line) => {
+  const skill = [
+    '---',
+    'metadata:',
+    '  wringer-template: 4',
+    '  wringer-command: bun verify',
+    '---',
+    '```bash',
+    line,
+    '```',
+  ].join('\n');
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'journey',
+      where: 'skill/SKILL.md:7',
+      problem: `\`${line}\`: The repo has no target named nowhere.`,
+    },
+  ]);
+});
+
+test('it fails a journey line with an unclosed quote', async () => {
+  const skill = [
+    '---',
+    'metadata:',
+    '  wringer-template: 4',
+    '  wringer-command: bun verify',
+    '---',
+    '```bash',
+    "bun verify action greet --name 'Wren",
+    '```',
+  ].join('\n');
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'journey',
+      where: 'skill/SKILL.md:7',
+      problem: "`bun verify action greet --name 'Wren`: The line has an unclosed quote.",
+    },
+  ]);
+});
