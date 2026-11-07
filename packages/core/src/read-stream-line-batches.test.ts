@@ -1,24 +1,11 @@
 import { expect, test } from 'bun:test';
+import { buildChunkStream } from '../test-utils/build-chunk-stream.ts';
 import { readStreamLineBatches } from './read-stream-line-batches.ts';
 
 function setupTest() {
-  const encoder = new TextEncoder();
-
   return {
     readBatches: (chunks: readonly string[]) =>
-      Array.fromAsync(
-        readStreamLineBatches(
-          new ReadableStream<Uint8Array>({
-            start: (controller) => {
-              for (const chunk of chunks) {
-                controller.enqueue(encoder.encode(chunk));
-              }
-
-              controller.close();
-            },
-          }),
-        ),
-      ),
+      Array.fromAsync(readStreamLineBatches(buildChunkStream(chunks))),
   };
 }
 
