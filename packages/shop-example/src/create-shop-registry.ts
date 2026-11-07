@@ -54,7 +54,8 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
       shop.defineTarget({
         mode: 'attach',
         access: 'read-only',
-        refusalHint: 'The demo shop is read-only. Stop and report the write you needed.',
+        refusalHint:
+          'The demo shop is read-only. Leave the write undone, skip `done` for this feature, and report the write you needed.',
         host: local(),
         endpoints: () => {
           if (options.demoURL === undefined) {

@@ -26,7 +26,8 @@ export function createVerifyRegistry(): Wringer {
     .target('shared', {
       mode: 'attach',
       access: 'read-only',
-      refusalHint: 'This target is read-only. Stop and report the write you needed.',
+      refusalHint:
+        'This target is read-only. Leave the write undone, skip `done` for this feature, and report the write you needed.',
       host: local(),
       endpoints: () => ({ web: 'https://larder.example' }),
       drivers: { http: () => ({ healthPath: '/api/health' }) },

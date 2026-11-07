@@ -2,6 +2,8 @@
 
 Drive `order-failure` last: it drops the `orders` table, which breaks every later order on the run.
 To drive another feature after it, run `bun verify up --restart` and `bun verify doctor` first.
+Drive every feature here on `local`: each Drive block places an order or drops a table, and `demo`
+refuses both writes.
 
 ## place-order
 

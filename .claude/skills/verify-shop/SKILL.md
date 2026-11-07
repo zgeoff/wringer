@@ -11,34 +11,38 @@ metadata:
 
 # Verify the shop example
 
-Use `bun verify` to start the app, drive a feature the way a user would, and record a verdict for
-it. A drive is any action, repo command or driver command, reads included, such as `browser click`
-or `http request`; a driver is a package that adds a group of commands, such as `http`. The built-in
-commands, such as `use` and `report`, are not drives. `bun verify done` records the verdict that the
-feature works on the current working tree, and a commit of the same change keeps it. The CI gate,
-`bun verify gate`, fails a PR when a feature it changes has no verdict for its code, so hand back
-the output of `bun verify report --human` for the PR body.
+Use `bun verify` to start the app, drive each feature that your change touches the way a user would,
+and record a verdict that the feature works. Hand back the output of `bun verify report --human` and
+each feature you could not verify. The CI gate, `bun verify gate`, fails a PR that changes a feature
+with no verdict.
+
+Count each command that works the app as a drive, reads included: the `action` commands, the repo
+commands under [Commands](#commands), `exec`, and the driver commands, such as `browser click` and
+`http request`. These commands set up or record a run, and are not drives: `up`, `down`, `attach`,
+`detach`, `status`, `doctor`, `use`, `done`, `features`, `report`, `gate` and `lint`.
 
 The mistakes that cost the most time:
 
-- **Driving before `doctor` passes.** Every drive fails with exit code 3 until the doctor passes on
-  the current run.
-- **Editing the app's code during a run.** A verdict holds only for the code the run started on.
-  After an edit, run `bun verify up --restart` and `bun verify doctor` again. On an attach target,
-  run `detach` and `attach` in place of `up --restart`.
+- **Driving before `doctor` passes.** `bun verify doctor` checks that the app answers and that each
+  driver works. Until it passes on the current run, the one that `up` or `attach` started, every
+  drive fails with exit code 3.
+- **Editing the app's code while `up` runs it.** Every later drive fails with `doctor-required`. Run
+  `bun verify up --restart` and `bun verify doctor`, then drive the feature again.
+- **Running `done` before you check the end state.** `done` needs only a drive that exited 0. Check
+  the end state yourself first.
 - **Branching on the error message.** Branch on the exit code and `error.code`. The message text can
   change in any release.
 
 ## Key rules
 
-- [Run the loop](#run-the-loop): up, doctor, use, drive, done, report.
+- [Run the loop](#run-the-loop): report, start a run, doctor, then drive, check and `done` each
+  feature, then report again and end the run.
 - [Read the envelope](#read-the-envelope): one JSON object per command, and an exit code to branch
   on.
-- [Targets](#targets): the targets this repo declares, and what a read-only target refuses.
+- [Targets](#targets): the targets this repo declares; drive a change on one that `up` starts.
 - [Commands](#commands): `bun verify --help` lists every command, each marked read or write.
 - [Feature map](#feature-map): the file that holds each feature's Drive block and end state.
-- [Keep the map true](#keep-the-map-true): fix a Drive block in the PR that breaks it, and run
-  `lint`.
+- [Keep the map true](#keep-the-map-true): fix a broken Drive block in the same PR, and run `lint`.
 
 ## References
 
@@ -46,62 +50,77 @@ The mistakes that cost the most time:
 
 ## Run the loop
 
-1. Run `bun verify report`. Each feature with `changed: true` touches a file the change edits, and
-   needs a verdict.
-2. Start a run on `local`, unless your task names another target, with the command the
-   [Targets](#targets) table gives. Expect: `ok: true`, and the app's endpoints in `data.endpoints`.
+1. Run `bun verify report`. Each feature in `data.features` with `changed: true` has a file under
+   its `paths` that differs from the default branch, committed or not. Each one needs a verdict.
+2. Unless your task names another target, start a run on `local`, with the commands in the
+   [Targets](#targets) table. Expect: `ok: true`, and the app's endpoints in `data.endpoints`.
 3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
    `doctor` again.
 4. Run the feature's Drive block from the [feature map](./references/feature-map.md). Its first
-   line, `use --feature`, files the evidence of each later drive under that feature.
-5. Check the end state. When it is wrong because of your change, fix the app's code, run
-   `bun verify up --restart` and `bun verify doctor`, and run the Drive block again. Otherwise
-   report the failure.
-6. Run `bun verify done`. It records the verdict for the feature that `use --feature` set. Expect:
-   `ok: true`. It fails unless a drive of the feature exited 0 after the doctor passed.
-7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names.
-   `done` records a verdict for any feature; the gate asks only for the changed ones.
-8. Run `bun verify report --human`, and put its output in the PR body in place of any older report.
-   Keep the HTML comment at its end: the gate reads the report from it.
-9. Stop the run: `bun verify down` on a launch target, or `bun verify detach` on an attach target.
+   line, `use --feature`, records each later drive under that feature, and keeps the target you set.
+   Expect: each command exits 0.
+5. Compare the app with the feature's end state:
+   - When it matches, and no drive was refused, go on to step 6.
+   - When your change broke it, fix the app's code, run `bun verify up --restart` and
+     `bun verify doctor`, and run the Drive block again.
+   - Otherwise, skip `done` for this feature. List it in your reply with the end state you expected
+     and the `data` you got.
+6. Run `bun verify done`. It records a verdict for the feature that `use --feature` set. Expect:
+   `ok: true`. With no drive of the feature that exited 0 since `doctor` passed, it fails with exit
+   code 1 and `check-failed`.
+7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
+   in the order the feature map asks for. The gate checks only the changed features. When a changed
+   feature has no entry in the feature map, write one, and run `bun verify lint`.
+8. Run `bun verify report --human`. Each verdict you recorded shows `verified`. After `done`, an
+   edit to any file on the branch makes every verdict `stale`, unless you commit the same code.
+   Repeat steps 4 to 6 for each stale feature.
+9. Put the whole output in the PR body, in place of the output of an older `report --human`. Keep
+   the HTML comment at the end of the output: the gate reads the report from it.
+10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
 
-Each command prints one JSON envelope as its last line. A streaming command, such as `doctor`,
-prints its events as JSON lines before it. Read these fields:
+Each command prints one JSON envelope as its last line. With `--human`, it prints text for a person
+in its place. A streaming command, such as `doctor`, prints its events as JSON lines before the
+envelope. Read these fields:
 
 - `ok`, then `data` on success, or `error.code`, `error.message` and `error.hint` on failure;
 - `evidence`: the files the command kept, under `.wringer/`;
 - `truncated` and `truncatedPath`: `data` was too large, and the file at `truncatedPath` holds it.
 
-| Exit | `error.code`                                                        | Do                                                    |
-| ---- | ------------------------------------------------------------------- | ----------------------------------------------------- |
-| 0    | none                                                                | Go on.                                                |
-| 1    | `check-failed`                                                      | The app failed a drive or a check. Read the evidence. |
-| 2    | `usage`                                                             | Fix the command; `--help` shows its flags.            |
-| 3    | `read-only`, `doctor-required`, `not-running`, `target-not-allowed` | Follow `error.hint`.                                  |
-| 4    | `environment`, `internal`                                           | Fix the tool or the host, then retry.                 |
-| 5    | `timeout`                                                           | Retry once with a larger `--timeout-ms`.              |
+| Exit | `error.code`         | Do                                                                                           |
+| ---- | -------------------- | -------------------------------------------------------------------------------------------- |
+| 0    | none                 | Go on.                                                                                       |
+| 1    | `check-failed`       | Read the evidence, then go on as step 5 says.                                                |
+| 2    | `usage`              | Fix the command; `--help` shows its flags.                                                   |
+| 3    | `read-only`          | Leave the write undone, skip `done` for the feature, and list the write in your reply.       |
+| 3    | `doctor-required`    | Run the commands in `error.hint`, then drive the feature again.                              |
+| 3    | `not-running`        | Start the run, as step 2 says.                                                               |
+| 3    | `target-not-allowed` | Follow `error.hint`.                                                                         |
+| 4    | `environment`        | Read `error.message`, fix the problem on this machine, such as a missing browser, and retry. |
+| 4    | `internal`           | Report the command and `error.message`: the CLI has a bug.                                   |
+| 5    | `timeout`            | Retry once with twice the timeout; the default is `--timeout-ms=120000`. Then report it.     |
 
 ## Targets
 
-A launch target is one whose app `bun verify up` starts and `bun verify down` stops. An attach
-target is an app that `bun verify` did not start: `attach` and `detach` connect to it and leave it
-running. Run `bun verify use --target <target>` to point later commands at a target; `--target` on
-one command overrides it.
+Start a launch target's app with `bun verify up`, and stop it with `bun verify down`. Connect to an
+attach target with `bun verify attach`: an attach target is an app that runs apart from
+`bun verify`, and `bun verify detach` leaves it running. Your edits never reach an attach target's
+app, so drive a change on a launch target.
+
+Run `bun verify use --target <target>` to point every later command at a target. `--target` on one
+command points that command alone.
 
 <!-- repo: targets -->
 
-| Target  | Start with                                                              | Access     | Notes                                                                   |
-| ------- | ----------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
-| `local` | `bun verify up`                                                         | read-write | Starts the shop with an empty database in the run's folder.             |
-| `demo`  | `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach --target demo` | read-only  | A shop that `bun verify` did not start. Stop it only if you started it. |
+To start a shop for `demo`, run `bun packages/shop-example/src/shop-app.ts` in the background. Its
+first line is JSON with the port, such as `{"event":"listening","port":4310}`. After
+`bun verify detach`, stop that process. Never stop a shop that someone else started.
 
-Start a shop for `demo` with `bun packages/shop-example/src/shop-app.ts`. It prints its port in a
-JSON line, such as `{"event":"listening","port":4310}`.
-
-A read-only target refuses a write with exit code 3 and `read-only`. Stop, and report the write you
-needed to whoever gave you the task.
+| Target  | Start with                                                                                     | Access     | Notes                                                       |
+| ------- | ---------------------------------------------------------------------------------------------- | ---------- | ----------------------------------------------------------- |
+| `local` | `bun verify use --target local`, then `bun verify up`                                          | read-write | Starts the shop with an empty database in the run's folder. |
+| `demo`  | `bun verify use --target demo`, then `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach` | read-only  | A shop that `bun verify` did not start.                     |
 
 <!-- /repo -->
 
@@ -125,9 +144,9 @@ help marks each command `[read]` or `[write]`.
   writes.
 - `bun verify browser snapshot` returns the page's accessibility tree, with a ref for each element
   that `browser click --ref` takes.
-- `bun verify stream read app` returns the app's log lines since `use` last ran, and keeps no
-  evidence file, so quote the line you checked when you report. Add `--from 0` to read from the
-  start of the run.
+- `bun verify stream read app` returns the app's log lines since `use` last ran. It keeps no
+  evidence file, so quote the line you checked in your reply. Add `--from 0` to read from the start
+  of the run.
 
 <!-- /repo -->
 
@@ -148,15 +167,16 @@ the targets, actions, commands, doctor checks and features, with each feature's 
 
 <!-- /repo -->
 
-- When a change touches a file under a feature's `paths`, drive that feature and run `done` before
-  the PR.
 - When a Drive block no longer works because the feature changed, fix it in the same PR.
 - In this file, edit only inside the `<!-- repo -->` blocks. The lines outside them come from the
   wringer template, and an upgrade of the template replaces them. The repo owns the feature map
   whole.
-- Run `bun verify lint` after you change this skill or the registry. It fails on a `paths` glob that
-  matches no file, a command in a code block that would fail before it ran, such as one with an
-  unknown flag or feature, and a skill written from an older template.
+- After you change this skill, its feature map or the registry, run `bun verify lint`. It fails on:
+  - a `paths` glob that matches no file;
+  - a command in a code block that would fail before it ran, such as one with an unknown flag,
+    feature or target;
+  - a skill written from an older template. Load the `wringer` skill that `@wringer/gunshi` ships,
+    and follow its upgrade steps.
 
 **Reply:** the output of `bun verify report --human`, and each feature you could not verify, with
-the command that failed and its `error.code`.
+the command that failed and its `error.code`, or the end state you expected and the `data` you got.
