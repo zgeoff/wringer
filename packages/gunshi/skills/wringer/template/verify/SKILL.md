@@ -57,8 +57,8 @@ The mistakes that cost the most time:
 5. Check the end state. When it is wrong because of your change, fix the app's code, run
    `bun verify up --restart` and `bun verify doctor`, and run the Drive block again. Otherwise
    report the failure.
-6. Run `bun verify done`. Expect: `ok: true`. It fails unless a drive of the feature exited 0 after
-   the doctor passed.
+6. Run `bun verify done`. It records the verdict for the feature that `use --feature` set. Expect:
+   `ok: true`. It fails unless a drive of the feature exited 0 after the doctor passed.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names.
    `done` records a verdict for any feature; the gate asks only for the changed ones.
 8. Run `bun verify report --human`, and put its output in the PR body in place of any older report.
