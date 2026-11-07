@@ -70,6 +70,30 @@ test('it keeps a tilde block open past a backtick fence inside it', () => {
   ]);
 });
 
+test('it keeps a block open past a fence line that carries an info string', () => {
+  const text = ['```', '```ts', 'bun verify wave', '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 3, text: 'bun verify wave', argv: ['wave'] },
+  ]);
+});
+
+test('it closes a block on a longer run of its fence marker', () => {
+  const text = ['```sh', 'bun verify up', '`````', 'bun verify down', '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 2, text: 'bun verify up', argv: ['up'] },
+  ]);
+});
+
+test('it keeps a continued line that the closing fence ends', () => {
+  const text = ['```sh', 'bun verify up \\', '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 2, text: 'bun verify up', argv: ['up'] },
+  ]);
+});
+
 test('it gives a null argv for a CLI line with an unclosed quote', () => {
   const text = ['```sh', `bun verify use --label 'open`, '```'].join('\n');
 

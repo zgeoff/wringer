@@ -17,6 +17,7 @@ export type { StateFileSystem } from './create-node-state-file-system.ts';
 export { createWringer, defaultStateDir } from './create-wringer.ts';
 export type { WringerBuilder, WringerOptions } from './create-wringer.ts';
 export { defineDriver } from './define-driver.ts';
+export { prepareArgs } from './prepare-args.ts';
 export { findOwnValue } from './find-own-value.ts';
 export type { DriverDefinition, DriverFactory } from './define-driver.ts';
 export { dataCapBytes } from './cap-data.ts';

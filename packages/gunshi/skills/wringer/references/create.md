@@ -7,8 +7,8 @@ declares the targets, drivers, actions, repo commands, doctor checks and feature
 
 The mistakes that cost the most:
 
-- **Leaving a read unmarked.** Every action and repo command is a write unless it declares
-  `effect: 'read'`, and a read-only target refuses each write with exit code 3.
+- **Leaving a read unmarked.** A repo command is a write unless it declares `effect: 'read'`, and an
+  action must declare its effect. A read-only target refuses each write with exit code 3.
 - **A glob relative to a package.** Write each feature's `paths` globs relative to the repo root, as
   `git ls-files` prints paths. In a monorepo, a glob relative to a package folder matches nothing.
 - **A placeholder in a journey.** In the `verify` skill's fenced code blocks, `bun verify lint`

@@ -34,12 +34,20 @@ export function buildLintCommand(skillFolder: string): RegisteredCommand {
 async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintData> {
   const root = ctx.session.root;
 
-  const listed = await ctx.session.repoHost.runGit({
-    cwd: root,
-    args: ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
-  });
+  // `--cached` still lists a tracked file that the working tree has deleted, so those come off.
+  const [listed, deleted] = await Promise.all([
+    ctx.session.repoHost.runGit({
+      cwd: root,
+      args: ['ls-files', '-z', '--cached', '--others', '--exclude-standard'],
+    }),
+    ctx.session.repoHost.runGit({ cwd: root, args: ['ls-files', '-z', '--deleted'] }),
+  ]);
 
-  const files = [...new Set(listed.stdout.split('\0').filter((path) => path !== ''))];
+  const gone = new Set(deleted.stdout.split('\0'));
+
+  const files = [...new Set(listed.stdout.split('\0'))].filter(
+    (path) => path !== '' && !gone.has(path),
+  );
 
   const skillFiles = await Promise.all(
     files

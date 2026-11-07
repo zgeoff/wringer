@@ -153,8 +153,8 @@ the targets, actions, commands, doctor checks and features, with each feature's 
   wringer template, and an upgrade of the template replaces them. The repo owns the feature map
   whole.
 - Run `bun verify lint` after you change this skill or the registry. It fails on a `paths` glob that
-  matches no file, a command in a code block that would not parse, and a skill written from an older
-  template.
+  matches no file, a command in a code block that would fail before it ran, such as one with an
+  unknown flag or feature, and a skill written from an older template.
 
 **Reply:** the output of `bun verify report --human`, and each feature you could not verify, with
 the command that failed and its `error.code`.

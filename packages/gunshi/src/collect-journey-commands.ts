@@ -35,7 +35,10 @@ interface FencedLine {
   readonly text: string;
 }
 
-const fencePattern = /^\s*(?<marker>`{3,}|~{3,})/u;
+const openingFencePattern = /^\s*(?<marker>`{3,}|~{3,})/u;
+
+// A closing fence holds no info string, so "```ts" inside a block is a line of the block.
+const closingFencePattern = /^\s*(?<marker>`{3,}|~{3,})\s*$/u;
 
 function collectFencedLines(text: string): readonly FencedLine[] {
   const fenced: FencedLine[] = [];
@@ -43,12 +46,16 @@ function collectFencedLines(text: string): readonly FencedLine[] {
   let pending: FencedLine | null = null;
 
   for (const [index, line] of text.split('\n').entries()) {
-    const marker = fencePattern.exec(line)?.groups?.['marker'];
-
     if (fence === null) {
-      fence = marker ?? null;
-    } else if (marker?.startsWith(fence) === true) {
+      fence = openingFencePattern.exec(line)?.groups?.['marker'] ?? null;
+    } else if (closingFencePattern.exec(line)?.groups?.['marker']?.startsWith(fence) === true) {
       fence = null;
+
+      if (pending !== null) {
+        fenced.push(pending);
+
+        pending = null;
+      }
     } else {
       const joined: FencedLine =
         pending === null

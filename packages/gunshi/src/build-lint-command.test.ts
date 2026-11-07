@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { createNodeRepoHost, createRepoState, envelopeSchema } from '@wringer/core';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { buildLintedWringer } from './build-linted-wringer.ts';
@@ -19,10 +19,8 @@ async function setupTest() {
   const written: string[] = [];
 
   return {
-    writeRepoFile: async (path: string, text: string) => {
-      await mkdir(dirname(join(repo.root, path)), { recursive: true });
-      await writeFile(join(repo.root, path), text);
-    },
+    root: repo.root,
+    git: repo.git,
     lint: async (...flags: readonly string[]) => {
       const exitCode = await runCLI(wringer, {
         argv: ['lint', ...flags],
@@ -52,10 +50,10 @@ async function setupTest() {
 test('it passes a repo whose globs match, whose journey lines parse and whose skill is current', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeRepoFile('src/greet.ts', 'export const greet = 1;\n');
+  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  await ctx.writeRepoFile(
-    'docs/verify/SKILL.md',
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
     [
       '---',
       'name: verify',
@@ -88,8 +86,8 @@ test('it passes a repo whose globs match, whose journey lines parse and whose sk
 test('it fails with exit code 1 on a feature glob that matches no file', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeRepoFile(
-    'docs/verify/SKILL.md',
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -121,10 +119,10 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
 test('it fails with exit code 1 on a journey line that calls an unknown command', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeRepoFile('src/greet.ts', 'export const greet = 1;\n');
+  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  await ctx.writeRepoFile(
-    'docs/verify/SKILL.md',
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
     [
       '---',
       'metadata:',
@@ -133,7 +131,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
       '---',
       '',
       '```bash',
-      'bun verify action wave --to Wren',
+      'bun verify action wave',
       '```',
     ].join('\n'),
   );
@@ -153,7 +151,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
           {
             check: 'journey',
             where: 'docs/verify/SKILL.md:8',
-            problem: expect.stringMatching(/^`bun verify action wave --to Wren`: /u),
+            problem: '`bun verify action wave`: Command not found: wave',
           },
         ],
       },
@@ -161,10 +159,74 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
   });
 });
 
+test('it fails a journey line that sets a feature the map lacks', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    [
+      '---',
+      'metadata:',
+      `  wringer-template: ${templateVersion}`,
+      '  wringer-command: bun verify',
+      '---',
+      '',
+      '```bash',
+      'bun verify use --feature greetings',
+      '```',
+    ].join('\n'),
+  );
+
+  const result = await ctx.lint('--json');
+
+  expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
+    skill: 'docs/verify/SKILL.md',
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'docs/verify/SKILL.md:8',
+        problem:
+          '`bun verify use --feature greetings`: The feature map has no feature named greetings.',
+      },
+    ],
+  });
+});
+
+test('it treats a tracked file that the working tree deleted as gone', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
+  await Bun.write(join(ctx.root, 'docs/verify/references/old.md'), '# Old\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'add the skill');
+
+  await rm(join(ctx.root, 'src/greet.ts'));
+  await rm(join(ctx.root, 'docs/verify/references/old.md'));
+
+  const result = await ctx.lint('--json');
+
+  expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
+    skill: 'docs/verify/SKILL.md',
+    commands: 0,
+    failures: [
+      { check: 'paths', where: 'feature greeting', problem: 'The glob `src/**` matches no file.' },
+    ],
+  });
+});
+
 test('it prints each failure with its place for a person', async () => {
   const ctx = await setupTest();
 
-  await ctx.writeRepoFile('src/greet.ts', 'export const greet = 1;\n');
+  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
   const result = await ctx.lint('--human');
 
