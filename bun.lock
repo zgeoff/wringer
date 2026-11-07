@@ -28,7 +28,7 @@
     },
     "packages/browser": {
       "name": "@wringer/browser",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "playwright-core": "catalog:",
         "tiny-invariant": "catalog:",
@@ -45,7 +45,7 @@
     },
     "packages/core": {
       "name": "@wringer/core",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "dependencies": {
         "@zgeoff/std": "catalog:",
         "ts-pattern": "catalog:",
@@ -60,7 +60,7 @@
     },
     "packages/db": {
       "name": "@wringer/db",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "ts-pattern": "catalog:",
         "zod": "catalog:",
@@ -76,7 +76,7 @@
     },
     "packages/gunshi": {
       "name": "@wringer/gunshi",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "gunshi": "catalog:",
         "zod": "catalog:",
@@ -92,7 +92,7 @@
     },
     "packages/http": {
       "name": "@wringer/http",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "zod": "catalog:",
       },
@@ -127,7 +127,7 @@
     },
     "packages/stream": {
       "name": "@wringer/stream",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "xstate": "catalog:",
         "zod": "catalog:",
