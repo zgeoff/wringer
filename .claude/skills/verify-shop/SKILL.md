@@ -69,9 +69,9 @@ The mistakes that cost the most time:
    `ok: true`. With no drive of the feature that exited 0 since `doctor` passed, it fails with exit
    code 1 and `check-failed`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order the feature map lists them, unless it asks for another. The gate checks only the
-   changed features. When a changed feature has no entry in the feature map, write one, and run
-   `bun verify lint`.
+   in the order the feature map lists them, unless the map asks for another. A task's list of
+   features sets no order. The gate checks only the changed features. When a changed feature has no
+   entry in the feature map, write one, and run `bun verify lint`.
 8. Run `bun verify report --human`. A changed feature with your verdict shows `verified`; a feature
    the branch doesn't change shows `unchanged`, with your verdict's evidence. After `done`, an edit
    to any file on the branch makes every verdict `stale`, unless you commit the same code. Repeat
