@@ -151,6 +151,36 @@ test('it records the lines the launched app logged as it stopped', async () => {
   expect(slice.records.map((record) => record.line)).toContain('closed');
 });
 
+test('it records every line of the burst the launched app logged as it stopped, in order', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  await waitFor(async () => {
+    const result = await ctx.run('local', ['stream', 'read'], { name: 'app', from: 0 });
+
+    const slice = streamSliceSchema.parse(result.envelope.data);
+
+    invariant(
+      slice.records.some((record) => record.line === 'booted'),
+      'The stream has no booted line yet.',
+    );
+  });
+
+  const down = await ctx.run('local', ['down']);
+  const slice = await ctx.readEndedStream(down.envelope.instance ?? '', 'app');
+
+  const closing = slice.records
+    .map((record) => record.line)
+    .filter((line) => line.startsWith('closing ') || line === 'closed');
+
+  expect(closing).toStrictEqual([
+    ...Array.from({ length: 500 }, (_, index) => `closing ${index + 1}`),
+    'closed',
+  ]);
+});
+
 test('it records a command source on an attach target', async () => {
   const ctx = await setupTest();
 
