@@ -14,7 +14,9 @@
     "src",
     "!src/**/*.test.ts",
     "dist",
-    "!src/test-utils"
+    "!src/test-utils",
+    "skills",
+    "!skills/**/*.test.ts"
   ],
   "type": "module",
   "exports": {
@@ -38,6 +40,7 @@
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
+    "@wringer/http": "workspace:*",
     "@zgeoff/testing": "catalog:"
   },
   "peerDependencies": {

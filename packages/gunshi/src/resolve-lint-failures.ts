@@ -13,7 +13,7 @@ export const lintFailureSchema = z.strictObject({
   problem: z.string(),
 });
 
-export type LintFailure = z.infer<typeof lintFailureSchema>;
+type LintFailure = z.infer<typeof lintFailureSchema>;
 
 export interface LintInput {
   readonly wringer: Wringer;

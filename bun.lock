@@ -85,6 +85,7 @@
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
+        "@wringer/http": "workspace:*",
         "@zgeoff/testing": "catalog:",
       },
       "peerDependencies": {
