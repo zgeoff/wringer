@@ -264,11 +264,11 @@ async function followFile(
     while (more) {
       const chunk = await request.readFileFrom(path, state.position, fileReadLimitBytes);
 
-      const step = buildFileStep(
-        state,
-        { start: chunk.start, identity: chunk.identity, byteCount: chunk.bytes.length },
-        fileReadLimitBytes,
-      );
+      const step = buildFileStep(state, {
+        start: chunk.start,
+        identity: chunk.identity,
+        byteCount: chunk.bytes.length,
+      });
 
       // A fresh decoder drops the old file's unfinished character along with its line.
       if (step.restarted) {

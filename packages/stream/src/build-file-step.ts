@@ -18,17 +18,14 @@ export interface FileStep {
   readonly restarted: boolean;
   readonly state: FileFollowState;
 
-  // A read that filled its limit may have stopped short of the end.
+  // A read stops at its limit, and a read of a file that changed under it can stop short of that,
+  // so only a read that returns no bytes reached the end.
   readonly more: boolean;
 }
 
 // A file that starts over drops the old file's unfinished line, so it never joins the new file's
 // text.
-export function buildFileStep(
-  state: FileFollowState,
-  chunk: ChunkInfo,
-  limitBytes: number,
-): FileStep {
+export function buildFileStep(state: FileFollowState, chunk: ChunkInfo): FileStep {
   const restarted = chunk.start < state.position.offset;
 
   return {
@@ -37,6 +34,6 @@ export function buildFileStep(
       position: { offset: chunk.start + chunk.byteCount, identity: chunk.identity },
       carry: restarted ? '' : state.carry,
     },
-    more: chunk.byteCount === limitBytes,
+    more: chunk.byteCount > 0,
   };
 }

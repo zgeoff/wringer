@@ -50,6 +50,16 @@ async function setupTest() {
       return Math.max(...chunks.map((chunk) => chunk.bytes.length));
     },
 
+    // The next file read returns only its first bytes, as a read of a file that changed under it
+    // can.
+    shortenNextRead: (byteCount: number) => {
+      readFileCalls.mockImplementationOnce(async (path, from, limitBytes) => {
+        const chunk = await readFileFrom(path, from, limitBytes, (file) => open(file, 'r'));
+
+        return { ...chunk, bytes: chunk.bytes.subarray(0, byteCount) };
+      });
+    },
+
     // Resolves once the recorder has finished its first read of a file source.
     firstFileRead: async () => {
       await waitFor(() => {
@@ -164,6 +174,32 @@ test('it records the lines a file source gained just before the recorder stopped
 
   expect(recorded).toBe(
     '{"at":"2026-03-01T09:30:00.000Z","line":"shutting down"}\n{"at":"2026-03-01T09:30:00.000Z","line":"bye"}\n',
+  );
+});
+
+test('it records the rest of a file source after a read that stopped short of its end', async () => {
+  const ctx = await setupTest();
+
+  ctx.clock.set('2026-03-01T09:30:00.000Z');
+
+  const log = join(ctx.directory, 'app.log');
+
+  await writeFile(log, '');
+
+  const recorder = await ctx.start({ app: { file: log } });
+
+  await ctx.firstFileRead();
+
+  await appendFile(log, 'first\nlast\n');
+
+  ctx.shortenNextRead(6);
+
+  await recorder.stop();
+
+  const recorded = await ctx.readStream('app');
+
+  expect(recorded).toBe(
+    '{"at":"2026-03-01T09:30:00.000Z","line":"first"}\n{"at":"2026-03-01T09:30:00.000Z","line":"last"}\n',
   );
 });
 

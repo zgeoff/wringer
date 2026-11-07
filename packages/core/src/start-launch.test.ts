@@ -1,4 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { once } from 'node:events';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
@@ -282,6 +283,51 @@ test('it reports the log failure of an app that never got ready to its caller as
   await Promise.allSettled([launching]);
 
   expect(onStopFailed.mock.calls).toStrictEqual([[notLogged]]);
+});
+
+test('it settles a stop whose log drain ran past its bound only once the last append is written', async () => {
+  const ctx = await setupTest();
+
+  const host = readLaunchHost();
+  const order: string[] = [];
+
+  const launch = await ctx.startAppOn(
+    {
+      ...host,
+      appendLog: async (path, text) => {
+        // Holds the app's last line past the stop's 2 s wait for its log.
+        if (text.includes('closing')) {
+          await once(AbortSignal.timeout(2500), 'abort');
+        }
+
+        await host.appendLog(path, text);
+
+        order.push(text.trim());
+      },
+    },
+    {
+      plan: {
+        command: [
+          'sh',
+          '-c',
+          `trap 'echo closing; exit 0' TERM; echo '{"port":4100}'; while :; do sleep 0.05; done`,
+        ],
+        ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
+      },
+      logPath: ctx.logPath,
+      readyTimeoutMs: 10_000,
+      signal: new AbortController().signal,
+      onCrash: mock<(reason: string) => void>(),
+      onStopFailed: mock<(reason: string) => void>(),
+      stopGraceMs: 5000,
+    },
+  );
+
+  await Promise.allSettled([launch.stop()]);
+
+  order.push('stopped');
+
+  expect(order).toStrictEqual(['{"port":4100}', 'closing', 'stopped']);
 });
 
 test('it fails a stop with the log failure that came while the app stopped', async () => {

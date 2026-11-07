@@ -9,7 +9,7 @@ test.each([
     step: {
       restarted: false,
       state: { position: { offset: 12, identity: '1:7' }, carry: '' },
-      more: false,
+      more: true,
     },
   },
   {
@@ -19,7 +19,7 @@ test.each([
     step: {
       restarted: false,
       state: { position: { offset: 17, identity: '1:7' }, carry: 'half a li' },
-      more: false,
+      more: true,
     },
   },
   {
@@ -29,19 +29,19 @@ test.each([
     step: {
       restarted: true,
       state: { position: { offset: 4, identity: '1:9' }, carry: '' },
-      more: false,
-    },
-  },
-  {
-    name: 'a read that filled its limit',
-    state: { position: { offset: 0, identity: null }, carry: '' },
-    chunk: { start: 0, identity: '1:7', byteCount: 64 },
-    step: {
-      restarted: false,
-      state: { position: { offset: 64, identity: '1:7' }, carry: '' },
       more: true,
     },
   },
+  {
+    name: 'a read that reached the end',
+    state: { position: { offset: 17, identity: '1:7' }, carry: 'half a li' },
+    chunk: { start: 17, identity: '1:7', byteCount: 0 },
+    step: {
+      restarted: false,
+      state: { position: { offset: 17, identity: '1:7' }, carry: 'half a li' },
+      more: false,
+    },
+  },
 ])('it steps the follow state for $name', (row) => {
-  expect(buildFileStep(row.state, row.chunk, 64)).toStrictEqual(row.step);
+  expect(buildFileStep(row.state, row.chunk)).toStrictEqual(row.step);
 });
