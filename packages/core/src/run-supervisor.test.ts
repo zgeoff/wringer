@@ -817,6 +817,12 @@ test('#runSupervisor logs and answers the failed stop of an app that the stop ca
     return view.supervisor;
   });
 
+  await waitFor(async () => {
+    const holding = await Bun.file(join(ctx.runFolder('held-run'), 'holder-ready')).exists();
+
+    invariant(holding, 'The app has not started its output holder yet.');
+  });
+
   const [answer] = await Promise.allSettled([ctx.callStop(supervisor.socket), supervising]);
   const ended = await ctx.readRun('held-run');
 
