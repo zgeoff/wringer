@@ -70,7 +70,7 @@ This skill ships inside `@wringer/gunshi`, so its version matches the packages t
 Replace any older copy:
 
 ```bash
-bun add --dev --exact @wringer/core @wringer/gunshi
+bun add --dev --exact @wringer/core @wringer/gunshi zod
 rm -rf .claude/skills/wringer
 mkdir -p .claude/skills
 cp -R node_modules/@wringer/gunshi/skills/wringer .claude/skills/wringer

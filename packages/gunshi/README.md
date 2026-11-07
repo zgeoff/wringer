@@ -63,6 +63,7 @@ run it on a fresh checkout. It exits with code 1, with `check-failed` in its env
 - a line in a fenced code block of the verify skill's Markdown files that calls the CLI and fails to
   parse, whose arguments fail the command's schema, or that names a feature or a target the registry
   lacks;
+- a skill folder with no `SKILL.md`;
 - a verify skill whose frontmatter lacks `metadata.wringer-template` or `metadata.wringer-command`,
   or whose `metadata.wringer-template` differs from the template version that this package ships.
   The agent skill's upgrade steps bring the verify skill to the shipped version.

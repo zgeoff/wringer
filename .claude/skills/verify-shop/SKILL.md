@@ -50,8 +50,9 @@ The mistakes that cost the most time:
 
 ## Run the loop
 
-1. Run `bun verify report`. Each feature in `data.features` with `changed: true` has a file under
-   its `paths` that differs from the default branch, committed or not. Each one needs a verdict.
+1. Run `bun verify report`. Each feature in `data.report.features` with `changed: true` has a file
+   under its `paths` that differs from the default branch, committed or not. Each one needs a
+   verdict.
 2. Unless your task names another target, start a run on `local`, with the commands in the
    [Targets](#targets) table. Expect: `ok: true`, and the app's endpoints in `data.endpoints`.
 3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
@@ -133,7 +134,6 @@ help marks each command `[read]` or `[write]`.
 
 - Run `bun verify <group> --help` to list the commands in a group, such as `action`. The top-level
   list shows the group alone.
-- Each driver adds its own group, such as `http` or `browser`.
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
 
@@ -144,8 +144,7 @@ help marks each command `[read]` or `[write]`.
 - `bun verify orders count` counts the rows of the `orders` table, in `data.orders`.
 - `bun verify db query '<sql>'` runs SQL on `local`'s database. Add `--write` for a statement that
   writes.
-- `bun verify browser snapshot` returns the page's accessibility tree, with a ref for each element
-  that `browser click --ref` takes.
+- `bun verify browser snapshot` returns the page's accessibility tree.
 - `bun verify stream read app` returns the app's log lines since `use` last ran. It keeps no
   evidence file, so quote the line you checked in your reply. Add `--from 0` to read from the start
   of the run.
@@ -154,10 +153,9 @@ help marks each command `[read]` or `[write]`.
 
 ## Feature map
 
-The [feature map](./references/feature-map.md) holds one entry per feature: what it does, how a user
-reaches it in the app, its Drive block, and the end state that shows it works. Read a feature's
-entry before you drive it. `bun verify features` lists each feature's `paths`: the files whose
-change makes the gate ask for its verdict.
+Before you drive a feature, read its entry in the [feature map](./references/feature-map.md): what
+it does, how a user reaches it, its Drive block and its end state. `bun verify features` lists each
+feature's `paths`: the files whose change makes the gate ask for its verdict.
 
 ## Keep the map true
 
@@ -167,8 +165,9 @@ The registry,
 [`create-shop-registry.ts`](../../../packages/shop-example/src/create-shop-registry.ts), declares
 the targets, actions, commands, doctor checks and features, with each feature's `paths`.
 
-An edit to this skill or its feature map is a skill edit. Before you make one, follow the skill
-steps in [AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
+This repo's CI runs `lint` through a test, and does not run `gate`. An edit to this skill or its
+feature map is a skill edit. Before you make one, follow the skill steps in
+[AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
 
 <!-- /repo -->
 

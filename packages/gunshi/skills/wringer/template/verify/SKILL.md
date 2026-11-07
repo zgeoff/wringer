@@ -50,8 +50,9 @@ The mistakes that cost the most time:
 
 ## Run the loop
 
-1. Run `bun verify report`. Each feature in `data.features` with `changed: true` has a file under
-   its `paths` that differs from the default branch, committed or not. Each one needs a verdict.
+1. Run `bun verify report`. Each feature in `data.report.features` with `changed: true` has a file
+   under its `paths` that differs from the default branch, committed or not. Each one needs a
+   verdict.
 2. Unless your task names another target, start a run on `local`, with the commands in the
    [Targets](#targets) table. Expect: `ok: true`, and the app's endpoints in `data.endpoints`.
 3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
@@ -129,7 +130,6 @@ help marks each command `[read]` or `[write]`.
 
 - Run `bun verify <group> --help` to list the commands in a group, such as `action`. The top-level
   list shows the group alone.
-- Each driver adds its own group, such as `http` or `browser`.
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
 
@@ -142,10 +142,9 @@ help marks each command `[read]` or `[write]`.
 
 ## Feature map
 
-The [feature map](./references/feature-map.md) holds one entry per feature: what it does, how a user
-reaches it in the app, its Drive block, and the end state that shows it works. Read a feature's
-entry before you drive it. `bun verify features` lists each feature's `paths`: the files whose
-change makes the gate ask for its verdict.
+Before you drive a feature, read its entry in the [feature map](./references/feature-map.md): what
+it does, how a user reaches it, its Drive block and its end state. `bun verify features` lists each
+feature's `paths`: the files whose change makes the gate ask for its verdict.
 
 ## Keep the map true
 
