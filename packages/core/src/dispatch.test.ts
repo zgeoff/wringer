@@ -45,7 +45,12 @@ async function setupTest() {
 
     // Each service call settles 300 ms after the command's deadline, as a browser does once it has
     // closed the page of a cancelled action.
-    runWithSlowCancel: (path: readonly string[], timeoutMs: number, onSettled: () => void) =>
+    runWithSlowCancel: (
+      path: readonly string[],
+      timeoutMs: number,
+      onSettled: () => void,
+      cancelFailure = new WringerError('timeout', { message: 'The page closed.' }),
+    ) =>
       dispatch(
         wringer,
         path,
@@ -61,7 +66,7 @@ async function setupTest() {
               await once(AbortSignal.timeout(300), 'abort');
 
               onSettled();
-              throw new WringerError('timeout', { message: 'The page closed.' });
+              throw cancelFailure;
             },
           },
         },
@@ -658,6 +663,30 @@ test('it answers a timeout only after the service call that the deadline cancell
   expect({ code: result.envelope.error?.code, order }).toStrictEqual({
     code: 'timeout',
     order: ['call settled', 'answered'],
+  });
+});
+
+test('it answers a command that timed out with the failure of a cancel that could not stop its call', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.runWithSlowCancel(
+    ['shelf'],
+    50,
+    mock<() => void>(),
+    new WringerError('environment', {
+      message: 'The page did not close, so its action may still run.',
+    }),
+  );
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 4,
+    error: expect.objectContaining({
+      code: 'environment',
+      message: expect.stringContaining('The page did not close, so its action may still run.'),
+    }),
   });
 });
 

@@ -3,7 +3,6 @@ import { match } from 'ts-pattern';
 import { buildEnvelope } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
-import { supervisorCancelWaitMs } from './call-supervisor.ts';
 import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
 import { envelopeVersion } from './envelope-version.ts';
@@ -45,6 +44,7 @@ import type {
   TargetDefinition,
   Wringer,
 } from './types.ts';
+import { waitForCancelledCalls } from './wait-for-cancelled-calls.ts';
 import { WringerError } from './wringer-error.ts';
 import { writeEnvelopeLog } from './write-envelope-log.ts';
 import { writeLateFailure } from './write-late-failure.ts';
@@ -155,12 +155,12 @@ export async function dispatch(
     }
   }
 
-  // A service call the deadline cancelled, such as a browser action, answers once its work has
-  // stopped, so a timeout never reaches the caller while that work can still land.
+  // A timeout never reaches the caller while a cancelled call's work can still land, and a cancel
+  // that failed answers in the timeout's place.
   if (failure?.code === 'timeout') {
-    await Promise.allSettled([
-      raceDeadline(Promise.allSettled(trace.calls), AbortSignal.timeout(supervisorCancelWaitMs)),
-    ]);
+    const cancelFailure = await waitForCancelledCalls(trace.calls);
+
+    failure = cancelFailure ?? failure;
   }
 
   trace.answered = true;
