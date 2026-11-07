@@ -9,7 +9,7 @@ description:
 # Build a verify CLI with wringer
 
 Give the repo's agents one way to drive its real app and keep the evidence of what they checked.
-Build three things in the repo:
+Build these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
@@ -31,8 +31,8 @@ These terms hold across this skill and its references:
 | gate      | `bun verify gate` in CI: it fails a PR that changes a feature's files without a verdict |
 | report    | the output of `bun verify report --human`, which the PR body holds for the gate         |
 
-Then prove all three, and wire the checks that keep them true. Hand back the PR that adds them, with
-the proof in its description. The mistakes that cost the most:
+Then prove them, and wire the checks that keep them true. Hand back the PR that adds them, with the
+proof in its description. The mistakes that cost the most:
 
 - **Calling it done before a fresh agent uses it.** You know the app; the repo's next agent knows
   only the `verify` skill. Run a subagent with none of your context to show that the skill works.
@@ -48,7 +48,7 @@ the proof in its description. The mistakes that cost the most:
 
 - [Install the skill](#install-the-skill): copy it from `@wringer/gunshi`, at the version the repo
   installs.
-- [The template](#the-template): three files to copy, with fixed parts and repo parts.
+- [The template](#the-template): the files to copy, with fixed parts and repo parts.
 - [Create](#create): read the repo, then write the CLI, the actions, the checks, 3 to 5 features and
   the `verify` skill.
 - [Prove](#prove): doctor passes, a fresh subagent reaches `done` on every feature, and the CLI
@@ -92,7 +92,7 @@ another package manager, use it in place of `bun` here, in the `package.json` sc
 
 Skip `verify-registry.test.ts` in `template/`: it tests the template inside wringer.
 
-The three locations are defaults. When you change one, change each place that refers to it:
+These locations are defaults. When you change one, change each place that refers to it:
 
 - the folder `scripts/verify/`: the `verify` script's path in `package.json`;
 - the skill folder: `runVerify`'s `skill` option, a path from the repo root;
