@@ -16,34 +16,32 @@ async function setupTest() {
   onTestFinished(() => repo.remove());
 
   const wringer = buildLintedWringer(createDemoWringer(), 'docs/verify');
-  const written: string[] = [];
+  const stdout: string[] = [];
+
+  const ports = {
+    cwd: repo.root,
+    isTTY: false,
+    isAgent: false,
+    writeStdout: (text: string) => {
+      stdout.push(text);
+    },
+    readRepoRoot,
+    openRepo: (root: string) => ({
+      state: createRepoState(root, wringer.stateDir),
+      repoHost: createNodeRepoHost(),
+      supervisor: {
+        start: () => Promise.reject(new Error('lint starts no supervisor')),
+        call: () => Promise.reject(new Error('lint calls no supervisor')),
+      },
+    }),
+    runSupervisor: () => Promise.reject(new Error('lint runs no supervisor')),
+  };
 
   return {
     root: repo.root,
     git: repo.git,
-    lint: async (...flags: readonly string[]) => {
-      const exitCode = await runCLI(wringer, {
-        argv: ['lint', ...flags],
-        cwd: repo.root,
-        isTTY: false,
-        isAgent: false,
-        writeStdout: (text) => {
-          written.push(text);
-        },
-        readRepoRoot,
-        openRepo: (root) => ({
-          state: createRepoState(root, wringer.stateDir),
-          repoHost: createNodeRepoHost(),
-          supervisor: {
-            start: () => Promise.reject(new Error('lint starts no supervisor')),
-            call: () => Promise.reject(new Error('lint calls no supervisor')),
-          },
-        }),
-        runSupervisor: () => Promise.reject(new Error('lint runs no supervisor')),
-      });
-
-      return { exitCode, stdout: written.splice(0).join('') };
-    },
+    stdout,
+    lint: (...flags: readonly string[]) => runCLI(wringer, { ...ports, argv: ['lint', ...flags] }),
   };
 }
 
@@ -69,7 +67,9 @@ test('it passes a repo whose globs match, whose journey lines parse and whose sk
     ].join('\n'),
   );
 
-  const result = await ctx.lint('--json');
+  const exitCode = await ctx.lint('--json');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect({
     exitCode: result.exitCode,
@@ -91,7 +91,9 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
-  const result = await ctx.lint('--json');
+  const exitCode = await ctx.lint('--json');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect({
     exitCode: result.exitCode,
@@ -136,7 +138,9 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
     ].join('\n'),
   );
 
-  const result = await ctx.lint('--json');
+  const exitCode = await ctx.lint('--json');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect({
     exitCode: result.exitCode,
@@ -179,7 +183,9 @@ test('it fails a journey line that sets a feature the map lacks', async () => {
     ].join('\n'),
   );
 
-  const result = await ctx.lint('--json');
+  const exitCode = await ctx.lint('--json');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
     skill: 'docs/verify/SKILL.md',
@@ -212,7 +218,9 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
   await rm(join(ctx.root, 'src/greet.ts'));
   await rm(join(ctx.root, 'docs/verify/references/old.md'));
 
-  const result = await ctx.lint('--json');
+  const exitCode = await ctx.lint('--json');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
     skill: 'docs/verify/SKILL.md',
@@ -228,7 +236,9 @@ test('it prints each failure with its place for a person', async () => {
 
   await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  const result = await ctx.lint('--human');
+  const exitCode = await ctx.lint('--human');
+
+  const result = { exitCode, stdout: ctx.stdout.join('') };
 
   expect(result).toStrictEqual({
     exitCode: 1,

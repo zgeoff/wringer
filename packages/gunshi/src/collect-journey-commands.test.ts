@@ -102,6 +102,40 @@ test('it gives a null argv for a CLI line with an unclosed quote', () => {
   ]);
 });
 
+test('it joins a CLI line whose quote stays open to the lines that close it', () => {
+  const text = ['```sh', `bun verify db query 'select *`, `from orders'`, '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    {
+      path: 'SKILL.md',
+      line: 2,
+      text: `bun verify db query 'select *\nfrom orders'`,
+      argv: ['db', 'query', 'select *\nfrom orders'],
+    },
+  ]);
+});
+
+test('it skips prose in a code block that names the CLI after an apostrophe', () => {
+  const text = ['```text', `Don't run bun verify up twice.`, 'bun verify down', '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 3, text: 'bun verify down', argv: ['down'] },
+  ]);
+});
+
+test('it joins a continued line in a file with Windows line endings', () => {
+  const text = ['```sh', 'bun verify action brew \\', '  --minutes 4', '```'].join('\r\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    {
+      path: 'SKILL.md',
+      line: 2,
+      text: 'bun verify action brew    --minutes 4',
+      argv: ['action', 'brew', '--minutes', '4'],
+    },
+  ]);
+});
+
 test('it ignores a CLI call outside a code block', () => {
   const text = 'bun verify up\n';
 

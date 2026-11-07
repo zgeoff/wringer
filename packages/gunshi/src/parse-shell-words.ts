@@ -7,6 +7,7 @@ export function parseShellWords(line: string): readonly string[] | null {
   const words: string[] = [];
   let word: string | null = null;
   let quote: "'" | '"' | null = null;
+  let quoted = false;
 
   for (let index = 0; index < line.length; index += 1) {
     const character = line.charAt(index);
@@ -28,8 +29,10 @@ export function parseShellWords(line: string): readonly string[] | null {
       }
     } else if (character === "'" || character === '"') {
       quote = character;
+      quoted = true;
       word ??= '';
     } else if (character === '\\') {
+      quoted = true;
       index += 1;
       word = `${word ?? ''}${line.charAt(index)}`;
     } else if (/\s/u.test(character)) {
@@ -38,7 +41,18 @@ export function parseShellWords(line: string): readonly string[] | null {
       }
 
       word = null;
+      quoted = false;
     } else if (operatorCharacters.has(character) || (character === '#' && word === null)) {
+      // In `2>&1`, the digits name the stream the redirect moves, and the command never sees them.
+      if (
+        (character === '<' || character === '>') &&
+        !quoted &&
+        word !== null &&
+        /^\d+$/u.test(word)
+      ) {
+        word = null;
+      }
+
       break;
     } else {
       word = `${word ?? ''}${character}`;

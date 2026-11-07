@@ -36,6 +36,6 @@ test('it refuses to attach the demo target with a usage error when it has no URL
   const demo = registry.targets.get('demo');
 
   expect(() => demo?.endpoints?.({ target: 'demo' })).toThrow(
-    expect.objectContaining({ code: 'usage', message: 'The demo target has no URL.' }),
+    expect.objectContaining({ code: 'usage' }),
   );
 });

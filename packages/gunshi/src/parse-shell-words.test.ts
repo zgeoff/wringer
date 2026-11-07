@@ -27,6 +27,12 @@ test.each([
   ],
   ['a pipe', 'bun verify status | jq .data', ['bun', 'verify', 'status']],
   ['a redirect', 'bun verify report --human > body.md', ['bun', 'verify', 'report', '--human']],
+  ['a stream redirect', 'bun verify doctor 2>&1 | tee doctor.log', ['bun', 'verify', 'doctor']],
+  [
+    'a quoted digit before a redirect',
+    `bun verify use --label '2'> out`,
+    ['bun', 'verify', 'use', '--label', '2'],
+  ],
   ['an and-list', 'bun verify up && bun verify doctor', ['bun', 'verify', 'up']],
   ['a comment', 'bun verify up # start the app', ['bun', 'verify', 'up']],
   [

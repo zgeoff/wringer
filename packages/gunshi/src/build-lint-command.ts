@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { WringerError, buildBuiltinCommand } from '@wringer/core';
 import type { BuiltinContext, RegisteredCommand } from '@wringer/core';
 import { z } from 'zod';
+import { collectLintFiles } from './collect-lint-files.ts';
 import { lintFailureSchema, resolveLintFailures } from './resolve-lint-failures.ts';
 import { templateVersion } from './template-version.ts';
 
@@ -34,7 +35,6 @@ export function buildLintCommand(skillFolder: string): RegisteredCommand {
 async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintData> {
   const root = ctx.session.root;
 
-  // `--cached` still lists a tracked file that the working tree has deleted, so those come off.
   const [listed, deleted] = await Promise.all([
     ctx.session.repoHost.runGit({
       cwd: root,
@@ -43,39 +43,49 @@ async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintDa
     ctx.session.repoHost.runGit({ cwd: root, args: ['ls-files', '-z', '--deleted'] }),
   ]);
 
-  const gone = new Set(deleted.stdout.split('\0'));
-
-  const files = [...new Set(listed.stdout.split('\0'))].filter(
-    (path) => path !== '' && !gone.has(path),
-  );
+  const lintFiles = collectLintFiles({
+    listed: listed.stdout,
+    deleted: deleted.stdout,
+    skillFolder,
+  });
 
   const skillFiles = await Promise.all(
-    files
-      .filter((path) => path.startsWith(`${skillFolder}/`) && path.endsWith('.md'))
-      .map(async (path) => ({ path, text: await ctx.session.repoHost.readText(join(root, path)) })),
+    lintFiles.skillMarkdown.map(async (path) => ({
+      path,
+      text: await ctx.session.repoHost.readText(join(root, path)),
+    })),
   );
 
-  const skillPath = `${skillFolder}/SKILL.md`;
+  const skillPath = `${lintFiles.skillFolder}/SKILL.md`;
 
   const result = await resolveLintFailures({
     wringer: ctx.wringer,
-    files,
+    files: lintFiles.files,
     skillPath,
     skillFiles,
     templateVersion,
   });
 
   const data = { skill: skillPath, commands: result.commands, failures: [...result.failures] };
+  const error = buildLintError(data);
 
-  if (data.failures.length > 0) {
-    const listedFailures = data.failures.map((failure) => `${failure.where}: ${failure.problem}`);
-
-    throw new WringerError('check-failed', {
-      message: `${data.failures.length} lint failure(s). ${listedFailures.join(' ')}`,
-      hint: 'Fix each failure in the feature map or the verify skill, then run `lint` again.',
-      data,
-    });
+  if (error !== null) {
+    throw error;
   }
 
   return data;
+}
+
+function buildLintError(data: LintData): WringerError | null {
+  if (data.failures.length === 0) {
+    return null;
+  }
+
+  const listedFailures = data.failures.map((failure) => `${failure.where}: ${failure.problem}`);
+
+  return new WringerError('check-failed', {
+    message: `${data.failures.length} lint failure(s). ${listedFailures.join(' ')}`,
+    hint: 'Fix each failure in the feature map or the verify skill, then run `lint` again.',
+    data,
+  });
 }
