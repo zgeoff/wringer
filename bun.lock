@@ -151,7 +151,7 @@
     "@orpc/openapi-client": "1.16.1",
     "@orpc/server": "1.16.1",
     "@zgeoff/std": "0.4.3",
-    "@zgeoff/testing": "0.2.1",
+    "@zgeoff/testing": "0.3.0",
     "ajv": "8.20.0",
     "gunshi": "0.37.3",
     "msw": "3.0.3",
@@ -568,7 +568,7 @@
 
     "@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
 
-    "@zgeoff/testing": ["@zgeoff/testing@0.2.1", "", { "dependencies": { "bun-pty": "0.5.2" } }, "sha512-i/x931QYNWJJEydeGCDhlIBEm+SuXhjmLzmiZWP/jyQlsCXYy7AFv0RAVRktltEPNdGnHlcCZqKZeWNkIjH3Lg=="],
+    "@zgeoff/testing": ["@zgeoff/testing@0.3.0", "", { "dependencies": { "bun-pty": "0.6.0" } }, "sha512-9oeaSUJ3XtoXzYwBgT5DtiHA2OgjyzeFsggIzNGdTUrrDMfwytB3HCA0kGCnVNh/o84nqli4jvDD5eYWWv6QeA=="],
 
     "acorn": ["acorn@8.19.0", "", { "bin": { "acorn": "bin/acorn" } }, "sha512-oJlA3XiRm7Cyk6qFD2Jn8ak9B7jSy0qy00ADO3+8dpT0LSjFihQYv4C02LFCSYJV3Q37xYwwRy5m+IpIiUzqWw=="],
 
@@ -588,7 +588,7 @@
 
     "brace-expansion": ["brace-expansion@5.0.12", "", { "dependencies": { "balanced-match": "^4.0.2" } }, "sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ=="],
 
-    "bun-pty": ["bun-pty@0.5.2", "", {}, "sha512-3CbZE6qgNevRf5HkbTsxudwxWyJqGgqfwXsKy3fmOD8/wirEfmOmVADdMhHihU3k7hFaG+tktpKSUdQBfU4ZWA=="],
+    "bun-pty": ["bun-pty@0.6.0", "", {}, "sha512-tRVhUKbu18DSg/lUdp9vXzzEAlevBcdWJ+3TXX0CuvSmtdC6EIbzKmklRpiKZmmtN6qwkIqB2QeEFghpI1/z3g=="],
 
     "bun-types": ["bun-types@1.4.3", "", { "dependencies": { "@types/node": "*", "undici-types": "*" } }, "sha512-tinRJNGOmUN+tEAsn2y2e942n9JHRHR42iUYzDH75NmhJqVBokGSQkkfSFdNWwsANIdrK6ACH9t01M452YyTwg=="],
 

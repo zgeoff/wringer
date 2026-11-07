@@ -19,7 +19,7 @@
       "@orpc/openapi-client": "1.16.1",
       "@orpc/server": "1.16.1",
       "@zgeoff/std": "0.4.3",
-      "@zgeoff/testing": "0.2.1",
+      "@zgeoff/testing": "0.3.0",
       "ajv": "8.20.0",
       "gunshi": "0.37.3",
       "msw": "3.0.3",
