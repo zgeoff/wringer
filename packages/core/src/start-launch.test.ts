@@ -327,7 +327,12 @@ test('it settles a stop whose log drain ran past its bound only once the last ap
 
   order.push('stopped');
 
-  expect(order).toStrictEqual(['{"port":4100}', 'closing', 'stopped']);
+  // The shell may also log `Terminated` for its killed `sleep`, so only the two lines in question
+  // are compared.
+  expect(order.filter((entry) => entry === 'closing' || entry === 'stopped')).toStrictEqual([
+    'closing',
+    'stopped',
+  ]);
 });
 
 test('it fails a stop with the log failure that came while the app stopped', async () => {

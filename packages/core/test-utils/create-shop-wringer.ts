@@ -122,6 +122,22 @@ export function createShopWringer(): Wringer {
       },
     })
     .command({
+      path: ['recheck'],
+      summary: 'List the notes again after a first list that failed',
+      args: emptySchema,
+      data: countSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: async (_args, ctx) => {
+        await Promise.allSettled([ctx.drivers.notes.list(null)]);
+
+        const listed = await ctx.drivers.notes.list(null);
+
+        return { count: listed.length };
+      },
+    })
+    .command({
       path: ['restock'],
       summary: 'Restock the shelves, with no declared effect',
       args: emptySchema,

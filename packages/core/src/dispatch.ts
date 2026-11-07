@@ -11,6 +11,7 @@ import type { ExitCode } from './error-codes.ts';
 import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
+import { keepCancelledCall } from './keep-cancelled-call.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
@@ -73,7 +74,7 @@ interface DriveTrace {
   boundRun: RunID | null;
   readonly late: Promise<void>[];
 
-  // Each service call the command sent to the run's supervisor.
+  // Each service call to the run's supervisor that was still running at the deadline.
   readonly calls: Promise<unknown>[];
 
   // Set once the command's outcome is settled, so the work's later events never follow the answer.
@@ -434,7 +435,7 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     callSupervisor: (call) => {
       const calling = request.session.supervisor.call(call);
 
-      request.trace.calls.push(calling);
+      keepCancelledCall(request.trace.calls, calling, call.signal);
 
       return calling;
     },

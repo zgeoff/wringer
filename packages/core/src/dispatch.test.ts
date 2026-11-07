@@ -26,6 +26,7 @@ async function setupTest() {
 
   const evidenceWrites = mock(writeNewFile);
   const supervisorCalls = mock(callSupervisor);
+  const order: string[] = [];
   const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate.promise };
 
   return {
@@ -43,13 +44,14 @@ async function setupTest() {
         },
       ),
 
-    // Each service call settles 300 ms after the command's deadline, as a browser does once it has
-    // closed the page of a cancelled action.
+    order,
+
+    // Each service call settles 300 ms after the command's 50 ms deadline, as a browser does once it
+    // has closed the page of a cancelled action.
     runWithSlowCancel: (
       path: readonly string[],
-      timeoutMs: number,
-      onSettled: () => void,
       cancelFailure = new WringerError('timeout', { message: 'The page closed.' }),
+      earlyFailures: WringerError[] = [],
     ) =>
       dispatch(
         wringer,
@@ -58,14 +60,22 @@ async function setupTest() {
         {
           ...shop.session,
           target: 'local',
-          timeoutMs,
+          timeoutMs: 50,
           supervisor: {
             ...shop.session.supervisor,
+
+            // Each early failure answers one call at once, before the deadline.
             call: async (call) => {
+              const early = earlyFailures.shift();
+
+              if (early !== undefined) {
+                throw early;
+              }
+
               await once(call.signal, 'abort');
               await once(AbortSignal.timeout(300), 'abort');
 
-              onSettled();
+              order.push('call settled');
               throw cancelFailure;
             },
           },
@@ -652,17 +662,29 @@ test('it answers a timeout only after the service call that the deadline cancell
   await ctx.run('local', ['up']);
   await ctx.run('local', ['doctor']);
 
-  const order: string[] = [];
+  const result = await ctx.runWithSlowCancel(['shelf']);
 
-  const result = await ctx.runWithSlowCancel(['shelf'], 50, () => {
-    order.push('call settled');
-  });
+  ctx.order.push('answered');
 
-  order.push('answered');
-
-  expect({ code: result.envelope.error?.code, order }).toStrictEqual({
+  expect({ code: result.envelope.error?.code, order: ctx.order }).toStrictEqual({
     code: 'timeout',
     order: ['call settled', 'answered'],
+  });
+});
+
+test('it answers a timeout, not the failure of a call the command handled before its deadline', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.runWithSlowCancel(['recheck'], undefined, [
+    new WringerError('check-failed', { message: 'The shelf was out of order.' }),
+  ]);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 5,
+    code: 'timeout',
   });
 });
 
@@ -674,8 +696,6 @@ test('it answers a command that timed out with the failure of a cancel that coul
 
   const result = await ctx.runWithSlowCancel(
     ['shelf'],
-    50,
-    mock<() => void>(),
     new WringerError('environment', {
       message: 'The page did not close, so its action may still run.',
     }),
