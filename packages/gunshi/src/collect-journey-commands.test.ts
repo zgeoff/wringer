@@ -56,7 +56,7 @@ test('it joins a line that ends in a backslash to the next', () => {
     {
       path: 'SKILL.md',
       line: 2,
-      text: 'bun verify action brew    --minutes 4',
+      text: 'bun verify action brew   --minutes 4',
       argv: ['action', 'brew', '--minutes', '4'],
     },
   ]);
@@ -130,8 +130,61 @@ test('it joins a continued line in a file with Windows line endings', () => {
     {
       path: 'SKILL.md',
       line: 2,
-      text: 'bun verify action brew    --minutes 4',
+      text: 'bun verify action brew   --minutes 4',
       argv: ['action', 'brew', '--minutes', '4'],
+    },
+  ]);
+});
+
+test('it joins a backslash-continued word with no space between its halves', () => {
+  const text = ['```sh', 'bun verify action greet --name Wr\\', 'en', '```'].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    {
+      path: 'SKILL.md',
+      line: 2,
+      text: 'bun verify action greet --name Wren',
+      argv: ['action', 'greet', '--name', 'Wren'],
+    },
+  ]);
+});
+
+test('it ends a line with an open quote at the next CLI line', () => {
+  const text = [
+    '```sh',
+    `bun verify action greet --name O'Brien`,
+    `bun verify action greet --name D'Arcy`,
+    '```',
+  ].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 2, text: `bun verify action greet --name O'Brien`, argv: null },
+    { path: 'SKILL.md', line: 3, text: `bun verify action greet --name D'Arcy`, argv: null },
+  ]);
+});
+
+test('it keeps an open-quote line in a fence that runs to the end of the file', () => {
+  const text = ['```sh', `bun verify use --label 'open`].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    { path: 'SKILL.md', line: 2, text: `bun verify use --label 'open`, argv: null },
+  ]);
+});
+
+test('it joins an open quote after an assignment whose value is quoted', () => {
+  const text = [
+    '```sh',
+    `NOTE='two words' bun verify db query 'select *`,
+    `from orders'`,
+    '```',
+  ].join('\n');
+
+  expect(collectJourneyCommands([{ path: 'SKILL.md', text }], ['bun', 'verify'])).toStrictEqual([
+    {
+      path: 'SKILL.md',
+      line: 2,
+      text: `NOTE='two words' bun verify db query 'select *\nfrom orders'`,
+      argv: ['db', 'query', 'select *\nfrom orders'],
     },
   ]);
 });

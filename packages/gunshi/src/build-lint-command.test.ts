@@ -15,7 +15,7 @@ async function setupTest() {
 
   onTestFinished(() => repo.remove());
 
-  const wringer = buildLintedWringer(createDemoWringer(), 'docs/verify');
+  const wringer = createDemoWringer();
   const stdout: string[] = [];
 
   const ports = {
@@ -41,47 +41,54 @@ async function setupTest() {
     root: repo.root,
     git: repo.git,
     stdout,
-    lint: (...flags: readonly string[]) => runCLI(wringer, { ...ports, argv: ['lint', ...flags] }),
+    lint: (skillFolder: string, ...flags: readonly string[]) =>
+      runCLI(buildLintedWringer(wringer, skillFolder), { ...ports, argv: ['lint', ...flags] }),
   };
 }
 
-test('it passes a repo whose globs match, whose journey lines parse and whose skill is current', async () => {
-  const ctx = await setupTest();
+test.each([
+  ['as the repo wrote it', 'docs/verify'],
+  ['with a leading dot segment and a trailing slash', './docs/verify/'],
+])(
+  'it passes a repo whose globs match, whose journey lines parse and whose skill is current, with the skill folder %s',
+  async (_case, skillFolder) => {
+    const ctx = await setupTest();
 
-  await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
+    await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
-    [
-      '---',
-      'name: verify',
-      'metadata:',
-      `  wringer-template: ${templateVersion}`,
-      '  wringer-command: bun verify',
-      '---',
-      '',
-      '```bash',
-      'bun verify up',
-      'bun verify action greet --name Wren',
-      '```',
-    ].join('\n'),
-  );
+    await Bun.write(
+      join(ctx.root, 'docs/verify/SKILL.md'),
+      [
+        '---',
+        'name: verify',
+        'metadata:',
+        `  wringer-template: ${templateVersion}`,
+        '  wringer-command: bun verify',
+        '---',
+        '',
+        '```bash',
+        'bun verify up',
+        'bun verify action greet --name Wren',
+        '```',
+      ].join('\n'),
+    );
 
-  const exitCode = await ctx.lint('--json');
+    const exitCode = await ctx.lint(skillFolder, '--json');
 
-  const result = { exitCode, stdout: ctx.stdout.join('') };
+    const result = { exitCode, stdout: ctx.stdout.join('') };
 
-  expect({
-    exitCode: result.exitCode,
-    envelope: envelopeSchema.parse(JSON.parse(result.stdout)),
-  }).toStrictEqual({
-    exitCode: 0,
-    envelope: expect.objectContaining({
-      ok: true,
-      data: { skill: 'docs/verify/SKILL.md', commands: 2, failures: [] },
-    }),
-  });
-});
+    expect({
+      exitCode: result.exitCode,
+      envelope: envelopeSchema.parse(JSON.parse(result.stdout)),
+    }).toStrictEqual({
+      exitCode: 0,
+      envelope: expect.objectContaining({
+        ok: true,
+        data: { skill: 'docs/verify/SKILL.md', commands: 2, failures: [] },
+      }),
+    });
+  },
+);
 
 test('it fails with exit code 1 on a feature glob that matches no file', async () => {
   const ctx = await setupTest();
@@ -91,7 +98,7 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
-  const exitCode = await ctx.lint('--json');
+  const exitCode = await ctx.lint('docs/verify', '--json');
 
   const result = { exitCode, stdout: ctx.stdout.join('') };
 
@@ -138,7 +145,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
     ].join('\n'),
   );
 
-  const exitCode = await ctx.lint('--json');
+  const exitCode = await ctx.lint('docs/verify', '--json');
 
   const result = { exitCode, stdout: ctx.stdout.join('') };
 
@@ -183,7 +190,7 @@ test('it fails a journey line that sets a feature the map lacks', async () => {
     ].join('\n'),
   );
 
-  const exitCode = await ctx.lint('--json');
+  const exitCode = await ctx.lint('docs/verify', '--json');
 
   const result = { exitCode, stdout: ctx.stdout.join('') };
 
@@ -218,7 +225,7 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
   await rm(join(ctx.root, 'src/greet.ts'));
   await rm(join(ctx.root, 'docs/verify/references/old.md'));
 
-  const exitCode = await ctx.lint('--json');
+  const exitCode = await ctx.lint('docs/verify', '--json');
 
   const result = { exitCode, stdout: ctx.stdout.join('') };
 
@@ -236,7 +243,7 @@ test('it prints each failure with its place for a person', async () => {
 
   await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  const exitCode = await ctx.lint('--human');
+  const exitCode = await ctx.lint('docs/verify', '--human');
 
   const result = { exitCode, stdout: ctx.stdout.join('') };
 

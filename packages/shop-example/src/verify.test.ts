@@ -15,10 +15,15 @@ test('it passes lint over the shop verify skill and its feature map', async () =
     },
   );
 
-  const [exitCode, stdout] = await Promise.all([child.exited, new Response(child.stdout).text()]);
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ]);
 
-  expect({ exitCode, data: envelopeSchema.parse(JSON.parse(stdout)).data }).toStrictEqual({
+  expect({ exitCode, data: envelopeSchema.parse(JSON.parse(stdout)).data, stderr }).toStrictEqual({
     exitCode: 0,
     data: { skill: '.claude/skills/verify-shop/SKILL.md', commands: 17, failures: [] },
+    stderr: '',
   });
 });

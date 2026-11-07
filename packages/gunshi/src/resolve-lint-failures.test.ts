@@ -72,15 +72,18 @@ test('it fails a journey line whose arguments fail the command schema', async ()
     templateVersion: 4,
   });
 
-  expect(result.failures).toStrictEqual([
-    {
-      check: 'journey',
-      where: 'skill/SKILL.md:7',
-      problem: expect.stringMatching(
-        /^`bun verify action greet --times 2`: The arguments are not valid: name: /u,
-      ),
-    },
-  ]);
+  expect(result).toStrictEqual({
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/SKILL.md:7',
+        problem: expect.stringMatching(
+          /^`bun verify action greet --times 2`: The arguments are not valid: name: /u,
+        ),
+      },
+    ],
+  });
 });
 
 test('it fails a journey line in a reference file of the skill', async () => {
@@ -98,13 +101,16 @@ test('it fails a journey line in a reference file of the skill', async () => {
     templateVersion: 4,
   });
 
-  expect(result.failures).toStrictEqual([
-    {
-      check: 'journey',
-      where: 'skill/references/greeting.md:4',
-      problem: expect.stringMatching(/^`bun verify wave`: /u),
-    },
-  ]);
+  expect(result).toStrictEqual({
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/references/greeting.md:4',
+        problem: expect.stringMatching(/^`bun verify wave`: /u),
+      },
+    ],
+  });
 });
 
 test('it fails a missing verify skill', async () => {
@@ -147,13 +153,16 @@ test.each([
     templateVersion: 4,
   });
 
-  expect(result.failures).toStrictEqual([
-    {
-      check: 'journey',
-      where: 'skill/SKILL.md:7',
-      problem: `\`${line}\`: The repo has no target named nowhere.`,
-    },
-  ]);
+  expect(result).toStrictEqual({
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/SKILL.md:7',
+        problem: `\`${line}\`: The repo has no target named nowhere.`,
+      },
+    ],
+  });
 });
 
 test.each([
@@ -202,14 +211,17 @@ test('it fails a journey line whose repo command names an unknown feature', asyn
     templateVersion: 4,
   });
 
-  expect(result.failures).toStrictEqual([
-    {
-      check: 'journey',
-      where: 'skill/SKILL.md:7',
-      problem:
-        '`bun verify action greet --name Wren --feature farewell`: The feature map has no feature named farewell.',
-    },
-  ]);
+  expect(result).toStrictEqual({
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/SKILL.md:7',
+        problem:
+          '`bun verify action greet --name Wren --feature farewell`: The feature map has no feature named farewell.',
+      },
+    ],
+  });
 });
 
 test('it fails a journey line with an unclosed quote', async () => {
@@ -232,11 +244,14 @@ test('it fails a journey line with an unclosed quote', async () => {
     templateVersion: 4,
   });
 
-  expect(result.failures).toStrictEqual([
-    {
-      check: 'journey',
-      where: 'skill/SKILL.md:7',
-      problem: "`bun verify action greet --name 'Wren`: The line has an unclosed quote.",
-    },
-  ]);
+  expect(result).toStrictEqual({
+    commands: 1,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/SKILL.md:7',
+        problem: "`bun verify action greet --name 'Wren`: The line has an unclosed quote.",
+      },
+    ],
+  });
 });

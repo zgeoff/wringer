@@ -57,8 +57,16 @@ function collectFencedLines(text: string, cliWords: readonly string[]): readonly
         pending = null;
       }
     } else {
+      // An apostrophe in a value, such as `--name O'Brien`, leaves a quote open; the next CLI line
+      // starts a new command, so the open line ends there and fails as unclosed.
+      if (pending !== null && hasOpenQuote(pending.text, cliWords) && isCLILine(line, cliWords)) {
+        fenced.push(pending);
+
+        pending = null;
+      }
+
       const joined: FencedLine =
-        pending === null ? { line: index + 1, text: line } : joinLine(pending, line);
+        pending === null ? { line: index + 1, text: line } : joinLine(pending, line, cliWords);
 
       if (joined.text.endsWith('\\') || hasOpenQuote(joined.text, cliWords)) {
         pending = joined;
@@ -70,7 +78,8 @@ function collectFencedLines(text: string, cliWords: readonly string[]): readonly
     }
   }
 
-  return fenced;
+  // A fence that never closes runs to the end of the file.
+  return pending === null ? fenced : [...fenced, toFinishedLine(pending)];
 }
 
 // A closing fence ends a continued line, and its last backslash then escapes nothing.
@@ -80,19 +89,12 @@ function toFinishedLine(pending: FencedLine): FencedLine {
     : pending;
 }
 
-// A backslash joins the next line with a space, as the shell does; inside a quote the shell keeps
-// the newline as part of the word.
-function joinLine(pending: FencedLine, line: string): FencedLine {
-  return pending.text.endsWith('\\')
-    ? { line: pending.line, text: `${pending.text.slice(0, -1)} ${line}` }
-    : { line: pending.line, text: `${pending.text}\n${line}` };
-}
-
 function hasOpenQuote(text: string, cliWords: readonly string[]): boolean {
   return isCLILine(text, cliWords) && parseShellWords(stripPrompt(text)) === null;
 }
 
-const leadingAssignmentsPattern = /^(?:[A-Za-z_]\w*=\S*\s+)*/u;
+// An assignment's value may hold quoted spaces, as in `NOTE='two words' bun verify up`.
+const leadingAssignmentsPattern = /^(?:[A-Za-z_]\w*=(?:'[^']*'|"(?:[^"\\]|\\.)*"|[^\s'"])*\s+)*/u;
 
 // A line that calls the CLI, after any prompt and environment assignments. Prose in a code block
 // with an apostrophe, such as "Don't run bun verify up twice", is not one.
@@ -105,6 +107,14 @@ function isCLILine(text: string, cliWords: readonly string[]): boolean {
 
 function stripPrompt(text: string): string {
   return text.trim().replace(/^\$\s+/u, '');
+}
+
+// Outside quotes the shell drops a backslash and its newline, so the next line goes on in the same
+// word; inside a quote it keeps the newline as part of the word.
+function joinLine(pending: FencedLine, line: string, cliWords: readonly string[]): FencedLine {
+  return hasOpenQuote(pending.text, cliWords)
+    ? { line: pending.line, text: `${pending.text}\n${line}` }
+    : { line: pending.line, text: `${pending.text.slice(0, -1)}${line}` };
 }
 
 const assignmentPattern = /^[A-Za-z_]\w*=/u;

@@ -25,8 +25,9 @@ test.each([
     skillFolder,
   };
 
-  expect(collectLintFiles(listing).skillMarkdown).toStrictEqual([
-    'docs/verify/SKILL.md',
-    'docs/verify/references/map.md',
-  ]);
+  expect(collectLintFiles(listing)).toStrictEqual({
+    files: ['docs/verify/SKILL.md', 'docs/verify/references/map.md', 'docs/verify/notes.txt'],
+    skillFolder: 'docs/verify',
+    skillMarkdown: ['docs/verify/SKILL.md', 'docs/verify/references/map.md'],
+  });
 });
