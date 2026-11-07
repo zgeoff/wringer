@@ -13,6 +13,11 @@
     ],
     "catalog": {
       "@mswjs/interceptors": "0.45.10",
+      "@orpc/client": "1.16.1",
+      "@orpc/contract": "1.16.1",
+      "@orpc/openapi": "1.16.1",
+      "@orpc/openapi-client": "1.16.1",
+      "@orpc/server": "1.16.1",
       "@zgeoff/std": "0.4.2",
       "@zgeoff/testing": "0.2.1",
       "gunshi": "0.37.3",
@@ -56,6 +61,11 @@
     "@commitlint/cli": "21.2.4",
     "@maschwenk/tsrslint": "0.1.6",
     "@mswjs/interceptors": "catalog:",
+    "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/openapi-client": "catalog:",
+    "@orpc/server": "catalog:",
     "@stylistic/eslint-plugin": "5.10.0",
     "@tsconfig/strictest": "2.0.8",
     "@types/bun": "1.4.3",
@@ -64,15 +74,18 @@
     "@zgeoff/format-codemod": "0.3.5",
     "@zgeoff/oxlint-config": "0.8.5",
     "@zgeoff/skill-gate": "0.2.22",
+    "@zgeoff/testing": "catalog:",
     "ajv": "8.20.0",
     "knip": "6.41.0",
     "lefthook": "2.2.2",
     "msw": "catalog:",
     "oxfmt": "0.72.0",
     "oxlint": "1.87.0",
+    "tiny-invariant": "catalog:",
     "ts-pattern": "5.9.2",
     "tsrs": "0.18.0-ts7.1.0-dev.20260929",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "zod": "catalog:"
   },
   "engines": {
     "node": ">=24"
