@@ -1,5 +1,6 @@
 export { bindDrivers } from './bind-drivers.ts';
 export type { BoundHelpers } from './bind-drivers.ts';
+export { buildBuiltinCommand } from './build-commands.ts';
 export { buildEnvelope } from './build-envelope.ts';
 export type { EnvelopeInput } from './build-envelope.ts';
 export { buildEnvelopeJSONSchema } from './build-envelope-json-schema.ts';

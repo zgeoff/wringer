@@ -32,12 +32,13 @@
   },
   "dependencies": {
     "gunshi": "catalog:",
+    "tiny-invariant": "catalog:",
+    "ts-pattern": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
-    "@zgeoff/testing": "catalog:",
-    "tiny-invariant": "catalog:"
+    "@zgeoff/testing": "catalog:"
   },
   "peerDependencies": {
     "@wringer/core": "workspace:*"

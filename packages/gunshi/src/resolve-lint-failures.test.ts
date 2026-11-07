@@ -1,0 +1,125 @@
+import { expect, test } from 'bun:test';
+import { resolveLintFailures } from './resolve-lint-failures.ts';
+import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
+
+test('it returns no failure when every glob matches, every line parses and the template is current', async () => {
+  const skill = [
+    '---',
+    'name: verify',
+    'metadata:',
+    '  wringer-template: 4',
+    '  wringer-command: bun verify',
+    '---',
+    '',
+    '```bash',
+    'bun verify up',
+    'bun verify action greet --name Wren --times 2',
+    '```',
+  ].join('\n');
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
+    templateVersion: 4,
+  });
+
+  expect(result).toStrictEqual({ commands: 2, failures: [] });
+});
+
+test('it fails a skill written from an older template version', async () => {
+  const skill = '---\nmetadata:\n  wringer-template: 3\n  wringer-command: bun verify\n---\n';
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
+    templateVersion: 4,
+  });
+
+  expect(result).toStrictEqual({
+    commands: 0,
+    failures: [
+      {
+        check: 'template',
+        where: 'skill/SKILL.md',
+        problem:
+          'The skill follows template 3, and the installed @wringer/gunshi ships template 4.',
+      },
+    ],
+  });
+});
+
+test('it fails a journey line whose arguments fail the command schema', async () => {
+  const skill = [
+    '---',
+    'metadata:',
+    '  wringer-template: 4',
+    '  wringer-command: bun verify',
+    '---',
+    '```bash',
+    'bun verify action greet --times 2',
+    '```',
+  ].join('\n');
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'journey',
+      where: 'skill/SKILL.md:7',
+      problem: expect.stringMatching(
+        /^`bun verify action greet --times 2`: The arguments are not valid: name: /u,
+      ),
+    },
+  ]);
+});
+
+test('it fails a journey line in a reference file of the skill', async () => {
+  const skill = '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+  const reference = ['# Greeting', '', '```bash', 'bun verify wave', '```'].join('\n');
+
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts', 'skill/SKILL.md', 'skill/references/greeting.md'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [
+      { path: 'skill/SKILL.md', text: skill },
+      { path: 'skill/references/greeting.md', text: reference },
+    ],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'journey',
+      where: 'skill/references/greeting.md:4',
+      problem: expect.stringMatching(/^`bun verify wave`: /u),
+    },
+  ]);
+});
+
+test('it fails a missing verify skill', async () => {
+  const result = await resolveLintFailures({
+    wringer: createDemoWringer(),
+    files: ['src/greet.ts'],
+    skillPath: 'skill/SKILL.md',
+    skillFiles: [],
+    templateVersion: 4,
+  });
+
+  expect(result).toStrictEqual({
+    commands: 0,
+    failures: [
+      { check: 'template', where: 'skill/SKILL.md', problem: 'The verify skill is missing.' },
+    ],
+  });
+});

@@ -79,12 +79,13 @@
       "version": "0.1.0",
       "dependencies": {
         "gunshi": "catalog:",
+        "tiny-invariant": "catalog:",
+        "ts-pattern": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/testing": "catalog:",
-        "tiny-invariant": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
