@@ -50,11 +50,14 @@ rehearsal of the npm publish of each package.
 ## Layout
 
 - `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
-  it holds an example shop app and its verify registry, which the browser lane drives end to end
-  with every driver.
+  it holds an example shop app and the verify CLI for it. The browser tests drive the app through
+  that CLI's registry with the http, db, stream and browser drivers, and `bun verify` runs the CLI.
+- `packages/gunshi/skills/wringer/`: the agent skill that adds a verify CLI to a repo, with the
+  template files it copies. It ships in `@wringer/gunshi`.
 - `docs/`: the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
-- `.claude/`: the shared agent skills and the skill-gate hook.
+- `.claude/`: the shared agent skills, the hook that asks for a skill before an edit, and
+  `verify-shop`, the skill that tells an agent how to drive the shop example with `bun verify`.
 
 ## Documentation
 

@@ -17,5 +17,5 @@ test('it pairs with a verify skill whose journeys parse and whose template versi
     templateVersion,
   });
 
-  expect(result).toStrictEqual({ commands: 3, failures: [] });
+  expect(result).toStrictEqual({ commands: 4, failures: [] });
 });
