@@ -31,7 +31,9 @@ await runVerify(registry, { skill: '.claude/skills/verify' });
 
 Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
 `bun verify.ts action seed --count 3`. The CLI lists the built-in commands, such as `up`, `doctor`
-and `lint`, beside the commands that the registry declares and that its drivers add.
+and `lint`, beside the commands that the registry declares and that its drivers add. A registry
+can't declare a command named `lint`: `runVerify` throws `Two commands share the name`, as `build()`
+does on any duplicate name.
 
 `skill` is the path, from the repo root, of the folder that holds the repo's verify skill: the
 Markdown that tells the repo's agents how to drive each feature. `lint` reads it. It defaults to
