@@ -6,14 +6,21 @@ import { createVerifyRegistry } from './verify-registry.ts';
 
 test('it pairs with a verify skill whose journeys parse and whose template version is current', async () => {
   const skillPath = '.claude/skills/verify/SKILL.md';
+  const mapPath = '.claude/skills/verify/references/feature-map.md';
 
-  const text = await Bun.file(join(import.meta.dir, 'verify', 'SKILL.md')).text();
+  const [skill, map] = await Promise.all([
+    Bun.file(join(import.meta.dir, 'verify', 'SKILL.md')).text(),
+    Bun.file(join(import.meta.dir, 'verify', 'references', 'feature-map.md')).text(),
+  ]);
 
   const result = await resolveLintFailures({
     wringer: createVerifyRegistry(),
-    files: ['src/items/add-item.ts', 'src/pages/pantry/pantry.tsx', skillPath],
+    files: ['src/items/add-item.ts', 'src/pages/pantry/pantry.tsx', skillPath, mapPath],
     skillPath,
-    skillFiles: [{ path: skillPath, text }],
+    skillFiles: [
+      { path: skillPath, text: skill },
+      { path: mapPath, text: map },
+    ],
     templateVersion,
   });
 

@@ -12,17 +12,20 @@ metadata:
 # Verify the shop example
 
 Use `bun verify` to start the app, drive a feature the way a user would, and record a verdict for
-it. A drive is any command that acts on the running app, such as an action or `browser click`.
-`bun verify done` records the verdict: the feature passed on this code. The CI gate fails a PR when
-a feature it changes has no verdict for its current code, so hand back the output of
-`bun verify report --human` for the PR body.
+it. A drive is any action, repo command or driver command, reads included, such as `browser click`
+or `http request`; a driver is a package that adds a group of commands, such as `http`. The built-in
+commands, such as `use` and `report`, are not drives. `bun verify done` records the verdict that the
+feature works on the current working tree, and a commit of the same change keeps it. The CI gate,
+`bun verify gate`, fails a PR when a feature it changes has no verdict for its code, so hand back
+the output of `bun verify report --human` for the PR body.
 
 The mistakes that cost the most time:
 
 - **Driving before `doctor` passes.** Every drive fails with exit code 3 until the doctor passes on
   the current run.
 - **Editing the app's code during a run.** A verdict holds only for the code the run started on.
-  After an edit, run `bun verify up --restart` and `bun verify doctor` again.
+  After an edit, run `bun verify up --restart` and `bun verify doctor` again. On an attach target,
+  run `detach` and `attach` in place of `up --restart`.
 - **Branching on the error message.** Branch on the exit code and `error.code`. The message text can
   change in any release.
 
@@ -33,26 +36,33 @@ The mistakes that cost the most time:
   on.
 - [Targets](#targets): the targets this repo declares, and what a read-only target refuses.
 - [Commands](#commands): `bun verify --help` lists every command, each marked read or write.
-- [Feature map](#feature-map): each feature's journey and the end state that proves it.
-- [Keep the map true](#keep-the-map-true): fix a journey in the PR that breaks it, and run `lint`.
+- [Feature map](#feature-map): the file that holds each feature's Drive block and end state.
+- [Keep the map true](#keep-the-map-true): fix a Drive block in the PR that breaks it, and run
+  `lint`.
+
+## References
+
+- [Feature map](./references/feature-map.md): each feature's entry, before you drive it.
 
 ## Run the loop
 
-1. Start a run with the command the [Targets](#targets) table gives. Expect: `ok: true`, and the
-   app's endpoints in `data.endpoints`.
-2. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
+1. Run `bun verify report`. Each feature with `changed: true` touches a file the change edits, and
+   needs a verdict.
+2. Start a run on `local`, unless your task names another target, with the command the
+   [Targets](#targets) table gives. Expect: `ok: true`, and the app's endpoints in `data.endpoints`.
+3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
    `doctor` again.
-3. Set the feature: `bun verify use --feature <feature>`. Each later drive records its evidence
-   under that feature.
-4. Run the feature's Drive block from the [feature map](#feature-map), and check its end state. When
-   the end state is wrong, fix the app's code and start again at step 1, or report the failure.
-5. Run `bun verify done`. Expect: `ok: true`. It fails unless a drive of the feature exited 0 after
+4. Run the feature's Drive block from the [feature map](./references/feature-map.md). Its first
+   line, `use --feature`, files the evidence of each later drive under that feature.
+5. Check the end state. When it is wrong because of your change, fix the app's code, run
+   `bun verify up --restart` and `bun verify doctor`, and run the Drive block again. Otherwise
+   report the failure.
+6. Run `bun verify done`. Expect: `ok: true`. It fails unless a drive of the feature exited 0 after
    the doctor passed.
-6. Repeat steps 3 to 5 for each feature the change touches. `bun verify report` marks each one with
-   `changed: true`.
-7. Run `bun verify report --human`, and put its output in the PR body in place of any older report.
+7. Repeat steps 4 to 6 for each feature with `changed: true`.
+8. Run `bun verify report --human`, and put its output in the PR body in place of any older report.
    Keep the HTML comment at its end: the gate reads the report from it.
-8. Stop the run: `bun verify down` on a launch target, or `bun verify detach` on an attach target.
+9. Stop the run: `bun verify down` on a launch target, or `bun verify detach` on an attach target.
 
 ## Read the envelope
 
@@ -74,16 +84,17 @@ prints its events as JSON lines before it. Read these fields:
 
 ## Targets
 
-`bun verify up` starts the app of a launch target, and `bun verify down` stops it. `attach` and
-`detach` join an app that runs apart, and leave it running. Run `bun verify use --target <target>`
-to point later commands at a target; `--target` on one command overrides it.
+A launch target is one whose app `bun verify up` starts and `bun verify down` stops. An attach
+target is an app that `bun verify` did not start: `attach` and `detach` connect to it and leave it
+running. Run `bun verify use --target <target>` to point later commands at a target; `--target` on
+one command overrides it.
 
 <!-- repo: targets -->
 
-| Target  | Start with                                                              | Access     | Notes                                                       |
-| ------- | ----------------------------------------------------------------------- | ---------- | ----------------------------------------------------------- |
-| `local` | `bun verify up`                                                         | read-write | Starts the shop with an empty database in the run's folder. |
-| `demo`  | `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach --target demo` | read-only  | A shop that runs apart from wringer. Never stop it.         |
+| Target  | Start with                                                              | Access     | Notes                                                                   |
+| ------- | ----------------------------------------------------------------------- | ---------- | ----------------------------------------------------------------------- |
+| `local` | `bun verify up`                                                         | read-write | Starts the shop with an empty database in the run's folder.             |
+| `demo`  | `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach --target demo` | read-only  | A shop that `bun verify` did not start. Stop it only if you started it. |
 
 Start a shop for `demo` with `bun packages/shop-example/src/shop-app.ts`. It prints its port in a
 JSON line, such as `{"event":"listening","port":4310}`.
@@ -106,8 +117,11 @@ help marks each command `[read]` or `[write]`.
 
 <!-- repo: commands -->
 
-- `bun verify action place-order` places one order through the API, as the page's button does.
-- `bun verify orders count` counts the rows of the `orders` table.
+- `bun verify action place-order` places one order through the API, as the page's button does, and
+  returns its `id` in `data.id`.
+- `bun verify orders count` counts the rows of the `orders` table, in `data.orders`.
+- `bun verify db query '<sql>'` runs SQL on `local`'s database. Add `--write` for a statement that
+  writes.
 - `bun verify browser snapshot` returns the page's accessibility tree, with a ref for each element
   that `browser click --ref` takes.
 - `bun verify stream read app` returns the app's log lines since `use` last ran. Add `--from 0` to
@@ -117,79 +131,10 @@ help marks each command `[read]` or `[write]`.
 
 ## Feature map
 
-Each entry says what the feature does, how a user reaches it in the app, the commands that drive it,
-and the end state that shows it works. `bun verify features` lists each feature's `paths`: the files
-whose change makes the gate ask for its verdict.
-
-<!-- repo: features -->
-
-Drive `order-failure` last: it drops the `orders` table, which breaks every later order on the run.
-
-### place-order
-
-- **What:** a shopper places an order from the shop page.
-- **How a user reaches it:** open `/`, and press Place order.
-- **Drive:**
-
-  ```bash
-  bun verify use --feature place-order
-  bun verify orders count
-  bun verify browser goto /
-  bun verify browser click --role button --name 'Place order'
-  bun verify browser snapshot
-  bun verify orders count
-  ```
-
-- **End state:** the snapshot's heading reads `Order <id> placed`, and the second `orders count`
-  returns one more order than the first.
-
-### list-orders
-
-- **What:** the orders API lists every placed order.
-- **How a user reaches it:** a client calls `GET /api/orders`.
-- **Drive:**
-
-  ```bash
-  bun verify use --feature list-orders
-  bun verify action place-order
-  bun verify http request --path /api/orders
-  ```
-
-- **End state:** `data.status` is 200, and `data.json` lists the order with the `id` that the action
-  returned, with the item `mug`.
-
-### order-log
-
-- **What:** the app logs one line for each order placed.
-- **How a user reaches it:** an operator reads the app's output.
-- **Drive:**
-
-  ```bash
-  bun verify use --feature order-log
-  bun verify action place-order
-  bun verify stream read app
-  ```
-
-- **End state:** the stream holds the line `order <id> placed`, with the `id` that the action
-  returned. When the line is missing, read the stream again, up to 5 times.
-
-### order-failure
-
-- **What:** the page tells the shopper when an order fails.
-- **How a user reaches it:** press Place order while the orders API fails.
-- **Drive:**
-
-  ```bash
-  bun verify use --feature order-failure
-  bun verify db query 'drop table orders' --write
-  bun verify browser goto /
-  bun verify browser click --role button --name 'Place order'
-  bun verify browser snapshot
-  ```
-
-- **End state:** the snapshot's heading starts with `The order failed`.
-
-<!-- /repo -->
+The [feature map](./references/feature-map.md) holds one entry per feature: what it does, how a user
+reaches it in the app, its Drive block, and the end state that shows it works. Read a feature's
+entry before you drive it. `bun verify features` lists each feature's `paths`: the files whose
+change makes the gate ask for its verdict.
 
 ## Keep the map true
 
@@ -203,7 +148,10 @@ the targets, actions, commands, doctor checks and features, with each feature's 
 
 - When a change touches a file under a feature's `paths`, drive that feature and run `done` before
   the PR.
-- When a journey no longer works because the feature changed, fix the journey in the same PR.
+- When a Drive block no longer works because the feature changed, fix it in the same PR.
+- In this file, edit only inside the `<!-- repo -->` blocks. The lines outside them come from the
+  wringer template, and an upgrade of the template replaces them. The repo owns the feature map
+  whole.
 - Run `bun verify lint` after you change this skill or the registry. It fails on a `paths` glob that
   matches no file, a command in a code block that would not parse, and a skill written from an older
   template.

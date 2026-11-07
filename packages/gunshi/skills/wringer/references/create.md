@@ -11,11 +11,12 @@ The mistakes that cost the most:
   `effect: 'read'`, and a read-only target refuses each write with exit code 3.
 - **A glob relative to a package.** Write each feature's `paths` globs relative to the repo root, as
   `git ls-files` prints paths. In a monorepo, a glob relative to a package folder matches nothing.
-- **A placeholder in a journey.** `bun verify lint` parses each line of a fenced code block in the
-  `verify` skill that calls the CLI, and reads `<name>` as a shell redirect. Write each such line as
-  a command that runs, and put a command with a placeholder in inline code.
-- **A ready line in plain text.** The launch target's `ready` function gets each line of the app's
-  stdout: a JSON object line as that object, and any other line as `{ message: <the line> }`.
+- **A placeholder in a journey.** In the `verify` skill's fenced code blocks, `bun verify lint`
+  parses each line that starts with `bun verify`, and reads `<name>` as a shell redirect. Write each
+  such line as a command that runs, and put a command with a placeholder in inline code.
+- **Matching a plain-text ready line as a string.** The launch target's `ready` function gets a JSON
+  object line as that object, and any other line as `{ message: <the line> }`. Match plain text on
+  `line['message']`.
 
 ## Steps
 
@@ -40,15 +41,15 @@ The mistakes that cost the most:
 4. In `verify-registry.ts`, write the `local` target with `mode: 'launch'` and
    `access: 'read-write'`. Its `launch` function returns:
    - `command`: the command a developer runs to start the app;
-   - `env`: the app's environment. Point the app's state at `ctx.runDirectory` here, such as its
-     database file, so each run starts clean;
+   - `env`: the app's environment. Point the app's state at `ctx.runDirectory` here, such as a
+     SQLite file, so each run starts clean. For a database server, name a database per run;
    - `ready`: a function that returns the app's endpoints once a line shows the app is ready, such
      as `{ web: 'http://127.0.0.1:4100' }`, and `null` before. The drivers use the `web` endpoint
      unless a driver's config sets another `endpoint`.
 5. Write a target with `mode: 'attach'` for each instance that runs apart from the CLI, such as a
    staging or a production deployment. Its `endpoints` function returns the instance's URLs. Give a
-   production target `access: 'read-only'`, and a `refusalHint` that tells the agent where to report
-   a write it needed.
+   target `access: 'read-only'` when agents must never write there, such as production, and a
+   `refusalHint` that tells the agent where to report a write it needed.
 6. Under each target's `drivers`, give a config for each driver the target allows. A target with no
    config for a driver refuses that driver's commands.
 7. Write an action with `.action` for each setup step a journey needs and a user can't do quickly in
@@ -68,8 +69,13 @@ The mistakes that cost the most:
       refusal.
     - `commands`: what `--help` can't say about the actions and repo commands, such as the order to
       run them in.
-    - `features`: one `###` entry per feature, in the template's form.
     - `registry`: the path of the registry file.
-12. Run `bun verify lint`. Expect: `ok: true`, and `data.commands` above 0.
+
+    Then rewrite `references/feature-map.md` with one `##` entry per feature, in the template's
+    form: what it does, how a user reaches it, its journey as a Drive block of commands that run as
+    written, and its end state.
+
+12. Run `bun verify lint`. Expect: `ok: true`, and `data.commands`, the count of journey lines it
+    parsed, above 0. A count of 0 means it found no Drive block.
 13. Run `bun verify --help`, then `bun verify <group> --help` for each group it lists, such as
     `action`. Expect: every action and repo command, each marked `[read]` or `[write]`.

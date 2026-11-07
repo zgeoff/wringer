@@ -6,8 +6,8 @@ placeholders, and add nothing else. A fact you add about the app or the CLI hide
 skill.
 
 - `<repo root>`: the absolute path of the repo.
-- `<skill path>`: the path of the repo's `verify` skill.
-- `<features>`: every feature name that `bun verify features` lists.
+- `<skill path>`: the absolute path of the `SKILL.md` of the repo's `verify` skill.
+- `<features>`: every feature name that `bun verify features` lists, comma-separated.
 
 ```text
 Load the skill at <skill path> and read it whole. It tells you how to drive this repo's app with
@@ -28,7 +28,7 @@ Reply with:
    the skill, what you needed, and what you did instead. Write "none" when there was none.
 ```
 
-When the subagent names a gap, fix the skill, and send the same brief to a new subagent. When a
-`done` fails and the subagent names no gap, find the cause before you change the skill: the app or
-the registry may be wrong. Stop when one subagent gets exit code 0 from `done` on every feature and
-names no gap. Its reply is the proof for the PR.
+When the subagent names a gap, fix the `verify` skill, or the CLI when its help or an error caused
+the gap. Then send the same brief to a new subagent. When a `done` fails and the subagent names no
+gap, find the cause before you change the skill: the app or the registry may be wrong. Stop when one
+subagent gets exit code 0 from `done` on every feature and names no gap.
