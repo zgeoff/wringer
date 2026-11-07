@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import type { ServiceContext, ServiceInstance } from '../src/types.ts';
 import { WringerError } from '../src/wringer-error.ts';
 
@@ -33,7 +34,8 @@ export interface StandInServices {
   // Its stop records each line of the app's log.
   readonly ledger: StandInService;
 
-  // Its `hold` method records itself and settles only once the hold gate opens.
+  // Its `hold` method records itself and settles only once the hold gate opens. Its `watch` method
+  // answers the time its signal aborted.
   readonly counter: StandInService;
 
   // Its start runs `sleep 30` through its exec, whatever the abort says, and records how the
@@ -115,6 +117,11 @@ export function buildStandInServices(dependencies: StandInDependencies): StandIn
               await dependencies.hold;
 
               return null;
+            },
+            watch: async (_args, signal) => {
+              await once(signal, 'abort');
+
+              return { cancelledAtMs: Date.now() };
             },
           },
           stop: () => Promise.resolve(),

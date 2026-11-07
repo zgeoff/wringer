@@ -5,6 +5,8 @@ import { createActor, waitFor } from 'xstate';
 import type { AppStart } from './app-machine.ts';
 import { appMachine } from './app-machine.ts';
 import { buildSpawnError } from './build-spawn-error.ts';
+import { createLogWriter } from './create-log-writer.ts';
+import type { LogWriter } from './create-log-writer.ts';
 import { parseLaunchLine } from './parse-launch-line.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { AppProcess, AppSpawnOptions, LaunchHost } from './read-launch-host.ts';
@@ -59,6 +61,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   });
 
   const logs = Promise.withResolvers<unknown>();
+  const log = createLogWriter((text) => request.host.appendLog(request.logPath, text));
 
   const app = createActor(appMachine, {
     input: {
@@ -75,6 +78,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
           env,
           child,
           logged: logs.promise,
+          closeLog: log.close,
           stopGraceMs: request.stopGraceMs,
         }),
     },
@@ -93,7 +97,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     onLine: (line: string) => void,
   ): Promise<void> => {
     try {
-      await pipeLines(request.host, stream, request.logPath, onLine);
+      await pipeLines(log, stream, onLine);
     } catch (error) {
       app.send({ type: 'log.failed', reason: toWringerError(error).message });
     }
@@ -177,7 +181,18 @@ interface AppStop {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly child: AppProcess;
   readonly logged: Promise<unknown>;
+  readonly closeLog: () => Promise<void>;
   readonly stopGraceMs: number;
+}
+
+// A failed stop still closes the log, so a service that reads the log once the stop settles, such
+// as a stream recorder, reads its last line.
+async function stopApp(stop: AppStop): Promise<void> {
+  try {
+    await signalApp(stop);
+  } finally {
+    await stop.closeLog();
+  }
 }
 
 const logDrainMs = 2000;
@@ -189,7 +204,7 @@ export const appStopLimitMs = 2 * appStopGraceMs + logDrainMs;
 // A hung stop command gives way to SIGTERM after the grace, and SIGKILL another grace later. The
 // stop ends once the app's last lines reach its log; a process outside the group can hold the
 // pipes open, so that wait has a bound.
-async function stopApp(stop: AppStop): Promise<void> {
+async function signalApp(stop: AppStop): Promise<void> {
   if (stop.plan.stop !== undefined) {
     const stopping = runStopCommand(stop.host, {
       argv: stop.plan.stop,
@@ -236,15 +251,14 @@ async function runStopCommand(host: LaunchHost, request: ProcessRequest): Promis
 }
 
 async function pipeLines(
-  host: LaunchHost,
+  log: LogWriter,
   stream: ReadableStream<Uint8Array>,
-  logPath: string,
   onLine: (line: string) => void,
 ): Promise<void> {
   // One append per chunk: an app that prints many lines as it stops would otherwise pay one
   // append per line, and miss the bound on the stop's wait for its log.
   for await (const lines of readStreamLineBatches(stream)) {
-    await host.appendLog(logPath, `${lines.join('\n')}\n`);
+    await log.append(`${lines.join('\n')}\n`);
 
     for (const line of lines) {
       onLine(line);

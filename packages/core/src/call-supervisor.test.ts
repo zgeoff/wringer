@@ -1,4 +1,5 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
+import { once } from 'node:events';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
@@ -51,6 +52,80 @@ test('it answers a result JSON cannot hold with an internal error', async () => 
   });
 
   expect(calling).rejects.toMatchObject({ code: 'internal' });
+});
+
+test("it returns the supervisor's answer to a call whose signal aborts while the supervisor works", async () => {
+  const ctx = await setupTest();
+
+  const caller = new AbortController();
+
+  ctx.handle.mockImplementationOnce(async () => {
+    caller.abort();
+
+    await once(AbortSignal.timeout(100), 'abort');
+
+    return { notes: 3 };
+  });
+
+  const result = await callSupervisor({
+    socket: ctx.socket,
+    request: { service: 'store', method: 'count', args: {} },
+    signal: caller.signal,
+  });
+
+  expect(result).toStrictEqual({ notes: 3 });
+});
+
+test('it times out a call whose supervisor does not answer within the wait after the abort', async () => {
+  const ctx = await setupTest();
+
+  const caller = new AbortController();
+
+  const held = Promise.withResolvers<unknown>();
+
+  onTestFinished(() => {
+    held.resolve(null);
+  });
+
+  ctx.handle.mockImplementationOnce(() => {
+    caller.abort();
+
+    return held.promise;
+  });
+
+  const calling = callSupervisor({
+    socket: ctx.socket,
+    request: { service: 'store', method: 'count', args: {} },
+    signal: caller.signal,
+  });
+
+  expect(calling).rejects.toMatchObject({ code: 'timeout' });
+});
+
+test('it fails a service call with a deadline whose cancel the supervisor never confirms with an environment error', async () => {
+  const ctx = await setupTest();
+
+  const caller = new AbortController();
+
+  const held = Promise.withResolvers<unknown>();
+
+  onTestFinished(() => {
+    held.resolve(null);
+  });
+
+  ctx.handle.mockImplementationOnce(() => {
+    caller.abort();
+
+    return held.promise;
+  });
+
+  const calling = callSupervisor({
+    socket: ctx.socket,
+    request: { service: 'store', method: 'count', args: {}, deadlineAt: Date.now() },
+    signal: caller.signal,
+  });
+
+  expect(calling).rejects.toMatchObject({ code: 'environment' });
 });
 
 test('it refuses a call whose signal aborted before the call, and sends no request', async () => {

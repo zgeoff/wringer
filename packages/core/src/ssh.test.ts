@@ -225,3 +225,64 @@ test('it fails with an environment error when ssh cannot connect', async () => {
     code: 'environment',
   });
 });
+
+test('it follows a remote command on a terminal as the read-only user, line by line', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary, readOnlyUser: 'app_ro' });
+  const lines: string[] = [];
+
+  const exitCode = await host.follow({
+    argv: ['printf', '%s\n', "it's up", 'second'],
+    access: 'read-only',
+    signal: new AbortController().signal,
+    onLine: (line) => {
+      lines.push(line);
+    },
+  });
+
+  const logins = await readFile(ctx.fake.loginsPath, 'utf8');
+
+  expect({ exitCode, lines, logins }).toStrictEqual({
+    exitCode: 0,
+    lines: ["it's up", 'second'],
+    logins: 'app_ro@app-host tty\n',
+  });
+});
+
+test('it fails a follow that ssh cannot connect for with an environment error and its reason', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'unreachable', binary: ctx.fake.binary });
+
+  const following = host.follow({
+    argv: ['tail', '-f', '/var/log/shop.log'],
+    access: 'read-write',
+    signal: new AbortController().signal,
+    onLine: () => {},
+  });
+
+  expect(following).rejects.toMatchObject({
+    code: 'environment',
+    message:
+      'ssh could not reach unreachable: ssh: connect to host unreachable port 22: Connection refused',
+  });
+});
+
+test('it follows only the stdout of a remote command, though a terminal merges its stderr', async () => {
+  const ctx = await setupTest();
+
+  const host = ssh({ destination: 'app-host', binary: ctx.fake.binary });
+  const lines: string[] = [];
+
+  await host.follow({
+    argv: ['sh', '-c', 'echo listening; echo "disk is slow" >&2; echo ready'],
+    access: 'read-write',
+    signal: new AbortController().signal,
+    onLine: (line) => {
+      lines.push(line);
+    },
+  });
+
+  expect(lines).toStrictEqual(['listening', 'ready']);
+});

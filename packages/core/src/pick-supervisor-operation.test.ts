@@ -11,26 +11,57 @@ test.each([
   const operation = pickSupervisorOperation(
     { service: supervisorServiceName, method: row.method, args: {} },
     new Map(),
+    1_000_000,
   );
 
   expect(operation).toStrictEqual({ kind: row.kind });
 });
 
-test("it picks a call that passes the request's args to the service method", async () => {
+test("it picks a call that passes the request's args and the caller's signal to the service method", async () => {
   const services = new Map([
-    ['shelf', { methods: { count: (args: unknown) => Promise.resolve({ counted: args }) } }],
+    [
+      'shelf',
+      {
+        methods: {
+          count: (args: unknown, signal: AbortSignal) =>
+            Promise.resolve({ counted: args, aborted: signal.aborted }),
+        },
+      },
+    ],
   ]);
 
   const operation = pickSupervisorOperation(
     { service: 'shelf', method: 'count', args: { aisle: 4 } },
     services,
+    1_000_000,
   );
 
   invariant(operation.kind === 'call');
 
-  const result = await operation.call();
+  const result = await operation.call(AbortSignal.abort());
 
-  expect(result).toStrictEqual({ counted: { aisle: 4 } });
+  expect(result).toStrictEqual({ counted: { aisle: 4 }, aborted: true });
+});
+
+test.each([
+  { name: 'no deadline', deadlineAt: undefined, cancelAfterMs: [] },
+  { name: 'a deadline 5 s away', deadlineAt: 1_005_000, cancelAfterMs: [4000] },
+  { name: 'a deadline 1 s away', deadlineAt: 1_001_000, cancelAfterMs: [0] },
+  { name: 'a deadline that has passed', deadlineAt: 999_000, cancelAfterMs: [0] },
+])('it cancels a service call one second before $name', (row) => {
+  const services = new Map([['shelf', { methods: { count: () => Promise.resolve(0) } }]]);
+
+  const operation = pickSupervisorOperation(
+    { service: 'shelf', method: 'count', args: {}, deadlineAt: row.deadlineAt },
+    services,
+    1_000_000,
+  );
+
+  expect(operation).toStrictEqual({
+    kind: 'call',
+    cancelAfterMs: row.cancelAfterMs,
+    call: expect.any(Function),
+  });
 });
 
 test.each([
@@ -43,6 +74,7 @@ test.each([
   const operation = pickSupervisorOperation(
     { service: row.service, method: row.method, args: {} },
     services,
+    1_000_000,
   );
 
   expect(operation).toStrictEqual({

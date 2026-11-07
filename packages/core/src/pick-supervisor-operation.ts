@@ -7,12 +7,23 @@ import { WringerError } from './wringer-error.ts';
 export type SupervisorOperation =
   | { readonly kind: 'stop' }
   | { readonly kind: 'status' }
-  | { readonly kind: 'call'; readonly call: () => Promise<unknown> }
+  | {
+      readonly kind: 'call';
+
+      // Empty for a request with no deadline; otherwise the one delay after which the call aborts.
+      readonly cancelAfterMs: readonly number[];
+      readonly call: (signal: AbortSignal) => Promise<unknown>;
+    }
   | { readonly kind: 'refuse'; readonly error: WringerError };
+
+// A service method's signal aborts this long before the caller's deadline, so the method has time
+// to stop its work, such as a browser closing its page, before the caller reports a timeout.
+const serviceCancelReserveMs = 1000;
 
 export function pickSupervisorOperation(
   request: SupervisorRequest,
   services: ReadonlyMap<string, Pick<ServiceInstance, 'methods'>>,
+  nowMs: number,
 ): SupervisorOperation {
   if (request.service === supervisorServiceName) {
     return request.method === 'stop' ? { kind: 'stop' } : { kind: 'status' };
@@ -30,5 +41,12 @@ export function pickSupervisorOperation(
     };
   }
 
-  return { kind: 'call', call: () => method(request.args) };
+  return {
+    kind: 'call',
+    cancelAfterMs:
+      request.deadlineAt === undefined
+        ? []
+        : [Math.max(0, request.deadlineAt - serviceCancelReserveMs - nowMs)],
+    call: (signal) => method(request.args, signal),
+  };
 }

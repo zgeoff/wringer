@@ -1,4 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { once } from 'node:events';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
@@ -46,13 +47,51 @@ async function setupTest() {
     ],
   });
 
+  const tillHeld = Promise.withResolvers<void>();
+
+  onTestFinished(() => {
+    tillHeld.resolve();
+  });
+
+  // The drawer's call fails once its check's own deadline cancels it; the wait then runs on until
+  // the doctor's deadline.
+  const till = defineDriver({
+    name: 'till',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    client: (session) => ({
+      count: () => session.service('drawer').call('count', null),
+    }),
+    checks: [
+      {
+        name: 'drawer',
+        timeoutMs: 100,
+        run: async (ctx) => {
+          await ctx.client.count();
+        },
+      },
+      {
+        name: 'wait',
+        timeoutMs: 5000,
+        run: () => tillHeld.promise,
+      },
+    ],
+  });
+
   const wringer = createWringer({ name: 'shop' })
     .use(clock({}))
+    .use(till({}))
     .target('box', {
       mode: 'attach',
       access: 'read-write',
       host: local(),
       drivers: { clock: () => ({}) },
+    })
+    .target('till-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      drivers: { till: () => ({}) },
     })
     .check({
       name: 'note',
@@ -100,6 +139,29 @@ async function setupTest() {
     },
     runWithin: (path: readonly string[], timeoutMs: number) =>
       dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
+    runOnTill: (path: readonly string[]) =>
+      dispatch(wringer, path, {}, { ...shop.session, target: 'till-box' }),
+
+    // Each service call fails once its signal aborts, as a cancel that could not stop its work.
+    runTillDoctorWithin: (timeoutMs: number) =>
+      dispatch(
+        wringer,
+        ['doctor'],
+        {},
+        {
+          ...shop.session,
+          target: 'till-box',
+          timeoutMs,
+          supervisor: {
+            ...shop.session.supervisor,
+            call: async (call) => {
+              await once(call.signal, 'abort');
+
+              throw new WringerError('environment', { message: 'The drawer jammed.' });
+            },
+          },
+        },
+      ),
     readPID: async () => {
       const text = await readFile(pidPath, 'utf8');
 
@@ -183,6 +245,19 @@ test('it lists the evidence a failed check kept in the doctor envelope', async (
   expect(result.envelope.evidence).toStrictEqual([
     { kind: 'note', path: expect.stringMatching(/cart\.txt$/u), sha256: expect.any(String) },
   ]);
+});
+
+test('it answers a timeout, not the failure of a check call that its own deadline cancelled earlier', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runOnTill(['attach']);
+
+  const result = await ctx.runTillDoctorWithin(400);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 5,
+    code: 'timeout',
+  });
 });
 
 test('it starts no check once the doctor ran past its own deadline', async () => {

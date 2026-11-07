@@ -11,6 +11,7 @@ import type { ExitCode } from './error-codes.ts';
 import { findOwnValue } from './find-own-value.ts';
 import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
+import { keepCancelledCall } from './keep-cancelled-call.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
@@ -44,6 +45,7 @@ import type {
   TargetDefinition,
   Wringer,
 } from './types.ts';
+import { waitForCancelledCalls } from './wait-for-cancelled-calls.ts';
 import { WringerError } from './wringer-error.ts';
 import { writeEnvelopeLog } from './write-envelope-log.ts';
 import { writeLateFailure } from './write-late-failure.ts';
@@ -71,6 +73,9 @@ interface DriveTrace {
   ranOnRun: boolean;
   boundRun: RunID | null;
   readonly late: Promise<void>[];
+
+  // Each service call to the run's supervisor that was still running at the deadline.
+  readonly calls: Promise<unknown>[];
 
   // Set once the command's outcome is settled, so the work's later events never follow the answer.
   answered: boolean;
@@ -104,6 +109,7 @@ export async function dispatch(
     ranOnRun: false,
     boundRun: null,
     late: [],
+    calls: [],
     answered: false,
   };
 
@@ -148,6 +154,14 @@ export async function dispatch(
     if (failure.code !== 'timeout') {
       pending = null;
     }
+  }
+
+  // A timeout never reaches the caller while a cancelled call's work can still land, and a cancel
+  // that failed answers in the timeout's place.
+  if (failure?.code === 'timeout') {
+    const cancelFailure = await waitForCancelledCalls(trace.calls);
+
+    failure = cancelFailure ?? failure;
   }
 
   trace.answered = true;
@@ -220,6 +234,7 @@ interface CommandContext {
   readonly target: TargetDefinition;
   readonly run: RunView | undefined;
   readonly feature: string | null;
+  readonly cursors: Readonly<Record<string, number>>;
 }
 
 async function readContext(
@@ -253,7 +268,15 @@ async function readContext(
   const runID = findOwnValue(pointers.currentRun, targetName);
   const run = runID === undefined ? undefined : await state.readRun(runID);
 
-  return { targetName, target, run, feature: session.feature ?? pointers.feature ?? null };
+  return {
+    targetName,
+    target,
+    run,
+    feature: session.feature ?? pointers.feature ?? null,
+
+    // Saved cursors are offsets into one run's streams; another run's streams start over.
+    cursors: runID !== undefined && pointers.cursorsRun === runID ? pointers.cursors : {},
+  };
 }
 
 interface CommandRequest {
@@ -403,12 +426,19 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     hint: options.hint,
     run: options.run,
     feature: request.context.feature,
+    cursors: request.context.cursors,
     signal: options.deadline?.signal ?? request.deadline,
     deadlineAt: options.deadline?.at ?? request.deadlineAt,
     now: request.now,
     emit: makeEmit(request.session, request.trace),
     files: request.session.repoHost,
-    callSupervisor: request.session.supervisor.call,
+    callSupervisor: (call) => {
+      const calling = request.session.supervisor.call(call);
+
+      keepCancelledCall(request.trace.calls, calling, request.deadline);
+
+      return calling;
+    },
   });
 }
 

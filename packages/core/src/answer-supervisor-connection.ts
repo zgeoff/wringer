@@ -5,7 +5,10 @@ import { supervisorRequestSchema } from './supervisor-protocol.ts';
 import type { SupervisorRequest, SupervisorResponse } from './supervisor-protocol.ts';
 import { toWringerError } from './to-wringer-error.ts';
 
-export type SupervisorRequestHandler = (request: SupervisorRequest) => Promise<unknown>;
+export type SupervisorRequestHandler = (
+  request: SupervisorRequest,
+  signal: AbortSignal,
+) => Promise<unknown>;
 
 export interface SupervisorConnectionOptions {
   readonly answerRequest: SupervisorRequestHandler;
@@ -38,6 +41,13 @@ export async function answerSupervisorConnection(
   // A connection error with no listener is thrown, and would end the supervisor.
   connection.on('error', fail);
 
+  const caller = new AbortController();
+
+  // A caller that gives up, such as at its deadline, closes the connection before the answer.
+  connection.once('close', () => {
+    caller.abort();
+  });
+
   const lines = createInterface({ input: connection });
 
   // readline re-emits the connection's errors, also after the loop below has stopped listening,
@@ -64,7 +74,7 @@ export async function answerSupervisorConnection(
     for await (const line of lines) {
       answering = true;
 
-      const response = await answerLine(line, options.answerRequest);
+      const response = await answerLine(line, options.answerRequest, caller.signal);
 
       connection.end(`${response}\n`);
 
@@ -81,11 +91,15 @@ export async function answerSupervisorConnection(
 
 // A service may return a value JSON cannot hold, such as a bigint, so the result is serialized
 // inside the try and its failure reaches the caller as an error response.
-async function answerLine(line: string, handle: SupervisorRequestHandler): Promise<string> {
+async function answerLine(
+  line: string,
+  handle: SupervisorRequestHandler,
+  signal: AbortSignal,
+): Promise<string> {
   try {
     const request = supervisorRequestSchema.parse(JSON.parse(line));
 
-    const result = await handle(request);
+    const result = await handle(request, signal);
 
     const response: SupervisorResponse = { ok: true, result: result ?? null };
 

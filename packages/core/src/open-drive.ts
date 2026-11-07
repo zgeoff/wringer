@@ -28,6 +28,7 @@ export interface DriveRequest {
   readonly hint: string;
   readonly run: RunView;
   readonly feature: string | null;
+  readonly cursors: Readonly<Record<string, number>>;
   readonly signal: AbortSignal;
 
   // When `signal` fires, in ms since the epoch on the `now` clock.
@@ -77,6 +78,7 @@ export function openDrive(request: DriveRequest): Drive {
         run,
         exec: makeDriverExec(execOptions),
         evidence: evidence.writer,
+        cursors: request.cursors,
         signal: request.signal,
         timeLeftMs: () => Math.max(0, request.deadlineAt - request.now().getTime()),
         fence,
@@ -84,7 +86,12 @@ export function openDrive(request: DriveRequest): Drive {
           call: (method, args) =>
             request.callSupervisor({
               socket: getSocket(request.run),
-              request: { service: buildServiceKey(entry.name, service), method, args },
+              request: {
+                service: buildServiceKey(entry.name, service),
+                method,
+                args,
+                deadlineAt: request.deadlineAt,
+              },
               signal: request.signal,
             }),
         }),

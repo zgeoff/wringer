@@ -26,6 +26,9 @@ export async function callSupervisor(call: SupervisorCall): Promise<unknown> {
   return response.result;
 }
 
+// The longest a call waits for the supervisor's answer once the caller's signal aborts.
+export const supervisorCancelWaitMs = 2000;
+
 async function exchangeLine(call: SupervisorCall): Promise<string> {
   // An abort that came before the listener never fires it, so a late call would still run.
   if (call.signal.aborted) {
@@ -35,10 +38,19 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
   const connection = createConnection({ path: call.socket });
   const lines = createInterface({ input: connection });
   const reply = Promise.withResolvers<string>();
+  let giveUp: ReturnType<typeof setTimeout> | undefined;
 
+  // The supervisor cancels the call itself before the caller's deadline, and its answer tells the
+  // caller the cancelled work has stopped, so the caller waits a bounded time for that answer.
   const onAbort = (): void => {
-    connection.destroy();
-    reply.reject(buildLateError());
+    giveUp = setTimeout(() => {
+      connection.destroy();
+
+      const failure =
+        call.request.deadlineAt === undefined ? buildLateError() : buildUnconfirmedError();
+
+      reply.reject(failure);
+    }, supervisorCancelWaitMs);
   };
 
   call.signal.addEventListener('abort', onAbort, { once: true });
@@ -65,6 +77,8 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
   try {
     return await reply.promise;
   } finally {
+    clearTimeout(giveUp);
+
     call.signal.removeEventListener('abort', onAbort);
     lines.close();
     connection.destroy();
@@ -73,6 +87,15 @@ async function exchangeLine(call: SupervisorCall): Promise<string> {
 
 function buildLateError(): WringerError {
   return new WringerError('timeout', { message: 'The supervisor did not answer in time.' });
+}
+
+// A timeout tells the caller the cancelled work stopped, so a cancel the supervisor never answered
+// fails with an environment error.
+export function buildUnconfirmedError(): WringerError {
+  return new WringerError('environment', {
+    message: `The run's supervisor did not confirm within ${supervisorCancelWaitMs} ms that the cancelled call stopped, so its work may still run.`,
+    hint: 'Run `up --restart` to start a new run.',
+  });
 }
 
 function toConnectionError(error: Error): WringerError {
