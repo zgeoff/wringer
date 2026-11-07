@@ -3,8 +3,8 @@ import type { ServiceInstance } from '@wringer/core';
 import type { Browser, Locator, Page } from 'playwright-core';
 import { createActor } from 'xstate';
 import { z } from 'zod';
-import { browserPageMachine } from './browser-page-machine.ts';
-import type { PageActionResult } from './browser-page-machine.ts';
+import { createBrowserPageMachine } from './create-browser-page-machine.ts';
+import type { PageActionResult } from './create-browser-page-machine.ts';
 import { findSnapshotElement } from './find-snapshot-element.ts';
 import type { ElementTarget, PageResult } from './page-service-contract.ts';
 import { pickReopenURL } from './pick-reopen-url.ts';
@@ -27,7 +27,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
   const browser = await options.launchBrowser();
   const runPage = await openRunPage(browser, options.actionTimeoutMs);
 
-  const pageActor = createActor(browserPageMachine, {
+  const pageActor = createActor(createBrowserPageMachine<Page>(), {
     input: {
       page: runPage.firstPage,
       closePage: (stale: Page) => stale.close(),
