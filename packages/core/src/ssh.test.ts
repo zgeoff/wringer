@@ -3,10 +3,10 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
 import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
+import { createFakeSSH } from './test-utils/create-fake-ssh.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 // The stack stops the remote process groups before it removes the folder their logs sit in.
 async function setupTest() {

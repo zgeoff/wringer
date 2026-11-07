@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { decideGuard } from './decide-guard.ts';
+import { buildMockRunView } from './test-utils/build-mock-run-view.ts';
 
 test('it lets a command that needs no run through without one', () => {
   const refusal = decideGuard({

@@ -6,8 +6,6 @@ import { dirname, join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { buildStandInServices } from '../test-utils/build-stand-in-services.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { createRepoState } from './create-repo-state.ts';
@@ -17,6 +15,8 @@ import { local } from './local.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 import { runSupervisor } from './run-supervisor.ts';
 import { supervisorServiceName } from './supervisor-protocol.ts';
+import { buildStandInServices } from './test-utils/build-stand-in-services.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 import { WringerError } from './wringer-error.ts';
 
 async function setupTest() {

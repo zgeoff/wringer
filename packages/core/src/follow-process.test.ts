@@ -3,9 +3,9 @@ import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { followProcess } from './follow-process.ts';
 import { probeProcess } from './probe-process.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'follow-process');

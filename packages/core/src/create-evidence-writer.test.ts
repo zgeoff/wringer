@@ -1,10 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import { createNodeRepoHost } from './create-node-repo-host.ts';
+import { buildStubClock } from './test-utils/build-stub-clock.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'evidence-writer');

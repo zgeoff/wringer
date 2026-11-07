@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createGuardedApp } from '../test-utils/create-guarded-app.ts';
 import { readLaunchHost } from './read-launch-host.ts';
+import { createGuardedApp } from './test-utils/create-guarded-app.ts';
 
 test('it reads the launch guard, the folder and the environment of this process', () => {
   const host = readLaunchHost();

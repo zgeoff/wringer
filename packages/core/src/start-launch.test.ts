@@ -4,13 +4,13 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { killProcessGroup } from './kill-process-group.ts';
 import { probeProcess } from './probe-process.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 import type { LaunchHost } from './read-launch-host.ts';
 import { startLaunch } from './start-launch.ts';
 import type { LaunchRequest } from './start-launch.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 import { WringerError } from './wringer-error.ts';
 
 // The stack stops each app before it removes the folder the app logs into. A second stop repeats

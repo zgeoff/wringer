@@ -2,14 +2,14 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
-import { createTestSession } from '../../test-utils/create-test-session.ts';
 import type { StatePort } from '../create-file-state.ts';
 import { dispatch } from '../dispatch.ts';
 import { readVerdicts } from '../read-verdicts.ts';
 import { reportSchema } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
 import type { RunEvent } from '../run-events.ts';
+import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
+import { createTestSession } from '../test-utils/create-test-session.ts';
 import type { UploadRequest } from '../types.ts';
 
 async function setupTest() {

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
-import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { pickEnvelopeTarget } from './pick-envelope-target.ts';
+import { buildMockRunView } from './test-utils/build-mock-run-view.ts';
 
 test('it picks the target of the run a lifecycle command bound over the settled target', () => {
   const bound = buildMockRunView({ target: 'prod' });

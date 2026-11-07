@@ -1,11 +1,11 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { ssh } from '@wringer/core';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTestSSHPostgres } from '@wringer/core/test-utils/create-test-ssh-postgres.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';
 import { buildExecQuery } from './build-exec-query.ts';
 import { parseExecResult } from './parse-exec-result.ts';
 

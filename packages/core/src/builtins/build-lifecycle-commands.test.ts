@@ -4,12 +4,12 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createShopWringer } from '../../test-utils/create-shop-wringer.ts';
-import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
 import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { runGit } from '../run-git.ts';
+import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
+import { createTestSession } from '../test-utils/create-test-session.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();

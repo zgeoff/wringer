@@ -1,8 +1,8 @@
 import { expect, mock, test } from 'bun:test';
-import { createDemoWringer } from '../test-utils/create-demo-wringer.ts';
 import { buildGunshiCommands } from './build-gunshi-commands.ts';
 import type { InvokeResult } from './build-gunshi-commands.ts';
 import { extraWordsArg } from './build-positional-args.ts';
+import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
 test('it nests each command under the words of its path', () => {
   const commands = buildGunshiCommands(createDemoWringer(), mock<(result: InvokeResult) => void>());

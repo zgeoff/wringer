@@ -2,13 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { open, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildRunPaths, dispatch } from '@wringer/core';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { createTestSession } from '../../core/test-utils/create-test-session.ts';
-import { createStreamWringer } from '../test-utils/create-stream-wringer.ts';
 import { readStreamSlice } from './read-stream-slice.ts';
 import { streamSliceSchema } from './stream.ts';
+import { createStreamWringer } from './test-utils/create-stream-wringer.ts';
 
 async function setupTest() {
   const triggers = await createTestFolder(import.meta.dir, 'stream-triggers');

@@ -4,8 +4,8 @@ import { rm } from 'node:fs/promises';
 import { createConnection, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { answerSupervisorConnection } from './answer-supervisor-connection.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 // The stack closes both ends of the socket and the listener before it removes their folder.
 async function setupTest() {

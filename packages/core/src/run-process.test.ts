@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
 import { runProcess } from './run-process.ts';
+import { createTestFolder } from './test-utils/create-test-folder.ts';
 
 test('it returns the exit code and output of a command, with stdin passed in', async () => {
   const result = await runProcess({

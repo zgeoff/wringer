@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { waitFor } from '@zgeoff/testing/helpers';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
-import { createTestPostgres } from '../test-utils/create-test-postgres.ts';
 import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
+import { createTestPostgres } from './test-utils/create-test-postgres.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the client, then
 // the container.

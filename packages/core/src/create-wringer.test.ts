@@ -1,10 +1,10 @@
 import { expect, expectTypeOf, test } from 'bun:test';
 import { z } from 'zod';
-import { notes } from '../test-utils/notes-driver.ts';
 import { bindDrivers } from './bind-drivers.ts';
 import { createWringer } from './create-wringer.ts';
 import { defineDriver } from './define-driver.ts';
 import { local } from './local.ts';
+import { notes } from './test-utils/notes-driver.ts';
 
 test('it registers the built-ins, the driver commands and each action under `action`', () => {
   const wringer = createWringer({ name: 'shop' })

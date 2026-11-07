@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockEnvelope } from '../test-utils/build-mock-envelope.ts';
-import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { pickLogRefusal } from './pick-log-refusal.ts';
+import { buildMockEnvelope } from './test-utils/build-mock-envelope.ts';
+import { buildMockRunView } from './test-utils/build-mock-run-view.ts';
 import { WringerError } from './wringer-error.ts';
 
 test.each([

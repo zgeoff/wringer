@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { open, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { readFileFrom } from './read-file-from.ts';
 import type { FilePosition } from './read-file-from.ts';
 

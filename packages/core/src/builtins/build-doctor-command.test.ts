@@ -6,13 +6,13 @@ import { setImmediate } from 'node:timers/promises';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
-import { createTestFolder } from '../../../../test-utils/create-test-folder.ts';
-import { createTestSession } from '../../test-utils/create-test-session.ts';
 import { createWringer } from '../create-wringer.ts';
 import { defineDriver } from '../define-driver.ts';
 import { dispatch } from '../dispatch.ts';
 import { local } from '../local.ts';
 import { probeProcess } from '../probe-process.ts';
+import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTestSession } from '../test-utils/create-test-session.ts';
 import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {

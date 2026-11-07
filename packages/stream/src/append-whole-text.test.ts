@@ -2,9 +2,9 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readText } from '@wringer/core';
-import { createTestFolder } from '../../../test-utils/create-test-folder.ts';
-import { runAppendUnderSizeLimit } from '../test-utils/run-append-under-size-limit.ts';
+import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { appendWholeText } from './append-whole-text.ts';
+import { runAppendUnderSizeLimit } from './test-utils/run-append-under-size-limit.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'append-whole-text');

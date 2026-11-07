@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { buildMockEnvelope } from '../test-utils/build-mock-envelope.ts';
-import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { findVerdictRefusal } from './find-verdict-refusal.ts';
+import { buildMockEnvelope } from './test-utils/build-mock-envelope.ts';
+import { buildMockRunView } from './test-utils/build-mock-run-view.ts';
 
 test.each([
   {
