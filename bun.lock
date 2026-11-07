@@ -150,7 +150,7 @@
     "@orpc/openapi": "1.16.1",
     "@orpc/openapi-client": "1.16.1",
     "@orpc/server": "1.16.1",
-    "@zgeoff/std": "0.4.2",
+    "@zgeoff/std": "0.4.3",
     "@zgeoff/testing": "0.2.1",
     "ajv": "8.20.0",
     "gunshi": "0.37.3",
@@ -566,7 +566,7 @@
 
     "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.25", "", { "dependencies": { "@zgeoff/agent-hooks": "0.2.9" } }, "sha512-KW+YiBBfrHX/UctIu6OJqhsucFEBI8Z/KJVBUw+Jiu12O5L+d43KUpzJu5/2Qo9AmDTOQVR//hNkDNockhmfzA=="],
 
-    "@zgeoff/std": ["@zgeoff/std@0.4.2", "", {}, "sha512-GZnnOkrYHe6p071BWYe7XIq5klqhvVb4j/JWOrrUTSj76uLA/ZnzlqDKIq16LblMcuRF9tjfvKvGK8sLRN8fMg=="],
+    "@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
 
     "@zgeoff/testing": ["@zgeoff/testing@0.2.1", "", { "dependencies": { "bun-pty": "0.5.2" } }, "sha512-i/x931QYNWJJEydeGCDhlIBEm+SuXhjmLzmiZWP/jyQlsCXYy7AFv0RAVRktltEPNdGnHlcCZqKZeWNkIjH3Lg=="],
 
