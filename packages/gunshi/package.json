@@ -10,6 +10,9 @@
     "url": "git+https://github.com/zgeoff/wringer.git",
     "directory": "packages/gunshi"
   },
+  "bin": {
+    "wringer-gunshi": "./src/wringer-gunshi.ts"
+  },
   "files": [
     "src",
     "!src/**/*.test.ts",
