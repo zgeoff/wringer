@@ -27,9 +27,9 @@ The mistakes that cost the most time:
 - **Editing the app's code while `up` runs it.** The next command that touches the app fails with
   `doctor-required`. Run `bun verify up --restart`, then `bun verify doctor`. Then run the feature's
   journey again.
-- **Running `done` before you check the end state.** `done` checks only that a journey command after
-  `use`, such as an `action` or a `browser` command, succeeded. It does not check the result. Check
-  the end state yourself first.
+- **Running `done` before you check the end state.** `done` checks only that one command of the
+  feature's journey after `use --feature`, a read or a write, succeeded. It does not check the
+  result. Check the end state yourself first.
 - **Branching on the error message.** Branch on the exit code and `error.code`. The message text can
   change in any release.
 
@@ -71,11 +71,12 @@ The mistakes that cost the most time:
    - Otherwise, skip `done` for this feature. List it in your reply with the end state you expected
      and the `data` you got.
 6. Run `bun verify done`. It records a verdict for the feature that `use --feature` set. Expect:
-   `ok: true`. If no journey command after `use --feature` succeeded since `doctor` passed, it fails
-   with exit code 1 and `check-failed`.
+   `ok: true`. It fails with exit code 1 and `check-failed` until one command of the journey
+   succeeds after `use --feature` and `doctor`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order the feature map lists them. When the feature map gives another order, follow it.
-   When a changed feature has no entry in the feature map, write one, and run `bun verify lint`.
+   in the order the feature map lists them. When the feature map's opening names a journey to run
+   last, follow it. When a changed feature has no entry in the feature map, write one, and run
+   `bun verify lint`.
 8. Run `bun verify report --human`. A changed feature with your verdict shows `verified`; a feature
    the branch doesn't change shows `unchanged`, with your verdict's evidence. After `done`, an edit
    to any file on the branch makes every verdict `stale`, unless you commit the same code. Repeat

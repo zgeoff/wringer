@@ -66,9 +66,9 @@ proof in its description. The mistakes that cost the most:
 
 ## Install the skill
 
-This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs. An
-agent can load it only after these commands put it in `.claude/skills/wringer/`. The installer
-replaces any older copy there:
+This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs.
+These commands put it in `.claude/skills/wringer/`, where an agent can load it, and replace any
+older copy there. Commit that folder with the rest of the work:
 
 ```bash
 bun add --dev --exact @wringer/core @wringer/gunshi zod
@@ -78,8 +78,9 @@ bunx @wringer/gunshi skill install
 Run the second command again after each upgrade of `@wringer/gunshi`.
 
 The CLI runs on Bun. When the repo installs packages with another package manager, use it for
-`bun add` and `bunx`, such as `pnpm add` and `pnpm dlx`. Also use it in the `package.json` script
-name and in the `verify` skill's `metadata.wringer-command`, such as `pnpm verify`.
+`bun add` and `bunx`, such as `pnpm add` and `pnpm dlx`. Also use it in the `verify` skill's
+`metadata.wringer-command`, such as `pnpm verify`. The `verify` script in `package.json` still runs
+the CLI with `bun`.
 
 ## The template
 

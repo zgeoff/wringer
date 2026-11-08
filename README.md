@@ -42,7 +42,8 @@ workspace publishes to npm.
    bunx @wringer/gunshi skill install
    ```
 
-   Expect: `Installed the wringer skill to <repo>/.claude/skills/wringer`.
+   Expect: `Installed the wringer skill to <repo_root>/.claude/skills/wringer`, where `<repo_root>`
+   is the repo's absolute path.
 
 3. Ask your coding agent to load the `wringer` skill and add a verify CLI to the repo.
 

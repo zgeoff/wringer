@@ -46,14 +46,14 @@ CLI, a feature map and a verify skill to a repo, and through the checks that pro
 `template/` folder holds the example files for the repo's own verify skill, which the agent writes.
 
 The install command deletes the folder it installs to, so move any edits out of the repo's copy
-first. After you install or upgrade the package, run it from the repo root:
+first. After you install or upgrade the package, run the install command from the repo root:
 
 ```bash
 bunx @wringer/gunshi skill install
 ```
 
 It copies the skill from the installed package to `.claude/skills/wringer`, or to `--dir <path>`. It
-refuses a folder that is not a copy of the wringer skill, and exits with code 2.
+refuses a folder that is not a copy of this agent skill, and exits with code 2.
 
 ## lint
 

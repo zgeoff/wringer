@@ -10,8 +10,9 @@ The mistakes that cost the most:
 - **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
   `edited` event misses the report an author pastes later.
 - **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Move the old
-  `verify` skill folder away first, as step 2 of the upgrade does. The installer replaces the
-  wringer skill's folder itself.
+  `verify` skill folder away first, as step 2 of the upgrade does.
+  `bunx @wringer/gunshi skill install` replaces the wringer skill's folder itself, so that folder
+  needs no move.
 
 ## Wire the checks into CI
 
@@ -46,11 +47,11 @@ Keep it a workflow of its own, so a body edit reruns only this job.
 
 ## Fix a drifted journey
 
-A journey breaks when a change to its feature, such as a renamed button, makes a journey command
-fail or its end state no longer match. Fix the feature's journey in the `verify` skill's
-`references/feature-map.md`, in the same PR. Then follow the `verify` skill's "Check a change" for
-that feature. Replace the whole report in the PR body with the new output of
-`bun verify report --human`.
+A journey breaks when a change to its feature, such as a renamed button, makes a command of its
+journey fail, or leaves the app different from the end state the journey expects. Fix the feature's
+journey in the `verify` skill's `references/feature-map.md`, in the same PR. Then follow the
+`verify` skill's "Check a change" for that feature. Replace the whole report in the PR body with the
+new output of `bun verify report --human`.
 
 ## Upgrade the template
 
