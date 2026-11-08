@@ -1,15 +1,15 @@
 # Feature map
 
-Drive `order-failure` last: it drops the `orders` table, which breaks every later order on the run.
-To drive another feature after it, run `bun verify up --restart` and `bun verify doctor` first.
-Drive every feature here on `local`: each Drive block places an order or drops a table, and `demo`
-refuses both writes.
+Run the `order-failure` journey last: it drops the `orders` table, which breaks every later order on
+the run. To run another feature's journey after it, run `bun verify up --restart` and
+`bun verify doctor` first. Run every journey here on `local`: each one places an order or drops a
+table, and `demo` refuses both writes.
 
 ## place-order
 
 - **What:** a shopper places an order from the shop page.
 - **How a user reaches it:** open `/`, and press Place order.
-- **Drive:**
+- **Journey:**
 
   ```bash
   bun verify use --feature place-order
@@ -27,7 +27,7 @@ refuses both writes.
 
 - **What:** the orders API lists every placed order.
 - **How a user reaches it:** a client calls `GET /api/orders`.
-- **Drive:**
+- **Journey:**
 
   ```bash
   bun verify use --feature list-orders
@@ -42,7 +42,7 @@ refuses both writes.
 
 - **What:** the app logs one line for each order placed.
 - **How a user reaches it:** an operator reads the app's output.
-- **Drive:**
+- **Journey:**
 
   ```bash
   bun verify use --feature order-log
@@ -58,7 +58,7 @@ refuses both writes.
 
 - **What:** the page tells the shopper when an order fails.
 - **How a user reaches it:** press Place order while the orders API fails.
-- **Drive:**
+- **Journey:**
 
   ```bash
   bun verify use --feature order-failure

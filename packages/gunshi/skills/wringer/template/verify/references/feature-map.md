@@ -4,7 +4,7 @@
 
 - **What:** a user adds an item to the pantry.
 - **How a user reaches it:** open `/pantry`, type a name, and press Add.
-- **Drive:**
+- **Journey:**
 
   ```bash
   bun verify use --feature add-item

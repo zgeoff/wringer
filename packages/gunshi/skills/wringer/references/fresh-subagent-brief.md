@@ -10,7 +10,7 @@ skill.
 - `<features>`: every feature name that `bun verify features` lists, comma-separated.
 
 ```text
-Load the skill at <skill path> and read it whole. It tells you how to drive this repo's app with
+Load the skill at <skill path> and read it whole. It tells you how to use this repo's app with
 its verify CLI.
 
 Your task: for each of these features, run the CLI's `done` command and get exit code 0:

@@ -55,7 +55,7 @@ The mistakes that cost the most:
 7. Write an action with `.action` for each setup step a journey needs and a user can't do quickly in
    the app, such as seeding a record. The CLI runs it as `bun verify action <name>`.
 8. Write a repo command with `.command` for a read that a journey checks often, such as a count.
-9. Write a doctor check with `.check` for each thing that must hold before a drive means anything,
+9. Write a doctor check with `.check` for each thing that must hold before a journey means anything,
    such as an API that answers. Then run `bun verify up` and `bun verify doctor`. Expect:
    `data.passed: true`. Run `bun verify down`.
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
@@ -72,10 +72,10 @@ The mistakes that cost the most:
     - `registry`: the path of the registry file.
 
     Then rewrite `references/feature-map.md` with one `##` entry per feature, in the template's
-    form: what it does, how a user reaches it, its journey as a Drive block of commands that run as
+    form: what it does, how a user reaches it, its journey as a block of commands that run as
     written, and its end state.
 
 12. Run `bun verify lint`. Expect: `ok: true`, and `data.commands`, the count of journey lines it
-    parsed, above 0. A count of 0 means it found no Drive block.
+    parsed, above 0. A count of 0 means it found no journey.
 13. Run `bun verify --help`, then `bun verify <group> --help` for each group it lists, such as
     `action`. Expect: every action and repo command, each marked `[read]` or `[write]`.
