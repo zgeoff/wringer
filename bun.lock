@@ -79,12 +79,14 @@
       "version": "0.1.0",
       "dependencies": {
         "gunshi": "catalog:",
+        "tiny-invariant": "catalog:",
+        "ts-pattern": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
+        "@wringer/http": "workspace:*",
         "@zgeoff/testing": "catalog:",
-        "tiny-invariant": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
@@ -116,6 +118,7 @@
         "@wringer/browser": "workspace:*",
         "@wringer/core": "workspace:*",
         "@wringer/db": "workspace:*",
+        "@wringer/gunshi": "workspace:*",
         "@wringer/http": "workspace:*",
         "@wringer/stream": "workspace:*",
         "zod": "catalog:",

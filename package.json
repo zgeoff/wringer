@@ -45,6 +45,7 @@
     "test:browser": "bun run --filter @wringer/browser browser:install && bun scripts/remove-stale-test-folders.ts && bun test --randomize --timeout 10000 .browser.test.ts",
     "test:docker": "bun test --timeout 15000 .docker.test.ts",
     "typecheck": "tsrs --noEmit && bun run --filter '*' typecheck",
+    "verify": "bun packages/shop-example/src/verify.ts",
     "files:branch": "bun scripts/read-branch-files.ts",
     "lint:files": "oxlint --no-error-on-unmatched-pattern",
     "test:related": "bun scripts/run-related-tests.ts",

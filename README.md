@@ -28,7 +28,28 @@ workspace publishes to npm.
 - [`@wringer/browser`](./packages/browser/README.md): a page of the target's app in a headless
   browser.
 
-## Quick start
+## Add wringer to your repo
+
+1. Install the packages, and zod, which the verify registry declares its schemas with:
+
+   ```bash
+   bun add --dev --exact @wringer/core @wringer/gunshi zod
+   ```
+
+2. Install the agent skill to `.claude/skills/wringer/`. The command replaces any older copy there.
+
+   ```bash
+   bunx @wringer/gunshi skill install
+   ```
+
+   Expect: `Installed the wringer skill to <repo_root>/.claude/skills/wringer`, where `<repo_root>`
+   is the repo's absolute path.
+
+3. Ask your coding agent to load the `wringer` skill and add a verify CLI to the repo.
+
+The gunshi README's [Agent skill](./packages/gunshi/README.md#agent-skill) section says more.
+
+## Work on wringer
 
 ```bash
 bun install
@@ -50,11 +71,16 @@ rehearsal of the npm publish of each package.
 ## Layout
 
 - `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
-  it holds an example shop app and its verify registry, which the browser lane drives end to end
-  with every driver.
+  it holds an example shop app and the verify CLI for it. The browser tests drive the app through
+  that CLI's registry with the `@wringer/http`, `db`, `stream` and `browser` packages, and
+  `bun verify` runs the CLI.
+- `packages/gunshi/skills/wringer/`: the agent skill that adds a verify CLI to a repo, with the
+  template files it copies. It ships in `@wringer/gunshi`.
 - `docs/`: the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
-- `.claude/`: the shared agent skills and the skill-gate hook.
+- `.claude/`: the agent skills that zgeoff/tools syncs, the hook that blocks an agent's edit until
+  it loads the skill for that file, and `verify-shop`, the skill that tells an agent how to drive
+  the shop example with `bun verify`.
 
 ## Documentation
 

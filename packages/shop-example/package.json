@@ -16,6 +16,7 @@
     "@wringer/browser": "workspace:*",
     "@wringer/core": "workspace:*",
     "@wringer/db": "workspace:*",
+    "@wringer/gunshi": "workspace:*",
     "@wringer/http": "workspace:*",
     "@wringer/stream": "workspace:*",
     "zod": "catalog:"

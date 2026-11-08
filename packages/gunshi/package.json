@@ -10,11 +10,16 @@
     "url": "git+https://github.com/zgeoff/wringer.git",
     "directory": "packages/gunshi"
   },
+  "bin": {
+    "wringer-gunshi": "./src/wringer-gunshi.ts"
+  },
   "files": [
     "src",
     "!src/**/*.test.ts",
     "dist",
-    "!src/test-utils"
+    "!src/test-utils",
+    "skills",
+    "!skills/**/*.test.ts"
   ],
   "type": "module",
   "exports": {
@@ -32,12 +37,14 @@
   },
   "dependencies": {
     "gunshi": "catalog:",
+    "tiny-invariant": "catalog:",
+    "ts-pattern": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
-    "@zgeoff/testing": "catalog:",
-    "tiny-invariant": "catalog:"
+    "@wringer/http": "workspace:*",
+    "@zgeoff/testing": "catalog:"
   },
   "peerDependencies": {
     "@wringer/core": "workspace:*"

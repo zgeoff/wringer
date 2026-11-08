@@ -26,11 +26,54 @@ Call `runVerify` from the repo's verify script with the registry that `@wringer/
 import { runVerify } from '@wringer/gunshi';
 import { registry } from './registry.ts';
 
-await runVerify(registry);
+await runVerify(registry, { skill: '.claude/skills/verify' });
 ```
 
 Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
-`bun verify.ts action seed --count 3`.
+`bun verify.ts action seed --count 3`. The CLI lists the built-in commands, such as `up`, `doctor`
+and `lint`, beside the commands that the registry declares and that its drivers add. A registry
+can't declare a command named `lint`: `runVerify` throws `Two commands share the name`, as `build()`
+does on any duplicate name.
+
+`skill` is the path, from the repo root, of the folder that holds the repo's verify skill: the
+Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
+defaults to `.claude/skills/verify`.
+
+## Agent skill
+
+The package ships an agent skill in `skills/wringer/`. It walks an agent through adding a verify
+CLI, a feature map and a verify skill to a repo, and through the checks that prove them. Its
+`template/` folder holds the example files for the repo's own verify skill, which the agent writes.
+
+The install command deletes the folder it installs to, so move any edits out of the repo's copy
+first. After you install or upgrade the package, run the install command from the repo root:
+
+```bash
+bunx @wringer/gunshi skill install
+```
+
+It copies the skill from the installed package to `.claude/skills/wringer`, or to `--dir <path>`. It
+refuses a folder that is not a copy of this agent skill, and exits with code 2.
+
+## lint
+
+`bun verify.ts lint` checks the feature map and the verify skill without starting the app, so CI can
+run it on a fresh checkout. It exits with code 1, with `check-failed` in its envelope's
+`error.code`, when it finds any of these:
+
+- a feature's `paths` glob that matches no tracked file, and no untracked file outside git's ignore
+  rules;
+- a line in a fenced code block of the verify skill's Markdown files that calls the CLI and fails to
+  parse, whose arguments fail the command's schema, or that names a feature or a target the registry
+  lacks;
+- a skill folder with no `SKILL.md`;
+- a verify skill whose frontmatter lacks `metadata.wringer-template` or `metadata.wringer-command`,
+  or whose `metadata.wringer-template` differs from the template version that this package ships.
+  The agent skill's upgrade steps bring the verify skill to the shipped version.
+
+`metadata.wringer-command` holds the words that call the CLI, such as `bun verify`. `lint` checks
+only the code block lines that start with those words, after an optional `$ ` prompt and environment
+assignments.
 
 ## Behaviour
 
