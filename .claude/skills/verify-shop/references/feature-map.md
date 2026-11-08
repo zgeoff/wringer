@@ -1,9 +1,11 @@
 # Feature map
 
-Run the `order-failure` journey last: it drops the `orders` table, which breaks every later order on
-the run. To run another feature's journey after it, run `bun verify up --restart` and
-`bun verify doctor` first. Run every journey here on `local`: each one places an order or drops a
-table, and `demo` refuses both writes.
+Run every journey here on the `local` target, which `bun verify use --target local` selects. Each
+journey places an order or drops a table, and the read-only `demo` target refuses both writes.
+
+Run the `order-failure` journey last. It drops the `orders` table, so every later order fails until
+`bun verify up --restart` starts the app on a new, empty database. To run another feature's journey
+after it, run `bun verify up --restart`, then `bun verify doctor`. Expect: `data.passed: true`.
 
 ## place-order
 

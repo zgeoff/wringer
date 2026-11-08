@@ -54,9 +54,9 @@ The mistakes that cost the most:
    config for a driver refuses that driver's commands.
 7. Write an action with `.action` for each setup step a journey needs and a user can't do quickly in
    the app, such as seeding a record. The CLI runs it as `bun verify action <name>`.
-8. Write a repo command with `.command` for a read that a journey checks often, such as a count.
+8. Write a repo command with `.command` for a read that a journey checks, such as a count.
 9. Write a doctor check with `.check` for each thing that must hold before a journey means anything,
-   such as an API that answers. Then run `bun verify up` and `bun verify doctor`. Expect:
+   such as an API that answers. Then run `bun verify up`, then `bun verify doctor`. Expect:
    `data.passed: true`. Run `bun verify down`.
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs

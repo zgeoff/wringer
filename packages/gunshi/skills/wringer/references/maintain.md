@@ -9,9 +9,9 @@ The mistakes that cost the most:
   checkout without the full history.
 - **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
   `edited` event misses the report an author pastes later.
-- **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Remove the old
-  `verify` skill folder first, as step 2 of the upgrade does. The installer replaces the wringer
-  skill's folder itself.
+- **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Move the old
+  `verify` skill folder away first, as step 2 of the upgrade does. The installer replaces the
+  wringer skill's folder itself.
 
 ## Wire the checks into CI
 
@@ -46,10 +46,11 @@ Keep it a workflow of its own, so a body edit reruns only this job.
 
 ## Fix a drifted journey
 
-When a change to a feature breaks its journey, such as a renamed button, fix the feature's journey
-in the `verify` skill's `references/feature-map.md`, in the same PR. Then follow the `verify`
-skill's "Check a change" for that feature, and replace the report in the PR body with the new output
-of `bun verify report --human`.
+A journey breaks when a change to its feature, such as a renamed button, makes a journey command
+fail or its end state no longer match. Fix the feature's journey in the `verify` skill's
+`references/feature-map.md`, in the same PR. Then follow the `verify` skill's "Check a change" for
+that feature. Replace the whole report in the PR body with the new output of
+`bun verify report --human`.
 
 ## Upgrade the template
 
@@ -57,8 +58,9 @@ When `lint` reports that the skill follows an older template:
 
 1. Run `bunx @wringer/gunshi skill install`, as [Install the skill](../SKILL.md#install-the-skill)
    shows. It replaces the repo's copy of the wringer skill.
-2. Move the repo's `verify` skill folder, such as `.claude/skills/verify/`, to a git-ignored folder
-   outside `.claude/skills/`, so it doesn't load as a second skill.
+2. Move the repo's `verify` skill folder, such as `.claude/skills/verify/`, to a folder outside
+   `.claude/skills/`, so it doesn't load as a second skill. List that folder in `.git/info/exclude`,
+   so git ignores it without a change to `.gitignore`.
 3. Copy `.claude/skills/wringer/template/verify/` to the folder that `runVerify`'s `skill` option
    names, which no longer exists.
 4. Copy the old skill's `references/feature-map.md` over the template's. Copy the frontmatter's

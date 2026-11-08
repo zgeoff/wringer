@@ -17,7 +17,8 @@ that adds them.
    and `data.passed: true`. Then run `bun verify down`.
 2. Send the [fresh subagent brief](./fresh-subagent-brief.md) to a new subagent, and follow that
    reference until one subagent reaches `done` on every feature and names no gap. Expect: its reply,
-   with exit code 0 from each `done`. Put each feature's `done` line from it in the PR.
+   with exit code 0 from each `done`. Put the subagent's result for each `done` in the PR: the
+   feature, the exit code, `ok` and `data.fingerprint`.
 3. Check that the CLI refuses to run against a changed tree:
    1. Run `bun verify up`, then `bun verify doctor`. Expect: `data.passed: true`.
    2. Add a blank line to a file that a feature's `paths` globs match.

@@ -13,9 +13,9 @@ these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
-  the feature map, where each feature lists the `paths` globs of its files;
-- a `verify` skill that gives the repo's agents the journey for each feature: the commands that use
-  it, and the end state that shows it works.
+  the features, where each feature lists the `paths` globs of its files;
+- a `verify` skill, with a feature map in its `references/feature-map.md` that gives each feature's
+  journey.
 
 These terms hold across this skill and its references:
 
@@ -26,6 +26,7 @@ These terms hold across this skill and its references:
 | driver    | a package that adds a group of commands, such as `@wringer/http` and `http request`     |
 | action    | a named step of the repo's own, run as `bun verify action <name>`                       |
 | doctor    | `bun verify doctor`: the checks that must pass before any command that touches the app  |
+| journey   | the `bun verify` commands that use one feature, and the end state that shows it works   |
 | verdict   | what `bun verify done` records: the feature works on the current code                   |
 | gate      | `bun verify gate` in CI: it fails a PR that changes a feature's files without a verdict |
 | report    | the output of `bun verify report --human`, which the PR body holds for the gate         |
@@ -65,17 +66,20 @@ proof in its description. The mistakes that cost the most:
 
 ## Install the skill
 
-This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs.
-The installer replaces any older copy:
+This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs. An
+agent can load it only after these commands put it in `.claude/skills/wringer/`. The installer
+replaces any older copy there:
 
 ```bash
 bun add --dev --exact @wringer/core @wringer/gunshi zod
 bunx @wringer/gunshi skill install
 ```
 
-Run the second command again after each upgrade of `@wringer/gunshi`. When the repo uses another
-package manager, use it in place of `bun` here, in the `package.json` script and in the `verify`
-skill's `metadata.wringer-command`, such as `pnpm verify`.
+Run the second command again after each upgrade of `@wringer/gunshi`.
+
+The CLI runs on Bun. When the repo installs packages with another package manager, use it for
+`bun add` and `bunx`, such as `pnpm add` and `pnpm dlx`. Also use it in the `package.json` script
+name and in the `verify` skill's `metadata.wringer-command`, such as `pnpm verify`.
 
 ## The template
 
@@ -115,10 +119,10 @@ The work is done only when each of these holds. [Prove](./references/prove.md) g
 1. `bun verify doctor` passes on `local`.
 2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. A new
    feature map needs one pass by an agent who did not write it, and this run is that pass.
-3. A command that touches the app, run after an edit to the app's code, fails with
+3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
    `doctor-required`. A read-only target, if the repo has one, refuses one write with `read-only`.
-4. The report is in the description of the PR that adds the CLI, whole: the gate reads it from the
-   HTML comment at its end.
+4. The whole report is in the description of the PR that adds the CLI. The gate reads the report
+   from the HTML comment at the report's end.
 
 ## Maintain
 

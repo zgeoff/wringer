@@ -16,13 +16,16 @@ record a verdict that it works. Hand back the output of `bun verify report --hum
 you could not verify. The CI gate, `bun verify gate`, fails a PR that changes a feature with no
 verdict.
 
+Each feature in the [feature map](./references/feature-map.md) has a journey: the `bun verify`
+commands that use the feature, and the end state that shows it works.
+
 The mistakes that cost the most time:
 
 - **Using the app before `doctor` passes.** `bun verify doctor` checks that the app answers and that
   each driver works. Until it passes on the current run, the one that `up` or `attach` started, any
   command that touches the app fails with exit code 3.
 - **Editing the app's code while `up` runs it.** The next command that touches the app fails with
-  `doctor-required`. Run `bun verify up --restart` and `bun verify doctor`, then run the feature's
+  `doctor-required`. Run `bun verify up --restart`, then `bun verify doctor`. Then run the feature's
   journey again.
 - **Running `done` before you check the end state.** `done` checks only that a journey command after
   `use`, such as an `action` or a `browser` command, succeeded. It does not check the result. Check
@@ -44,7 +47,8 @@ The mistakes that cost the most time:
 
 ## References
 
-- [Feature map](./references/feature-map.md): each feature's entry, before you run it.
+- [Feature map](./references/feature-map.md): each feature's journey and end state, before you check
+  the feature.
 
 ## Check a change
 
@@ -56,21 +60,22 @@ The mistakes that cost the most time:
 3. Run `bun verify doctor`. Expect: `data.passed: true`. When a check fails, fix its cause, and run
    `doctor` again.
 4. Run the feature's journey from the [feature map](./references/feature-map.md). Its first line,
-   `use --feature`, records each later command under that feature, and keeps the target you set.
+   `use --feature`, records each later command under that feature. It does not change the target.
    Expect: each command exits 0.
 5. Compare the app with the feature's end state:
-   - When it matches, and no command was refused, go on to step 6.
-   - When your change broke it, fix the app's code, run `bun verify up --restart` and
-     `bun verify doctor`, and run the journey again.
+   - When it matches, and no command failed with `read-only`, go on to step 6.
+   - When your change broke the feature, fix the app's code. Then run `bun verify up --restart`,
+     `bun verify doctor` and the journey again.
+   - When your change means to change the end state, fix the feature's entry in the feature map, and
+     run `bun verify lint`. Then run the journey again.
    - Otherwise, skip `done` for this feature. List it in your reply with the end state you expected
      and the `data` you got.
 6. Run `bun verify done`. It records a verdict for the feature that `use --feature` set. Expect:
    `ok: true`. If no journey command after `use --feature` succeeded since `doctor` passed, it fails
    with exit code 1 and `check-failed`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order the feature map lists them, unless the map asks for another. A task's list of
-   features sets no order. The gate checks only the changed features. When a changed feature has no
-   entry in the feature map, write one, and run `bun verify lint`.
+   in the order the feature map lists them. When the feature map gives another order, follow it.
+   When a changed feature has no entry in the feature map, write one, and run `bun verify lint`.
 8. Run `bun verify report --human`. A changed feature with your verdict shows `verified`; a feature
    the branch doesn't change shows `unchanged`, with your verdict's evidence. After `done`, an edit
    to any file on the branch makes every verdict `stale`, unless you commit the same code. Repeat
@@ -142,8 +147,8 @@ help marks each command `[read]` or `[write]`.
 
 Before you run a feature's journey, read its entry in the
 [feature map](./references/feature-map.md): what it does, how a user reaches it, its journey and its
-end state. `bun verify features` lists each feature's `paths`: the files whose change makes the gate
-ask for its verdict.
+end state. `bun verify features` lists each feature's `paths`. When a PR changes a file that they
+match, the gate needs a verdict for the feature.
 
 ## Update the feature map
 
@@ -157,7 +162,7 @@ checks and features, with each feature's `paths`.
 - When a feature's journey stops working because the feature changed, fix it in the same PR.
 - In this file, edit only the frontmatter's `name` and `description`, the `#` title, and the lines
   inside the `<!-- repo -->` blocks. An upgrade of the template keeps those and replaces every other
-  line. The repo owns the feature map whole.
+  line. You may edit any line of the feature map.
 - After you change this skill, its feature map or the registry, run `bun verify lint`. It fails on:
   - a `paths` glob that matches no file;
   - a command in a code block that would fail before it ran, such as one with an unknown flag,

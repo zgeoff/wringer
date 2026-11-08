@@ -47,7 +47,8 @@ type GateData = z.infer<typeof gateDataSchema>;
 export function buildVerdictCommands(): readonly RegisteredCommand[] {
   const done: BuiltinCommandSpec<DoneArgs, Verdict> = {
     path: [doneCommand],
-    summary: 'Record a verdict for a feature from the drives since the doctor passed',
+    summary:
+      'Record a verdict for a feature from its commands that touched the app since the doctor passed',
     args: doneArgsSchema,
     data: verdictSchema,
     effect: 'read',
@@ -120,7 +121,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 
   if (drives.length === 0) {
     throw new WringerError('check-failed', {
-      message: `No drive of ${feature} passed on run ${ctx.run.runID} since the doctor passed.`,
+      message: `No command of ${feature} that touches the app passed on run ${ctx.run.runID} since the doctor passed.`,
       hint: `Drive the feature with \`--feature ${feature}\`, then run \`done\` again.`,
     });
   }

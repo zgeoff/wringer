@@ -30,17 +30,19 @@ workspace publishes to npm.
 
 ## Add wringer to your repo
 
-1. Install the packages:
+1. Install the packages, and zod, which the verify registry declares its schemas with:
 
    ```bash
    bun add --dev --exact @wringer/core @wringer/gunshi zod
    ```
 
-2. Install the agent skill, which replaces any older copy:
+2. Install the agent skill to `.claude/skills/wringer/`. The command replaces any older copy there.
 
    ```bash
    bunx @wringer/gunshi skill install
    ```
+
+   Expect: `Installed the wringer skill to <repo>/.claude/skills/wringer`.
 
 3. Ask your coding agent to load the `wringer` skill and add a verify CLI to the repo.
 

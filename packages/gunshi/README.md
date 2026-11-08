@@ -36,23 +36,24 @@ can't declare a command named `lint`: `runVerify` throws `Two commands share the
 does on any duplicate name.
 
 `skill` is the path, from the repo root, of the folder that holds the repo's verify skill: the
-Markdown that tells the repo's agents how to use each feature. `lint` reads it. It defaults to
-`.claude/skills/verify`.
+Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
+defaults to `.claude/skills/verify`.
 
 ## Agent skill
 
 The package ships an agent skill in `skills/wringer/`. It walks an agent through adding a verify
 CLI, a feature map and a verify skill to a repo, and through the checks that prove them. Its
-`template/` folder holds the example files the agent copies. After you install or upgrade the
-package, install the skill:
+`template/` folder holds the example files for the repo's own verify skill, which the agent writes.
+
+The install command deletes the folder it installs to, so move any edits out of the repo's copy
+first. After you install or upgrade the package, run it from the repo root:
 
 ```bash
 bunx @wringer/gunshi skill install
 ```
 
-The command removes the repo's old copy and copies the installed one to `.claude/skills/wringer`,
-relative to the current folder. Pass `--dir <path>` to install to another folder. An unknown command
-or flag prints the usage and exits with code 2.
+It copies the skill from the installed package to `.claude/skills/wringer`, or to `--dir <path>`. It
+refuses a folder that is not a copy of the wringer skill, and exits with code 2.
 
 ## lint
 
