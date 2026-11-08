@@ -8,14 +8,14 @@ description:
 
 # Build a verify CLI with wringer
 
-Give the repo's agents one way to drive its real app and keep the evidence of what they checked.
-Build these in the repo:
+Give the repo's agents one way to use its real app and keep the evidence of what they checked. Build
+these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
   the feature map, where each feature lists the `paths` globs of its files;
-- a `verify` skill that gives the repo's agents the journey for each feature: the commands that
-  drive it, and the end state that shows it works.
+- a `verify` skill that gives the repo's agents the journey for each feature: the commands that use
+  it, and the end state that shows it works.
 
 These terms hold across this skill and its references:
 
@@ -25,8 +25,7 @@ These terms hold across this skill and its references:
 | read-only | a target's access that refuses each write with exit code 3                              |
 | driver    | a package that adds a group of commands, such as `@wringer/http` and `http request`     |
 | action    | a named step of the repo's own, run as `bun verify action <name>`                       |
-| doctor    | `bun verify doctor`: the checks that must pass before any drive                         |
-| drive     | an action, a repo command or a driver command that runs after the doctor passed         |
+| doctor    | `bun verify doctor`: the checks that must pass before any command that touches the app  |
 | verdict   | what `bun verify done` records: the feature works on the current code                   |
 | gate      | `bun verify gate` in CI: it fails a PR that changes a feature's files without a verdict |
 | report    | the output of `bun verify report --human`, which the PR body holds for the gate         |
@@ -67,18 +66,16 @@ proof in its description. The mistakes that cost the most:
 ## Install the skill
 
 This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs.
-Replace any older copy:
+The installer replaces any older copy:
 
 ```bash
 bun add --dev --exact @wringer/core @wringer/gunshi zod
-rm -rf .claude/skills/wringer
-mkdir -p .claude/skills
-cp -R node_modules/@wringer/gunshi/skills/wringer .claude/skills/wringer
+bunx @wringer/gunshi skill install
 ```
 
-Run the last three commands again after each upgrade of `@wringer/gunshi`. When the repo uses
-another package manager, use it in place of `bun` here, in the `package.json` script and in the
-`verify` skill's `metadata.wringer-command`, such as `pnpm verify`.
+Run the second command again after each upgrade of `@wringer/gunshi`. When the repo uses another
+package manager, use it in place of `bun` here, in the `package.json` script and in the `verify`
+skill's `metadata.wringer-command`, such as `pnpm verify`.
 
 ## The template
 
@@ -118,8 +115,8 @@ The work is done only when each of these holds. [Prove](./references/prove.md) g
 1. `bun verify doctor` passes on `local`.
 2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. A new
    feature map needs one pass by an agent who did not write it, and this run is that pass.
-3. A drive after an edit to the app's code fails with `doctor-required`. A read-only target, if the
-   repo has one, refuses one write with `read-only`.
+3. A command that touches the app, run after an edit to the app's code, fails with
+   `doctor-required`. A read-only target, if the repo has one, refuses one write with `read-only`.
 4. The report is in the description of the PR that adds the CLI, whole: the gate reads it from the
    HTML comment at its end.
 

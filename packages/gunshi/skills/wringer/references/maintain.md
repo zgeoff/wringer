@@ -10,7 +10,8 @@ The mistakes that cost the most:
 - **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
   `edited` event misses the report an author pastes later.
 - **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Remove the old
-  folder first, for the wringer skill and for the repo's `verify` skill alike.
+  `verify` skill folder first, as step 3 of the upgrade does. The installer replaces the wringer
+  skill's folder itself.
 
 ## Wire the checks into CI
 
@@ -45,16 +46,17 @@ Keep it a workflow of its own, so a body edit reruns only this job.
 
 ## Fix a drifted journey
 
-When a change to a feature breaks its journey, such as a renamed button, fix the feature's Drive
-block in the `verify` skill's `references/feature-map.md`, in the same PR. Then follow the `verify`
-skill's "Run the loop" for that feature, and replace the report in the PR body with the new output
+When a change to a feature breaks its journey, such as a renamed button, fix the feature's journey
+in the `verify` skill's `references/feature-map.md`, in the same PR. Then follow the `verify`
+skill's "Check a change" for that feature, and replace the report in the PR body with the new output
 of `bun verify report --human`.
 
 ## Upgrade the template
 
 When `lint` reports that the skill follows an older template:
 
-1. Install the wringer skill again, as [Install the skill](../SKILL.md#install-the-skill) shows.
+1. Run `bunx @wringer/gunshi skill install`, as [Install the skill](../SKILL.md#install-the-skill)
+   shows. It replaces the repo's copy of the wringer skill.
 2. Move the repo's `verify` skill folder, such as `.claude/skills/verify/`, to a git-ignored folder
    outside `.claude/skills/`, so it doesn't load as a second skill.
 3. Copy `.claude/skills/wringer/template/verify/` to the folder that `runVerify`'s `skill` option

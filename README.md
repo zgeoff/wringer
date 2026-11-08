@@ -28,7 +28,25 @@ workspace publishes to npm.
 - [`@wringer/browser`](./packages/browser/README.md): a page of the target's app in a headless
   browser.
 
-## Quick start
+## Add wringer to your repo
+
+1. Install the packages:
+
+   ```bash
+   bun add --dev --exact @wringer/core @wringer/gunshi zod
+   ```
+
+2. Install the agent skill, which replaces any older copy:
+
+   ```bash
+   bunx @wringer/gunshi skill install
+   ```
+
+3. Ask your coding agent to load the `wringer` skill and add a verify CLI to the repo.
+
+The gunshi README's [Agent skill](./packages/gunshi/README.md#agent-skill) section says more.
+
+## Work on wringer
 
 ```bash
 bun install
