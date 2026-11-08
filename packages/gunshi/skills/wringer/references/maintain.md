@@ -10,7 +10,7 @@ The mistakes that cost the most:
 - **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
   `edited` event misses the report an author pastes later.
 - **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Remove the old
-  `verify` skill folder first, as step 3 of the upgrade does. The installer replaces the wringer
+  `verify` skill folder first, as step 2 of the upgrade does. The installer replaces the wringer
   skill's folder itself.
 
 ## Wire the checks into CI

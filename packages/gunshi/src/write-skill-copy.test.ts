@@ -24,7 +24,7 @@ test('it creates the destination folder with the skill and its template', async 
 
   const destination = join(ctx.directory, '.claude', 'skills', 'wringer');
 
-  await writeSkillCopy(ctx.source, destination);
+  await writeSkillCopy({ source: ctx.source, destination, cwd: ctx.directory });
 
   const entries = await readdir(destination);
   const skill = await Bun.file(join(destination, 'SKILL.md')).text();
@@ -39,9 +39,9 @@ test('it replaces an existing copy without nesting a second one', async () => {
   const destination = join(ctx.directory, 'installed');
 
   await mkdir(destination, { recursive: true });
-  await writeFile(join(destination, 'SKILL.md'), '# Old\n');
+  await writeFile(join(destination, 'SKILL.md'), '---\nname: wringer\n---\n# Old\n');
   await writeFile(join(destination, 'stale.md'), 'left over\n');
-  await writeSkillCopy(ctx.source, destination);
+  await writeSkillCopy({ source: ctx.source, destination, cwd: ctx.directory });
 
   const entries = await readdir(destination);
   const skill = await Bun.file(join(destination, 'SKILL.md')).text();
@@ -55,9 +55,33 @@ test('it leaves out the test files', async () => {
 
   const destination = join(ctx.directory, 'installed');
 
-  await writeSkillCopy(ctx.source, destination);
+  await writeSkillCopy({ source: ctx.source, destination, cwd: ctx.directory });
 
   const entries = await readdir(join(destination, 'template'));
 
   expect(entries).toStrictEqual(['verify.ts']);
+});
+
+test('it refuses to remove a folder that holds another skill, and keeps it', async () => {
+  const ctx = await setupTest();
+
+  const skills = join(ctx.directory, 'skills');
+
+  await mkdir(join(skills, 'verify'), { recursive: true });
+  await writeFile(join(skills, 'verify', 'SKILL.md'), '---\nname: verify\n---\n');
+
+  const result = await writeSkillCopy({
+    source: ctx.source,
+    destination: skills,
+    cwd: ctx.directory,
+  });
+
+  expect(result).toStrictEqual({
+    ok: false,
+    reason: `${skills} exists and is not a copy of the wringer skill.`,
+  });
+
+  const entries = await readdir(skills);
+
+  expect(entries).toStrictEqual(['verify']);
 });

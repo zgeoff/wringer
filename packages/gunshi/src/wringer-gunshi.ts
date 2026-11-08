@@ -13,6 +13,15 @@ if (args === null) {
 
 const destination = resolve(args.destination);
 
-await writeSkillCopy(join(import.meta.dir, '..', 'skills', 'wringer'), destination);
+const result = await writeSkillCopy({
+  source: join(import.meta.dir, '..', 'skills', 'wringer'),
+  destination,
+  cwd: process.cwd(),
+});
+
+if (!result.ok) {
+  console.error(`Refused: ${result.reason} Pass --dir with the folder for the wringer skill.`);
+  process.exit(2);
+}
 
 console.log(`Installed the wringer skill to ${destination}`);

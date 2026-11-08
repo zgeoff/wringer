@@ -24,8 +24,9 @@ The mistakes that cost the most time:
 - **Editing the app's code while `up` runs it.** The next command that touches the app fails with
   `doctor-required`. Run `bun verify up --restart` and `bun verify doctor`, then run the feature's
   journey again.
-- **Running `done` before you check the end state.** `done` checks only that one command for the
-  feature succeeded. It does not check the result. Check the end state yourself first.
+- **Running `done` before you check the end state.** `done` checks only that a journey command after
+  `use`, such as an `action` or a `browser` command, succeeded. It does not check the result. Check
+  the end state yourself first.
 - **Branching on the error message.** Branch on the exit code and `error.code`. The message text can
   change in any release.
 
@@ -64,8 +65,8 @@ The mistakes that cost the most time:
    - Otherwise, skip `done` for this feature. List it in your reply with the end state you expected
      and the `data` you got.
 6. Run `bun verify done`. It records a verdict for the feature that `use --feature` set. Expect:
-   `ok: true`. If no command for the feature succeeded since `doctor` passed, it fails with exit
-   code 1 and `check-failed`.
+   `ok: true`. If no journey command after `use --feature` succeeded since `doctor` passed, it fails
+   with exit code 1 and `check-failed`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
    in the order the feature map lists them, unless the map asks for another. A task's list of
    features sets no order. The gate checks only the changed features. When a changed feature has no

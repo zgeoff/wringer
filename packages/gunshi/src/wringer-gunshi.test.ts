@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runProcess } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
@@ -36,4 +36,21 @@ test('it prints usage and exits 2 on an unknown command', async () => {
 
   expect(result.exitCode).toBe(2);
   expect(result.stderr).toContain('Usage: wringer-gunshi skill install');
+});
+
+test('it exits 2 and removes nothing when --dir names a folder of other skills', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.directory, '.claude', 'skills', 'verify'), { recursive: true });
+
+  await writeFile(
+    join(ctx.directory, '.claude', 'skills', 'verify', 'SKILL.md'),
+    '---\nname: verify\n---\n',
+  );
+
+  const result = await ctx.runBin(['skill', 'install', '--dir', '.claude/skills']);
+  const entries = await readdir(join(ctx.directory, '.claude', 'skills'));
+
+  expect(result.exitCode).toBe(2);
+  expect(entries).toStrictEqual(['verify']);
 });

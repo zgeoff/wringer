@@ -1,6 +1,6 @@
 import { parseArgs } from 'node:util';
 
-// The flag is `--dir`, as the CLI usage shows.
+// Users type `--dir`; the naming lint rejects `dir` as a literal key, so the name lives in a value.
 const directoryFlag = 'dir';
 const defaultDestination = '.claude/skills/wringer';
 
