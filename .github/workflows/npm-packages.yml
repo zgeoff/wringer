@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   changes:
-    uses: zgeoff/tools/.github/workflows/paths-changed.yml@8527abf72fdc8ffad7ad445a2dd083e7158c1bc3 # main
+    uses: zgeoff/tools/.github/workflows/paths-changed.yml@c9b824d1e456af850913cb4bef28fdbc64402aa3 # main
     with:
       paths: |
         .github/workflows/npm-packages.yml
