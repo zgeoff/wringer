@@ -1,6 +1,6 @@
 {
   "name": "@wringer/db",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The db driver for wringer: SQL against a target database, read-only unless asked to write",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/db#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",

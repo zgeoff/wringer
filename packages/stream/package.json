@@ -1,6 +1,6 @@
 {
   "name": "@wringer/stream",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The stream driver for wringer: records a target's logs during a run and reads them from a cursor",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/stream#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",

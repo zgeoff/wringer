@@ -1,6 +1,6 @@
 {
   "name": "@wringer/http",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The http driver for wringer: requests against a target, read-only unless granted",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/http#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
