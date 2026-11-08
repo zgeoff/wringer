@@ -1,6 +1,6 @@
 {
   "name": "@wringer/gunshi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The gunshi adapter for wringer: turns a wringer registry into a CLI",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/gunshi#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
