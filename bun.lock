@@ -15,7 +15,7 @@
         "@zgeoff/commitlint-config": "0.1.0",
         "@zgeoff/format-codemod": "0.3.5",
         "@zgeoff/oxlint-config": "0.8.6",
-        "@zgeoff/skill-gate": "0.2.26",
+        "@zgeoff/skill-gate": "0.2.27",
         "@zgeoff/testing": "catalog:",
         "knip": "6.41.0",
         "lefthook": "2.2.2",
@@ -560,7 +560,7 @@
 
     "@wringer/stream": ["@wringer/stream@workspace:packages/stream"],
 
-    "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.10", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-Z+PKOqlzS30ISC6cT+iva9StXG1Gob/h9vFgaslTOaTZe3tLOHlIt1Z49RjH1bfU3YM4TCGHMxso+i6J9dC9LQ=="],
+    "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.11", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-tm3pN/VHCL++ryz7l9ICupy1c/LNTUe3OlOTFMwAb52T7Mb+dse9qqNG8Ms0bbHp8Rz5PB6uyV2ALoYE/41aSQ=="],
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.2.3", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.5.2" } }, "sha512-4ZNPft3LunVKp+s2esoJXSe64EaEywsu3z6Cg5/s/MJcdygmrQeAyfECioePCo5RuAIcaPfgF3lhYsPKcmVJ4w=="],
 
@@ -570,7 +570,7 @@
 
     "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.8.6", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-gBnGBTPgUNK3j4S6CDMwMlGMxPrjmcdDSLAiXs0bAl252PMBILMujeqGnmBZ6NVo+WwCAHvWQFrsjixHozl1DA=="],
 
-    "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.26", "", { "dependencies": { "@zgeoff/agent-hooks": "0.2.10" } }, "sha512-XjgC+sjsbNaiv8w0/kcGgtP6U5LP1auGRPXh07L5orFdFFz+K+J3D+T+1+x37wYNLraH/tMI0RaiuoM6b1Uq+g=="],
+    "@zgeoff/skill-gate": ["@zgeoff/skill-gate@0.2.27", "", { "dependencies": { "@zgeoff/agent-hooks": "0.2.11" } }, "sha512-olxrYsNvZjIQve3E5h5O3O6luYO545llSwdNdSiTuzqDcn4msCIbIeRdJ13QU4EpN8iHQtcGWJf3QDzOgz6qmQ=="],
 
     "@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
 
