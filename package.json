@@ -12,7 +12,7 @@
       "packages/*"
     ],
     "catalog": {
-      "@mswjs/interceptors": "0.45.10",
+      "@mswjs/interceptors": "0.45.11",
       "@orpc/client": "1.16.1",
       "@orpc/contract": "1.16.1",
       "@orpc/openapi": "1.16.1",
@@ -64,7 +64,7 @@
     "@maschwenk/tsrslint": "0.1.6",
     "@stylistic/eslint-plugin": "5.10.0",
     "@tsconfig/strictest": "2.0.8",
-    "@types/bun": "1.4.3",
+    "@types/bun": "1.4.4",
     "@wringer/core": "workspace:*",
     "@zgeoff/bun-test-extended": "0.2.3",
     "@zgeoff/commitlint-config": "0.1.0",
@@ -83,5 +83,5 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "bun@1.4.3"
+  "packageManager": "bun@1.4.4"
 }
