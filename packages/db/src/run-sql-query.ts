@@ -276,7 +276,14 @@ function startPostgresQuery(
   text: string,
   params: readonly unknown[],
 ): SQL.Query<unknown> {
-  return params.length === 0
-    ? sql<unknown>(Object.assign([text], { raw: [text] }))
-    : sql.unsafe<unknown>(text, [...params]);
+  if (params.length > 0) {
+    return sql.unsafe<unknown>(text, [...params]);
+  }
+
+  const strings = Object.assign([text], { raw: [text] });
+
+  // Bun.SQL takes only an array whose `raw` is not enumerable as a template object.
+  Object.defineProperty(strings, 'raw', { enumerable: false });
+
+  return sql<unknown>(strings);
 }
