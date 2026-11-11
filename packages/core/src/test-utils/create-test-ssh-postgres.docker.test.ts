@@ -34,9 +34,7 @@ async function setupTest() {
 
       const connection = await sql.reserve();
 
-      stack.defer(() => {
-        connection.release();
-      });
+      stack.defer(() => connection.release());
 
       return connection;
     },
