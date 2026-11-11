@@ -178,7 +178,7 @@ test('it rejects a Postgres statement that holds a psql command', () => {
       dialect: 'postgres',
       program: ['psql'],
       database: 'shop',
-      sql: 'select 1 \\! touch /tmp/owned',
+      sql: String.raw`select 1 \! touch /tmp/owned`,
       params: [],
       write: true,
       deadlineAtMs: 1_800_000_000_000,
