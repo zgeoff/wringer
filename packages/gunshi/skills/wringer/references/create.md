@@ -66,10 +66,10 @@ The mistakes that cost the most:
     of the files that change its behaviour.
 11. The gate fails a PR that changes a file matched by neither a feature's `paths` nor an ignore
     glob. Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
-    `**/*.md`, `**/*.test.ts`, `.github/**`, `.claude/**` and `scripts/verify/**`. Expect: each file
-    that `git ls-files` prints matches a feature's `paths` or an ignore glob. Add a file that
-    matches neither to the `paths` of each feature whose behaviour it changes. A file such as
-    `package.json` changes every feature.
+    `**/*.md`, `**/*.test.ts`, `.github/**`, `.claude/**` and `scripts/verify/**`. Add each other
+    file to the `paths` of each feature whose behaviour it changes: a file such as `package.json`
+    changes every feature. Expect: each file that `git ls-files` prints matches a feature's `paths`
+    or an ignore glob.
 12. Copy [`template/verify/`](../template/verify/) to `.claude/skills/verify/`. Rewrite the
     frontmatter's `name` and `description` and the `#` title for the app. Set
     `metadata.wringer-command` to the command that runs the script, `bun verify` by default. Rewrite
