@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
+import { buildChangeRequest } from './build-change-request.ts';
 import { buildEnvelope } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
@@ -367,11 +368,10 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
 async function probeFingerprintChanged(request: CommandRequest): Promise<boolean> {
   const base = await readDefaultBase(request.session.repoHost, request.session.root);
 
-  const fingerprint = await readFingerprint(request.session.repoHost, {
-    cwd: request.session.root,
-    base,
-    exclude: [request.wringer.stateDir],
-  });
+  const fingerprint = await readFingerprint(
+    request.session.repoHost,
+    buildChangeRequest(request.wringer, request.session.root, base),
+  );
 
   return fingerprint !== request.context.run?.fingerprint;
 }

@@ -37,7 +37,12 @@ async function setupTest() {
     readFingerprint: (cwd = repo, base = 'main') =>
       readFingerprint(
         { runGit, runGitBytes, removeDirectory },
-        { cwd, base, exclude: ['.wringer'] },
+        { cwd, base, exclude: ['.wringer'], ignore: [] },
+      ),
+    readFingerprintIgnoring: (ignore: readonly string[]) =>
+      readFingerprint(
+        { runGit, runGitBytes, removeDirectory },
+        { cwd: repo, base: 'main', exclude: ['.wringer'], ignore },
       ),
   };
 }
@@ -175,7 +180,7 @@ test('it gives the same fingerprint whatever order the diff lists the files in',
       },
       removeDirectory,
     },
-    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'] },
+    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'], ignore: [] },
   );
 
   expect(after).toBe(before);
@@ -247,7 +252,7 @@ test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', as
         runGitBytes({ ...request, env: { GIT_DIFF_OPTS: '--unified=0', ...request.env } }),
       removeDirectory,
     },
-    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'] },
+    { cwd: ctx.repo, base: 'main', exclude: ['.wringer'], ignore: [] },
   );
 
   expect(after).toBe(before);
@@ -295,7 +300,7 @@ test.each([
   await writeFile(join(ctx.repo, 'logs', 'run.log'), 'stopped\n');
   await writeFile(join(ctx.repo, 'logs', 'Boot.LOG'), 'halted\n');
 
-  const request = { cwd: ctx.repo, base: 'main', exclude: ['*.log'] };
+  const request = { cwd: ctx.repo, base: 'main', exclude: ['*.log'], ignore: [] };
 
   const before = await readFingerprint({ runGit, runGitBytes, removeDirectory }, request);
 
@@ -933,6 +938,69 @@ test('it leaves a committed change to the evidence folder out of the fingerprint
   const fingerprint = await ctx.readFingerprint();
 
   expect(fingerprint).toBe(emptyFingerprint);
+});
+
+test('it leaves each committed, edited and untracked path an ignore glob matches out of the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+  await writeFile(join(ctx.repo, 'README.md'), '# app\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const before = await ctx.readFingerprintIgnoring(['**/*.md', '.github/**']);
+
+  await mkdir(join(ctx.repo, '.github', 'workflows'), { recursive: true });
+  await writeFile(join(ctx.repo, '.github', 'workflows', 'ci.yml'), 'on: push\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'ci');
+
+  await writeFile(join(ctx.repo, 'README.md'), '# app on port 4000\n');
+  await mkdir(join(ctx.repo, 'docs'));
+  await writeFile(join(ctx.repo, 'docs', 'ports.md'), 'The app listens on 4000.\n');
+
+  const after = await ctx.readFingerprintIgnoring(['**/*.md', '.github/**']);
+
+  expect(after).toBe(before);
+});
+
+test('it gives a change to only ignored paths the empty fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'README.md'), '# app\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'README.md'), '# app, edited\n');
+
+  const fingerprint = await ctx.readFingerprintIgnoring(['**/*.md']);
+
+  expect(fingerprint).toBe(emptyFingerprint);
+});
+
+test('it keeps a path in the fingerprint whose name an ignored path would match as a pattern', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const unignored = await ctx.readFingerprintIgnoring([]);
+
+  await writeFile(join(ctx.repo, '*.ts'), 'a file named for a pattern\n');
+
+  const ignored = await ctx.readFingerprintIgnoring(['[*].ts']);
+
+  expect(ignored).toBe(unignored);
 });
 
 test('it gives two calls at once the same fingerprint', async () => {

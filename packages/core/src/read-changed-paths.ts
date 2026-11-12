@@ -1,16 +1,12 @@
+import type { ChangeRequest } from './build-change-request.ts';
+import { isGlobMatch } from './is-glob-match.ts';
 import type { FingerprintHost } from './read-fingerprint.ts';
 
-export interface ChangedPathsRequest {
-  readonly cwd: string;
-  readonly base: string;
-  readonly exclude: readonly string[];
-}
-
 // The paths the branch changes against its merge base: committed, staged and unstaged edits, and
-// untracked files that git does not ignore.
+// untracked files that git does not ignore. A path an ignore glob matches is left out.
 export async function readChangedPaths(
   host: Pick<FingerprintHost, 'runGit'>,
-  request: ChangedPathsRequest,
+  request: ChangeRequest,
 ): Promise<readonly string[]> {
   const mergeBaseResult = await host.runGit({
     cwd: request.cwd,
@@ -33,7 +29,9 @@ export async function readChangedPaths(
     }),
   ]);
 
-  const paths = `${tracked.stdout}\0${untracked.stdout}`.split('\0').filter((path) => path !== '');
+  const paths = `${tracked.stdout}\0${untracked.stdout}`
+    .split('\0')
+    .filter((path) => path !== '' && !isGlobMatch(path, request.ignore));
 
   return [...new Set(paths)].toSorted();
 }

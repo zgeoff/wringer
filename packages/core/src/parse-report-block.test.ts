@@ -23,11 +23,30 @@ test('it reads back the report that the Markdown embeds, with a > in a value', (
         },
       },
     ],
+    unmapped: [],
   };
 
   const parsed = parseReportBlock(`Ships the checkout.\n\n${renderReportMarkdown(report)}`);
 
   expect(parsed).toStrictEqual({ ok: true, report });
+});
+
+test('it reads a report written before reports listed unmapped paths as having none', () => {
+  const parsed = parseReportBlock(
+    '<!-- wringer-report v1\n{"version":1,"base":"main","fingerprint":"f2","complete":true,"features":[]}\n-->',
+  );
+
+  expect(parsed).toStrictEqual({
+    ok: true,
+    report: {
+      version: 1,
+      base: 'main',
+      fingerprint: 'f2',
+      complete: true,
+      features: [],
+      unmapped: [],
+    },
+  });
 });
 
 test('it explains a body that holds no report block', () => {

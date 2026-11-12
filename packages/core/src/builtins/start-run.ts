@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildChangeRequest } from '../build-change-request.ts';
 import type { RunView } from '../build-run-view.ts';
 import { findOwnValue } from '../find-own-value.ts';
 import { readDefaultBase } from '../read-default-base.ts';
@@ -52,11 +53,10 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
 
-    const fingerprint = await readFingerprint(ctx.session.repoHost, {
-      cwd: ctx.session.root,
-      base,
-      exclude: [ctx.wringer.stateDir],
-    });
+    const fingerprint = await readFingerprint(
+      ctx.session.repoHost,
+      buildChangeRequest(ctx.wringer, ctx.session.root, base),
+    );
 
     // The caller has its timeout already once the deadline passes, so no run starts after it.
     if (ctx.signal.aborted) {

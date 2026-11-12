@@ -16,8 +16,8 @@ export interface ShopRegistryOptions {
 const orderCountSchema = z.strictObject({ orders: z.number().int().nonnegative() });
 
 // The example repo's verify registry: a launch target that starts the shop app with its database in
-// the run folder, a read-only attach target for a shop started apart, all four drivers, and the
-// shop's feature map, with root-relative paths as git lists them.
+// the run folder, a read-only attach target for a shop started apart, all four drivers, the shop's
+// feature map with root-relative paths as git lists them, and the paths the gate ignores.
 export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
   const shop = bindDrivers([http({}), db({}), stream({}), browser({})] as const);
 
@@ -135,5 +135,6 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
         paths: ['packages/shop-example/src/shop-app.ts'],
       },
     )
+    .ignore('**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**')
     .build();
 }

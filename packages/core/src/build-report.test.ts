@@ -72,3 +72,29 @@ test('it calls a report complete when every changed feature is verified', () => 
 
   expect(report.complete).toBeTrue();
 });
+
+test('it lists each changed path that no feature maps as unmapped', () => {
+  const report = buildReport({
+    base: 'main',
+    fingerprint: 'f2',
+    features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
+    changedPaths: ['scripts/seed.ts', 'src/checkout/pay.ts', 'src/tax.ts'],
+    verdicts: new Map([
+      [
+        'checkout',
+        {
+          feature: 'checkout',
+          fingerprint: 'f2',
+          run: 'r1',
+          at: '2026-11-04T10:00:00.000Z',
+          evidence: [],
+        },
+      ],
+    ]),
+  });
+
+  expect({ complete: report.complete, unmapped: report.unmapped }).toStrictEqual({
+    complete: false,
+    unmapped: ['scripts/seed.ts', 'src/tax.ts'],
+  });
+});

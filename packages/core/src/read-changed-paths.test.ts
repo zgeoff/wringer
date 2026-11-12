@@ -13,8 +13,8 @@ async function setupTest() {
   return {
     root: repo.root,
     git: repo.git,
-    readChangedPaths: () =>
-      readChangedPaths({ runGit }, { cwd: repo.root, base: 'main', exclude: ['.wringer'] }),
+    readChangedPaths: (ignore: readonly string[] = []) =>
+      readChangedPaths({ runGit }, { cwd: repo.root, base: 'main', exclude: ['.wringer'], ignore }),
   };
 }
 
@@ -61,4 +61,25 @@ test('it leaves the evidence folder out', async () => {
   const paths = await ctx.readChangedPaths();
 
   expect(paths).toStrictEqual([]);
+});
+
+test('it leaves out each committed, edited and untracked path an ignore glob matches', async () => {
+  const ctx = await setupTest();
+
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await mkdir(join(ctx.root, 'docs'));
+  await writeFile(join(ctx.root, 'docs', 'guide.txt'), 'How to shop.\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'guide');
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+  await mkdir(join(ctx.root, 'src'));
+  await writeFile(join(ctx.root, 'src', 'pay.ts'), 'export const pay = 1;\n');
+  await writeFile(join(ctx.root, 'src', 'pay.test.ts'), 'export {};\n');
+
+  const paths = await ctx.readChangedPaths(['docs/**', '**/*.md', '**/*.test.ts']);
+
+  expect(paths).toStrictEqual(['src/pay.ts']);
 });

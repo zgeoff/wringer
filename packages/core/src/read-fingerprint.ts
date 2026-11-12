@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import type { ChangeRequest } from './build-change-request.ts';
 import { buildPromisedObjectReads } from './build-promised-object-reads.ts';
 import { buildSkipWorktreeMarks } from './build-skip-worktree-marks.ts';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
+import { isGlobMatch } from './is-glob-match.ts';
 import { parsePatchID } from './parse-patch-id.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
@@ -17,11 +19,9 @@ export interface FingerprintHost {
   readonly removeDirectory: (path: string) => Promise<void>;
 }
 
-export interface FingerprintRequest {
-  readonly cwd: string;
-  readonly base: string;
-  readonly exclude: readonly string[];
-}
+// `ignore` holds globs of paths with no runtime effect: a change to a path one matches leaves the
+// fingerprint alone.
+export type FingerprintRequest = ChangeRequest;
 
 const pinnedDiffOptions = [
   '--unified=3',
@@ -78,6 +78,16 @@ export async function readFingerprint(
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
+    const excludes = request.exclude.map((path) => `:(top,exclude)${path}`);
+
+    const ignored = await readIgnoredPaths(host, {
+      root,
+      env,
+      mergeBase,
+      excludes,
+      ignore: request.ignore,
+    });
+
     const diff = await host.runGitBytes({
       cwd: root,
       args: [
@@ -92,7 +102,8 @@ export async function readFingerprint(
         mergeBase,
         '--',
         ':(top)',
-        ...request.exclude.map((path) => `:(top,exclude)${path}`),
+        ...excludes,
+        ...ignored.map((path) => `:(top,literal,exclude)${path}`),
       ],
       env,
     });
@@ -268,4 +279,44 @@ async function addSubmodules(
   for (const request of buildSubmoduleAdds({ root, env, stagedEntries: staged })) {
     await host.runGit(request);
   }
+}
+
+interface IgnoredPathsRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly mergeBase: string;
+  readonly excludes: readonly string[];
+  readonly ignore: readonly string[];
+}
+
+// The changed paths an ignore glob matches, each excluded from the diff by its literal name, so a
+// `*` or `[` in a file's name never widens the exclusion to another file.
+async function readIgnoredPaths(
+  host: FingerprintHost,
+  request: IgnoredPathsRequest,
+): Promise<readonly string[]> {
+  if (request.ignore.length === 0) {
+    return [];
+  }
+
+  const names = await host.runGit({
+    cwd: request.root,
+    args: [
+      'diff',
+      '--cached',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      '--no-relative',
+      request.mergeBase,
+      '--',
+      ':(top)',
+      ...request.excludes,
+    ],
+    env: request.env,
+  });
+
+  return names.stdout
+    .split('\0')
+    .filter((path) => path !== '' && isGlobMatch(path, request.ignore));
 }

@@ -33,6 +33,7 @@ export interface WringerBuilder<Ds extends AnyDrivers> {
   readonly action: <Input, Data>(action: ActionDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
   readonly check: <Input, Data>(check: CheckDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
   readonly feature: (...features: readonly FeatureDefinition[]) => WringerBuilder<Ds>;
+  readonly ignore: (...globs: readonly string[]) => WringerBuilder<Ds>;
   readonly hook: <Name extends keyof HookHandlers>(
     name: Name,
     handler: HookHandlers[Name],
@@ -50,6 +51,7 @@ export function createWringer(options: WringerOptions): WringerBuilder<readonly 
     commands: [],
     checks: [],
     features: [],
+    ignore: [],
     hooks: {},
   });
 }
@@ -61,6 +63,7 @@ interface Parts {
   readonly commands: readonly ((driverNames: readonly string[]) => RegisteredCommand)[];
   readonly checks: readonly ((driverNames: readonly string[]) => RunnableRepoCheck)[];
   readonly features: readonly FeatureDefinition[];
+  readonly ignore: readonly string[];
   readonly hooks: Partial<HookHandlers>;
 }
 
@@ -83,6 +86,7 @@ function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
     check: (check) =>
       makeBuilder({ ...parts, checks: [...parts.checks, (names) => buildRepoCheck(check, names)] }),
     feature: (...features) => makeBuilder({ ...parts, features: [...parts.features, ...features] }),
+    ignore: (...globs) => makeBuilder({ ...parts, ignore: [...parts.ignore, ...globs] }),
     hook: (name, handler) => makeBuilder({ ...parts, hooks: { ...parts.hooks, [name]: handler } }),
     build: () => buildWringer(parts),
   };
@@ -147,6 +151,7 @@ function buildWringer(parts: Parts): Wringer {
     ),
     checks: Object.freeze(parts.checks.map((buildEntry) => buildEntry(driverNames))),
     features: Object.freeze([...parts.features]),
+    ignore: Object.freeze([...parts.ignore]),
     hooks: Object.freeze({ ...parts.hooks }),
   });
 }

@@ -16,7 +16,7 @@ export function renderReportMarkdown(report: Report): string {
   const lines = [
     '## wringer report',
     '',
-    `Fingerprint \`${report.fingerprint}\` against \`${report.base}\`: ${report.complete ? 'every changed feature is verified' : 'some changed features need a verdict'}.`,
+    `Fingerprint \`${report.fingerprint}\` against \`${report.base}\`: ${pickSummary(report)}.`,
     '',
     '| Feature | Status | Evidence |',
     '| --- | --- | --- |',
@@ -25,6 +25,7 @@ export function renderReportMarkdown(report: Report): string {
         `| ${feature.name} | ${statusLabels[feature.status]} | ${formatEvidence(feature.verdict?.evidence ?? [])} |`,
     ),
     '',
+    ...formatUnmapped(report.unmapped),
     reportBlockOpen,
     JSON.stringify(report).replaceAll('>', String.raw`\u003e`),
     reportBlockClose,
@@ -32,6 +33,16 @@ export function renderReportMarkdown(report: Report): string {
   ];
 
   return lines.join('\n');
+}
+
+function pickSummary(report: Report): string {
+  if (report.complete) {
+    return 'every changed feature is verified';
+  }
+
+  return report.unmapped.length > 0
+    ? 'some changed paths map to no feature'
+    : 'some changed features need a verdict';
 }
 
 function formatEvidence(
@@ -50,4 +61,17 @@ function formatEvidence(
       item.url === undefined ? `${item.kind} \`${item.path}\`` : `[${item.kind}](${item.url})`,
     )
     .join(', ');
+}
+
+function formatUnmapped(unmapped: readonly string[]): readonly string[] {
+  if (unmapped.length === 0) {
+    return [];
+  }
+
+  return [
+    'Changed paths that no feature maps. Map each to a feature, or add it to the ignore list:',
+    '',
+    ...unmapped.map((path) => `- \`${path}\``),
+    '',
+  ];
 }
