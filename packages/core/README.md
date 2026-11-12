@@ -56,11 +56,11 @@ own file.
 - One supervisor process per run, which owns the app and every driver service.
 - The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`. `gate` fails a PR
   when a changed feature lacks a verdict at the current fingerprint, and when a changed path matches
-  no feature's `paths` and no `.ignore` glob. `report` lists those unmapped paths.
+  neither a feature's `paths` nor an `.ignore` glob. `report` lists those unmapped paths.
 - The ignore list: `.ignore(...globs)` names the paths with no runtime effect, such as docs and
-  tests. A path one glob matches counts as no change, even when a feature's `paths` match it too: it
-  maps to no feature, and the fingerprint leaves it out, so a README edit keeps each verdict fresh.
-  Feature `paths` and ignore globs both match with `Bun.Glob`.
+  tests. Any path an ignore glob matches counts as no change, even when a feature's `paths` match it
+  too. The gate skips it and the fingerprint leaves it out, so a README edit keeps each verdict
+  fresh. Feature `paths` and ignore globs both match with `Bun.Glob`.
 - The envelope's zod schema, and the JSON Schema built from it.
 - A closed set of error codes, each mapped to one exit code.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
