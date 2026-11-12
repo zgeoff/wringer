@@ -13,24 +13,24 @@ these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
-  the features, with each feature's `paths` globs, and the ignore list: the globs, set with
-  `.ignore`, of the files the running app never reads;
+  the features, with each feature's `paths` globs, and the ignore list, set with `.ignore`: the
+  globs of the files the running app never reads;
 - a `verify` skill, with a feature map in its `references/feature-map.md` that gives each feature's
   journey.
 
 These terms hold across this skill and its references:
 
-| Term      | Meaning                                                                                                                                                   |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| target    | where the app runs: `local`, which the CLI starts, or an instance it attaches to                                                                          |
-| read-only | a target's access that refuses each write with exit code 3                                                                                                |
-| driver    | a package that adds a group of commands, such as `@wringer/http` and `http request`                                                                       |
-| action    | a named step of the repo's own, run as `bun verify action <name>`                                                                                         |
-| doctor    | `bun verify doctor`: the checks that must pass before any command that touches the app                                                                    |
-| journey   | the `bun verify` commands that use one feature, and the end state that shows it works                                                                     |
-| verdict   | what `bun verify done` records: the feature works on the current code                                                                                     |
-| gate      | `bun verify gate` in CI: it fails a PR with a changed feature that lacks a verdict, or a changed file outside every feature's `paths` and the ignore list |
-| report    | the output of `bun verify report --human`, which the PR body holds for the gate                                                                           |
+| Term      | Meaning                                                                                                                                             |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| target    | where the app runs: `local`, which the CLI starts, or an instance it attaches to                                                                    |
+| read-only | a target's access that refuses each write with exit code 3                                                                                          |
+| driver    | a package that adds a group of commands, such as `@wringer/http` and `http request`                                                                 |
+| action    | a named step of the repo's own, run as `bun verify action <name>`                                                                                   |
+| doctor    | `bun verify doctor`: the checks that must pass before any command that touches the app                                                              |
+| journey   | the `bun verify` commands that use one feature, and the end state that shows it works                                                               |
+| verdict   | what `bun verify done` records: the feature works on the current code                                                                               |
+| gate      | `bun verify gate` in CI: it fails a PR on a changed feature without a verdict, and on a changed file outside every `paths` glob and the ignore list |
+| report    | the output of `bun verify report --human`, which the PR body holds for the gate                                                                     |
 
 Then prove them, and wire the checks that keep them true. Hand back the PR that adds them, with the
 proof in its description. The mistakes that cost the most:
