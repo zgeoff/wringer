@@ -39,6 +39,7 @@ export const registry = createWringer({ name: 'shop' })
     }),
   })
   .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
+  .ignore('docs/**', '**/*.md', '**/*.test.ts')
   .build();
 ```
 
@@ -53,22 +54,28 @@ own file.
 - Read-only targets: each driver client and exec refuses a write there with `read-only` and the
   target's hint. A target's driver config lists the writes it grants.
 - One supervisor process per run, which owns the app and every driver service.
-- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`.
+- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`. `gate` fails a PR
+  when a changed feature lacks a verdict at the current fingerprint, and when a changed path matches
+  no feature's `paths` and no `.ignore` glob. `report` lists those unmapped paths.
+- The ignore list: `.ignore(...globs)` names the paths with no runtime effect, such as docs and
+  tests. A path one glob matches counts as no change, even when a feature's `paths` match it too: it
+  maps to no feature, and the fingerprint leaves it out, so a README edit keeps each verdict fresh.
+  Feature `paths` and ignore globs both match with `Bun.Glob`.
 - The envelope's zod schema, and the JSON Schema built from it.
 - A closed set of error codes, each mapped to one exit code.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
-- The fingerprint: `git patch-id --verbatim` of the working tree against the merge base, which stays
-  the same across a commit and across a clean rebase that leaves the 3 lines around each change as
-  they were. A rebase that changes those lines changes the fingerprint, because the hash keeps the
-  diff's context. It needs git 2.39 or later. Only the tracked files and git's defaults shape it:
-  the config, attributes and ignore files of the clone, the user and the system never apply, so the
-  same change gets the same fingerprint in any clone. A clone whose config converts a file as git
-  adds it, such as `core.autocrlf` or a clean filter, can get another fingerprint once the change is
-  committed; the verdict then reads as stale, never as fresh. A sparse checkout, a linked worktree,
-  a shallow or partial clone and a detached HEAD get the fingerprint of the same change in a full
-  clone, and a file on disk that the index marks skip-worktree counts as any other. A repo with no
-  commit, a shallow clone that lacks the merge base, and a submodule that holds work it has not
-  committed fail with an `environment` error.
+- The fingerprint: `git patch-id --verbatim` of the working tree against the merge base, less the
+  state folder and the ignored paths, which stays the same across a commit and across a clean rebase
+  that leaves the 3 lines around each change as they were. A rebase that changes those lines changes
+  the fingerprint, because the hash keeps the diff's context. It needs git 2.39 or later. Only the
+  tracked files and git's defaults shape it: the config, attributes and ignore files of the clone,
+  the user and the system never apply, so the same change gets the same fingerprint in any clone. A
+  clone whose config converts a file as git adds it, such as `core.autocrlf` or a clean filter, can
+  get another fingerprint once the change is committed; the verdict then reads as stale, never as
+  fresh. A sparse checkout, a linked worktree, a shallow or partial clone and a detached HEAD get
+  the fingerprint of the same change in a full clone, and a file on disk that the index marks
+  skip-worktree counts as any other. A repo with no commit, a shallow clone that lacks the merge
+  base, and a submodule that holds work it has not committed fail with an `environment` error.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer. Each host also follows a long-running command, such as `tail -F`, line by line.
 

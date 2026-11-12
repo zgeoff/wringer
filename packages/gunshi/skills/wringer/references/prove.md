@@ -35,6 +35,8 @@ that adds them.
       `error.code` `read-only`.
    4. Run `bun verify detach`, then `bun verify use --target local`.
 5. Run `bun verify report --human`. Expect: each feature whose `paths` match a file the branch
-   changes shows `verified`, and every other feature shows `unchanged`. Paste the whole output into
-   the PR description as it is, outside a code block. The gate reads the report from the HTML
+   changes shows `verified`, every other feature shows `unchanged`, and the report lists no changed
+   path under "Changed paths that no feature maps". When it lists one, add the path to a feature's
+   `paths` or to the registry's `.ignore` list, and start again at step 1. Paste the whole output
+   into the PR description as it is, outside a code block. The gate reads the report from the HTML
    comment at its end.

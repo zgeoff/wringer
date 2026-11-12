@@ -11,6 +11,9 @@ The mistakes that cost the most:
   action must declare its effect. A read-only target refuses each write with exit code 3.
 - **A glob relative to a package.** Write each feature's `paths` globs relative to the repo root, as
   `git ls-files` prints paths. In a monorepo, a glob relative to a package folder matches nothing.
+- **Ignoring a file that changes behaviour.** Ignore only files the running app never reads, such as
+  docs and tests. The gate skips a file that an ignore glob matches, even when a feature's `paths`
+  match it too, so a change to it never needs a verdict.
 - **A placeholder in a journey.** In the `verify` skill's fenced code blocks, `bun verify lint`
   parses each line that starts with `bun verify`, and reads `<name>` as a shell redirect. Write each
   such line as a command that runs, and put a command with a placeholder in inline code.
@@ -61,7 +64,13 @@ The mistakes that cost the most:
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs
     of the files that change its behaviour.
-11. Copy [`template/verify/`](../template/verify/) to `.claude/skills/verify/`. Rewrite the
+11. Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
+    `**/*.md`, `**/*.test.ts`, `.github/**`, `.claude/**` and `scripts/verify/**`. The gate fails a
+    PR that changes a file matched by neither a feature's `paths` nor an ignore glob. Expect: each
+    file that `git ls-files` prints matches a feature's `paths` or an ignore glob. Add a file that
+    matches neither to the `paths` of each feature whose behaviour it changes. A file such as
+    `package.json` changes every feature.
+12. Copy [`template/verify/`](../template/verify/) to `.claude/skills/verify/`. Rewrite the
     frontmatter's `name` and `description` and the `#` title for the app. Set
     `metadata.wringer-command` to the command that runs the script, `bun verify` by default. Rewrite
     each `<!-- repo: <part> -->` block:
@@ -75,7 +84,7 @@ The mistakes that cost the most:
     form: what it does, how a user reaches it, its journey as a block of commands that run as
     written, and its end state.
 
-12. Run `bun verify lint`. Expect: `ok: true`, and `data.commands`, the count of journey lines it
+13. Run `bun verify lint`. Expect: `ok: true`, and `data.commands`, the count of journey lines it
     parsed, above 0. A count of 0 means it found no journey.
-13. Run `bun verify --help`, then `bun verify <group> --help` for each group it lists, such as
+14. Run `bun verify --help`, then `bun verify <group> --help` for each group it lists, such as
     `action`. Expect: every action and repo command, each marked `[read]` or `[write]`.

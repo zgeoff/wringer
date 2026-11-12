@@ -17,10 +17,13 @@ The mistakes that cost the most:
 ## Wire the checks into CI
 
 `bun verify lint` and `bun verify gate --base <ref> --body-file <file>` need no running app, so they
-run in any job that has the repo's dependencies. The gate maps the PR's changed files to features
-through `paths`, reads the last report block in the body, and works out the code's fingerprint
-itself. It fails with exit code 1 when a changed feature has no verdict, or a verdict for other
-code.
+run in any job that has the repo's dependencies. The gate reads the last report block in the PR body
+and works out the code's fingerprint itself. It fails with exit code 1 in two cases:
+
+- A changed feature has no verdict, or a verdict for other code.
+- A changed file matches neither a feature's `paths` nor a glob in the registry's `.ignore` list.
+  The gate's error lists each such file. Add it to a feature's `paths`, or to `.ignore` when the
+  running app never reads it.
 
 Add a workflow like this one. When the repo's other workflows pin each action to a commit SHA, pin
 these the same way.

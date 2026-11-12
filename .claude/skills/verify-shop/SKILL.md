@@ -159,20 +159,20 @@ help marks each command `[read]` or `[write]`.
 
 Before you run a feature's journey, read its entry in the
 [feature map](./references/feature-map.md): what it does, how a user reaches it, its journey and its
-end state. `bun verify features` lists each feature's `paths`. When a PR changes a file that they
-match, the gate needs a verdict for the feature.
+end state. `bun verify features` lists each feature's `paths`. The gate needs a verdict for each
+feature whose `paths` match a changed file. It fails on a changed file that matches neither `paths`
+nor `.ignore` in the registry: add the file to one of them.
 
 ## Update the feature map
 
 <!-- repo: registry -->
 
-The registry,
-[`create-shop-registry.ts`](../../../packages/shop-example/src/create-shop-registry.ts), declares
-the targets, actions, commands, doctor checks and features, with each feature's `paths`.
+The registry is
+[`create-shop-registry.ts`](../../../packages/shop-example/src/create-shop-registry.ts).
 
-This repo's CI runs `lint` through a test, and does not run `gate`, so a missing verdict never
-blocks a PR here. An edit to this skill or its feature map is a skill edit. Before you make one,
-follow the skill steps in [AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
+This repo's CI runs `lint` through a test and never runs `gate`. An edit to this skill or its
+feature map is a skill edit. Before you make one, follow the skill steps in
+[AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
 
 <!-- /repo -->
 
