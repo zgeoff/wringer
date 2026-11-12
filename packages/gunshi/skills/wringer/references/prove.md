@@ -37,6 +37,6 @@ that adds them.
 5. Run `bun verify report --human`. Expect: each feature whose `paths` match a file the branch
    changes shows `verified`, every other feature shows `unchanged`, and the report lists no changed
    path under "Changed paths that no feature maps". When it lists one, add the path to a feature's
-   `paths` or to the registry's `.ignore` list, and start again at step 1. Paste the whole output
-   into the PR description as it is, outside a code block. The gate reads the report from the HTML
-   comment at its end.
+   `paths`, or to the registry's `.ignore` list when the running app never reads it. Then start
+   again at step 1. Paste the whole output into the PR description as it is, outside a code block.
+   The gate reads the report from the HTML comment at its end.

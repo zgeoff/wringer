@@ -64,10 +64,10 @@ The mistakes that cost the most:
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs
     of the files that change its behaviour.
-11. Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
-    `**/*.md`, `**/*.test.ts`, `.github/**`, `.claude/**` and `scripts/verify/**`. The gate fails a
-    PR that changes a file matched by neither a feature's `paths` nor an ignore glob. Expect: each
-    file that `git ls-files` prints matches a feature's `paths` or an ignore glob. Add a file that
+11. The gate fails a PR that changes a file matched by neither a feature's `paths` nor an ignore
+    glob. Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
+    `**/*.md`, `**/*.test.ts`, `.github/**`, `.claude/**` and `scripts/verify/**`. Expect: each file
+    that `git ls-files` prints matches a feature's `paths` or an ignore glob. Add a file that
     matches neither to the `paths` of each feature whose behaviour it changes. A file such as
     `package.json` changes every feature.
 12. Copy [`template/verify/`](../template/verify/) to `.claude/skills/verify/`. Rewrite the

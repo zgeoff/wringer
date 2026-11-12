@@ -160,8 +160,8 @@ help marks each command `[read]` or `[write]`.
 Before you run a feature's journey, read its entry in the
 [feature map](./references/feature-map.md): what it does, how a user reaches it, its journey and its
 end state. `bun verify features` lists each feature's `paths`. The gate needs a verdict for each
-feature whose `paths` match a changed file. It fails on a changed file that matches neither `paths`
-nor `.ignore` in the registry: add the file to one of them.
+feature whose `paths` match a changed file. It fails on a changed file that matches neither a
+feature's `paths` nor the registry's `.ignore` globs: add it to one of them.
 
 ## Update the feature map
 
