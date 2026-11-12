@@ -259,7 +259,7 @@ test('#gate passes a PR body whose report holds a verdict at the current fingerp
 
   expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 0,
-    data: { fingerprint: expect.any(String), failing: [] },
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
   });
 });
 
@@ -292,7 +292,7 @@ test('#gate passes a PR into another branch when done took the same base', async
 
   expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
     exitCode: 0,
-    data: { fingerprint: expect.any(String), failing: [] },
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
   });
 });
 
@@ -330,6 +330,7 @@ test('#gate fails a PR body whose verdict predates a change to the feature', asy
       failing: [
         { name: 'checkout', reason: expect.stringMatching(/^verdict at \S+, tree at \S+$/u) },
       ],
+      unmapped: [],
     },
   });
 });
@@ -347,5 +348,146 @@ test('#gate fails a PR body with no report block for a changed feature', async (
   expect(result.envelope.data).toStrictEqual({
     fingerprint: expect.any(String),
     failing: [{ name: 'search', reason: 'The PR body holds no wringer report block.' }],
+    unmapped: [],
+  });
+});
+
+test('#gate keeps a verdict fresh after an edit to a README the repo ignores', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['done']);
+
+  const report = await ctx.run(['report']);
+
+  await ctx.writeBody(ctx.parseReportData(report.envelope.data).markdown);
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop\n\nPay with one click.\n');
+
+  const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
+  });
+});
+
+test('#gate fails a PR that changes a path no feature maps and the repo does not ignore', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'scripts'));
+  await writeFile(join(ctx.root, 'scripts', 'seed.ts'), 'export const seed = 1;\n');
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    hint: result.envelope.error?.hint,
+    data: result.envelope.data,
+  }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+    hint: expect.stringContaining('ignore list'),
+    data: { fingerprint: expect.any(String), failing: [], unmapped: ['scripts/seed.ts'] },
+  });
+});
+
+test('#gate passes a PR that changes only a path the repo ignores', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'docs'));
+  await writeFile(join(ctx.root, 'docs', 'pay.md'), 'Pay with one click.\n');
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
+  });
+});
+
+test('#report lists each changed path that no feature maps', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'scripts'));
+  await writeFile(join(ctx.root, 'scripts', 'seed.ts'), 'export const seed = 1;\n');
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  const result = await ctx.run(['report']);
+
+  const data = ctx.parseReportData(result.envelope.data);
+
+  expect({
+    complete: data.report.complete,
+    unmapped: data.report.unmapped,
+    markdown: data.markdown,
+  }).toStrictEqual({
+    complete: false,
+    unmapped: ['scripts/seed.ts'],
+    markdown: expect.stringContaining('`scripts/seed.ts`'),
+  });
+});
+
+test('#done records a verdict when a path the repo ignores changed after the run started', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
+  });
+});
+
+test('#done records a verdict when a path the repo ignores changed before the run started', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
+  });
+});
+
+test('#action runs when a path the repo ignores changed after the doctor passed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  const result = await ctx.run(['action', 'receipt']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
   });
 });

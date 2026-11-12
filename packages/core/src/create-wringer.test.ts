@@ -105,6 +105,24 @@ test('it keeps the state folder in .wringer unless the repo names another', () =
   expect(wringer.stateDir).toBe('.wringer');
 });
 
+test('it collects the ignore globs of each `ignore` call in order', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .ignore('docs/**', '**/*.md')
+    .ignore('.github/**')
+    .build();
+
+  expect(wringer.ignore).toStrictEqual(['docs/**', '**/*.md', '.github/**']);
+});
+
+test('it ignores no path unless the repo lists some', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .build();
+
+  expect(wringer.ignore).toStrictEqual([]);
+});
+
 test('it types an action against the drivers the repo bound', () => {
   const shop = bindDrivers([notes({})] as const);
 

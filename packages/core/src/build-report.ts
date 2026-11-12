@@ -1,3 +1,4 @@
+import { isGlobMatch } from './is-glob-match.ts';
 import type { FeatureStatus, Report, Verdict } from './report-schema.ts';
 import type { FeatureDefinition } from './types.ts';
 
@@ -10,13 +11,11 @@ export interface ReportInput {
 }
 
 // Each feature whose paths the branch changes needs a verdict at the current fingerprint. A feature
-// the branch leaves alone is `unchanged`, whatever its verdict.
+// the branch leaves alone is `unchanged`, whatever its verdict. A changed path no feature maps is
+// unmapped, and leaves the report incomplete.
 export function buildReport(input: ReportInput): Report {
   const features = input.features.map((feature) => {
-    const changed = input.changedPaths.some((path) =>
-      feature.paths.some((pattern) => new Bun.Glob(pattern).match(path)),
-    );
-
+    const changed = input.changedPaths.some((path) => isGlobMatch(path, feature.paths));
     const verdict = input.verdicts.get(feature.name) ?? null;
 
     return {
@@ -27,14 +26,19 @@ export function buildReport(input: ReportInput): Report {
     };
   });
 
+  const unmapped = input.changedPaths.filter(
+    (path) => !input.features.some((feature) => isGlobMatch(path, feature.paths)),
+  );
+
   return {
     version: 1,
     base: input.base,
     fingerprint: input.fingerprint,
-    complete: features.every(
-      (feature) => feature.status === 'verified' || feature.status === 'unchanged',
-    ),
+    complete:
+      unmapped.length === 0 &&
+      features.every((feature) => feature.status === 'verified' || feature.status === 'unchanged'),
     features,
+    unmapped,
   };
 }
 

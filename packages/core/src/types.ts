@@ -427,6 +427,10 @@ export interface Wringer {
   readonly commands: ReadonlyMap<string, RegisteredCommand>;
   readonly checks: readonly RunnableRepoCheck[];
   readonly features: readonly FeatureDefinition[];
+
+  // Globs of paths with no runtime effect, such as docs: a change to one maps to no feature and
+  // leaves the fingerprint alone.
+  readonly ignore: readonly string[];
   readonly hooks: Partial<HookHandlers>;
 }
 

@@ -1,8 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { join, resolve } from 'node:path';
+import type { ChangeRequest } from './build-change-request.ts';
 import { buildPromisedObjectReads } from './build-promised-object-reads.ts';
 import { buildSkipWorktreeMarks } from './build-skip-worktree-marks.ts';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
+import { isGlobMatch } from './is-glob-match.ts';
 import { parsePatchID } from './parse-patch-id.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
@@ -17,11 +19,9 @@ export interface FingerprintHost {
   readonly removeDirectory: (path: string) => Promise<void>;
 }
 
-export interface FingerprintRequest {
-  readonly cwd: string;
-  readonly base: string;
-  readonly exclude: readonly string[];
-}
+// `ignore` holds globs of paths with no runtime effect: a change to a path one matches leaves the
+// fingerprint alone.
+export type FingerprintRequest = ChangeRequest;
 
 const pinnedDiffOptions = [
   '--unified=3',
@@ -46,7 +46,7 @@ export async function readFingerprint(
   const mergeBase = await readMergeBase(host, root, request.base);
 
   await readPromisedObjects(host, root, mergeBase);
-  await readSubmoduleWork(host, root);
+  await readSubmoduleWork(host, root, request.ignore);
 
   const gitDir = await readGitPath(host, root, `wringer-${randomUUID()}`);
 
@@ -75,6 +75,7 @@ export async function readFingerprint(
     });
 
     await addSubmodules(host, root, env);
+    await restoreIgnoredPaths(host, { root, env, mergeBase, ignore: request.ignore });
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
@@ -156,7 +157,11 @@ async function readPromisedObjects(
 
 // `--no-optional-locks` keeps status from writing the repo's own index, and `-uno` skips the
 // repo's own untracked files, which `add --all` counts anyway.
-async function readSubmoduleWork(host: FingerprintHost, root: string): Promise<void> {
+async function readSubmoduleWork(
+  host: FingerprintHost,
+  root: string,
+  ignore: readonly string[],
+): Promise<void> {
   const status = await host.runGitBytes({
     cwd: root,
     args: [
@@ -169,7 +174,7 @@ async function readSubmoduleWork(host: FingerprintHost, root: string): Promise<v
     ],
   });
 
-  const refusal = pickSubmoduleRefusal(status);
+  const refusal = pickSubmoduleRefusal(status, ignore);
 
   if (refusal !== null) {
     throw refusal;
@@ -268,4 +273,96 @@ async function addSubmodules(
   for (const request of buildSubmoduleAdds({ root, env, stagedEntries: staged })) {
     await host.runGit(request);
   }
+}
+
+interface IgnoredPathsRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly mergeBase: string;
+  readonly ignore: readonly string[];
+}
+
+// Each changed path an ignore glob matches goes back to its merge-base state in the index, so the
+// diff leaves it out. The names go to git as the bytes it listed, on stdin, so a name that is not
+// UTF-8 still matches, no count of names outgrows the argument list, and `*` stays a plain letter.
+async function restoreIgnoredPaths(
+  host: FingerprintHost,
+  request: IgnoredPathsRequest,
+): Promise<void> {
+  if (request.ignore.length === 0) {
+    return;
+  }
+
+  const names = await host.runGitBytes({
+    cwd: request.root,
+    args: [
+      'diff',
+      '--cached',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      '--no-relative',
+      request.mergeBase,
+    ],
+    env: request.env,
+  });
+
+  const ignored = collectIgnoredNames(Buffer.from(names), request.ignore);
+
+  if (ignored.length === 0) {
+    return;
+  }
+
+  await host.runGit({
+    cwd: request.root,
+    args: [
+      '--literal-pathspecs',
+      'restore',
+      '--staged',
+      `--source=${request.mergeBase}`,
+      '--pathspec-from-file=-',
+      '--pathspec-file-nul',
+    ],
+    stdin: Buffer.concat(ignored.flatMap((name) => [name, Buffer.from([0])])),
+    env: request.env,
+  });
+}
+
+// A name matches as the changed paths decode it, and stays the bytes git wrote. An ignored name
+// stays in the diff when a counted name sits inside it or around it, such as a file that became a
+// folder: restoring one would remove the other from the index.
+function collectIgnoredNames(output: Buffer, ignore: readonly string[]): readonly Buffer[] {
+  const names = collectNames(output);
+  const ignored = names.filter((name) => isGlobMatch(name.toString('utf8'), ignore));
+  const counted = names.filter((name) => !ignored.includes(name));
+
+  return ignored.filter(
+    (name) => !counted.some((other) => isInsidePath(other, name) || isInsidePath(name, other)),
+  );
+}
+
+function collectNames(output: Buffer): readonly Buffer[] {
+  const names: Buffer[] = [];
+  let start = 0;
+
+  while (start < output.length) {
+    const end = output.indexOf(0, start);
+    const stop = end === -1 ? output.length : end;
+
+    if (stop > start) {
+      names.push(output.subarray(start, stop));
+    }
+
+    start = stop + 1;
+  }
+
+  return names;
+}
+
+function isInsidePath(path: Buffer, folder: Buffer): boolean {
+  return (
+    path.length > folder.length &&
+    path[folder.length] === 0x2f &&
+    path.subarray(0, folder.length).equals(folder)
+  );
 }

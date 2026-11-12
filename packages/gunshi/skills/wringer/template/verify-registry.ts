@@ -78,5 +78,6 @@ export function createVerifyRegistry(): Wringer {
       summary: 'Add an item from the pantry page',
       paths: ['src/items/**', 'src/pages/pantry/**'],
     })
+    .ignore('docs/**', '**/*.md', '**/*.test.ts', '.github/**', '.claude/**', 'scripts/verify/**')
     .build();
 }

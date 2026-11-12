@@ -32,6 +32,10 @@ export const reportSchema = z.strictObject({
   fingerprint: z.string(),
   complete: z.boolean(),
   features: z.array(featureReportSchema),
+
+  // The changed paths that no feature maps and the repo does not ignore. A report written before
+  // the field existed reads as having none; `gate` works the paths out again either way.
+  unmapped: z.array(z.string()).default([]),
 });
 
 export type Report = z.infer<typeof reportSchema>;

@@ -1,5 +1,6 @@
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
+import { buildChangeRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
 import type { Evidence } from '../envelope.ts';
@@ -38,6 +39,7 @@ const gateFailureSchema = z.strictObject({ name: z.string(), reason: z.string() 
 const gateDataSchema = z.strictObject({
   fingerprint: z.string(),
   failing: z.array(gateFailureSchema),
+  unmapped: z.array(z.string()),
 });
 
 type GateData = z.infer<typeof gateDataSchema>;
@@ -76,7 +78,7 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
   const gate: BuiltinCommandSpec<GateArgs, GateData> = {
     path: ['gate'],
     summary:
-      'Fail when a changed feature lacks a verdict at the current fingerprint in the PR body',
+      'Fail when a changed feature lacks a verdict at the current fingerprint in the PR body, or a changed path maps to no feature',
     args: gateArgsSchema,
     data: gateDataSchema,
     effect: 'read',
@@ -141,11 +143,10 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 }
 
 function readCurrentFingerprint(ctx: BuiltinContext, base: string): Promise<string> {
-  return readFingerprint(ctx.session.repoHost, {
-    cwd: ctx.session.root,
-    base,
-    exclude: [ctx.wringer.stateDir],
-  });
+  return readFingerprint(
+    ctx.session.repoHost,
+    buildChangeRequest(ctx.wringer, ctx.session.root, base),
+  );
 }
 
 async function readReport(ctx: BuiltinContext, givenBase: string | undefined): Promise<Report> {
@@ -153,11 +154,7 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
 
   const [fingerprint, changedPaths, verdicts] = await Promise.all([
     readCurrentFingerprint(ctx, base),
-    readChangedPaths(ctx.session.repoHost, {
-      cwd: ctx.session.root,
-      base,
-      exclude: [ctx.wringer.stateDir],
-    }),
+    readChangedPaths(ctx.session.repoHost, buildChangeRequest(ctx.wringer, ctx.session.root, base)),
     readVerdicts(ctx.state, ctx.session.repoHost, ctx.session.root),
   ]);
 
@@ -212,11 +209,10 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
 
   const [fingerprint, changedPaths] = await Promise.all([
     readCurrentFingerprint(ctx, args.base),
-    readChangedPaths(ctx.session.repoHost, {
-      cwd: ctx.session.root,
-      base: args.base,
-      exclude: [ctx.wringer.stateDir],
-    }),
+    readChangedPaths(
+      ctx.session.repoHost,
+      buildChangeRequest(ctx.wringer, ctx.session.root, args.base),
+    ),
   ]);
 
   const claimed = block.ok
@@ -252,15 +248,44 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     return [];
   });
 
-  const data = { fingerprint, failing };
+  const data = { fingerprint, failing, unmapped: computed.unmapped };
 
-  if (failing.length > 0) {
+  if (failing.length > 0 || computed.unmapped.length > 0) {
     throw new WringerError('check-failed', {
-      message: `${failing.length} changed feature(s) lack a verdict at the current fingerprint: ${failing.map((feature) => feature.name).join(', ')}.`,
-      hint: 'Drive each feature, run `done` and `report --human`, and update the PR body.',
+      message: formatGateFailure(failing, computed.unmapped),
+      hint: pickGateHint(failing, computed.unmapped),
       data,
     });
   }
 
   return data;
+}
+
+function formatGateFailure(
+  failing: readonly { readonly name: string }[],
+  unmapped: readonly string[],
+): string {
+  const lines = [
+    failing.length > 0
+      ? `${failing.length} changed feature(s) lack a verdict at the current fingerprint: ${failing.map((feature) => feature.name).join(', ')}.`
+      : null,
+    unmapped.length > 0
+      ? `${unmapped.length} changed path(s) map to no feature: ${unmapped.join(', ')}.`
+      : null,
+  ];
+
+  return lines.filter((line) => line !== null).join(' ');
+}
+
+const verdictHint = 'Drive each feature, run `done` and `report --human`, and update the PR body.';
+
+const unmappedHint =
+  "Add each unmapped path to a feature's `paths`, or to the registry's ignore list when it has no runtime effect.";
+
+function pickGateHint(failing: readonly unknown[], unmapped: readonly string[]): string {
+  if (unmapped.length === 0) {
+    return verdictHint;
+  }
+
+  return failing.length === 0 ? unmappedHint : `${unmappedHint} ${verdictHint}`;
 }

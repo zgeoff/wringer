@@ -16,7 +16,7 @@ test.each([
     status: `2 R. N... 100644 100644 100644 48ee17484d28109fff28c5e25cec8e0a0978f815 48ee17484d28109fff28c5e25cec8e0a0978f815 R100 new.ts\u00001 .M S.M. old\0`,
   },
 ])('it refuses nothing for $name', (row) => {
-  expect(pickSubmoduleRefusal(Buffer.from(row.status))).toBeNull();
+  expect(pickSubmoduleRefusal(Buffer.from(row.status), [])).toBeNull();
 });
 
 test.each([
@@ -27,7 +27,7 @@ test.each([
 ])('it refuses a submodule with $name', (row) => {
   const status = `1 .M ${row.sub} 160000 160000 160000 48ee17484d28109fff28c5e25cec8e0a0978f815 48ee17484d28109fff28c5e25cec8e0a0978f815 ${row.path}\0`;
 
-  expect(pickSubmoduleRefusal(Buffer.from(status))).toMatchObject({
+  expect(pickSubmoduleRefusal(Buffer.from(status), [])).toMatchObject({
     code: 'environment',
     message: `The submodule ${row.path} holds work that is not committed in it, so the change has no fingerprint.`,
   });
@@ -41,8 +41,30 @@ test('it names every dirty submodule', () => {
     '',
   ].join('\0');
 
-  expect(pickSubmoduleRefusal(Buffer.from(status))).toMatchObject({
+  expect(pickSubmoduleRefusal(Buffer.from(status), [])).toMatchObject({
     message:
       'The submodule lib, vendor holds work that is not committed in it, so the change has no fingerprint.',
+  });
+});
+
+test.each([
+  { name: 'its exact path', path: 'lib', ignore: ['lib'] },
+  { name: 'a glob over its folder', path: 'vendor/lib', ignore: ['vendor/**'] },
+])('it refuses no dirty submodule that the ignore list covers by $name', (row) => {
+  const status = `1 .M S.M. 160000 160000 160000 48ee17484d28109fff28c5e25cec8e0a0978f815 48ee17484d28109fff28c5e25cec8e0a0978f815 ${row.path}\0`;
+
+  expect(pickSubmoduleRefusal(Buffer.from(status), row.ignore)).toBeNull();
+});
+
+test('it still refuses a dirty submodule the ignore list does not cover', () => {
+  const status = [
+    `1 .M S.M. 160000 160000 160000 48ee17484d28109fff28c5e25cec8e0a0978f815 48ee17484d28109fff28c5e25cec8e0a0978f815 docs`,
+    `1 .M S.M. 160000 160000 160000 48ee17484d28109fff28c5e25cec8e0a0978f815 48ee17484d28109fff28c5e25cec8e0a0978f815 lib`,
+    '',
+  ].join('\0');
+
+  expect(pickSubmoduleRefusal(Buffer.from(status), ['docs'])).toMatchObject({
+    message:
+      'The submodule lib holds work that is not committed in it, so the change has no fingerprint.',
   });
 });
