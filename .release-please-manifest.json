@@ -1,8 +1,8 @@
 {
-  "packages/core": "0.1.2",
-  "packages/browser": "0.1.1",
-  "packages/db": "0.1.1",
-  "packages/gunshi": "0.1.1",
-  "packages/http": "0.1.1",
-  "packages/stream": "0.1.1"
+  "packages/core": "0.2.0",
+  "packages/browser": "0.1.2",
+  "packages/db": "0.1.2",
+  "packages/gunshi": "0.2.0",
+  "packages/http": "0.1.2",
+  "packages/stream": "0.1.2"
 }

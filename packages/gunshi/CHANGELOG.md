@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.2.0](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.1.1...@wringer/gunshi@0.2.0) (2026-11-12)
+
+
+### ⚠ BREAKING CHANGES
+
+* **core:** ignore no-effect paths and fail the gate on unmapped ones ([#99](https://github.com/zgeoff/wringer/issues/99))
+
+### Features
+
+* **core:** ignore no-effect paths and fail the gate on unmapped ones ([#99](https://github.com/zgeoff/wringer/issues/99)) ([c781102](https://github.com/zgeoff/wringer/commit/c7811021a3b6eaaebd8e7dbcf65639315d85acf6))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @wringer/core bumped to 0.2.0
+    * @wringer/http bumped to 0.1.2
+  * peerDependencies
+    * @wringer/core bumped to 0.2.0
+
 ## [0.1.1](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.1.0...@wringer/gunshi@0.1.1) (2026-11-08)
 
 ### Features

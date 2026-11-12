@@ -1,6 +1,6 @@
 {
   "name": "@wringer/core",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "The core of wringer: the envelope, the registry, the fence, the run state and the evidence",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/core#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
