@@ -1003,6 +1003,36 @@ test('it keeps a path in the fingerprint whose name an ignored path would match 
   expect(ignored).toBe(unignored);
 });
 
+test.each(['--no-sparse-index', '--sparse-index'])(
+  'it leaves an ignored path outside a sparse checkout made with %s out of the fingerprint',
+  async (indexFlag) => {
+    const ctx = await setupTest();
+
+    await mkdir(join(ctx.repo, 'web'));
+    await mkdir(join(ctx.repo, 'docs'));
+    await writeFile(join(ctx.repo, 'web', 'app.ts'), 'export const port = 3000;\n');
+    await writeFile(join(ctx.repo, 'docs', 'ports.txt'), 'The app listens on 3000.\n');
+
+    await ctx.git('add', '.');
+    await ctx.git('commit', '--quiet', '-m', 'start');
+    await ctx.git('switch', '--quiet', '-c', 'feature');
+
+    await writeFile(join(ctx.repo, 'web', 'app.ts'), 'export const port = 4000;\n');
+
+    const before = await ctx.readFingerprintIgnoring(['docs/**']);
+
+    await writeFile(join(ctx.repo, 'docs', 'ports.txt'), 'The app listens on 4000.\n');
+
+    await ctx.git('add', '.');
+    await ctx.git('commit', '--quiet', '-m', 'docs');
+    await ctx.git('sparse-checkout', 'set', '--cone', indexFlag, 'web');
+
+    const after = await ctx.readFingerprintIgnoring(['docs/**']);
+
+    expect(after).toBe(before);
+  },
+);
+
 test('it gives two calls at once the same fingerprint', async () => {
   const ctx = await setupTest();
 

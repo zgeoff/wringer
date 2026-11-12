@@ -75,19 +75,10 @@ export async function readFingerprint(
     });
 
     await addSubmodules(host, root, env);
+    await restoreIgnoredPaths(host, { root, env, mergeBase, ignore: request.ignore });
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
-    const excludes = request.exclude.map((path) => `:(top,exclude)${path}`);
-
-    const ignored = await readIgnoredPaths(host, {
-      root,
-      env,
-      mergeBase,
-      excludes,
-      ignore: request.ignore,
-    });
-
     const diff = await host.runGitBytes({
       cwd: root,
       args: [
@@ -102,8 +93,7 @@ export async function readFingerprint(
         mergeBase,
         '--',
         ':(top)',
-        ...excludes,
-        ...ignored.map((path) => `:(top,literal,exclude)${path}`),
+        ...request.exclude.map((path) => `:(top,exclude)${path}`),
       ],
       env,
     });
@@ -285,18 +275,18 @@ interface IgnoredPathsRequest {
   readonly root: string;
   readonly env: Readonly<Record<string, string>>;
   readonly mergeBase: string;
-  readonly excludes: readonly string[];
   readonly ignore: readonly string[];
 }
 
-// The changed paths an ignore glob matches, each excluded from the diff by its literal name, so a
-// `*` or `[` in a file's name never widens the exclusion to another file.
-async function readIgnoredPaths(
+// Each changed path an ignore glob matches goes back to its merge-base state in the index, so the
+// diff leaves it out. The paths go in on stdin as literal names, so no count of them outgrows the
+// argument list, and a `*` or `[` in a file's name never reaches another file.
+async function restoreIgnoredPaths(
   host: FingerprintHost,
   request: IgnoredPathsRequest,
-): Promise<readonly string[]> {
+): Promise<void> {
   if (request.ignore.length === 0) {
-    return [];
+    return;
   }
 
   const names = await host.runGit({
@@ -309,14 +299,29 @@ async function readIgnoredPaths(
       '--no-renames',
       '--no-relative',
       request.mergeBase,
-      '--',
-      ':(top)',
-      ...request.excludes,
     ],
     env: request.env,
   });
 
-  return names.stdout
+  const ignored = names.stdout
     .split('\0')
     .filter((path) => path !== '' && isGlobMatch(path, request.ignore));
+
+  if (ignored.length === 0) {
+    return;
+  }
+
+  await host.runGit({
+    cwd: request.root,
+    args: [
+      '--literal-pathspecs',
+      'restore',
+      '--staged',
+      `--source=${request.mergeBase}`,
+      '--pathspec-from-file=-',
+      '--pathspec-file-nul',
+    ],
+    stdin: ignored.map((path) => `${path}\0`).join(''),
+    env: request.env,
+  });
 }
