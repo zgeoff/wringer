@@ -2,14 +2,13 @@
 
 ## [0.1.2](https://github.com/zgeoff/wringer/compare/@wringer/db@0.1.1...@wringer/db@0.1.2) (2026-11-12)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.2.0
-  * peerDependencies
-    * @wringer/core bumped to 0.2.0
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.2.0
+  - peerDependencies
+    - @wringer/core bumped to 0.2.0
 
 ## [0.1.1](https://github.com/zgeoff/wringer/compare/@wringer/db@0.1.0...@wringer/db@0.1.1) (2026-11-08)
 

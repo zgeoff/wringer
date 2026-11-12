@@ -2,14 +2,16 @@
 
 ## [0.2.0](https://github.com/zgeoff/wringer/compare/@wringer/core@0.1.2...@wringer/core@0.2.0) (2026-11-12)
 
-
 ### ⚠ BREAKING CHANGES
 
-* **core:** ignore no-effect paths and fail the gate on unmapped ones ([#99](https://github.com/zgeoff/wringer/issues/99))
+- **core:** ignore no-effect paths and fail the gate on unmapped ones
+  ([#99](https://github.com/zgeoff/wringer/issues/99))
 
 ### Features
 
-* **core:** ignore no-effect paths and fail the gate on unmapped ones ([#99](https://github.com/zgeoff/wringer/issues/99)) ([c781102](https://github.com/zgeoff/wringer/commit/c7811021a3b6eaaebd8e7dbcf65639315d85acf6))
+- **core:** ignore no-effect paths and fail the gate on unmapped ones
+  ([#99](https://github.com/zgeoff/wringer/issues/99))
+  ([c781102](https://github.com/zgeoff/wringer/commit/c7811021a3b6eaaebd8e7dbcf65639315d85acf6))
 
 ## [0.1.2](https://github.com/zgeoff/wringer/compare/@wringer/core@0.1.1...@wringer/core@0.1.2) (2026-11-08)
 
