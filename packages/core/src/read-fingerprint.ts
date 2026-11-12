@@ -46,7 +46,7 @@ export async function readFingerprint(
   const mergeBase = await readMergeBase(host, root, request.base);
 
   await readPromisedObjects(host, root, mergeBase);
-  await readSubmoduleWork(host, root);
+  await readSubmoduleWork(host, root, request.ignore);
 
   const gitDir = await readGitPath(host, root, `wringer-${randomUUID()}`);
 
@@ -157,7 +157,11 @@ async function readPromisedObjects(
 
 // `--no-optional-locks` keeps status from writing the repo's own index, and `-uno` skips the
 // repo's own untracked files, which `add --all` counts anyway.
-async function readSubmoduleWork(host: FingerprintHost, root: string): Promise<void> {
+async function readSubmoduleWork(
+  host: FingerprintHost,
+  root: string,
+  ignore: readonly string[],
+): Promise<void> {
   const status = await host.runGitBytes({
     cwd: root,
     args: [
@@ -170,7 +174,7 @@ async function readSubmoduleWork(host: FingerprintHost, root: string): Promise<v
     ],
   });
 
-  const refusal = pickSubmoduleRefusal(status);
+  const refusal = pickSubmoduleRefusal(status, ignore);
 
   if (refusal !== null) {
     throw refusal;

@@ -1,10 +1,16 @@
+import { isGlobMatch } from './is-glob-match.ts';
 import { WringerError } from './wringer-error.ts';
 
 // `status --porcelain=v2` gives each submodule a field `S<c><m><u>`: `m` is `M` when its tracked
 // files changed and `u` is `U` when it holds untracked files. A moved commit alone reaches the
 // fingerprint through the gitlink, but work inside a submodule never does.
-export function pickSubmoduleRefusal(statusEntries: Uint8Array): WringerError | null {
-  const dirty = collectDirtySubmodules(Buffer.from(statusEntries).toString('utf8'));
+export function pickSubmoduleRefusal(
+  statusEntries: Uint8Array,
+  ignore: readonly string[],
+): WringerError | null {
+  const dirty = collectDirtySubmodules(Buffer.from(statusEntries).toString('utf8')).filter(
+    (path) => !isGlobMatch(path, ignore),
+  );
 
   if (dirty.length === 0) {
     return null;

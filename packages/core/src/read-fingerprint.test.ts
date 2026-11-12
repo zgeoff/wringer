@@ -515,6 +515,36 @@ test.each([
   });
 });
 
+test('it keeps the fingerprint when a submodule the ignore list covers holds work it has not committed', async () => {
+  const ctx = await setupTest();
+
+  const submoduleGitArgs = [
+    '-C',
+    'lib',
+    '-c',
+    'user.email=tester@example.com',
+    '-c',
+    'user.name=Tester',
+  ];
+
+  await mkdir(join(ctx.repo, 'lib'));
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 5;\n');
+
+  await ctx.git('-C', 'lib', 'init', '--quiet', '--initial-branch=main');
+  await ctx.git(...submoduleGitArgs, 'add', '.');
+  await ctx.git(...submoduleGitArgs, 'commit', '--quiet', '-m', 'start');
+  await ctx.git('submodule', '--quiet', 'add', './lib', 'lib');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  const before = await ctx.readFingerprintIgnoring(['lib']);
+
+  await writeFile(join(ctx.repo, 'lib', 'prices.ts'), 'export const price = 6;\n');
+
+  const after = await ctx.readFingerprintIgnoring(['lib']);
+
+  expect(after).toBe(before);
+});
+
 test('it changes the fingerprint when only a byte that is not UTF-8 changes', async () => {
   const ctx = await setupTest();
 
