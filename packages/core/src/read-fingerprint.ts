@@ -279,8 +279,8 @@ interface IgnoredPathsRequest {
 }
 
 // Each changed path an ignore glob matches goes back to its merge-base state in the index, so the
-// diff leaves it out. The paths go in on stdin as literal names, so no count of them outgrows the
-// argument list, and a `*` or `[` in a file's name never reaches another file.
+// diff leaves it out. The names go to git as the bytes it listed, on stdin, so a name that is not
+// UTF-8 still matches, no count of names outgrows the argument list, and `*` stays a plain letter.
 async function restoreIgnoredPaths(
   host: FingerprintHost,
   request: IgnoredPathsRequest,
@@ -289,7 +289,7 @@ async function restoreIgnoredPaths(
     return;
   }
 
-  const names = await host.runGit({
+  const names = await host.runGitBytes({
     cwd: request.root,
     args: [
       'diff',
@@ -303,9 +303,7 @@ async function restoreIgnoredPaths(
     env: request.env,
   });
 
-  const ignored = names.stdout
-    .split('\0')
-    .filter((path) => path !== '' && isGlobMatch(path, request.ignore));
+  const ignored = collectIgnoredNames(Buffer.from(names), request.ignore);
 
   if (ignored.length === 0) {
     return;
@@ -321,7 +319,28 @@ async function restoreIgnoredPaths(
       '--pathspec-from-file=-',
       '--pathspec-file-nul',
     ],
-    stdin: ignored.map((path) => `${path}\0`).join(''),
+    stdin: Buffer.concat(ignored.flatMap((name) => [name, Buffer.from([0])])),
     env: request.env,
   });
+}
+
+// A name is matched as UTF-8, where a byte that is not UTF-8 reads as U+FFFD, as the changed paths
+// read it, and kept as the bytes git wrote.
+function collectIgnoredNames(output: Buffer, ignore: readonly string[]): readonly Buffer[] {
+  const names: Buffer[] = [];
+  let start = 0;
+
+  while (start < output.length) {
+    const end = output.indexOf(0, start);
+    const stop = end === -1 ? output.length : end;
+    const name = output.subarray(start, stop);
+
+    if (name.length > 0 && isGlobMatch(name.toString('utf8'), ignore)) {
+      names.push(name);
+    }
+
+    start = stop + 1;
+  }
+
+  return names;
 }

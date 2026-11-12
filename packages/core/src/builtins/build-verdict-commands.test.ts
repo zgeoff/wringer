@@ -456,3 +456,38 @@ test('#done records a verdict when a path the repo ignores changed after the run
     error: null,
   });
 });
+
+test('#done records a verdict when a path the repo ignores changed before the run started', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
+  });
+});
+
+test('#action runs when a path the repo ignores changed after the doctor passed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+
+  await writeFile(join(ctx.root, 'README.md'), '# shop, edited\n');
+
+  const result = await ctx.run(['action', 'receipt']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
+  });
+});

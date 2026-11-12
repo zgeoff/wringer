@@ -1033,6 +1033,28 @@ test.each(['--no-sparse-index', '--sparse-index'])(
   },
 );
 
+test('it leaves an ignored path whose name is not UTF-8 out of the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.repo, 'docs'));
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 3000;\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await writeFile(join(ctx.repo, 'app.ts'), 'export const port = 4000;\n');
+
+  const before = await ctx.readFingerprintIgnoring(['docs/**']);
+
+  const name = Buffer.concat([Buffer.from([0x63, 0x61, 0x66, 0xe9]), Buffer.from('.txt')]);
+
+  await writeFile(Buffer.concat([Buffer.from(`${ctx.repo}/docs/`), name]), 'opened\n');
+
+  const after = await ctx.readFingerprintIgnoring(['docs/**']);
+
+  expect(after).toBe(before);
+});
+
 test('it gives two calls at once the same fingerprint', async () => {
   const ctx = await setupTest();
 
