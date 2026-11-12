@@ -1055,6 +1055,40 @@ test('it leaves an ignored path whose name is not UTF-8 out of the fingerprint',
   expect(after).toBe(before);
 });
 
+test('it keeps a counted file inside an ignored file that became a folder in the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.repo, 'README.md'), '# app\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await rm(join(ctx.repo, 'README.md'));
+  await mkdir(join(ctx.repo, 'README.md'));
+  await writeFile(join(ctx.repo, 'README.md', 'app.ts'), 'export const port = 4000;\n');
+
+  const fingerprint = await ctx.readFingerprintIgnoring(['**/*.md']);
+
+  expect(fingerprint).not.toBe(emptyFingerprint);
+});
+
+test('it keeps a counted file that replaced a folder of ignored files in the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.repo, 'guide'));
+  await writeFile(join(ctx.repo, 'guide', 'start.md'), '# start\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'start');
+
+  await rm(join(ctx.repo, 'guide'), { recursive: true });
+  await writeFile(join(ctx.repo, 'guide'), 'export const port = 4000;\n');
+
+  const fingerprint = await ctx.readFingerprintIgnoring(['**/*.md']);
+
+  expect(fingerprint).not.toBe(emptyFingerprint);
+});
+
 test('it gives two calls at once the same fingerprint', async () => {
   const ctx = await setupTest();
 

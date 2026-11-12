@@ -324,23 +324,41 @@ async function restoreIgnoredPaths(
   });
 }
 
-// A name is matched as UTF-8, where a byte that is not UTF-8 reads as U+FFFD, as the changed paths
-// read it, and kept as the bytes git wrote.
+// A name matches as the changed paths decode it, and stays the bytes git wrote. An ignored name
+// stays in the diff when a counted name sits inside it or around it, such as a file that became a
+// folder: restoring one would remove the other from the index.
 function collectIgnoredNames(output: Buffer, ignore: readonly string[]): readonly Buffer[] {
+  const names = collectNames(output);
+  const ignored = names.filter((name) => isGlobMatch(name.toString('utf8'), ignore));
+  const counted = names.filter((name) => !ignored.includes(name));
+
+  return ignored.filter(
+    (name) => !counted.some((other) => isInsidePath(other, name) || isInsidePath(name, other)),
+  );
+}
+
+function collectNames(output: Buffer): readonly Buffer[] {
   const names: Buffer[] = [];
   let start = 0;
 
   while (start < output.length) {
     const end = output.indexOf(0, start);
     const stop = end === -1 ? output.length : end;
-    const name = output.subarray(start, stop);
 
-    if (name.length > 0 && isGlobMatch(name.toString('utf8'), ignore)) {
-      names.push(name);
+    if (stop > start) {
+      names.push(output.subarray(start, stop));
     }
 
     start = stop + 1;
   }
 
   return names;
+}
+
+function isInsidePath(path: Buffer, folder: Buffer): boolean {
+  return (
+    path.length > folder.length &&
+    path[folder.length] === 0x2f &&
+    path.subarray(0, folder.length).equals(folder)
+  );
 }
