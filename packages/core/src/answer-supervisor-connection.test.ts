@@ -48,13 +48,35 @@ async function setupTest() {
 
   const closing = new AbortController();
 
+  const received = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+
   return {
     reports,
     client,
     connection,
+    received: received.promise,
+    release: release.resolve,
     close: () => {
       closing.abort();
     },
+    answerHeld: () =>
+      answerSupervisorConnection(
+        connection,
+        {
+          answerRequest: async () => {
+            received.resolve();
+
+            await release.promise;
+
+            return { notes: 2 };
+          },
+          onTransportError: (error) => {
+            reports.push(error);
+          },
+        },
+        closing.signal,
+      ),
     answer: () =>
       answerSupervisorConnection(
         connection,
@@ -114,4 +136,26 @@ test('it reports a connection that fails after its answer, once, and throws noth
   await Promise.allSettled([closed]);
 
   expect(ctx.reports).toStrictEqual([broken]);
+});
+
+test('it reports nothing when the caller sends a request and closes before the answer', async () => {
+  const ctx = await setupTest();
+
+  const answering = ctx.answerHeld();
+
+  ctx.client.write('{"service":"shelf","method":"count","args":null}\n');
+
+  await ctx.received;
+
+  const closed = once(ctx.connection, 'close');
+
+  ctx.client.destroy();
+
+  await closed;
+
+  ctx.release();
+
+  await answering;
+
+  expect(ctx.reports).toStrictEqual([]);
 });

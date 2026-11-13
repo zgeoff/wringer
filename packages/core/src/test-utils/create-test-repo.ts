@@ -20,7 +20,8 @@ export async function createTestRepo(parent: string): Promise<TestRepo> {
     return result.stdout;
   };
 
-  const remove = () => rm(root, { recursive: true, force: true });
+  // Late work from a timed-out command can add files while the removal walks the tree.
+  const remove = () => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 
   // The caller gets `remove` only once this returns, so a failed step removes the folder here.
   try {
