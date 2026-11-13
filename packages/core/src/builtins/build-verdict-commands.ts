@@ -1,13 +1,13 @@
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { buildChangeRequest } from '../build-change-request.ts';
+import { buildChangeFactsRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
 import type { Evidence } from '../envelope.ts';
 import { parseReportBlock } from '../parse-report-block.ts';
-import { readChangedPaths } from '../read-changed-paths.ts';
+import { readChangeFacts } from '../read-change-facts.ts';
+import type { ChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
-import { readFingerprint } from '../read-fingerprint.ts';
 import { doneCommand, readVerdicts } from '../read-verdicts.ts';
 import { renderReportMarkdown } from '../render-report-markdown.ts';
 import { reportSchema, verdictSchema } from '../report-schema.ts';
@@ -110,9 +110,9 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
   // The run took its fingerprint against the default base, so the tree check uses that base; the
   // verdict takes the base the PR's gate will use.
   const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
-  const treeFingerprint = await readCurrentFingerprint(ctx, defaultBase);
+  const treeFacts = await readCurrentFacts(ctx, defaultBase);
 
-  if (ctx.target.mode === 'launch' && treeFingerprint !== ctx.run.fingerprint) {
+  if (ctx.target.mode === 'launch' && treeFacts.fingerprint !== ctx.run.fingerprint) {
     throw new WringerError('doctor-required', {
       message: 'The working tree changed since this run started.',
       hint: 'Run `up --restart` and `doctor`, then drive the feature again.',
@@ -128,37 +128,44 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     });
   }
 
-  const fingerprint =
+  const scopeFacts =
     args.base === undefined || args.base === defaultBase
-      ? treeFingerprint
-      : await readCurrentFingerprint(ctx, args.base);
+      ? treeFacts
+      : await readCurrentFacts(ctx, args.base);
 
   return {
     feature,
-    fingerprint,
+    fingerprint: scopeFacts.fingerprint,
     run: ctx.run.runID,
     at: ctx.now().toISOString(),
     evidence: drives.flatMap((envelope) => envelope.evidence),
   };
 }
 
-function readCurrentFingerprint(ctx: BuiltinContext, base: string): Promise<string> {
-  return readFingerprint(
+function readCurrentFacts(ctx: BuiltinContext, base: string): Promise<ChangeFacts> {
+  return readChangeFacts(
     ctx.session.repoHost,
-    buildChangeRequest(ctx.wringer, ctx.session.root, base),
+    buildChangeFactsRequest(ctx.wringer, ctx.session.root, base),
   );
 }
 
 async function readReport(ctx: BuiltinContext, givenBase: string | undefined): Promise<Report> {
   const base = await readBase(ctx, givenBase);
 
-  const [fingerprint, changedPaths, verdicts] = await Promise.all([
-    readCurrentFingerprint(ctx, base),
-    readChangedPaths(ctx.session.repoHost, buildChangeRequest(ctx.wringer, ctx.session.root, base)),
+  const [facts, verdicts] = await Promise.all([
+    readCurrentFacts(ctx, base),
     readVerdicts(ctx.state, ctx.session.repoHost, ctx.session.root),
   ]);
 
-  return buildReport({ base, fingerprint, features: ctx.wringer.features, changedPaths, verdicts });
+  return buildReport({
+    base,
+    fingerprint: facts.fingerprint,
+    features: ctx.wringer.features,
+    changedPaths: facts.changedPaths,
+    shared: ctx.wringer.shared,
+    ignore: ctx.wringer.ignore,
+    verdicts,
+  });
 }
 
 function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<string> {
@@ -207,13 +214,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
 
   const block = parseReportBlock(body);
 
-  const [fingerprint, changedPaths] = await Promise.all([
-    readCurrentFingerprint(ctx, args.base),
-    readChangedPaths(
-      ctx.session.repoHost,
-      buildChangeRequest(ctx.wringer, ctx.session.root, args.base),
-    ),
-  ]);
+  const facts = await readCurrentFacts(ctx, args.base);
 
   const claimed = block.ok
     ? block.report.features.flatMap((feature) =>
@@ -225,9 +226,11 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
 
   const computed = buildReport({
     base: args.base,
-    fingerprint,
+    fingerprint: facts.fingerprint,
     features: ctx.wringer.features,
-    changedPaths,
+    changedPaths: facts.changedPaths,
+    shared: ctx.wringer.shared,
+    ignore: ctx.wringer.ignore,
     verdicts,
   });
 
@@ -240,7 +243,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
       return [
         {
           name: feature.name,
-          reason: `verdict at ${feature.verdict?.fingerprint ?? ''}, tree at ${fingerprint}`,
+          reason: `verdict at ${feature.verdict?.fingerprint ?? ''}, tree at ${facts.fingerprint}`,
         },
       ];
     }
@@ -248,7 +251,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     return [];
   });
 
-  const data = { fingerprint, failing, unmapped: computed.unmapped };
+  const data = { fingerprint: facts.fingerprint, failing, unmapped: computed.unmapped };
 
   if (failing.length > 0 || computed.unmapped.length > 0) {
     throw new WringerError('check-failed', {

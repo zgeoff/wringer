@@ -46,8 +46,17 @@ export type { ProcessSupervisorOptions } from './make-process-supervisor-port.ts
 export { emptyFingerprint } from './parse-patch-id.ts';
 export { parseReportBlock } from './parse-report-block.ts';
 export type { ReportBlockResult } from './parse-report-block.ts';
-export { readFingerprint } from './read-fingerprint.ts';
-export type { FingerprintHost, FingerprintRequest } from './read-fingerprint.ts';
+export { readChangeFacts } from './read-change-facts.ts';
+export { collectFeatureScopes } from './collect-feature-scopes.ts';
+
+export type {
+  ChangeFacts,
+  ChangeFactsHost,
+  ChangeFactsRequest,
+  FeatureScope,
+  Fingerprint,
+} from './read-change-facts.ts';
+
 export { readStreamLines } from './read-stream-lines.ts';
 export { readText } from './read-text.ts';
 export { renderReportMarkdown } from './render-report-markdown.ts';

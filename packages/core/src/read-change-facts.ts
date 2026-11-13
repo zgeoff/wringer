@@ -5,23 +5,49 @@ import { buildPromisedObjectReads } from './build-promised-object-reads.ts';
 import { buildSkipWorktreeMarks } from './build-skip-worktree-marks.ts';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import { isGlobMatch } from './is-glob-match.ts';
-import { parsePatchID } from './parse-patch-id.ts';
+import { parseDiffOutput } from './parse-diff-output.ts';
+import { emptyFingerprint, parsePatchID } from './parse-patch-id.ts';
+import { parseRawEntries } from './parse-raw-entries.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
 import { pickSubmoduleRefusal } from './pick-submodule-refusal.ts';
 import type { GitRequest } from './run-git.ts';
 import type { ProcessResult } from './run-process.ts';
+import { splitDiffByPath } from './split-diff-by-path.ts';
+import type { PathChunk } from './split-diff-by-path.ts';
 import { WringerError } from './wringer-error.ts';
 
-export interface FingerprintHost {
+export interface ChangeFactsHost {
   readonly runGit: (request: GitRequest) => Promise<ProcessResult>;
   readonly runGitBytes: (request: GitRequest) => Promise<Uint8Array>;
   readonly removeDirectory: (path: string) => Promise<void>;
 }
 
-// `ignore` holds globs of paths with no runtime effect: a change to a path one matches leaves the
-// fingerprint alone.
-export type FingerprintRequest = ChangeRequest;
+export interface FeatureScope {
+  readonly name: string;
+  readonly globs: readonly string[];
+}
+
+// `ignore` holds globs of paths with no runtime effect: a change to a path one matches leaves every
+// fingerprint and the changed paths alone.
+export interface ChangeFactsRequest extends ChangeRequest {
+  readonly scopes: readonly FeatureScope[];
+
+  // A full commit id. The facts then list each path whose content differs between that commit and
+  // the isolated index, leaving out paths an ignore glob matches.
+  readonly deployed: string | null;
+}
+
+// A patch ID, or 'empty' for a diff with no file.
+export type Fingerprint = string;
+
+export interface ChangeFacts {
+  readonly mergeBase: string;
+  readonly fingerprint: Fingerprint;
+  readonly changedPaths: readonly string[];
+  readonly featureFingerprints: ReadonlyMap<string, Fingerprint>;
+  readonly deployedPaths: readonly string[] | null;
+}
 
 const pinnedDiffOptions = [
   '--unified=3',
@@ -35,13 +61,13 @@ const pinnedDiffOptions = [
   '--submodule=short',
 ];
 
-// The index is built and diffed in a git folder of its own, so only the repo's tracked files and
-// git's defaults shape the change: no config, attributes or ignore rules of the clone, the user or
-// the system reach it, and the same change gets the same fingerprint in any clone.
-export async function readFingerprint(
-  host: FingerprintHost,
-  request: FingerprintRequest,
-): Promise<string> {
+// The index is built and diffed in a git folder of its own, so no config, attributes or ignore
+// rules of the clone, the user or the system reach it. One diff of it against the merge base gives
+// the changed paths and every fingerprint, so they describe the same files.
+export async function readChangeFacts(
+  host: ChangeFactsHost,
+  request: ChangeFactsRequest,
+): Promise<ChangeFacts> {
   const root = await readRepoRoot(host, request.cwd);
   const mergeBase = await readMergeBase(host, root, request.base);
 
@@ -77,14 +103,18 @@ export async function readFingerprint(
     await addSubmodules(host, root, env);
     await restoreIgnoredPaths(host, { root, env, mergeBase, ignore: request.ignore });
 
+    const exclusions = request.exclude.map((path) => `:(top,exclude)${path}`);
+
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
-    const diff = await host.runGitBytes({
+    const output = await host.runGitBytes({
       cwd: root,
       args: [
         'diff',
         '--cached',
+        '--raw',
         '--binary',
+        '-z',
         '--no-color',
         '--no-ext-diff',
         '--no-textconv',
@@ -93,22 +123,36 @@ export async function readFingerprint(
         mergeBase,
         '--',
         ':(top)',
-        ...request.exclude.map((path) => `:(top,exclude)${path}`),
+        ...exclusions,
       ],
       env,
     });
 
-    const patchID = await host.runGit({
-      cwd: root,
+    const parsed = parseDiffOutput(output);
+    const entries = parsed.entries;
+    const chunks = splitDiffByPath(parsed.patch, entries);
 
-      // `--verbatim` hashes with the stable algorithm and keeps whitespace, so `"a b"` and `"ab"`
-      // differ; `--stable` alone drops it, and git refuses the two flags together.
-      args: ['patch-id', '--verbatim'],
-      stdin: diff,
+    const fingerprint = await readPatchID(host, { root, env, patch: parsed.patch });
+
+    const featureFingerprints = await readFeatureFingerprints(host, {
+      root,
       env,
+      chunks,
+      scopes: request.scopes,
     });
 
-    return parsePatchID(patchID.stdout);
+    const deployedPaths =
+      request.deployed === null
+        ? null
+        : await readDeployedPaths(host, { root, env, deployed: request.deployed, request });
+
+    return {
+      mergeBase,
+      fingerprint,
+      changedPaths: entries.map((entry) => entry.path.toString('utf8')).toSorted(),
+      featureFingerprints,
+      deployedPaths,
+    };
   } finally {
     await host.removeDirectory(gitDir);
   }
@@ -116,14 +160,14 @@ export async function readFingerprint(
 
 // From a subfolder, `ls-files` lists only that folder, with paths relative to it, so every index
 // step runs from the root.
-async function readRepoRoot(host: FingerprintHost, cwd: string): Promise<string> {
+async function readRepoRoot(host: ChangeFactsHost, cwd: string): Promise<string> {
   const result = await host.runGit({ cwd, args: ['rev-parse', '--show-toplevel'] });
 
   // A folder name may end in a space, so only the line end git adds comes off.
   return resolve(cwd, result.stdout.replace(/\n$/u, ''));
 }
 
-async function readMergeBase(host: FingerprintHost, root: string, base: string): Promise<string> {
+async function readMergeBase(host: ChangeFactsHost, root: string, base: string): Promise<string> {
   const commits = await host.runGit({ cwd: root, args: ['rev-list', '--max-count=1', '--all'] });
 
   const steps = pickMergeBaseSteps({ root, base, newestCommit: commits.stdout });
@@ -144,7 +188,7 @@ async function readMergeBase(host: FingerprintHost, root: string, base: string):
 }
 
 async function readPromisedObjects(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   root: string,
   mergeBase: string,
 ): Promise<void> {
@@ -158,7 +202,7 @@ async function readPromisedObjects(
 // `--no-optional-locks` keeps status from writing the repo's own index, and `-uno` skips the
 // repo's own untracked files, which `add --all` counts anyway.
 async function readSubmoduleWork(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   root: string,
   ignore: readonly string[],
 ): Promise<void> {
@@ -183,7 +227,7 @@ async function readSubmoduleWork(
 
 // git prints a path inside the git folder relative to the folder it runs in; the path leaves here
 // absolute.
-async function readGitPath(host: FingerprintHost, root: string, name: string): Promise<string> {
+async function readGitPath(host: ChangeFactsHost, root: string, name: string): Promise<string> {
   const result = await host.runGit({ cwd: root, args: ['rev-parse', '--git-path', name] });
 
   return resolve(root, result.stdout.replace(/\n$/u, ''));
@@ -206,7 +250,7 @@ const isolatedConfigEnv = {
 // The folder reads the repo's objects as alternates and writes its own, so the repo gains no
 // object. A bare folder made with no template has no `info/attributes` and no `info/exclude`.
 async function createIsolatedGitDir(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   root: string,
   gitDir: string,
 ): Promise<Readonly<Record<string, string>>> {
@@ -252,7 +296,7 @@ function toQuotedGitPath(path: string): string {
 }
 
 async function copySkipWorktreeFlags(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   root: string,
   env: Readonly<Record<string, string>>,
 ): Promise<void> {
@@ -264,7 +308,7 @@ async function copySkipWorktreeFlags(
 }
 
 async function addSubmodules(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   root: string,
   env: Readonly<Record<string, string>>,
 ): Promise<void> {
@@ -286,7 +330,7 @@ interface IgnoredPathsRequest {
 // diff leaves it out. The names go to git as the bytes it listed, on stdin, so a name that is not
 // UTF-8 still matches, no count of names outgrows the argument list, and `*` stays a plain letter.
 async function restoreIgnoredPaths(
-  host: FingerprintHost,
+  host: ChangeFactsHost,
   request: IgnoredPathsRequest,
 ): Promise<void> {
   if (request.ignore.length === 0) {
@@ -365,4 +409,109 @@ function isInsidePath(path: Buffer, folder: Buffer): boolean {
     path[folder.length] === 0x2f &&
     path.subarray(0, folder.length).equals(folder)
   );
+}
+
+interface PatchRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly patch: Uint8Array;
+}
+
+async function readPatchID(host: ChangeFactsHost, request: PatchRequest): Promise<Fingerprint> {
+  const patchID = await host.runGit({
+    cwd: request.root,
+
+    // `--verbatim` hashes with the stable algorithm and keeps whitespace, so `"a b"` and `"ab"`
+    // differ; `--stable` alone drops it, and git refuses the two flags together.
+    args: ['patch-id', '--verbatim'],
+    stdin: request.patch,
+    env: request.env,
+  });
+
+  return parsePatchID(patchID.stdout);
+}
+
+interface FeatureFingerprintsRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly chunks: readonly PathChunk[];
+  readonly scopes: readonly FeatureScope[];
+}
+
+// How many `patch-id` processes run at once.
+const patchIDBatchSize = 8;
+
+async function readFeatureFingerprints(
+  host: ChangeFactsHost,
+  request: FeatureFingerprintsRequest,
+): Promise<ReadonlyMap<string, Fingerprint>> {
+  const fingerprints = new Map<string, Fingerprint>();
+
+  for (let start = 0; start < request.scopes.length; start += patchIDBatchSize) {
+    const batch = request.scopes.slice(start, start + patchIDBatchSize);
+
+    const read = await Promise.all(
+      batch.map((scope) => {
+        const patch = collectScopePatch(request.chunks, scope.globs);
+
+        return patch === null
+          ? Promise.resolve(emptyFingerprint)
+          : readPatchID(host, { root: request.root, env: request.env, patch });
+      }),
+    );
+
+    batch.forEach((scope, index) => {
+      fingerprints.set(scope.name, read[index] ?? emptyFingerprint);
+    });
+  }
+
+  return fingerprints;
+}
+
+// The chunks of the paths a glob matches, in the order of the paths' bytes, or null for none.
+function collectScopePatch(chunks: readonly PathChunk[], globs: readonly string[]): Buffer | null {
+  const matching = chunks
+    .filter((chunk) => isGlobMatch(chunk.path.toString('utf8'), globs))
+    .toSorted((left, right) => Buffer.compare(left.path, right.path));
+
+  return matching.length === 0 ? null : Buffer.concat(matching.map((chunk) => chunk.bytes));
+}
+
+interface DeployedRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly deployed: string;
+  readonly request: ChangeRequest;
+}
+
+// Every path either side holds counts, deletions included. The state folder stays out, as it does
+// from the diff.
+async function readDeployedPaths(
+  host: ChangeFactsHost,
+  request: DeployedRequest,
+): Promise<readonly string[]> {
+  const raw = await host.runGitBytes({
+    cwd: request.root,
+    args: [
+      'diff',
+      '--cached',
+      '--raw',
+      '-z',
+      '--no-abbrev',
+      '--no-renames',
+      '--no-relative',
+      '--no-textconv',
+      '--ignore-submodules=none',
+      request.deployed,
+      '--',
+      ':(top)',
+      ...request.request.exclude.map((path) => `:(top,exclude)${path}`),
+    ],
+    env: request.env,
+  });
+
+  return parseRawEntries(raw)
+    .map((entry) => entry.path.toString('utf8'))
+    .filter((path) => !isGlobMatch(path, request.request.ignore))
+    .toSorted();
 }

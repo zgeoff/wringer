@@ -7,12 +7,14 @@ export interface ReportInput {
   readonly fingerprint: string;
   readonly features: readonly FeatureDefinition[];
   readonly changedPaths: readonly string[];
+  readonly shared: readonly string[];
+  readonly ignore: readonly string[];
   readonly verdicts: ReadonlyMap<string, Verdict>;
 }
 
 // Each feature whose paths the branch changes needs a verdict at the current fingerprint. A feature
-// the branch leaves alone is `unchanged`, whatever its verdict. A changed path no feature maps is
-// unmapped, and leaves the report incomplete.
+// the branch leaves alone is `unchanged`, whatever its verdict. A changed path that no feature, shared
+// glob or ignore glob maps is unmapped, and leaves the report incomplete.
 export function buildReport(input: ReportInput): Report {
   const features = input.features.map((feature) => {
     const changed = input.changedPaths.some((path) => isGlobMatch(path, feature.paths));
@@ -27,7 +29,10 @@ export function buildReport(input: ReportInput): Report {
   });
 
   const unmapped = input.changedPaths.filter(
-    (path) => !input.features.some((feature) => isGlobMatch(path, feature.paths)),
+    (path) =>
+      !input.features.some((feature) => isGlobMatch(path, feature.paths)) &&
+      !isGlobMatch(path, input.shared) &&
+      !isGlobMatch(path, input.ignore),
   );
 
   return {

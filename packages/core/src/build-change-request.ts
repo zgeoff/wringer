@@ -1,3 +1,5 @@
+import { collectFeatureScopes } from './collect-feature-scopes.ts';
+import type { ChangeFactsRequest } from './read-change-facts.ts';
 import type { Wringer } from './types.ts';
 
 export interface ChangeRequest {
@@ -15,4 +17,18 @@ export function buildChangeRequest(
   base: string,
 ): ChangeRequest {
   return { cwd, base, exclude: [wringer.stateDir], ignore: wringer.ignore };
+}
+
+// The change facts of the branch: the changed paths and a fingerprint of the whole diff and of each
+// feature's scope.
+export function buildChangeFactsRequest(
+  wringer: Pick<Wringer, 'stateDir' | 'ignore' | 'features' | 'shared'>,
+  cwd: string,
+  base: string,
+): ChangeFactsRequest {
+  return {
+    ...buildChangeRequest(wringer, cwd, base),
+    scopes: collectFeatureScopes(wringer),
+    deployed: null,
+  };
 }

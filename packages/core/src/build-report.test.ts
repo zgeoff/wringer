@@ -12,6 +12,8 @@ test('it marks each feature by whether the branch changed it and its verdict mat
       { name: 'account', summary: 'Sign in', paths: ['src/account/**'] },
     ],
     changedPaths: ['src/checkout/pay.ts', 'src/search/rank.ts', 'src/cart/add.ts'],
+    shared: [],
+    ignore: [],
     verdicts: new Map([
       [
         'checkout',
@@ -56,6 +58,8 @@ test('it calls a report complete when every changed feature is verified', () => 
     fingerprint: 'f2',
     features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
     changedPaths: ['src/checkout/pay.ts'],
+    shared: [],
+    ignore: [],
     verdicts: new Map([
       [
         'checkout',
@@ -79,6 +83,8 @@ test('it lists each changed path that no feature maps as unmapped', () => {
     fingerprint: 'f2',
     features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
     changedPaths: ['scripts/seed.ts', 'src/checkout/pay.ts', 'src/tax.ts'],
+    shared: [],
+    ignore: [],
     verdicts: new Map([
       [
         'checkout',
@@ -96,5 +102,22 @@ test('it lists each changed path that no feature maps as unmapped', () => {
   expect({ complete: report.complete, unmapped: report.unmapped }).toStrictEqual({
     complete: false,
     unmapped: ['scripts/seed.ts', 'src/tax.ts'],
+  });
+});
+
+test('it leaves a changed path that only a shared or an ignore glob matches out of the unmapped paths', () => {
+  const report = buildReport({
+    base: 'main',
+    fingerprint: 'f2',
+    features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
+    changedPaths: ['guide.md', 'package.json', 'src/tax.ts'],
+    shared: ['package.json'],
+    ignore: ['**/*.md'],
+    verdicts: new Map(),
+  });
+
+  expect({ complete: report.complete, unmapped: report.unmapped }).toStrictEqual({
+    complete: false,
+    unmapped: ['src/tax.ts'],
   });
 });

@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { match } from 'ts-pattern';
-import { buildChangeRequest } from './build-change-request.ts';
+import { buildChangeFactsRequest } from './build-change-request.ts';
 import { buildEnvelope } from './build-envelope.ts';
 import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
@@ -27,8 +27,8 @@ import { pickEnvelopeRun } from './pick-envelope-run.ts';
 import { pickEnvelopeTarget } from './pick-envelope-target.ts';
 import { pickLogRefusal } from './pick-log-refusal.ts';
 import { raceDeadline } from './race-deadline.ts';
+import { readChangeFacts } from './read-change-facts.ts';
 import { readDefaultBase } from './read-default-base.ts';
-import { readFingerprint } from './read-fingerprint.ts';
 import { readHeadSHA } from './read-head-sha.ts';
 import type { RunID } from './run-events.ts';
 import { settleDispatchAnswer } from './settle-dispatch-answer.ts';
@@ -368,12 +368,12 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
 async function probeFingerprintChanged(request: CommandRequest): Promise<boolean> {
   const base = await readDefaultBase(request.session.repoHost, request.session.root);
 
-  const fingerprint = await readFingerprint(
+  const facts = await readChangeFacts(
     request.session.repoHost,
-    buildChangeRequest(request.wringer, request.session.root, base),
+    buildChangeFactsRequest(request.wringer, request.session.root, base),
   );
 
-  return fingerprint !== request.context.run?.fingerprint;
+  return facts.fingerprint !== request.context.run?.fingerprint;
 }
 
 function openCommandDrive(

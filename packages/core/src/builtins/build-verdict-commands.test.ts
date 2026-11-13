@@ -417,6 +417,60 @@ test('#gate passes a PR that changes only a path the repo ignores', async () => 
   });
 });
 
+test('#gate passes a PR that changes only a path the repo shares', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.root, 'package.json'), '{}\n');
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
+  });
+});
+
+test('#gate leaves an ignored path out of the unmapped paths when it became a folder', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'docs'));
+  await writeFile(join(ctx.root, 'docs', 'guide.md'), 'guide\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'add guide');
+  await ctx.git('rm', '--quiet', 'docs/guide.md');
+
+  await mkdir(join(ctx.root, 'docs', 'guide.md'), { recursive: true });
+  await writeFile(join(ctx.root, 'docs', 'guide.md', 'app.ts'), 'export const app = 1;\n');
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'HEAD', bodyFile: '.wringer/body.md' });
+
+  expect(result.envelope.data).toStrictEqual({
+    fingerprint: expect.any(String),
+    failing: [],
+    unmapped: ['docs/guide.md/app.ts'],
+  });
+});
+
+test('#report leaves a changed path the repo shares out of the unmapped paths', async () => {
+  const ctx = await setupTest();
+
+  await writeFile(join(ctx.root, 'package.json'), '{}\n');
+
+  const result = await ctx.run(['report']);
+
+  const data = ctx.parseReportData(result.envelope.data);
+
+  expect({ complete: data.report.complete, unmapped: data.report.unmapped }).toStrictEqual({
+    complete: true,
+    unmapped: [],
+  });
+});
+
 test('#report lists each changed path that no feature maps', async () => {
   const ctx = await setupTest();
 

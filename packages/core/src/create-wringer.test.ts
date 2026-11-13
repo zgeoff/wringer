@@ -158,3 +158,21 @@ test('it refuses a launch target that carries attach-only endpoints, at compile 
 
   expect(target.mode).toBe('launch');
 });
+
+test('it collects the shared globs of each `shared` call in order, and no other path', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .shared('package.json', 'bun.lock')
+    .shared('verify/**')
+    .build();
+
+  expect(wringer.shared).toStrictEqual(['package.json', 'bun.lock', 'verify/**']);
+});
+
+test('it shares no path unless the repo lists some', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .build();
+
+  expect(wringer.shared).toStrictEqual([]);
+});

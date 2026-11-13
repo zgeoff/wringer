@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { buildChangeRequest } from '../build-change-request.ts';
+import { buildChangeFactsRequest } from '../build-change-request.ts';
 import type { RunView } from '../build-run-view.ts';
 import { findOwnValue } from '../find-own-value.ts';
+import { readChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
-import { readFingerprint } from '../read-fingerprint.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext } from '../types.ts';
@@ -53,9 +53,9 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
 
-    const fingerprint = await readFingerprint(
+    const facts = await readChangeFacts(
       ctx.session.repoHost,
-      buildChangeRequest(ctx.wringer, ctx.session.root, base),
+      buildChangeFactsRequest(ctx.wringer, ctx.session.root, base),
     );
 
     // The caller has its timeout already once the deadline passes, so no run starts after it.
@@ -71,7 +71,7 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
       at: ctx.now().toISOString(),
       target: ctx.targetName,
       mode: ctx.target.mode,
-      fingerprint,
+      fingerprint: facts.fingerprint,
     });
 
     await ctx.state.writePointers((latest) => ({
