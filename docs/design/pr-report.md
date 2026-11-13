@@ -329,10 +329,10 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
   closing marker, and refuses any other block, including one whose closing marker falls inside a
   fenced code block. It trims the block's outer whitespace.
 - `writeReportSpan` uses the first `## Verification` heading outside a fenced code block. A heading
-  matches with up to 3 spaces of indent and optional closing hashes. A fence is a run of 3 or more
-  backticks or tildes, indented by up to 3 spaces, closed by a run of the same character at least as
-  long. A fence that never closes runs to the end of the description, and `writeReportSpan` refuses
-  to put a new span inside it.
+  matches with up to 3 spaces of indent and optional closing hashes. A code fence is a run of 3 or
+  more backticks or tildes, indented by up to 3 spaces, closed by a run of the same character at
+  least as long. A code fence that never closes runs to the end of the description, and
+  `writeReportSpan` refuses to put a new span inside it.
 - When the description holds one span and it already equals the block, with line endings turned to
   LF, `writeReportSpan` returns the description untouched with `action: 'unchanged'`.
 
