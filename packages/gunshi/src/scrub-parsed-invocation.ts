@@ -1,4 +1,4 @@
-import { addEnvSecrets, createSecretSet, scrubFailure } from '@wringer/core';
+import { collectEnvSecrets, createSecretSet, scrubFailure } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import type { ParsedInvocation } from './pick-cli-outcome.ts';
 
@@ -15,12 +15,18 @@ export function scrubParsedInvocation(
 
   const secrets = createSecretSet();
 
-  try {
-    addEnvSecrets(secrets, { declared: wringer.secrets, env });
-  } catch {
-    // A declared value that is too short is reported by the command that runs next; the values
-    // added before it still scrub this error.
+  for (const secret of collectEnvSecrets({ declared: wringer.secrets, env })) {
+    try {
+      secrets.add(secret);
+    } catch {
+      // A declared value that is too short is reported by the command that runs next. The other
+      // secrets still scrub this error.
+    }
   }
 
-  return { ...parsed, error: scrubFailure(parsed.error, secrets) ?? parsed.error };
+  return {
+    ...parsed,
+    command: secrets.scrubText(parsed.command),
+    error: scrubFailure(parsed.error, secrets) ?? parsed.error,
+  };
 }

@@ -411,9 +411,16 @@ test('it answers outside a git worktree with an environment envelope and exit co
 test('it scrubs a secret that a parse failure quotes from the arguments', async () => {
   const ctx = await setupTest();
 
-  const result = await ctx.run(['stauts', '--header', 'Bearer planted-shop-token'], undefined, {
-    GITHUB_TOKEN: 'planted-shop-token',
-  });
+  const result = await ctx.run(
+    ['planted-shop-token', '--header', 'Bearer planted-shop-token'],
+    undefined,
+    {
+      GITHUB_TOKEN: 'planted-shop-token',
+    },
+  );
 
-  expect(result.stdout.includes('planted-shop-token')).toBe(false);
+  expect({
+    leaked: result.stdout.includes('planted-shop-token'),
+    redacted: result.stdout.includes('[redacted:GITHUB_TOKEN]'),
+  }).toStrictEqual({ leaked: false, redacted: true });
 });
