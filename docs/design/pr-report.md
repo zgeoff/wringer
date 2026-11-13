@@ -361,9 +361,8 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
 - A journey uploads when `--no-upload` is absent, the verdict's target had `evidence: 'upload'` when
   `done` recorded it, and the registry's target of that name still has it.
 - Before any upload, every shown file passes the upload guard that
-  [Redaction](./redaction.md#the-upload-guard) owns: inside the run's evidence folder, a regular
-  file, the recorded `sha256`, opaque only on a `publicData` target, and no known secret. A refusal
-  fails `publish` before the first upload.
+  [Redaction](./redaction.md#the-upload-guard) owns. A file the guard refuses stays local, and a
+  `secret-found` refusal fails `publish` before the first upload, as that design says.
 - `publish` uploads only the files the final plan shows.
 - When a target has `evidence: 'upload'` and the registry has no `upload` hook, `lint` fails, and
   `publish` fails with `usage` before it reads the PR.

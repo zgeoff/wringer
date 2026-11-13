@@ -316,9 +316,9 @@ own `paths`.
 
 ### 3. Upload the wringer registry's evidence
 
-**Outcome:** the `local` target of the wringer registry sets `evidence: 'upload'` and
-`publicData: true`, since it runs the shop example on seeded data, and uploads its evidence through
-the core uploader, with the upload URL and token from the environment.
+**Outcome:** the `local` target of the wringer registry sets `evidence: 'upload'`, since it runs the
+shop example on seeded data, and uploads its evidence through the core uploader, with the upload URL
+and token from the environment.
 
 **Depends on:** 2, and the uploader of [PR].
 
