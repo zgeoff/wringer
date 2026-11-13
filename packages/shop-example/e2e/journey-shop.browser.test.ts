@@ -78,7 +78,6 @@ test('it drives a page, an http call, a stream read and a db query, then reports
     expect.objectContaining({ name: 'order-failure', status: 'unchanged' }),
     expect.objectContaining({ name: 'list-orders', status: 'unchanged' }),
     expect.objectContaining({ name: 'order-log', status: 'unchanged' }),
-    expect.objectContaining({ name: 'guide', status: 'unchanged' }),
   ];
 
   expect({

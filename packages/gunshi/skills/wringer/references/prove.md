@@ -1,7 +1,5 @@
 # Prove
 
-Prove the verify CLI, its registry and its skill work before the PR
-
 Prove that the verify CLI, its registry and the repo's `verify` skill work before you open the PR
 that adds them.
 
@@ -17,10 +15,10 @@ that adds them.
 
 1. Run `bun verify up`, then `bun verify doctor`. Expect: the doctor's last JSON line has `ok: true`
    and `data.passed: true`. Then run `bun verify down`.
-2. Send the brief of `guide fresh-subagent-brief` to a new subagent, and follow that reference until
-   one subagent reaches `done` on every feature and names no gap. Expect: its reply, with exit code
-   0 from each `done`. Put the subagent's result for each `done` in the PR: the feature, the exit
-   code, `ok` and `data.fingerprint`.
+2. Send the [fresh subagent brief](./fresh-subagent-brief.md) to a new subagent, and follow that
+   reference until one subagent reaches `done` on every feature and names no gap. Expect: its reply,
+   with exit code 0 from each `done`. Put the subagent's result for each `done` in the PR: the
+   feature, the exit code, `ok` and `data.fingerprint`.
 3. Check that the CLI refuses to run against a changed tree:
    1. Run `bun verify up`, then `bun verify doctor`. Expect: `data.passed: true`.
    2. Add a blank line to a file that a feature's `paths` globs match.

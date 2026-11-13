@@ -1,132 +1,56 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readdir, rm } from 'node:fs/promises';
+import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { envelopeSchema, runProcess } from '@wringer/core';
+import { runProcess } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
-import { guideFolder, readGuide } from './read-guide.ts';
 
-// The bin runs in a git repo that has no verify CLI, as it does when an agent adds the first one.
 async function setupTest() {
-  const repo = await createTestRepo(import.meta.dir);
+  const directory = await createTestFolder(import.meta.dir, 'wringer-gunshi');
 
-  onTestFinished(() => rm(repo.root, { recursive: true, force: true }));
+  onTestFinished(() => rm(directory, { recursive: true, force: true }));
 
   return {
+    directory,
     runBin: (args: string[]) =>
       runProcess({
         argv: ['bun', join(import.meta.dir, 'wringer-gunshi.ts'), ...args],
-        cwd: repo.root,
+        cwd: directory,
       }),
   };
 }
 
-test('it lists the topics of the shipped guide with its version', async () => {
+test('it installs the packaged skill to --dir and exits 0', async () => {
   const ctx = await setupTest();
-  const guide = await readGuide();
-  const result = await ctx.runBin(['guide', '--json']);
+  const result = await ctx.runBin(['skill', 'install', '--dir', 'out/wringer']);
 
-  expect({
-    exitCode: result.exitCode,
-    data: envelopeSchema.parse(JSON.parse(result.stdout)).data,
-  }).toStrictEqual({
-    exitCode: 0,
-    data: {
-      version: guide.version,
-      topics: guide.topics.map((topic) => ({ name: topic.name, summary: topic.summary })),
-    },
-  });
+  expect(result.exitCode).toBe(0);
+
+  const entries = await readdir(join(ctx.directory, 'out', 'wringer'));
+
+  expect(entries).toIncludeAllMembers(['SKILL.md']);
 });
 
-test('it prints the create topic with the installed version', async () => {
+test('it prints usage and exits 2 on an unknown command', async () => {
   const ctx = await setupTest();
-  const guide = await readGuide();
-  const result = await ctx.runBin(['guide', 'create', '--json']);
+  const result = await ctx.runBin(['skill', 'remove']);
 
-  const create = guide.topics.find((topic) => topic.name === 'create');
-
-  expect({
-    exitCode: result.exitCode,
-    data: envelopeSchema.parse(JSON.parse(result.stdout)).data,
-  }).toStrictEqual({
-    exitCode: 0,
-    data: { version: guide.version, topic: 'create', text: create?.text },
-  });
+  expect(result.exitCode).toBe(2);
+  expect(result.stderr).toContain('Usage: wringer-gunshi skill install');
 });
 
-test('it prints only the text of a topic for a person', async () => {
+test('it exits 2 and removes nothing when --dir names a folder of other skills', async () => {
   const ctx = await setupTest();
-  const guide = await readGuide();
-  const result = await ctx.runBin(['guide', 'create', '--human']);
 
-  expect(result).toMatchObject({
-    exitCode: 0,
-    stdout: guide.topics.find((topic) => topic.name === 'create')?.text,
-  });
-});
+  await mkdir(join(ctx.directory, '.claude', 'skills', 'verify'), { recursive: true });
 
-test('it names the installed template folder in the template topic', async () => {
-  const ctx = await setupTest();
-  const result = await ctx.runBin(['guide', 'template', '--human']);
+  await writeFile(
+    join(ctx.directory, '.claude', 'skills', 'verify', 'SKILL.md'),
+    '---\nname: verify\n---\n',
+  );
 
-  expect(result.stdout).toContain(join(guideFolder, 'template'));
-});
+  const result = await ctx.runBin(['skill', 'install', '--dir', '.claude/skills']);
+  const entries = await readdir(join(ctx.directory, '.claude', 'skills'));
 
-test('it fails an unknown topic with usage and lists the topics', async () => {
-  const ctx = await setupTest();
-  const result = await ctx.runBin(['guide', 'nope', '--json']);
-
-  const envelope = envelopeSchema.parse(JSON.parse(result.stdout));
-
-  expect({ exitCode: result.exitCode, error: envelope.error }).toStrictEqual({
-    exitCode: 2,
-    error: expect.objectContaining({
-      code: 'usage',
-      hint: expect.stringContaining('create'),
-    }),
-  });
-});
-
-test('it has no skill install command', async () => {
-  const ctx = await setupTest();
-  const result = await ctx.runBin(['skill', 'install', '--json']);
-
-  expect(result.exitCode).not.toBe(0);
-});
-
-test('it prints the guide from a folder that is no git worktree and leaves it empty', async () => {
-  const folder = await createTestFolder(import.meta.dir, 'guide-outside-repo');
-
-  onTestFinished(() => rm(folder, { recursive: true, force: true }));
-
-  const result = await runProcess({
-    argv: ['bun', join(import.meta.dir, 'wringer-gunshi.ts'), 'guide', 'create', '--json'],
-    cwd: folder,
-  });
-
-  expect({
-    exitCode: result.exitCode,
-    topic: envelopeSchema.parse(JSON.parse(result.stdout)).data,
-    files: await readdir(folder),
-  }).toStrictEqual({
-    exitCode: 0,
-    topic: expect.objectContaining({ topic: 'create' }),
-    files: [],
-  });
-});
-
-test('it labels the guide envelope with no commit even inside a git worktree', async () => {
-  const repo = await createTestRepo(import.meta.dir);
-
-  onTestFinished(() => repo.remove());
-
-  const result = await runProcess({
-    argv: ['bun', join(import.meta.dir, 'wringer-gunshi.ts'), 'guide', 'create', '--json'],
-    cwd: repo.root,
-  });
-
-  expect({
-    exitCode: result.exitCode,
-    sha: envelopeSchema.parse(JSON.parse(result.stdout)).sha,
-  }).toStrictEqual({ exitCode: 0, sha: null });
+  expect(result.exitCode).toBe(2);
+  expect(entries).toStrictEqual(['verify']);
 });

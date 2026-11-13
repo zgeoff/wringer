@@ -2,7 +2,6 @@ import type { Envelope } from '@wringer/core';
 import { z } from 'zod';
 
 const markdownDataSchema = z.looseObject({ markdown: z.string() });
-const topicDataSchema = z.looseObject({ topic: z.string(), text: z.string() });
 
 // A person reads the same envelope as an agent, as text: the error and its hint, or the data. A
 // command whose data carries Markdown, such as `report`, prints only that Markdown.
@@ -17,12 +16,6 @@ export function renderHumanEnvelope(envelope: Envelope): string {
 
   if (markdown.success) {
     return `${markdown.data.markdown}\n`;
-  }
-
-  const topic = topicDataSchema.safeParse(envelope.data);
-
-  if (topic.success) {
-    return topic.data.text;
   }
 
   const truncated =

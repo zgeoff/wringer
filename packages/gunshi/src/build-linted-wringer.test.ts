@@ -1,17 +1,16 @@
 import { expect, test } from 'bun:test';
 import { createWringer, local } from '@wringer/core';
 import { z } from 'zod';
-import { buildCLIWringer } from './build-cli-wringer.ts';
+import { buildLintedWringer } from './build-linted-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
-test('it adds the `lint` and `guide` commands beside the registry commands', () => {
-  const wringer = buildCLIWringer(createDemoWringer(), '.claude/skills/verify');
+test('it adds the `lint` command beside the registry commands', () => {
+  const wringer = buildLintedWringer(createDemoWringer(), '.claude/skills/verify');
 
   expect({
     lint: wringer.commands.get('lint')?.info.effect,
-    guide: wringer.commands.get('guide')?.info.effect,
     up: wringer.commands.has('up'),
-  }).toStrictEqual({ lint: 'read', guide: 'read', up: true });
+  }).toStrictEqual({ lint: 'read', up: true });
 });
 
 test('it refuses a registry that registers its own `lint` command', () => {
@@ -33,7 +32,7 @@ test('it refuses a registry that registers its own `lint` command', () => {
     })
     .build();
 
-  expect(() => buildCLIWringer(wringer, '.claude/skills/verify')).toThrow(
+  expect(() => buildLintedWringer(wringer, '.claude/skills/verify')).toThrow(
     'Two commands share the name `lint`.',
   );
 });

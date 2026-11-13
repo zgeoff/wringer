@@ -1,7 +1,5 @@
 # Fresh subagent brief
 
-The brief to send a fresh subagent that tries the verify skill
-
 Send the brief below to a new general-purpose subagent. Never use a fork: a fork carries your
 context, and the subagent must know only what the repo's `verify` skill tells it. Fill in the three
 placeholders, and add nothing else. A fact you add about the app or the CLI hides a gap in the

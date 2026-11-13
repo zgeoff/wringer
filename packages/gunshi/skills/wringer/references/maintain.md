@@ -1,7 +1,5 @@
 # Maintain
 
-Keep the gate, lint and the journeys true, and upgrade the verify skill
-
 Wire `bun verify lint` and the gate into the repo's CI, fix a journey when its feature changes, and
 upgrade the `verify` skill when `lint` reports an older template.
 
@@ -13,6 +11,8 @@ The mistakes that cost the most:
   `edited` event misses the report an author pastes later.
 - **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Move the old
   `verify` skill folder away first, as step 2 of the upgrade does.
+  `bunx @wringer/gunshi skill install` replaces the wringer skill's folder itself, so that folder
+  needs no move.
 
 ## Wire the checks into CI
 
@@ -61,13 +61,13 @@ new output of `bun verify report --human`.
 
 When `lint` reports that the skill follows an older template:
 
-1. Run `bun verify guide template`. It names the folder of the template that the installed
-   `@wringer/gunshi` ships.
+1. Run `bunx @wringer/gunshi skill install`, as [Install the skill](../SKILL.md#install-the-skill)
+   shows. It replaces the repo's copy of the wringer skill.
 2. Move the repo's `verify` skill folder, such as `.claude/skills/verify/`, to a folder outside
    `.claude/skills/`, so it doesn't load as a second skill. List that folder in `.git/info/exclude`,
    so git ignores it without a change to `.gitignore`.
-3. Copy `verify/` from that template folder to the folder that `runVerify`'s `skill` option names,
-   which no longer exists.
+3. Copy `.claude/skills/wringer/template/verify/` to the folder that `runVerify`'s `skill` option
+   names, which no longer exists.
 4. Copy the old skill's `references/feature-map.md` over the template's. Copy the frontmatter's
    `name`, `description` and `metadata.wringer-command`, the `#` title, and each `<!-- repo -->`
    block, from the old `SKILL.md` into the new one. When the new template renames or adds a block,

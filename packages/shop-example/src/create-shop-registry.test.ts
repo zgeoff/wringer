@@ -19,7 +19,7 @@ test('it builds the local and demo targets with the four drivers, the shop featu
       ['demo', 'attach', 'read-only'],
     ],
     drivers: ['http', 'db', 'stream', 'browser'],
-    features: ['place-order', 'order-failure', 'list-orders', 'order-log', 'guide'],
+    features: ['place-order', 'order-failure', 'list-orders', 'order-log'],
     ignore: ['**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**'],
   });
 });

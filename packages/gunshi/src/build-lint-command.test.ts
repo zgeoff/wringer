@@ -8,7 +8,7 @@ import {
   envelopeSchema,
 } from '@wringer/core';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
-import { buildCLIWringer } from './build-cli-wringer.ts';
+import { buildLintedWringer } from './build-linted-wringer.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 import { runCLI } from './run-cli.ts';
 import { templateVersion } from './template-version.ts';
@@ -48,7 +48,7 @@ async function setupTest() {
     git: repo.git,
     stdout,
     lint: (skillFolder: string, ...flags: readonly string[]) =>
-      runCLI(buildCLIWringer(wringer, skillFolder), { ...ports, argv: ['lint', ...flags] }),
+      runCLI(buildLintedWringer(wringer, skillFolder), { ...ports, argv: ['lint', ...flags] }),
   };
 }
 

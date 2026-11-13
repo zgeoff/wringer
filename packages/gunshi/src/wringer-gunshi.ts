@@ -1,10 +1,27 @@
 #!/usr/bin/env bun
-import { buildGuidePorts } from './build-guide-ports.ts';
-import { buildGuideWringer } from './build-guide-wringer.ts';
-import { runWringer } from './run-verify.ts';
+import { join, resolve } from 'node:path';
+import { parseSkillInstallArgs } from './parse-skill-install-args.ts';
+import { writeSkillCopy } from './write-skill-copy.ts';
 
-const [, script] = process.argv;
-const selfCommand = script === undefined ? [process.execPath] : [process.execPath, script];
+const usage = 'Usage: wringer-gunshi skill install [--dir <path>]';
+const args = parseSkillInstallArgs(process.argv.slice(2));
 
-// `guide` reads only the installed package, so it runs from any folder, in a repo or not.
-await runWringer(buildGuideWringer(), buildGuidePorts(selfCommand));
+if (args === null) {
+  console.error(usage);
+  process.exit(2);
+}
+
+const destination = resolve(args.destination);
+
+const result = await writeSkillCopy({
+  source: join(import.meta.dir, '..', 'skills', 'wringer'),
+  destination,
+  cwd: process.cwd(),
+});
+
+if (!result.ok) {
+  console.error(`Refused: ${result.reason} Pass --dir with the folder for the wringer skill.`);
+  process.exit(2);
+}
+
+console.log(`Installed the wringer skill to ${destination}`);

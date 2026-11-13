@@ -18,8 +18,8 @@
     "!src/**/*.test.ts",
     "dist",
     "!src/test-utils",
-    "guide",
-    "!guide/**/*.test.ts"
+    "skills",
+    "!skills/**/*.test.ts"
   ],
   "type": "module",
   "exports": {

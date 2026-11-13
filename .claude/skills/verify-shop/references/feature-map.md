@@ -71,20 +71,3 @@ after it, run `bun verify up --restart`, then `bun verify doctor`. Expect: `data
   ```
 
 - **End state:** the snapshot's heading starts with `The order failed`.
-
-## guide
-
-- **What:** the CLI prints the guide for adding a verify CLI to a repo, from the installed package.
-- **How a user reaches it:** run `bun verify guide`, or `bun verify guide <topic>`.
-- **Journey:**
-
-  ```bash
-  bun verify use --feature guide
-  bun verify guide
-  bun verify guide create
-  bun verify http request --path /api/orders
-  ```
-
-- **End state:** the first `guide` lists `create` in `data.topics`, and the second has `data.text`
-  starting with `# Create`. The `http request` only lets `done` record the verdict: `done` needs one
-  command that touches the app, and `guide` does not.

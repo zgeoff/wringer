@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { resolveLintFailures } from '../../src/resolve-lint-failures.ts';
-import { templateVersion } from '../../src/template-version.ts';
+import { resolveLintFailures } from '../../../src/resolve-lint-failures.ts';
+import { templateVersion } from '../../../src/template-version.ts';
 import { createVerifyRegistry } from './verify-registry.ts';
 
 test('it pairs with a verify skill whose journeys parse and whose template version is current', async () => {

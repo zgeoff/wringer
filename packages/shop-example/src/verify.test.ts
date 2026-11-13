@@ -23,7 +23,7 @@ test('it passes lint over the shop verify skill and its feature map', async () =
 
   expect({ exitCode, data: envelopeSchema.parse(JSON.parse(stdout)).data, stderr }).toStrictEqual({
     exitCode: 0,
-    data: { skill: '.claude/skills/verify-shop/SKILL.md', commands: 21, failures: [] },
+    data: { skill: '.claude/skills/verify-shop/SKILL.md', commands: 17, failures: [] },
     stderr: '',
   });
 });

@@ -1,10 +1,9 @@
 # Create
 
-Write the verify CLI, its registry and the repo's verify skill
-
 Add the verify CLI, its registry and the repo's `verify` skill. The registry is the file that
 declares the targets, drivers, actions, repo commands, doctor checks and features;
-`verify-registry.ts` in the template shows one of each, on the builder that `createWringer` returns.
+[`verify-registry.ts`](../template/verify-registry.ts) shows one of each, on the builder that
+`createWringer` returns.
 
 The mistakes that cost the most:
 
@@ -38,9 +37,10 @@ The mistakes that cost the most:
    its config for a target.
 
 2. Add `.wringer/` to `.gitignore`. The CLI keeps each run's state and evidence there.
-3. Copy `verify.ts` and `verify-registry.ts` from the template (`bun verify guide template` names
-   its folder) into `scripts/verify/`. Add `"verify": "bun scripts/verify/verify.ts"` to the
-   `scripts` of `package.json`. Expect: `bun verify --help` lists the template's commands.
+3. Copy [`verify.ts`](../template/verify.ts) and
+   [`verify-registry.ts`](../template/verify-registry.ts) into `scripts/verify/`. Add
+   `"verify": "bun scripts/verify/verify.ts"` to the `scripts` of `package.json`. Expect:
+   `bun verify --help` lists the template's commands.
 4. In `verify-registry.ts`, write the `local` target with `mode: 'launch'` and
    `access: 'read-write'`. Its `launch` function returns:
    - `command`: the command a developer runs to start the app;
@@ -70,9 +70,10 @@ The mistakes that cost the most:
     file to the `paths` of each feature whose behaviour it changes: a file such as `package.json`
     changes every feature. Expect: each file that `git ls-files` prints matches a feature's `paths`
     or an ignore glob.
-12. Copy `verify/` from the template to `.claude/skills/verify/`. Rewrite the frontmatter's `name`
-    and `description` and the `#` title for the app. Set `metadata.wringer-command` to the command
-    that runs the script, `bun verify` by default. Rewrite each `<!-- repo: <part> -->` block:
+12. Copy [`template/verify/`](../template/verify/) to `.claude/skills/verify/`. Rewrite the
+    frontmatter's `name` and `description` and the `#` title for the app. Set
+    `metadata.wringer-command` to the command that runs the script, `bun verify` by default. Rewrite
+    each `<!-- repo: <part> -->` block:
     - `targets`: one row per target, with the command that starts a run, and what to do on a
       refusal.
     - `commands`: what `--help` can't say about the actions and repo commands, such as the order to

@@ -39,22 +39,21 @@ does on any duplicate name.
 Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
 defaults to `.claude/skills/verify`.
 
-## Guide
+## Agent skill
 
-The package ships a guide in `guide/`. It walks an agent through adding a verify CLI, a feature map
-and a verify skill to a repo, and through the checks that prove them. Its `template/` folder holds
-the example files for the repo's own verify skill, which the agent writes.
+The package ships an agent skill in `skills/wringer/`. It walks an agent through adding a verify
+CLI, a feature map and a verify skill to a repo, and through the checks that prove them. Its
+`template/` folder holds the example files for the repo's own verify skill, which the agent writes.
 
-The CLI prints the guide of the installed version, so no copy in the repo goes stale:
+The install command deletes the folder it installs to, so move any edits out of the repo's copy
+first. After you install or upgrade the package, run the install command from the repo root:
 
 ```bash
-bun verify guide            # the version and the topics
-bun verify guide create     # one topic
-bunx wringer-gunshi guide   # the same, for a repo that has no verify CLI yet
+bunx @wringer/gunshi skill install
 ```
 
-An unknown topic fails with `usage`, and its hint lists the topics. `guide template` prints the
-absolute path of the installed template folder, to copy from. `--human` prints a topic's text alone.
+It copies the skill from the installed package to `.claude/skills/wringer`, or to `--dir <path>`. It
+refuses a folder that is not a copy of this agent skill, and exits with code 2.
 
 ## lint
 
@@ -70,7 +69,7 @@ run it on a fresh checkout. It exits with code 1, with `check-failed` in its env
 - a skill folder with no `SKILL.md`;
 - a verify skill whose frontmatter lacks `metadata.wringer-template` or `metadata.wringer-command`,
   or whose `metadata.wringer-template` differs from the template version that this package ships.
-  The `maintain` topic of the guide gives the upgrade steps.
+  The agent skill's upgrade steps bring the verify skill to the shipped version.
 
 `metadata.wringer-command` holds the words that call the CLI, such as `bun verify`. `lint` checks
 only the code block lines that start with those words, after an optional `$ ` prompt and environment
