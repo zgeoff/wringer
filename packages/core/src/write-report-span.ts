@@ -77,7 +77,15 @@ function findBlockProblem(span: string): string | null {
     return 'The report block must start with one opening marker and end with one closing marker.';
   }
 
+  if (isFenced(collectFencedRanges(span), span.length - reportMarkers.close.length)) {
+    return 'The report block leaves a code block open at its closing marker.';
+  }
+
   return null;
+}
+
+function isFenced(fenced: readonly FencedRange[], offset: number): boolean {
+  return fenced.some((range) => offset >= range.start && offset < range.end);
 }
 
 function collectMarkerOffsets(
@@ -97,10 +105,6 @@ function collectMarkerOffsets(
   }
 
   return offsets;
-}
-
-function isFenced(fenced: readonly FencedRange[], offset: number): boolean {
-  return fenced.some((range) => offset >= range.start && offset < range.end);
 }
 
 function findMarkerProblem(opens: readonly number[], closes: readonly number[]): string | null {

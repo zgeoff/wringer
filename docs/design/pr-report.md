@@ -326,7 +326,8 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
   `publish` fails with `check-failed` and writes nothing.
 - When it holds an opening marker with no closing one, or the reverse, `publish` fails the same way.
 - `writeReportSpan` takes a block that starts with its one opening marker and ends with its one
-  closing marker, and refuses any other block. It trims the block's outer whitespace.
+  closing marker, and refuses any other block, including one whose closing marker falls inside a
+  fenced code block. It trims the block's outer whitespace.
 - `writeReportSpan` uses the first `## Verification` heading outside a fenced code block. A heading
   matches with up to 3 spaces of indent and optional closing hashes. A fence is a run of 3 or more
   backticks or tildes, indented by up to 3 spaces, closed by a run of the same character at least as

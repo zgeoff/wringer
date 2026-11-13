@@ -321,3 +321,26 @@ test.each([
     reason: 'The report block must start with one opening marker and end with one closing marker.',
   });
 });
+
+test.each([
+  ['a backtick fence', '```'],
+  ['a tilde fence', '~~~'],
+  ['an indented fence', '  ```'],
+])('#writeReportSpan refuses a block whose closing marker sits in %s left open', (_name, fence) => {
+  const badBlock = `${reportMarkers.open}\n${fence}\nrow\n${reportMarkers.close}`;
+
+  expect(writeReportSpan('## Verification\n\n## Notes\ntext\n', badBlock)).toStrictEqual({
+    ok: false,
+    reason: 'The report block leaves a code block open at its closing marker.',
+  });
+});
+
+test('#writeReportSpan accepts a block whose fence closes before the closing marker', () => {
+  const block = `${reportMarkers.open}\n\`\`\`\nrow\n\`\`\`\n${reportMarkers.close}`;
+
+  expect(writeReportSpan('## Verification\n', block)).toStrictEqual({
+    ok: true,
+    action: 'created',
+    body: `## Verification\n\n${block}\n`,
+  });
+});
