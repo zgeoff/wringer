@@ -310,6 +310,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     targetName: context.targetName,
     access: context.target.access,
     effect: prepared.effect,
+    touchesTarget: info.touchesTarget ?? true,
     hint,
   });
 

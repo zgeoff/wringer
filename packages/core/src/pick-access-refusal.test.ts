@@ -31,6 +31,14 @@ test.each([
     code: null,
   },
   {
+    name: 'a write on a read-only target, by a command that never touches the target',
+    allowedTargets: undefined,
+    access: 'read-only',
+    effect: 'write',
+    touchesTarget: false,
+    code: null,
+  },
+  {
     name: 'a command on a target it does not list',
     allowedTargets: ['staging'],
     access: 'read-only',
@@ -44,6 +52,7 @@ test.each([
     targetName: 'local',
     access: row.access,
     effect: row.effect,
+    touchesTarget: 'touchesTarget' in row ? row.touchesTarget : true,
     hint: 'local is read-only: reproduce it elsewhere.',
   });
 
@@ -57,6 +66,7 @@ test('it names the command, the target and its hint in a read-only refusal', () 
     targetName: 'prod',
     access: 'read-only',
     effect: 'write',
+    touchesTarget: true,
     hint: 'prod is read-only: reproduce it on local.',
   });
 

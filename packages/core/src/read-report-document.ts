@@ -1,7 +1,9 @@
 import { collectJourneyDrives } from './collect-journey-drives.ts';
 import type { StatePort } from './create-file-state.ts';
+import type { SecretSet } from './create-secret-set.ts';
 import type { Envelope } from './envelope.ts';
 import { pickJourneyEvidence } from './pick-journey-evidence.ts';
+import { pickUploadRefusal } from './pick-upload-refusal.ts';
 import { readUploadCandidate } from './read-upload-candidate.ts';
 import type { Journey, JourneyFile, JourneyStep, ReportDocument } from './report-document.ts';
 import type { Report, Verdict } from './report-schema.ts';
@@ -10,6 +12,9 @@ import type { EvidenceFiles, Wringer } from './types.ts';
 
 export interface ReportDocumentOptions {
   readonly isUploadAllowed: boolean;
+
+  // The hosts a link may name; empty while nothing uploads.
+  readonly linkHosts: readonly string[];
 }
 
 export interface ReportDocumentDependencies {
@@ -18,10 +23,13 @@ export interface ReportDocumentDependencies {
   readonly files: EvidenceFiles;
   readonly root: string;
   readonly stateDir: string;
+
+  // Holds every secret the upload guard looks for.
+  readonly secrets: SecretSet;
 }
 
-// Reads the run log of each verified feature's verdict and builds the journey from it. Nothing
-// uploads: every file keeps no link.
+// Reads the run log of each verified feature's verdict and builds the journey from it, and runs the
+// upload guard over each file. Nothing uploads: every file keeps no link.
 export async function readReportDocument(
   dependencies: ReportDocumentDependencies,
   report: Report,
@@ -39,7 +47,7 @@ export async function readReportDocument(
     registry: dependencies.wringer.name,
     report,
     journeys: new Map(entries),
-    linkHosts: [],
+    linkHosts: options.linkHosts,
   };
 }
 
@@ -60,7 +68,7 @@ async function readJourney(
   });
 
   const steps = await Promise.all(
-    (drives ?? []).map((envelope) => readStep(dependencies, envelope)),
+    (drives ?? []).map((envelope) => readStep(dependencies, envelope, evidence === 'upload')),
   );
 
   return [verdict.feature, { steps, evidence }];
@@ -84,6 +92,7 @@ async function readDrives(
 async function readStep(
   dependencies: ReportDocumentDependencies,
   envelope: Envelope,
+  targetUploads: boolean,
 ): Promise<JourneyStep> {
   const files = await Promise.all(
     envelope.evidence.map(async (evidence): Promise<JourneyFile> => {
@@ -94,7 +103,14 @@ async function readStep(
 
       const content = isReadable ? await dependencies.files.readBytes(candidate.realPath) : null;
 
-      return { evidence, bytes: content === null ? null : content.byteLength, url: null };
+      return {
+        evidence,
+        bytes: content === null ? null : content.byteLength,
+        url: null,
+        refusal:
+          pickUploadRefusal(candidate, { targetUploads, secrets: dependencies.secrets })?.reason ??
+          null,
+      };
     }),
   );
 

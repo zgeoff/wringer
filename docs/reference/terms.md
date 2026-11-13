@@ -76,14 +76,15 @@ fingerprint in any clone, and an edit to another feature's files leaves it as it
 
 The files and data that a run's commands keep as proof, such as a screenshot or a response body. The
 repo sets for each target in the registry whether the CLI keeps the evidence local or uploads it.
-The report links to uploaded evidence.
+`publish` uploads the evidence that the report links to.
 
 ## Report
 
 The block in a PR description that lists each changed feature with its status and, for a verified
-feature, its journey and its evidence. `bun verify report --human` prints it, and the agent puts it
-in the PR description. The block ends with an HTML comment that holds each verdict's data, and the
-gate reads the verdicts from that comment.
+feature, its journey and its evidence. `bun verify publish` uploads the evidence and writes the
+block into the PR description, and `bun verify report --human` prints the same block to preview. The
+block ends with an HTML comment that holds each verdict's data, and the gate reads the verdicts from
+that comment.
 
 ## Gate
 

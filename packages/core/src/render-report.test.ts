@@ -36,6 +36,7 @@ function setupTest() {
     evidence: { kind: 'screenshot', path, sha256: digest },
     bytes: 2048,
     url: null,
+    refusal: null,
     ...overrides,
   });
 

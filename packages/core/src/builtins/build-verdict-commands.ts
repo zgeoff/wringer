@@ -8,7 +8,7 @@ import { readChangeFacts } from '../read-change-facts.ts';
 import type { ChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { readReportDocument } from '../read-report-document.ts';
-import { doneCommand, readVerdicts } from '../read-verdicts.ts';
+import { doneCommand } from '../read-verdicts.ts';
 import { renderReport } from '../render-report.ts';
 import { parseReportComment } from '../report-comment.ts';
 import type { CommentRead } from '../report-comment.ts';
@@ -24,6 +24,9 @@ import type { Claim, Pin, Report, Verdict } from '../report-schema.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { buildDeployedPin } from './build-deployed-pin.ts';
+import { buildPublishCommand } from './build-publish-command.ts';
+import { readCurrentFacts } from './read-current-facts.ts';
+import { readCurrentReport } from './read-current-report.ts';
 import { readDeployedCommit } from './read-deployed-commit.ts';
 
 const doneArgsSchema = z.strictObject({
@@ -63,7 +66,8 @@ const gateDataSchema = z.strictObject({
 type GateData = z.infer<typeof gateDataSchema>;
 
 // `done` turns the evidence of one run into a verdict, `report` merges every verdict of the worktree
-// for the PR body, and `gate` checks that report again in CI, with a fingerprint it computes itself.
+// for the PR body, `publish` writes that report into the PR, and `gate` checks it again in CI, with a
+// fingerprint it computes itself.
 export function buildVerdictCommands(): readonly RegisteredCommand[] {
   const done: BuiltinCommandSpec<DoneArgs, Verdict> = {
     path: [doneCommand],
@@ -86,7 +90,8 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
     needsRun: false,
     needsDoctor: false,
     run: async (args, ctx) => {
-      const built = await readReport(ctx, args.base);
+      const base = await readBase(ctx, args.base);
+      const built = await readCurrentReport(ctx, base);
 
       const document = await readReportDocument(
         {
@@ -95,9 +100,10 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
           files: ctx.session.repoHost,
           root: ctx.session.root,
           stateDir: ctx.stateDir,
+          secrets: ctx.secrets,
         },
         built,
-        { isUploadAllowed: false },
+        { isUploadAllowed: false, linkHosts: [] },
       );
 
       return { report: built, markdown: renderReport(document, noCuts, ctx.secrets) };
@@ -116,7 +122,12 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
     run: (args, ctx) => checkGate(args, ctx),
   };
 
-  return [buildBuiltinCommand(done), buildBuiltinCommand(report), buildBuiltinCommand(gate)];
+  return [
+    buildBuiltinCommand(done),
+    buildBuiltinCommand(report),
+    buildBuiltinCommand(gate),
+    buildPublishCommand(),
+  ];
 }
 
 async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdict> {
@@ -197,34 +208,6 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     pin,
     evidence: drives.flatMap((envelope) => envelope.evidence),
   };
-}
-
-function readCurrentFacts(ctx: BuiltinContext, base: string): Promise<ChangeFacts> {
-  return readChangeFacts(
-    ctx.session.repoHost,
-    buildChangeFactsRequest(ctx.wringer, ctx.session.root, base),
-  );
-}
-
-async function readReport(ctx: BuiltinContext, givenBase: string | undefined): Promise<Report> {
-  const base = await readBase(ctx, givenBase);
-
-  const [facts, verdicts] = await Promise.all([
-    readCurrentFacts(ctx, base),
-    readVerdicts(ctx.state, ctx.session.repoHost, ctx.session.root),
-  ]);
-
-  return buildReport({
-    base,
-    fingerprint: facts.fingerprint,
-    features: ctx.wringer.features,
-    featureFingerprints: facts.featureFingerprints,
-    changedPaths: facts.changedPaths,
-    shared: ctx.wringer.shared,
-    ignore: ctx.wringer.ignore,
-    verdicts,
-    policy: ctx.wringer.gate,
-  });
 }
 
 function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<string> {

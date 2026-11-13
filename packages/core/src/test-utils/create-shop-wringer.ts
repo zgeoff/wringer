@@ -334,6 +334,23 @@ export function createShopWringer(options: { readonly gate?: GatePolicy } = {}):
     )
     .action(
       shop.defineAction({
+        name: 'album',
+        summary: 'Keep a photo of the cart with three notes beside it',
+        effect: 'read',
+        input: emptySchema,
+        data: emptySchema,
+        run: async (_input, ctx) => {
+          await ctx.evidence.writeFile('note', 'first.txt', 'first note');
+          await ctx.evidence.writeFile('note', 'second.txt', 'second note');
+          await ctx.evidence.writeFile('note', 'third.txt', 'third note');
+          await ctx.evidence.writeFile('screenshot', 'cart.png', Buffer.from('cart pixels'));
+
+          return {};
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
         name: 'echo',
         summary: 'Return, emit and keep the text it is given',
         effect: 'read',
@@ -343,6 +360,20 @@ export function createShopWringer(options: { readonly gate?: GatePolicy } = {}):
           ctx.emit('echoed', { text: input.text });
 
           await ctx.evidence.writeFile('note', 'echo.txt', input.text);
+
+          return { text: input.text };
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'say',
+        summary: 'Return the text it is given as data, and keep a receipt that does not hold it',
+        effect: 'read',
+        input: textSchema,
+        data: textSchema,
+        run: async (input, ctx) => {
+          await ctx.evidence.writeFile('note', 'receipt.txt', 'paid 12 for the cart');
 
           return { text: input.text };
         },

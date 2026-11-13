@@ -139,6 +139,10 @@ export interface CommandShape<Args, Data> {
   readonly needsRun?: boolean | undefined;
   readonly needsDoctor?: boolean | undefined;
   readonly timeoutMs?: number | undefined;
+
+  // Default true. A command that writes somewhere other than the target sets false, so a read-only
+  // target does not refuse it for its effect.
+  readonly touchesTarget?: boolean | undefined;
 }
 
 // A command with its argument and data types erased, as the registry and the CLI adapter see it. A

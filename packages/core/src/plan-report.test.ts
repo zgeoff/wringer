@@ -54,6 +54,7 @@ function setupTest() {
         },
         bytes: 2048,
         url: null,
+        refusal: null,
       })),
       data: spec.data ?? null,
     });
@@ -448,4 +449,57 @@ test('it collapses the longer table first, whatever its row count', () => {
       ],
     ]),
   );
+});
+
+test('it sizes a file the upload guard refuses as a local cell, so the rendered length equals the plan', () => {
+  const ctx = setupTest();
+  const document = ctx.buildDocument([{ name: 'checkout', steps: [{ files: ['png', 'png'] }] }]);
+
+  const guarded: ReportDocument = {
+    ...document,
+    journeys: new Map(
+      [...document.journeys].map(([name, journey]) => [
+        name,
+        {
+          ...journey,
+          steps: journey.steps.map((step) => ({
+            ...step,
+            files: step.files.map((file) =>
+              file.evidence.path === 'out/f1.png'
+                ? { ...file, refusal: 'hash-mismatch' as const }
+                : file,
+            ),
+          })),
+        },
+      ]),
+    ),
+  };
+
+  const result = ctx.plan(guarded, 1_000_000);
+  const plan = result.ok ? result.plan : noCuts;
+  const linked = ctx.withLinks(guarded, 80);
+
+  // Only the file the guard lets through gets a link; the refused one renders as its local cell.
+  const uploaded: ReportDocument = {
+    ...linked,
+    journeys: new Map(
+      [...linked.journeys].map(([name, journey]) => [
+        name,
+        {
+          ...journey,
+          steps: journey.steps.map((step) => ({
+            ...step,
+            files: step.files.map((file) =>
+              file.refusal === null ? file : { ...file, url: null },
+            ),
+          })),
+        },
+      ]),
+    ),
+  };
+
+  expect({
+    shown: collectShownFiles(guarded, plan, 80).map((file) => file.evidence.path),
+    rendered: ctx.render(uploaded, plan).length,
+  }).toStrictEqual({ shown: ['out/f2.png'], rendered: result.ok ? result.chars : -1 });
 });

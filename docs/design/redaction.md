@@ -360,8 +360,8 @@ in evidence, step data, an error message, the run log or an upload, from any dri
 Run `grep -r planted-shop-token .wringer/` and keep the hits as the baseline.
 
 **Scope note:** the guard goes into `report`'s link step, which cannot tell a verdict's target yet,
-so it passes `targetUploads: false` and every opaque file stays local there, screenshots included,
-until that work lands. The publish work in the PR report design passes the real value.
+so it passes `targetUploads: false` and every opaque file stays local there, screenshots included.
+`publish` passes the real value: it is true for a journey whose target uploads.
 
 **Acceptance:**
 

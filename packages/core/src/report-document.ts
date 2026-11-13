@@ -1,4 +1,5 @@
 import type { Evidence } from './envelope.ts';
+import type { UploadRefusal } from './pick-upload-refusal.ts';
 import type { Report } from './report-schema.ts';
 
 // Why a journey's evidence stays on this machine.
@@ -17,6 +18,9 @@ export interface JourneyFile {
 
   // The link the file host gave; null while the file stays local.
   readonly url: string | null;
+
+  // Why the upload guard refuses the file, or null when it may leave. A refused file stays local.
+  readonly refusal: UploadRefusal['reason'] | null;
 }
 
 export interface JourneyStep {

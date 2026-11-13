@@ -8,10 +8,14 @@ export interface AccessInput {
   readonly targetName: string;
   readonly access: Access;
   readonly effect: Effect;
+
+  // False for a command that never touches the target: its effect then says nothing about it.
+  readonly touchesTarget: boolean;
   readonly hint: string;
 }
 
-// A repo command may name the only targets it runs on, and a read-only target takes only reads.
+// A repo command may name the only targets it runs on, and a read-only target takes only reads of
+// a command that touches it.
 export function pickAccessRefusal(input: AccessInput): WringerError | null {
   const commandText = `\`${input.path.join(' ')}\``;
 
@@ -21,7 +25,7 @@ export function pickAccessRefusal(input: AccessInput): WringerError | null {
     });
   }
 
-  if (input.access === 'read-only' && input.effect !== 'read') {
+  if (input.touchesTarget && input.access === 'read-only' && input.effect !== 'read') {
     return new WringerError('read-only', {
       message: `${commandText} is a write, and target ${input.targetName} is read-only.`,
       hint: input.hint,

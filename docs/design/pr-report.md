@@ -290,6 +290,7 @@ interface JourneyFile {
   readonly evidence: Evidence; // kind, path, sha256
   readonly bytes: number | null; // null when the file is gone from the worktree
   readonly url: string | null; // null from the document reader; publish builds a new document with the links
+  readonly refusal: UploadRefusal['reason'] | null; // why the upload guard refuses the file; the reader runs the guard
 }
 
 // core. Pure: one pass over fragment sizes, no render loop.
@@ -323,7 +324,8 @@ const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, sec
   skips the write. Any failed upload fails it before the write, and the description stays as it was.
   Each link uploaded before the failure stays in the reuse record, so a retry reuses it.
 - `--dry-run` makes no upload and no write. It prints the block with local evidence, counts in
-  `uploaded` the files that would upload, and needs the PR token but no upload variables.
+  `uploaded` the files that would upload, and needs the PR token but no upload variables. It plans
+  with no links, so `uploaded` counts the files its own shown cells would link, and `reused` is 0.
 - When the current branch has no open PR, `publish` fails with `environment` and the hint to open
   the PR or pass `--pr`. When it has several, the error lists their numbers.
 - On a detached HEAD, `publish` needs `--pr`. A PR named by `--pr` that is closed or merged fails
@@ -402,6 +404,11 @@ const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, sec
   [Redaction](./redaction.md#the-upload-guard) owns. A file the guard refuses stays local, and a
   `secret-found` refusal fails `publish` before the first upload, as that design says.
 - `publish` uploads only the files the final plan shows.
+- The document reader runs the guard over every file of every journey before any plan, so a plan
+  sizes a refused file as a local cell and the rendered length matches the plan. A `secret-found`
+  refusal in a journey that uploads fails `publish` before the first upload, whether or not the plan
+  shows that file. `publish` also loads the secrets file of each run its verdicts name, and runs the
+  rendered block through `findSecret` before the write.
 - When a target has `evidence: 'upload'` and the registry has no `upload` hook, `lint` fails, and
   `publish` fails with `usage` before it reads the PR.
 - A missing upload URL or token variable fails `publish` with `environment`, naming the variable.
@@ -451,7 +458,10 @@ const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, sec
 - The renderer builds the span from those fragments, so the rendered length equals the planned
   length when every link is `maxURLLength` long, and is shorter otherwise.
 - The cut order does not depend on the budget, so a smaller budget only adds cuts. The second plan,
-  against the re-read description, never shows a file the first plan did not upload.
+  against the re-read description, never shows a file the first plan did not upload: its budget is
+  the smaller of the two descriptions' budgets.
+- A CRLF description grows by one character per line of the block. When the edited description is
+  still over 65,536 characters, `publish` takes the overflow off the budget and plans again.
 - When the summary table, the data comment and the shorter form of each section still do not fit,
   `publish` fails with `check-failed`: "The report needs 66,034 characters, and the PR description
   has room for 61,200 of GitHub's 65,536." `report --human` prints the uncut block and never fails

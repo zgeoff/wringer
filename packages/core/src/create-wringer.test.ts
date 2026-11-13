@@ -32,6 +32,7 @@ test('it registers the built-ins, the driver commands and each action under `act
     'done',
     'report',
     'gate',
+    'publish',
     'doctor',
     'exec',
     'notes add',
