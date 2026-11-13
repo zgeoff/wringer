@@ -61,6 +61,9 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
   });
 
   const logs = Promise.withResolvers<unknown>();
+
+  const giveUpOnLog = new AbortController();
+
   const log = createLogWriter((text) => request.host.appendLog(request.logPath, text));
 
   const app = createActor(appMachine, {
@@ -78,6 +81,9 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
           env,
           child,
           logged: logs.promise,
+          giveUpOnLog: () => {
+            giveUpOnLog.abort();
+          },
           closeLog: log.close,
           stopGraceMs: request.stopGraceMs,
         }),
@@ -97,7 +103,7 @@ export async function startLaunch(request: LaunchRequest): Promise<Launch> {
     onLine: (line: string) => void,
   ): Promise<void> => {
     try {
-      await pipeLines(log, stream, onLine);
+      await pipeLines(log, stream, giveUpOnLog.signal, onLine);
     } catch (error) {
       app.send({ type: 'log.failed', reason: toWringerError(error).message });
     }
@@ -181,6 +187,9 @@ interface AppStop {
   readonly env: Readonly<Record<string, string | undefined>>;
   readonly child: AppProcess;
   readonly logged: Promise<unknown>;
+
+  // Releases the app's pipes, which a process outside its group may still hold.
+  readonly giveUpOnLog: () => void;
   readonly closeLog: () => Promise<void>;
   readonly stopGraceMs: number;
 }
@@ -233,6 +242,8 @@ async function signalApp(stop: AppStop): Promise<void> {
   ]);
 
   if (drained.status === 'rejected') {
+    stop.giveUpOnLog();
+
     throw new WringerError('environment', {
       message: `The app's output still had not reached its log ${logDrainMs} ms after it exited.`,
       hint: 'A process the app started outside its process group may still hold its output open.',
@@ -253,11 +264,12 @@ async function runStopCommand(host: LaunchHost, request: ProcessRequest): Promis
 async function pipeLines(
   log: LogWriter,
   stream: ReadableStream<Uint8Array>,
+  signal: AbortSignal,
   onLine: (line: string) => void,
 ): Promise<void> {
   // One append per chunk: an app that prints many lines as it stops would otherwise pay one
   // append per line, and miss the bound on the stop's wait for its log.
-  for await (const lines of readStreamLineBatches(stream)) {
+  for await (const lines of readStreamLineBatches(stream, signal)) {
     await log.append(`${lines.join('\n')}\n`);
 
     for (const line of lines) {
