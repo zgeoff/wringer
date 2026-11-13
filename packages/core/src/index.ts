@@ -19,6 +19,8 @@ export { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 export { createRepoState } from './create-repo-state.ts';
 export type { StateFileSystem } from './create-node-state-file-system.ts';
 export { createSecretSet } from './create-secret-set.ts';
+export { createHostUploader } from './create-host-uploader.ts';
+export type { HostUploaderDependencies, HostUploaderOptions } from './create-host-uploader.ts';
 export { createWringer, defaultStateDir } from './create-wringer.ts';
 export type { WringerBuilder, WringerOptions } from './create-wringer.ts';
 export { defineDriver } from './define-driver.ts';

@@ -156,6 +156,7 @@ interface HookHandlers {
 interface EvidenceUploader {
   readonly maxURLLength: number; // the link's length once percent-encoded and HTML-escaped; core rejects a longer one
   readonly linkHosts: readonly string[]; // the hosts core accepts in a returned link
+  readonly assertReady?: () => void; // throws `environment`, naming the variable, when its configuration is missing
   readonly upload: (file: UploadFile, signal: AbortSignal) => Promise<UploadedLink>;
 }
 
@@ -201,6 +202,12 @@ interface HostUploaderOptions {
 }
 // POST <url> with fields `file`, `label`, `expires`; `Authorization: Bearer <token>`.
 // The host returns 201 with JSON `{ url, expiresAt }`. linkHosts is the upload URL's host.
+// The uploader reads both variables when it is used, so a command that never uploads needs neither.
+// `readSecrets` returns the token, named for its variable, and core adds it to the command's secret
+// set after `assertReady`, so the scrubber and the upload guard know it whatever the variable is
+// named.
+// `linkHosts` and `assertReady` read the URL, and `assertReady` also reads the token. The URL is
+// `https`, or `http` on a loopback host. The request never follows a redirect.
 ```
 
 ### The reuse record
@@ -389,6 +396,13 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
   `publish` fails with `usage` before it reads the PR.
 - A missing upload URL or token variable fails `publish` with `environment`, naming the variable.
   `lint` checks no environment.
+- Core calls `assertReady` before it reads a file or sends one, so a missing variable fails before
+  the first upload.
+- Core sends only the bytes whose SHA-256 is the one the guard checked: it reads the file again at
+  the upload and refuses a file that changed since. A filename that holds a known secret becomes
+  `<sha256>.<extension>`, and the label is scrubbed with the command's secret set.
+- A reuse record entry that fails the link checks, or a record that does not parse, is not reused.
+  Core uploads at most 4 files at once, and records each link when the host returns it.
 - Core picks the content type: `image/png`, `image/jpeg`, `image/gif`, `image/webp`, `video/mp4` and
   `video/webm` by extension, `text/plain` for every other text file, including HTML, SVG, Markdown
   and XML, and `application/octet-stream` for the rest.

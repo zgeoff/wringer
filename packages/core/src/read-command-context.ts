@@ -33,6 +33,11 @@ export async function readCommandContext(
 ): Promise<CommandContext> {
   addEnvSecrets(sources.secrets, { declared: wringer.secrets, env: sources.session.env });
 
+  // The upload token joins the set before any command runs, whatever its variable is named.
+  for (const secret of wringer.hooks.upload?.readSecrets?.() ?? []) {
+    sources.secrets.add(secret);
+  }
+
   // A feature names a folder of the run, so only a feature of the map may reach a path; `use` checks
   // the feature it saves, and this checks the one a command passes.
   if (

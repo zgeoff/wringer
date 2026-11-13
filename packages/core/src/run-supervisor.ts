@@ -65,6 +65,10 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
 
   addEnvSecrets(secrets, { declared: options.wringer.secrets, env: options.launchHost.env });
 
+  for (const secret of options.wringer.hooks.upload?.readSecrets?.() ?? []) {
+    secrets.add(secret);
+  }
+
   const scrubbingState = createScrubbingState(options.state, secrets, {
     beforeAppend: (runID) => readRunSecrets(options.state, secrets, runID),
   });

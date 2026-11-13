@@ -3,6 +3,7 @@ import { once } from 'node:events';
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { callSupervisor } from './call-supervisor.ts';
+import { createHostUploader } from './create-host-uploader.ts';
 import { dispatch } from './dispatch.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit } from './run-git.ts';
@@ -1120,4 +1121,37 @@ test('it keeps a declared secret out of the stack that an internal error writes 
     leaked: sinks.includes('planted-shop-token'),
     kept: sinks.includes('cannot read [redacted:SHOP_API_TOKEN]'),
   }).toStrictEqual({ code: 'internal', leaked: false, kept: true });
+});
+
+test('it scrubs the uploader token from a command that runs before any upload, whatever its variable is named', async () => {
+  const wringer = createShopWringer();
+
+  const uploading = {
+    ...wringer,
+    hooks: {
+      upload: createHostUploader(
+        { urlEnv: 'FILE_HOST_URL', tokenEnv: 'FILE_ACCESS' },
+        { env: { FILE_ACCESS: 'planted-upload-token' }, fetch },
+      ),
+    },
+  };
+
+  const shop = await createTestSession({ parent: import.meta.dir, wringer: uploading });
+
+  const result = await dispatch(
+    uploading,
+    ['echo-runless'],
+    { text: 'the token is planted-upload-token' },
+    { ...shop.session, target: 'local' },
+  );
+
+  const evidence = await readFile(
+    join(shop.repo.root, result.envelope.evidence[0]?.path ?? ''),
+    'utf8',
+  );
+
+  expect({ data: result.envelope.data, evidence }).toStrictEqual({
+    data: { text: 'the token is [redacted:FILE_ACCESS]' },
+    evidence: 'the token is [redacted:FILE_ACCESS]',
+  });
 });

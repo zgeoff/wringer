@@ -12,7 +12,7 @@ import { runIDSchema } from '../run-events.ts';
 import type { RunEvent, RunID } from '../run-events.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
-import type { UploadRequest } from '../types.ts';
+import type { UploadFile } from '../types.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -23,17 +23,31 @@ async function setupTest() {
   const failureSchema = z.object({ name: z.string(), status: z.string() });
   const failingSchema = z.looseObject({ failing: z.array(failureSchema) });
   const reportDataSchema = z.strictObject({ report: reportSchema, markdown: z.string() });
-  const uploads: UploadRequest[] = [];
+  const uploads: UploadFile[] = [];
 
   const uploading = {
     ...wringer,
     hooks: {
-      upload: (file: UploadRequest) => {
-        uploads.push(file);
+      upload: {
+        maxURLLength: 512,
+        linkHosts: ['files.example'],
+        upload: (file: UploadFile) => {
+          uploads.push(file);
 
-        return Promise.resolve('https://files.example/receipt');
+          return Promise.resolve({ url: 'https://files.example/receipt', expiresAt: null });
+        },
       },
     },
+  };
+
+  const uploadingTarget = {
+    ...uploading,
+    targets: new Map(
+      [...wringer.targets].map(([name, target]) => [
+        name,
+        name === 'local' ? { ...target, evidence: 'upload' as const } : target,
+      ]),
+    ),
   };
 
   // `done` pauses where it hands its envelope to the state, before the state takes the run lock,
@@ -147,6 +161,8 @@ async function setupTest() {
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[], env: Readonly<Record<string, string>> = {}) =>
       dispatch(uploading, path, {}, { ...shop.session, env, target: 'local' }),
+    runOnUploadingTarget: (path: readonly string[], args: unknown = {}) =>
+      dispatch(uploadingTarget, path, args, { ...shop.session, target: 'local' }),
     parseReportData: (data: unknown) => reportDataSchema.parse(data),
 
     // The body sits in the ignored state folder, as CI keeps it outside the checkout, so writing it
@@ -634,7 +650,7 @@ test('#report gives each changed feature its status and embeds the data comment'
   ]);
 });
 
-test('#report uploads the evidence of a verified feature by its absolute path', async () => {
+test('#report uploads the evidence of a verified feature with its bytes, name, type and label', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
@@ -649,12 +665,11 @@ test('#report uploads the evidence of a verified feature by its absolute path', 
 
   expect(ctx.uploads).toStrictEqual([
     {
-      kind: 'note',
-      path: expect.stringMatching(
-        new RegExp(`^${ctx.root}/\\.wringer/runs/.+-receipt\\.txt$`, 'u'),
-      ),
+      bytes: expect.any(Uint8Array),
+      filename: expect.stringMatching(/-receipt\.txt$/u),
+      contentType: 'text/plain',
+      label: 'shop/checkout',
       sha256: expect.any(String),
-      scrub: 'text',
     },
   ]);
 });
@@ -1122,10 +1137,10 @@ test('#report keeps an opaque file local and never passes it to the upload hook'
     .report.features.find((feature) => feature.name === 'checkout');
 
   expect({
-    uploaded: ctx.uploads.map((file) => file.kind),
+    uploaded: ctx.uploads.map((file) => file.contentType),
     urls: checkout?.verdict?.evidence.map((item) => [item.kind, item.url]),
   }).toStrictEqual({
-    uploaded: ['note'],
+    uploaded: ['text/plain'],
     urls: [
       ['note', 'https://files.example/receipt'],
       ['screenshot', undefined],
@@ -1181,3 +1196,27 @@ test.each([
     }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
   },
 );
+
+test('#done records the evidence setting of its target, and #report then uploads an opaque file', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.runOnUploadingTarget(['up']);
+  await ctx.runOnUploadingTarget(['doctor']);
+  await ctx.runOnUploadingTarget(['use'], { feature: 'checkout' });
+  await ctx.runOnUploadingTarget(['action', 'photo']);
+  await ctx.runOnUploadingTarget(['done']);
+  await ctx.runOnUploadingTarget(['report']);
+
+  const verdicts = await ctx.readVerdicts();
+
+  expect({
+    evidence: [...verdicts.values()].map((verdict) => verdict.target.evidence),
+    uploaded: ctx.uploads.map((file) => file.contentType),
+  }).toStrictEqual({
+    evidence: ['upload'],
+    uploaded: ['text/plain', 'image/png'],
+  });
+});

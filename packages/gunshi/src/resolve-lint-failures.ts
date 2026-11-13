@@ -64,6 +64,7 @@ export async function resolveLintFailures(input: LintInput): Promise<LintResult>
     failures: [
       ...pathFailures,
       ...collectRegistryFailures(input.wringer, input.registryFile),
+      ...collectUploadFailures(input.wringer),
       ...journeyFailures.filter((failure) => failure !== null),
       ...collectTemplateFailures(metadata, input.skillPath, input.templateVersion),
     ],
@@ -116,6 +117,22 @@ function collectRegistryFailures(
         'No shared glob and no feature `paths` glob matches the registry file, so a change to it leaves every verdict standing. Add the file to `.shared()`.',
     },
   ];
+}
+
+// A target that uploads its evidence needs the hook that does it, or `publish` fails.
+function collectUploadFailures(wringer: Wringer): readonly LintFailure[] {
+  if (wringer.hooks.upload !== undefined) {
+    return [];
+  }
+
+  return [...wringer.targets]
+    .filter(([, target]) => target.evidence === 'upload')
+    .map(([name]): LintFailure => ({
+      check: 'registry',
+      where: `target ${name}`,
+      problem:
+        "The target sets `evidence: 'upload'` and the registry has no `upload` hook. Add `.hook('upload', createHostUploader(…))`, or set `evidence: 'local'`.",
+    }));
 }
 
 function collectTemplateFailures(

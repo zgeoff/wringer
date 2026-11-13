@@ -9,6 +9,9 @@ export interface StatePaths {
 
   // The late failures of commands that ran with no run, whose log would otherwise take them.
   readonly lateFailures: string;
+
+  // The reuse record of uploaded evidence links.
+  readonly uploads: string;
 }
 
 export function buildStatePaths(stateDir: string): StatePaths {
@@ -18,6 +21,7 @@ export function buildStatePaths(stateDir: string): StatePaths {
     locks: join(stateDir, 'locks'),
     runs: join(stateDir, 'runs'),
     lateFailures: join(stateDir, 'late-failures.ndjson'),
+    uploads: join(stateDir, 'uploads.json'),
   };
 }
 

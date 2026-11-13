@@ -14,6 +14,8 @@ import { parseSecretsFile } from './parse-secrets-file.ts';
 import type { StoredSecret } from './parse-secrets-file.ts';
 import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
 import type { LateFailureEvent, RunEvent, RunID } from './run-events.ts';
+import { parseUploadRecord } from './upload-record.ts';
+import type { UploadRecord } from './upload-record.ts';
 import { WringerError } from './wringer-error.ts';
 
 export const pointersSchema = z.strictObject({
@@ -54,6 +56,11 @@ export interface StatePort {
   readonly appendSecret: (runID: RunID, secret: StoredSecret) => Promise<void>;
   readonly readSecrets: (runID: RunID) => Promise<readonly StoredSecret[]>;
   readonly removeSecrets: (runID: RunID) => Promise<void>;
+
+  // The reuse record of uploaded evidence links, `uploads.json`. Both take its lock; a write reads
+  // the record again under the lock, so two writers never lose each other's link.
+  readonly readUploads: () => Promise<UploadRecord>;
+  readonly writeUploads: (change: (current: UploadRecord) => UploadRecord) => Promise<void>;
 }
 
 export interface FileStateOptions {
@@ -219,6 +226,24 @@ export function createFileState(options: FileStateOptions): StatePort {
 
       return parseSecretsFile(text ?? '');
     },
+    readUploads: () =>
+      withLock('uploads.lock', async () => {
+        const text = await fs.readText(paths.uploads);
+
+        return parseUploadRecord(text);
+      }),
+    writeUploads: (change) =>
+      withLock('uploads.lock', async () => {
+        const stored = await fs.readText(paths.uploads);
+
+        const next = change(parseUploadRecord(stored));
+
+        await fs.createDirectory(paths.root);
+
+        const text = `${JSON.stringify(next, null, 2)}\n`;
+
+        await fs.writeTextAtomic(paths.uploads, text);
+      }),
     removeSecrets: (runID) => {
       const runPaths = buildRunPaths(options.stateDir, runID);
 

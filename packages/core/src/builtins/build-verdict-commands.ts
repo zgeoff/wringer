@@ -4,12 +4,10 @@ import { buildChangeFactsRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
 import type { Evidence } from '../envelope.ts';
-import { pickUploadRefusal } from '../pick-upload-refusal.ts';
 import { readChangeFacts } from '../read-change-facts.ts';
 import type { ChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { readRunSecrets } from '../read-run-secrets.ts';
-import { readUploadCandidate } from '../read-upload-candidate.ts';
 import { doneCommand, readVerdicts } from '../read-verdicts.ts';
 import { renderReportMarkdown } from '../render-report-markdown.ts';
 import { parseReportComment } from '../report-comment.ts';
@@ -24,6 +22,7 @@ import {
 import type { Claim, Report, Verdict } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
+import { uploadEvidence } from '../upload-evidence.ts';
 import { WringerError } from '../wringer-error.ts';
 
 const doneArgsSchema = z.strictObject({
@@ -166,7 +165,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     featureFingerprint: scopeFacts.featureFingerprints.get(feature) ?? treeFingerprint,
     run: ctx.run.runID,
     at: ctx.now().toISOString(),
-    target: { name: ctx.targetName, evidence: 'local' },
+    target: { name: ctx.targetName, evidence: ctx.target.evidence ?? 'local' },
     pin: ctx.target.mode === 'launch' ? { kind: 'local' } : { kind: 'unpinned' },
     evidence: drives.flatMap((envelope) => envelope.evidence),
   };
@@ -208,15 +207,14 @@ function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<s
   return readDefaultBase(ctx.session.repoHost, ctx.session.root);
 }
 
-// The repo's upload hook turns each local evidence file into a link. The guard picks every refusal
-// before the hook gets the first file. A refused file stays local, with no link, except a file with
-// a known secret in it: the scrubber missed it, so the command fails.
+// The repo's uploader turns each local evidence file into a link, behind the upload guard: a refused
+// file stays local, with no link, except a file with a known secret in it, which fails the command.
 async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report> {
   await readSecretsOfVerdicts(ctx, report);
 
-  const upload = ctx.wringer.hooks.upload;
+  const uploader = ctx.wringer.hooks.upload;
 
-  if (upload === undefined) {
+  if (uploader === undefined) {
     return report;
   }
 
@@ -224,56 +222,50 @@ async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report
     feature.verdict === null || feature.status !== 'verified' ? [] : [feature.verdict],
   );
 
-  const checked = await Promise.all(
-    verdicts.flatMap((verdict) =>
-      verdict.evidence.map(async (evidence) => {
-        const candidate = await readUploadCandidate(evidence, {
-          root: ctx.session.root,
-          stateDir: ctx.stateDir,
-          files: ctx.session.repoHost,
-        });
-
-        // The report cannot tell a verdict's target, so every opaque file stays local here.
-        return {
-          evidence,
-          refusal: pickUploadRefusal(candidate, { targetUploads: false, secrets: ctx.secrets }),
-        };
-      }),
-    ),
+  const items = verdicts.flatMap((verdict) =>
+    verdict.evidence.map((evidence) => ({
+      evidence,
+      targetUploads:
+        verdict.target.evidence === 'upload' &&
+        ctx.wringer.targets.get(verdict.target.name)?.evidence === 'upload',
+      label: `${ctx.wringer.name}/${verdict.feature}`,
+    })),
   );
 
-  const found = checked.find((item) => item.refusal?.reason === 'secret-found');
+  const outcomes = await uploadEvidence(items, {
+    uploader,
+    state: ctx.state,
+    files: ctx.session.repoHost,
+    root: ctx.session.root,
+    stateDir: ctx.stateDir,
+    secrets: ctx.secrets,
+    now: ctx.now,
+    signal: ctx.signal,
+  });
 
-  if (found !== undefined) {
-    throw new WringerError('internal', {
-      message: `The file ${found.evidence.path} holds a known secret, so no file was uploaded.`,
-      hint: 'The scrubber missed it. Remove the run folder, and report the bug.',
+  const urls = new Map<Evidence, string>();
+
+  items.forEach((item, index) => {
+    const outcome = outcomes[index];
+
+    if (outcome?.kind === 'linked') {
+      urls.set(item.evidence, outcome.link.url);
+    }
+  });
+
+  const features = report.features.map((feature) => {
+    if (feature.verdict === null || feature.status !== 'verified') {
+      return feature;
+    }
+
+    const evidence = feature.verdict.evidence.map((item) => {
+      const url = urls.get(item);
+
+      return url === undefined ? item : { ...item, url };
     });
-  }
 
-  const refused = new Set(
-    checked.filter((item) => item.refusal !== null).map((item) => item.evidence),
-  );
-
-  const link = async (evidence: Evidence): Promise<Evidence & { readonly url?: string }> =>
-    refused.has(evidence)
-      ? evidence
-      : {
-          ...evidence,
-          url: await upload({ ...evidence, path: join(ctx.session.root, evidence.path) }),
-        };
-
-  const features = await Promise.all(
-    report.features.map(async (feature) => {
-      if (feature.verdict === null || feature.status !== 'verified') {
-        return feature;
-      }
-
-      const evidence = await Promise.all(feature.verdict.evidence.map((item) => link(item)));
-
-      return { ...feature, verdict: { ...feature.verdict, evidence } };
-    }),
-  );
+    return { ...feature, verdict: { ...feature.verdict, evidence } };
+  });
 
   return { ...report, features };
 }

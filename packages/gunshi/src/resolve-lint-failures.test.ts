@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { createWringer, local } from '@wringer/core';
 import { resolveLintFailures } from './resolve-lint-failures.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
@@ -310,4 +311,49 @@ test.each([
   });
 
   expect(result.failures).toStrictEqual([]);
+});
+
+test('it fails a target that uploads its evidence when the registry has no upload hook', async () => {
+  const wringer = createWringer({ name: 'demo' })
+    .target('preview', { mode: 'attach', access: 'read-only', evidence: 'upload', host: local() })
+    .build();
+
+  const result = await resolveLintFailures({
+    wringer,
+    files: [],
+    skillPath: 'skill/SKILL.md',
+    registryFile: null,
+    skillFiles: [],
+    templateVersion: 4,
+  });
+
+  expect(result.failures.filter((failure) => failure.check === 'registry')).toStrictEqual([
+    {
+      check: 'registry',
+      where: 'target preview',
+      problem: expect.stringContaining('no `upload` hook'),
+    },
+  ]);
+});
+
+test('it passes a target that uploads its evidence when the registry has the upload hook', async () => {
+  const wringer = createWringer({ name: 'demo' })
+    .target('preview', { mode: 'attach', access: 'read-only', evidence: 'upload', host: local() })
+    .hook('upload', {
+      maxURLLength: 512,
+      linkHosts: ['files.example'],
+      upload: () => Promise.reject(new Error('unused')),
+    })
+    .build();
+
+  const result = await resolveLintFailures({
+    wringer,
+    files: [],
+    skillPath: 'skill/SKILL.md',
+    registryFile: null,
+    skillFiles: [],
+    templateVersion: 4,
+  });
+
+  expect(result.failures.filter((failure) => failure.check === 'registry')).toStrictEqual([]);
 });
