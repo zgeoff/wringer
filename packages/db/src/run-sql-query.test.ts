@@ -30,6 +30,28 @@ async function setupTest() {
     refusingPostgres.stop();
   });
 
+  // A server that accepts a connection and never writes to it.
+  const stalledSockets = { open: 0, accepted: 0 };
+
+  const stalledServer = Bun.listen({
+    hostname: '127.0.0.1',
+    port: 0,
+    socket: {
+      open: () => {
+        stalledSockets.open += 1;
+        stalledSockets.accepted += 1;
+      },
+      close: () => {
+        stalledSockets.open -= 1;
+      },
+      data: () => {},
+    },
+  });
+
+  onTestFinished(() => {
+    stalledServer.stop(true);
+  });
+
   const cancelFailures: string[] = [];
   const waits: number[] = [];
 
@@ -59,6 +81,7 @@ async function setupTest() {
     file,
     cancelFailures,
     waits,
+    stalledSockets,
     postgresStatements: postgres.statements,
     refusingPostgresStatements: refusingPostgres.statements,
     runPostgresQuery: (
@@ -89,6 +112,42 @@ async function setupTest() {
           timeLeftMs,
         },
         unpreparedClients,
+      ),
+    runOnStalledPostgres: (signal: AbortSignal) =>
+      runSQLQuery(
+        {
+          adapter: 'postgres',
+          url: `postgres://127.0.0.1:${stalledServer.port}/shop`,
+          sql: 'select 1',
+          params: [],
+          write: false,
+          signal,
+          timeLeftMs: () => 60_000,
+        },
+        clients,
+      ),
+    runWithStalledCancel: (sql: string, signal: AbortSignal) =>
+      runSQLQuery(
+        {
+          adapter: 'postgres',
+          url: postgres.url,
+          sql,
+          params: [],
+          write: true,
+          signal,
+          timeLeftMs: () => 60_000,
+        },
+        {
+          ...clients,
+
+          // The cancel session reaches a server that never answers it.
+          openPostgres: (url, sessionName) => {
+            const stalledURL = `postgres://127.0.0.1:${stalledServer.port}/shop`;
+            const target = sessionName.endsWith('-cancel') ? stalledURL : url;
+
+            return clients.openPostgres(target, sessionName);
+          },
+        },
       ),
     runOnRefusingPostgres: (sql: string, signal: AbortSignal) =>
       runSQLQuery(
@@ -384,4 +443,91 @@ test('it still counts the rows a write changed', async () => {
   const result = await ctx.runQuery("update notes set text = 'done'", { write: true });
 
   expect(result.rowCount).toBe(2);
+});
+
+test('it ends a Postgres query against a server that never answers by its deadline', async () => {
+  const ctx = await setupTest();
+
+  const startedAt = performance.now();
+
+  const failure = await ctx
+    .runOnStalledPostgres(AbortSignal.timeout(500))
+    .catch((error: unknown) => error);
+
+  const elapsedMs = performance.now() - startedAt;
+
+  expect({ failure, onTime: elapsedMs < 1500 }).toStrictEqual({
+    failure: expect.objectContaining({ code: 'timeout' }),
+    onTime: true,
+  });
+});
+
+test('it ends a cancel attempt against a server that never answers within its bound', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  // The sleep ends only when the server stops, so the test leaves it running.
+  void Promise.allSettled([ctx.runWithStalledCancel('select pg_sleep(60)', controller.signal)]);
+
+  await waitFor(() => {
+    invariant(
+      ctx.postgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)'),
+      'The sleep has not reached postgres yet.',
+    );
+  });
+
+  controller.abort();
+
+  await waitFor(
+    () => {
+      invariant(ctx.cancelFailures.length > 0, 'No cancel attempt has ended yet.');
+    },
+    { timeoutMs: 4000 },
+  );
+
+  expect(ctx.cancelFailures).toStrictEqual([expect.stringContaining('timed out')]);
+});
+
+test('it closes the socket of a connect that the deadline cut off', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runOnStalledPostgres(AbortSignal.timeout(300)).catch(() => null);
+
+  await waitFor(
+    () => {
+      invariant(ctx.stalledSockets.accepted === 1, 'The connect has not reached the server yet.');
+      invariant(ctx.stalledSockets.open === 0, 'A socket of the cut-off connect is still open.');
+    },
+    { timeoutMs: 1000 },
+  );
+
+  expect(ctx.stalledSockets).toStrictEqual({ open: 0, accepted: 1 });
+});
+
+test('it starts a second cancel attempt within the attempt and close bounds', async () => {
+  const ctx = await setupTest();
+
+  const controller = new AbortController();
+
+  void Promise.allSettled([ctx.runWithStalledCancel('select pg_sleep(60)', controller.signal)]);
+
+  await waitFor(() => {
+    invariant(
+      ctx.postgresStatements.some((statement) => statement.sql === 'select pg_sleep(60)'),
+      'The sleep has not reached postgres yet.',
+    );
+  });
+
+  controller.abort();
+
+  // Two bounds of 2 s each end the first attempt and its close.
+  await waitFor(
+    () => {
+      invariant(ctx.stalledSockets.accepted >= 2, 'No second cancel attempt has started yet.');
+    },
+    { timeoutMs: 4800 },
+  );
+
+  expect(ctx.stalledSockets.accepted).toBeGreaterThanOrEqual(2);
 });

@@ -11,6 +11,7 @@ import type { DbResult, Row } from './db-result-schema.ts';
 import { initialCancelState, pickCancelStep } from './pick-cancel-step.ts';
 import type { CancelEvent } from './pick-cancel-step.ts';
 import { pickStatementTimeoutStep } from './pick-statement-timeout-step.ts';
+import { runUntilAbort } from './run-until-abort.ts';
 import { toSafeInteger } from './to-safe-integer.ts';
 
 // A write opens an existing file read-write, so a mistyped path fails, never makes a new database.
@@ -112,6 +113,10 @@ function readChanges(database: Database): number {
   return Number(changesSchema.parse(database.query('select changes() as count').get()).count);
 }
 
+// Bun.SQL reads a close timeout in seconds, and 0 means no timeout, so this is the shortest wait
+// that still destroys the sockets.
+const forceClose = { timeout: 0.05 };
+
 interface QueryProgress {
   settled: boolean;
 }
@@ -122,6 +127,7 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
   const sessionName = `wringer-${randomUUID()}`;
   const client = clients.openPostgres(input.url, sessionName);
   const progress: QueryProgress = { settled: false };
+  let connected = false;
 
   const cancel = (): void => {
     void runCancelLoop(clients, input.url, sessionName, progress);
@@ -130,7 +136,16 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
   try {
     // A statement queued while the connection opens runs once it is up, before a cancel could see
     // it, so the deadline is checked once the connection is up, and the cancel listens from then.
-    await client.connect();
+    await runUntilAbort(
+      client.connect(),
+      input.signal,
+      () =>
+        new WringerError('timeout', {
+          message: 'The database did not accept the connection before the deadline.',
+        }),
+    );
+
+    connected = true;
 
     input.signal.addEventListener('abort', cancel, { once: true });
 
@@ -160,7 +175,13 @@ async function runPostgresQuery(input: SQLQueryInput, clients: SQLClients): Prom
 
     input.signal.removeEventListener('abort', cancel);
 
-    await client.close();
+    if (connected) {
+      await client.close();
+    } else {
+      // A graceful close waits on the server that stalled the connect and leaves the socket open,
+      // so a force close destroys it, and the close runs on without the caller.
+      void Promise.allSettled([client.close(forceClose)]);
+    }
   }
 }
 
@@ -219,11 +240,24 @@ async function runCancelLoop(
   }
 }
 
+// A cancel session against a server that accepts and never answers would hold the loop for good.
+const cancelAttemptBoundMs = 2000;
+
 // Nothing awaits the loop, so a failed close is reported, never thrown.
 async function closeSession(clients: SQLClients, session: SQL | null): Promise<void> {
+  if (session === null) {
+    return;
+  }
+
   try {
-    await session?.close();
+    await runUntilAbort(
+      session.close(),
+      AbortSignal.timeout(cancelAttemptBoundMs),
+      () => new Error('the close timed out'),
+    );
   } catch (error) {
+    // The graceful close that timed out leaves the socket open, so this one destroys it.
+    void Promise.allSettled([session.close(forceClose)]);
     clients.reportCancelFailure(`The cancel session could not be closed: ${String(error)}`);
   }
 }
@@ -243,7 +277,11 @@ async function runCancelAttempt(
   try {
     session.canceller ??= clients.openPostgres(target.url, `${target.sessionName}-cancel`);
 
-    await session.canceller.unsafe(cancelSQL, [target.sessionName]);
+    await runUntilAbort(
+      session.canceller.unsafe(cancelSQL, [target.sessionName]),
+      AbortSignal.timeout(cancelAttemptBoundMs),
+      () => new Error(`The cancel attempt timed out after ${cancelAttemptBoundMs} ms.`),
+    );
 
     return { kind: 'cancelled' };
   } catch (error) {
