@@ -58,12 +58,18 @@ async function setupTest() {
     verifyCheckout: async (action: string) => {
       await mkdir(join(shop.repo.root, 'src', 'checkout'), { recursive: true });
       await writeFile(join(shop.repo.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
-      await run(['up']);
+
+      const up = await run(['up']);
+
       await run(['doctor']);
       await run(['use'], { feature: 'checkout' });
       await run(['action', action]);
       await run(['done']);
+
+      return up.envelope.instance ?? '';
     },
+    keepSecret: (runID: string, name: string, value: string) =>
+      shop.state.appendSecret(runID, { name, value }),
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
@@ -617,3 +623,24 @@ test('#report fails with an internal error before it sends any file when one hol
     uploads: ctx.uploads,
   }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
 });
+
+test.each([
+  { name: 'notes.apiToken', value: 'for the cart' },
+  { name: 'notes.url', value: 'paid 12 for' },
+])(
+  '#report refuses an upload that holds the driver config secret $name that a drive kept',
+  async (secret) => {
+    const ctx = await setupTest();
+    const runID = await ctx.verifyCheckout('photo');
+
+    await ctx.keepSecret(runID, secret.name, secret.value);
+
+    const result = await ctx.runWithUpload(['report']);
+
+    expect({
+      code: result.envelope.error?.code,
+      exitCode: result.exitCode,
+      uploads: ctx.uploads,
+    }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
+  },
+);

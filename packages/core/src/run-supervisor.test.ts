@@ -138,7 +138,9 @@ async function setupTest() {
       login: {
         start: () =>
           Promise.reject(
-            new Error('login rejected for planted-launch-token via planted-kept-value'),
+            new Error(
+              'login rejected for planted-launch-token via planted-kept-value as driver-config-token on driver-url-pass',
+            ),
           ),
       },
     },
@@ -1093,6 +1095,30 @@ test('#runSupervisor scrubs a secret that a command kept in the secrets file bef
     type: 'crashed',
     at: expect.any(String),
     reason: expect.stringContaining('via [redacted:notes.session]'),
+  });
+});
+
+test('#runSupervisor scrubs a driver config token and a URL password that a drive kept from the crashed event and the log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('config-run');
+  await ctx.keepSecret('config-run', { name: 'notes.apiToken', value: 'driver-config-token' });
+  await ctx.keepSecret('config-run', { name: 'notes.url', value: 'driver-url-pass' });
+  await Promise.allSettled([ctx.runSupervisor('config-run', undefined, 'secret-box')]);
+
+  const events = await ctx.readRunEvents('config-run');
+  const log = await ctx.readLog('config-run');
+
+  expect({
+    crashed: events.find((event) => event.type === 'crashed'),
+    leaked: /driver-config-token|driver-url-pass/u.test(`${JSON.stringify(events)}${log}`),
+  }).toStrictEqual({
+    crashed: {
+      type: 'crashed',
+      at: expect.any(String),
+      reason: expect.stringContaining('as [redacted:notes.apiToken] on [redacted:notes.url]'),
+    },
+    leaked: false,
   });
 });
 
