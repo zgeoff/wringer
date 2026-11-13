@@ -1,7 +1,8 @@
-import { expect, test } from 'bun:test';
+import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { dispatch, reportSchema } from '@wringer/core';
+import { createFileHostStandIn } from '@wringer/core/test-utils/create-file-host-stand-in.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
@@ -12,8 +13,40 @@ async function setupTest() {
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
 
+  // The uploader reads the process environment when it is used, so a test sets the variables and
+  // gets them restored.
+  const restores: (() => void)[] = [];
+
+  const setEnv = (values: Readonly<Record<string, string | undefined>>) => {
+    for (const [key, value] of Object.entries(values)) {
+      const before = process.env[key];
+
+      restores.push(() => {
+        if (before === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = before;
+        }
+      });
+
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+
+  onTestFinished(() => {
+    for (const restore of restores) {
+      restore();
+    }
+  });
+
   return {
+    setEnv,
     registry,
+    session: shop.session,
     root: shop.repo.root,
     writeFiles: async (paths: readonly string[]) => {
       for (const path of paths) {
@@ -142,4 +175,81 @@ test('it marks every feature changed after a change only to a shared file', asyn
     changed: report.features.map((feature) => feature.changed),
     complete: report.complete,
   }).toStrictEqual({ changed: report.features.map(() => true), complete: false });
+});
+
+test('it uploads the evidence of the local target and keeps the demo target local', () => {
+  const registry = createWringerRegistry();
+
+  expect(
+    [...registry.targets.entries()].map(([name, target]) => [name, target.evidence ?? 'local']),
+  ).toStrictEqual([
+    ['local', 'upload'],
+    ['demo', 'local'],
+  ]);
+});
+
+test('it keeps the evidence of every shop registry target local and registers no uploader', () => {
+  const registry = createShopRegistry();
+
+  expect({
+    evidence: [...registry.targets.values()].map((target) => target.evidence ?? 'local'),
+    uploader: registry.hooks.upload,
+  }).toStrictEqual({ evidence: ['local', 'local'], uploader: undefined });
+});
+
+test('it links a verdict on local to the file host, with the token and the registry label', async () => {
+  const token = 'planted-upload-token';
+  const host = createFileHostStandIn({ token });
+
+  const ctx = await setupTest();
+
+  ctx.setEnv({ VERIFY_UPLOAD_URL: host.url, VERIFY_UPLOAD_TOKEN: token });
+
+  await ctx.writeFiles(['packages/http/src/send-request.ts']);
+
+  const run = (path: readonly string[], args: unknown = {}) =>
+    dispatch(ctx.registry, path, args, { ...ctx.session, target: 'local' });
+
+  await run(['up']);
+  await run(['doctor']);
+  await run(['use'], { feature: 'http-driver' });
+  await run(['action', 'place-order']);
+  await run(['done']);
+
+  const result = await run(['report']);
+
+  const httpDriver = z
+    .strictObject({ report: reportSchema })
+    .loose()
+    .parse(result.envelope.data)
+    .report.features.find((feature) => feature.name === 'http-driver');
+
+  expect({
+    verified: httpDriver?.status,
+    urls: httpDriver?.verdict?.evidence.map((item) =>
+      item.url?.startsWith(`https://${host.host}/`),
+    ),
+    authorizations: new Set(host.uploads.map((upload) => upload.authorization)),
+    labels: new Set(host.uploads.map((upload) => upload.label)),
+  }).toStrictEqual({
+    verified: 'verified',
+    urls: expect.arrayContaining([true]),
+    authorizations: new Set([`Bearer ${token}`]),
+    labels: new Set(['wringer/http-driver']),
+  });
+});
+
+test('it needs neither upload variable for a command that uploads nothing', async () => {
+  const ctx = await setupTest();
+
+  ctx.setEnv({ VERIFY_UPLOAD_URL: undefined, VERIFY_UPLOAD_TOKEN: undefined });
+
+  const result = await dispatch(
+    ctx.registry,
+    ['features'],
+    {},
+    { ...ctx.session, target: 'local' },
+  );
+
+  expect(result.envelope.ok).toBeTrue();
 });
