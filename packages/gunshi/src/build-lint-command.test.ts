@@ -1,7 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createNodeRepoHost, createRepoState, envelopeSchema } from '@wringer/core';
+import {
+  createNodePullRequestHost,
+  createNodeRepoHost,
+  createRepoState,
+  envelopeSchema,
+} from '@wringer/core';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { buildLintedWringer } from './build-linted-wringer.ts';
 import { readRepoRoot } from './read-repo-root.ts';
@@ -29,6 +34,7 @@ async function setupTest() {
     openRepo: (root: string) => ({
       state: createRepoState(root, wringer.stateDir),
       repoHost: createNodeRepoHost(),
+      pullRequests: createNodePullRequestHost(root),
       supervisor: {
         start: () => Promise.reject(new Error('lint starts no supervisor')),
         call: () => Promise.reject(new Error('lint calls no supervisor')),

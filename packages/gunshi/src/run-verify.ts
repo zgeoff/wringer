@@ -1,4 +1,5 @@
 import {
+  createNodePullRequestHost,
   createNodeRepoHost,
   createRepoState,
   makeProcessSupervisorPort,
@@ -38,6 +39,7 @@ export async function runVerify(wringer: Wringer, options: VerifyOptions = {}): 
       openRepo: (root) => ({
         state: createRepoState(root, wringer.stateDir),
         repoHost: createNodeRepoHost(),
+        pullRequests: createNodePullRequestHost(root),
         supervisor: makeProcessSupervisorPort({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
       runSupervisor: runSupervisorProcess,

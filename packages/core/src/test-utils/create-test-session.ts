@@ -7,6 +7,7 @@ import { readLaunchHost } from '../read-launch-host.ts';
 import { runSupervisor } from '../run-supervisor.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
 import type { Session, Wringer } from '../types.ts';
+import { createFakePullRequestHost } from './create-fake-pull-request-host.ts';
 import { createTestRepo } from './create-test-repo.ts';
 import type { TestRepo } from './create-test-repo.ts';
 
@@ -62,6 +63,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
       root: repo.root,
       state,
       repoHost: createNodeRepoHost(),
+      pullRequests: createFakePullRequestHost([]),
       output: {
         writeLine: (line) => {
           lines.push(line);
