@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { buildAppURL } from './build-app-url.ts';
 import { callPage } from './call-page.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
+import { makeChromiumLauncher } from './make-chromium-launcher.ts';
 import { pageStateSchema, snapshotSchema } from './page-service-contract.ts';
 import type { ElementTarget, PageArgs } from './page-service-contract.ts';
 import { pickBrowserEffect } from './pick-browser-effect.ts';
@@ -88,13 +89,10 @@ export const browser = defineDriver({
     page: {
       start: (ctx) =>
         startBrowserPage({
-          launchBrowser: () =>
-            chromium.launch({
-              headless: true,
-              ...(ctx.options.executablePath === undefined
-                ? {}
-                : { executablePath: ctx.options.executablePath }),
-            }),
+          launchBrowser: makeChromiumLauncher(
+            (options) => chromium.launch(options),
+            ctx.options.executablePath,
+          ),
           actionTimeoutMs: ctx.options.actionTimeoutMs,
 
           // The supervisor holds the page, and its stderr goes to the supervisor's log.
