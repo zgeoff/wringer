@@ -1,4 +1,4 @@
-import type { UploadedLink } from './types.ts';
+import type { UploadedLink } from './evidence-uploader.ts';
 import type { UploadRecord } from './upload-record.ts';
 
 const minimumLeftMs = 7 * 24 * 60 * 60 * 1000;

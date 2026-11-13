@@ -334,19 +334,25 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
 - `done` records the feature's fingerprint at the base `--base` names, or at the default base. The
   launch check compares two default-base fingerprints, and `gate` compares the recorded one with its
   own at its `--base`, so neither compares across bases.
+- A `revision` that throws a plain error fails as `environment`.
 - On an attach target with `revision`, `doctor` runs it as one more check, named `revision`, on the
   same read-only drive, within 5 s. Each value is trimmed and lowercased first. The check fails when
-  `revision` throws, times out, or returns anything other than 7 to 64 hex characters. The doctor
-  writes `revision-read` only when every check passes, just before `doctor-passed`.
-- `done` reads the latest `revision-read` written after the latest `doctor-passed`, and calls
-  `revision` once more on a read-only drive, within 5 s. `done` refuses in each of these cases:
+  `revision` throws, times out, returns anything other than 7 to 64 hex characters, or returns a
+  value that holds a known secret, as [Redaction](redaction.md) says. The doctor writes
+  `revision-read` only when every check passes, just before `doctor-passed`.
+- The registry builder refuses a repo check named `revision` when an attach target declares
+  `revision`, with a `usage` error.
+- `done` reads the `revision-read` that the latest `doctor-passed` follows, and calls `revision`
+  once more on a read-only drive, within 5 s. A `doctor-passed` or `doctor-failed` with no
+  `revision-read` before it clears the value. `done` refuses in each of these cases:
   - The run has no such `revision-read`. The hint is to run `doctor`.
   - The call throws or times out. The hint is to check the target, then run `done` again.
-  - The two values resolve to different full commit ids, or either fails to resolve. The hint is to
-    run `doctor` and drive the feature again.
-  - `git rev-parse --verify --end-of-options <revision>^{commit}` fails, which refuses a tag object,
-    a tree, an ambiguous prefix and a commit the clone lacks alike. The hint is
-    `git fetch origin <revision>`.
+  - The two values differ as text, and they resolve to different full commit ids or either fails to
+    resolve. The hint is to run `doctor` and drive the feature again.
+  - The value is the same as the doctor's, or the two spellings name one commit, and
+    `git rev-parse --verify --end-of-options <revision>` and the same with `^{commit}` appended do
+    not both succeed with one id. That refuses a tag object, a tree, an ambiguous prefix and a
+    commit the clone lacks alike. The hint is `git fetch origin <revision>`.
   - A path in the feature's scope differs between that commit and the isolated index. The message
     lists up to 10 such paths.
 - `deployedPaths` compares every path either side holds, deletions included, and leaves out each

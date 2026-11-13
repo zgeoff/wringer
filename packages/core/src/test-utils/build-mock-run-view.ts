@@ -17,6 +17,7 @@ export function buildMockRunView(overrides: Partial<RunView> = {}): RunView {
     supervisor: null,
     doctor: 'passed',
     doctorResults: [],
+    revisionRead: null,
     drivesAfterDoctor: [],
     ...overrides,
   };

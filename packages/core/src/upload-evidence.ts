@@ -2,13 +2,14 @@ import { buildUploadNames } from './build-upload-names.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { SecretSet } from './create-secret-set.ts';
 import type { Evidence } from './envelope.ts';
+import type { EvidenceUploader, UploadedLink } from './evidence-uploader.ts';
 import { pickContentType } from './pick-content-type.ts';
 import { pickLinkFailure } from './pick-link-failure.ts';
 import { pickReusableLink } from './pick-reusable-link.ts';
 import { pickUploadRefusal } from './pick-upload-refusal.ts';
 import type { UploadCandidate, UploadRefusal } from './pick-upload-refusal.ts';
 import { readUploadCandidate } from './read-upload-candidate.ts';
-import type { EvidenceFiles, EvidenceUploader, UploadedLink } from './types.ts';
+import type { EvidenceFiles } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface UploadItem {

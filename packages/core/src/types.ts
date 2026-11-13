@@ -5,6 +5,7 @@ import type { SupervisorCall } from './call-supervisor.ts';
 import type { StatePort } from './create-file-state.ts';
 import type { Secret, SecretSet } from './create-secret-set.ts';
 import type { Evidence } from './envelope.ts';
+import type { EvidenceUploader } from './evidence-uploader.ts';
 import type { Access, Host } from './host.ts';
 import type { LaunchLine } from './launch-line-schema.ts';
 import type { ChangeFactsHost } from './read-change-facts.ts';
@@ -317,43 +318,6 @@ export interface FeatureDefinition {
   readonly paths: readonly string[];
 }
 
-export interface UploadFile {
-  readonly bytes: Uint8Array;
-
-  // Core builds it: `[A-Za-z0-9._-]`, 100 characters at most.
-  readonly filename: string;
-  readonly contentType: string;
-
-  // `<registry name>/<feature>`.
-  readonly label: string;
-  readonly sha256: string;
-}
-
-export interface UploadedLink {
-  readonly url: string;
-
-  // An ISO time, or null for a link that never expires.
-  readonly expiresAt: string | null;
-}
-
-export interface EvidenceUploader {
-  // The longest link, once percent-encoded and HTML-escaped, that core accepts.
-  readonly maxURLLength: number;
-
-  // The hosts core accepts in a returned link. The first one keys the reuse record.
-  readonly linkHosts: readonly string[];
-
-  // Throws an `environment` error, naming the variable, when the uploader's configuration is
-  // missing. Core calls it before it reads the PR or sends a file.
-  readonly assertReady?: (() => void) | undefined;
-
-  // The secrets the uploader holds, such as its token. Core adds them to the secret set of every
-  // command and of the run supervisor before any command runs, so the scrubber and the upload guard
-  // know them whatever their name. It never throws: a secret not yet set is left out.
-  readonly readSecrets?: (() => readonly Secret[]) | undefined;
-  readonly upload: (file: UploadFile, signal: AbortSignal) => Promise<UploadedLink>;
-}
-
 export interface HookHandlers {
   readonly upload: EvidenceUploader;
 }
@@ -391,15 +355,29 @@ export interface LaunchTarget<Ds extends AnyDrivers> extends TargetBase<Ds> {
   readonly endpoints?: never;
 }
 
+export interface RevisionContext<Ds extends AnyDrivers> {
+  readonly target: string;
+  readonly endpoints: Endpoints;
+  readonly drivers: DriverClients<Ds>;
+
+  // Fires after 5 s.
+  readonly signal: AbortSignal;
+}
+
 export interface AttachTarget<Ds extends AnyDrivers> extends TargetBase<Ds> {
   readonly mode: 'attach';
   readonly endpoints?: ((ctx: EndpointsContext) => Endpoints | Promise<Endpoints>) | undefined;
+
+  // The commit the deployment runs: 7 to 64 hex characters.
+  readonly revision?: ((ctx: RevisionContext<Ds>) => string | Promise<string>) | undefined;
   readonly launch?: never;
 }
 
 export type TargetDefinition<Ds extends AnyDrivers = AnyDrivers> =
   | LaunchTarget<Ds>
   | AttachTarget<Ds>;
+
+export type RevisionFunction = NonNullable<AttachTarget<AnyDrivers>['revision']>;
 
 export interface Drive {
   readonly ctx: DriveContext;

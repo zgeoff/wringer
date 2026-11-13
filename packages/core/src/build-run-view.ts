@@ -28,12 +28,20 @@ export interface RunView {
   readonly supervisor: SupervisorInfo | null;
   readonly doctor: DoctorState;
   readonly doctorResults: readonly CheckResult[];
+
+  // The revision the latest passed doctor read from the deployment, or null when it read none.
+  readonly revisionRead: string | null;
   readonly drivesAfterDoctor: readonly Envelope[];
 }
 
 export interface BuildRunViewInput {
   readonly runID: RunID;
   readonly events: readonly RunEvent[];
+}
+
+interface FoldState {
+  readonly view: RunView;
+  readonly pendingRevision: string | null;
 }
 
 export function buildRunView(input: BuildRunViewInput): RunView | undefined {
@@ -58,13 +66,24 @@ export function buildRunView(input: BuildRunViewInput): RunView | undefined {
     supervisor: null,
     doctor: 'none',
     doctorResults: [],
+    revisionRead: null,
     drivesAfterDoctor: [],
   };
 
-  return rest.reduce((view, event) => buildNextRunView(view, event), initial);
+  // The doctor writes `revision-read` just before its verdict event, so the value waits here until
+  // that event claims it.
+  const start: FoldState = { view: initial, pendingRevision: null };
+
+  return rest.reduce<FoldState>(
+    (state, event) => ({
+      view: buildNextRunView(state.view, event, state.pendingRevision),
+      pendingRevision: pickPendingRevision(state.pendingRevision, event),
+    }),
+    start,
+  ).view;
 }
 
-function buildNextRunView(view: RunView, event: RunEvent): RunView {
+function buildNextRunView(view: RunView, event: RunEvent, pendingRevision: string | null): RunView {
   const moved = buildMovedRunView(view, event);
 
   return match(event)
@@ -88,12 +107,14 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
       ...moved,
       doctor: 'passed',
       doctorResults: doctor.results,
+      revisionRead: pendingRevision,
       drivesAfterDoctor: [],
     }))
     .with({ type: 'doctor-failed' }, (doctor) => ({
       ...moved,
       doctor: 'failed',
       doctorResults: doctor.results,
+      revisionRead: null,
       drivesAfterDoctor: [],
     }))
     .with({ type: 'envelope' }, (logged) =>
@@ -110,6 +131,7 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
     .with(
       { type: 'run-started' },
       { type: 'run-ready' },
+      { type: 'revision-read' },
       { type: 'internal-error' },
       { type: 'late-failure' },
       () => moved,
@@ -125,4 +147,12 @@ function buildMovedRunView(view: RunView, event: RunEvent): RunView {
   }
 
   return { ...view, status: next };
+}
+
+function pickPendingRevision(pending: string | null, event: RunEvent): string | null {
+  if (event.type === 'revision-read') {
+    return event.revision;
+  }
+
+  return event.type === 'doctor-passed' || event.type === 'doctor-failed' ? null : pending;
 }

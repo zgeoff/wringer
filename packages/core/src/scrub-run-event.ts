@@ -3,8 +3,9 @@ import type { SecretSet } from './create-secret-set.ts';
 import type { RunEvent } from './run-events.ts';
 import { scrubEnvelope } from './scrub-envelope.ts';
 
-// Later commands read back a `launch-ready` event's endpoints and a `scopes-read` event's feature
-// names, so both stay unscrubbed: core refuses an endpoint or a feature name that holds a secret.
+// Later commands read back a `launch-ready` event's endpoints, a `scopes-read` event's feature names
+// and a `revision-read` event's revision, so all three stay unscrubbed: core refuses an endpoint, a
+// feature name or a revision that holds a secret.
 export function scrubRunEvent(event: RunEvent, secrets: SecretSet): RunEvent {
   return match(event)
     .returnType<RunEvent>()
@@ -40,6 +41,7 @@ export function scrubRunEvent(event: RunEvent, secrets: SecretSet): RunEvent {
       { type: 'service-ready' },
       { type: 'run-ready' },
       { type: 'scopes-read' },
+      { type: 'revision-read' },
       { type: 'run-ended' },
       (unchanged) => unchanged,
     )

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createHostUploader } from './create-host-uploader.ts';
+import type { UploadFile } from './evidence-uploader.ts';
 import { createFileHostStandIn } from './test-utils/create-file-host-stand-in.ts';
-import type { UploadFile } from './types.ts';
 
 function setupTest(
   overrides: { readonly forceStatus?: number; readonly redirectTo?: string } = {},

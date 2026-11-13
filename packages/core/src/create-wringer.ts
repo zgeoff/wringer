@@ -163,6 +163,21 @@ function buildWringer(parts: Parts): Wringer {
     });
   }
 
+  const checks = parts.checks.map((buildEntry) => buildEntry(driverNames));
+
+  // The doctor names its own check of a target's `revision` this way, so a repo check of that name
+  // would share a result name with it.
+  const revisionTarget = parts.targets.find(
+    ([, target]) => target.mode === 'attach' && target.revision !== undefined,
+  );
+
+  if (revisionTarget !== undefined && checks.some((check) => check.name === 'revision')) {
+    throw new WringerError('usage', {
+      message: `A repo check is named \`revision\`, which the doctor uses for the revision of target \`${revisionTarget[0]}\`.`,
+      hint: 'Rename the repo check.',
+    });
+  }
+
   const registered = [
     ...buildLifecycleCommands(),
     ...buildStateCommands(),
@@ -182,7 +197,7 @@ function buildWringer(parts: Parts): Wringer {
       registered.map((command) => [command.info.path.join(' '), command] as const),
       'command',
     ),
-    checks: Object.freeze(parts.checks.map((buildEntry) => buildEntry(driverNames))),
+    checks: Object.freeze(checks),
     features: Object.freeze([...parts.features]),
     shared: Object.freeze([...parts.shared]),
     ignore: Object.freeze([...parts.ignore]),

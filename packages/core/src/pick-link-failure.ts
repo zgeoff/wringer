@@ -1,4 +1,4 @@
-import type { EvidenceUploader, UploadedLink } from './types.ts';
+import type { EvidenceUploader, UploadedLink } from './evidence-uploader.ts';
 
 // A reason the link cannot go in the report, or null. No message repeats the link, which may carry
 // a capability.

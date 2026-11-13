@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { EvidenceUploader, UploadFile, UploadedLink } from './types.ts';
+import type { EvidenceUploader, UploadFile, UploadedLink } from './evidence-uploader.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface HostUploaderOptions {

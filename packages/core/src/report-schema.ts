@@ -15,6 +15,7 @@ export const fingerprintSchema = z.union([
 const linkedEvidenceSchema = evidenceSchema.extend({ url: z.string().optional() });
 
 // What the verdict's run drove: `local` is a launch target, which runs the worktree's own code.
+// `deployed` is an attach target whose commit holds the worktree's code in the feature's scope.
 // `unpinned` is an attach target that cannot say which commit it runs.
 const pinSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('local') }),
@@ -24,6 +25,8 @@ const pinSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({ kind: z.literal('unpinned') }),
 ]);
+
+export type Pin = z.infer<typeof pinSchema>;
 
 const verdictTargetSchema = z.strictObject({
   name: nameSchema,

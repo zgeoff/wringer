@@ -273,6 +273,10 @@ rebuilds the response `body` string as compact JSON from the redacted `json`. Wh
 - `up` and `attach` refuse with `usage`, before any run event, a registry whose feature name holds a
   spelling of any secret in the command's set, because a `scopes-read` event keeps its feature names
   unscrubbed for `done` to match.
+- The doctor's `revision` check fails with `usage` on a revision that holds a spelling of any secret
+  in the command's set, and the doctor then writes no `revision-read`, because that event keeps its
+  revision unscrubbed for `done` to compare. A failure message gives a bad revision's type or
+  length, and never the value.
 - An env value that is all digits, or a URL with no password, is never collected.
 - A collected value under 4 characters is never scrubbed by value, so a copy outside its redacted
   field stays. Such a value has at most 62³ spellings and protects nothing, and scrubbing it would

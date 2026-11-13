@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { buildBuiltinCommand } from '../build-commands.ts';
+import { pickRevisionRefusal } from '../pick-revision-refusal.ts';
+import { readRevision, revisionTimeoutMs } from '../read-revision.ts';
 import { checkResultSchema } from '../run-events.ts';
 import type { CheckResult } from '../run-events.ts';
 import { toWringerError } from '../to-wringer-error.ts';
@@ -27,8 +29,13 @@ export function buildDoctorCommand(): RegisteredCommand {
     needsDoctor: false,
     run: async (_args, ctx) => {
       const results: CheckResult[] = [];
+      const read: { revision: string | null } = { revision: null };
 
-      for (const check of collectChecks(ctx, ctx.openDrive('read-only'))) {
+      const checks = collectChecks(ctx, ctx.openDrive('read-only'), (value) => {
+        read.revision = value;
+      });
+
+      for (const check of checks) {
         const result = await runCheck(ctx, check);
 
         results.push(result);
@@ -37,6 +44,14 @@ export function buildDoctorCommand(): RegisteredCommand {
 
       const outcome = pickDoctorOutcome(results, ctx.now().toISOString());
       const runID = ctx.run?.runID ?? '';
+
+      if (read.revision !== null && outcome.failure === null) {
+        await ctx.state.appendEvent(runID, {
+          type: 'revision-read',
+          at: outcome.event.at,
+          revision: read.revision,
+        });
+      }
 
       await ctx.state.appendEvent(runID, outcome.event);
       await ctx.state.writeManifest(runID);
@@ -57,7 +72,11 @@ interface PlannedCheck {
 }
 
 // Each check runs in a drive of its own, whose clients and execs stop at the check's deadline.
-function collectChecks(ctx: BuiltinContext, drive: Drive): readonly PlannedCheck[] {
+function collectChecks(
+  ctx: BuiltinContext,
+  drive: Drive,
+  onRevision: (revision: string) => void,
+): readonly PlannedCheck[] {
   const driverChecks = [...drive.drivers].flatMap(([driverName, opened]) =>
     opened.checks.map((check) => ({
       name: `${driverName}.${check.name}`,
@@ -72,7 +91,7 @@ function collectChecks(ctx: BuiltinContext, drive: Drive): readonly PlannedCheck
     run: (checkDrive: Drive) => check.run(checkDrive.ctx),
   }));
 
-  return [...driverChecks, ...repoChecks];
+  return [...driverChecks, ...repoChecks, ...collectRevisionChecks(ctx, onRevision)];
 }
 
 function runDriverCheck(
@@ -92,6 +111,38 @@ function runDriverCheck(
   }
 
   return check.run(ctx.feature, ctx.emit);
+}
+
+// An attach target that names its deployed commit gets one more check, on the same read-only drive.
+function collectRevisionChecks(
+  ctx: BuiltinContext,
+  onRevision: (revision: string) => void,
+): readonly PlannedCheck[] {
+  const target = ctx.target;
+
+  if (target.mode !== 'attach' || target.revision === undefined) {
+    return [];
+  }
+
+  const revision = target.revision;
+
+  return [
+    {
+      name: 'revision',
+      timeoutMs: revisionTimeoutMs,
+      run: async (checkDrive) => {
+        const value = await readRevision(revision, checkDrive.ctx);
+
+        const refusal = pickRevisionRefusal(value, ctx.secrets);
+
+        if (refusal !== null) {
+          throw refusal;
+        }
+
+        onRevision(value);
+      },
+    },
+  ];
 }
 
 async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<CheckResult> {

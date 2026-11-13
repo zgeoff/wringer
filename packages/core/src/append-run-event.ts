@@ -107,6 +107,7 @@ export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
       'run-started',
       'supervisor-ready',
       'scopes-read',
+      'revision-read',
       'launch-ready',
       'service-ready',
       'doctor-passed',

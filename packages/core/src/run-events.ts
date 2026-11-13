@@ -26,6 +26,8 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
 
 const at = z.iso.datetime();
 
+export const revisionSchema = z.string().regex(/^[0-9a-f]{7,64}$/u);
+
 // Entries, not a record: a record drops a feature named `__proto__`.
 const featureFingerprintsSchema = z.array(z.tuple([z.string(), fingerprintSchema]));
 
@@ -59,6 +61,7 @@ export const runEventSchema = z.discriminatedUnion('type', [
     at,
     featureFingerprints: featureFingerprintsSchema,
   }),
+  z.strictObject({ type: z.literal('revision-read'), at, revision: revisionSchema }),
   z.strictObject({ type: z.literal('launch-ready'), at, endpoints: endpointsSchema }),
   z.strictObject({ type: z.literal('service-ready'), at, service: z.string() }),
   z.strictObject({ type: z.literal('run-ready'), at }),

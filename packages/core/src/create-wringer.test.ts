@@ -92,6 +92,41 @@ test('it refuses two drivers of one name', () => {
   expect(() => builder.build()).toThrow('Two drivers are named `notes`.');
 });
 
+test('it refuses a repo check named revision when an attach target declares revision', () => {
+  const builder = createWringer({ name: 'shop' })
+    .target('staging', {
+      mode: 'attach',
+      access: 'read-only',
+      host: local(),
+      revision: () => '5e1d0a7',
+    })
+    .check({
+      name: 'revision',
+      timeoutMs: 1000,
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      run: () => Promise.resolve({}),
+    });
+
+  expect(() => builder.build()).toThrow(
+    expect.objectContaining({ code: 'usage', message: expect.stringContaining('`revision`') }),
+  );
+});
+
+test('it accepts a repo check named revision when no target declares revision', () => {
+  const builder = createWringer({ name: 'shop' })
+    .target('staging', { mode: 'attach', access: 'read-only', host: local() })
+    .check({
+      name: 'revision',
+      timeoutMs: 1000,
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      run: () => Promise.resolve({}),
+    });
+
+  expect(builder.build().checks.map((check) => check.name)).toStrictEqual(['revision']);
+});
+
 test('it refuses a CLI with no target', () => {
   expect(() => createWringer({ name: 'shop' }).build()).toThrow(
     'A wringer CLI needs at least one target.',

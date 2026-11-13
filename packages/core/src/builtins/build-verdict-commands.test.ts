@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { StatePort } from '../create-file-state.ts';
 import { dispatch } from '../dispatch.ts';
+import type { UploadFile } from '../evidence-uploader.ts';
 import { readVerdicts } from '../read-verdicts.ts';
 import { parseReportComment } from '../report-comment.ts';
 import { reportSchema } from '../report-schema.ts';
@@ -12,7 +13,6 @@ import { runIDSchema } from '../run-events.ts';
 import type { RunEvent, RunID } from '../run-events.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
-import type { UploadFile } from '../types.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();

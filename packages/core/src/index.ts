@@ -39,6 +39,7 @@ export {
 } from './envelope.ts';
 
 export type { Envelope, Evidence, StreamEvent } from './envelope.ts';
+export type { EvidenceUploader, UploadFile, UploadedLink } from './evidence-uploader.ts';
 export { envelopeVersion } from './envelope-version.ts';
 export { defaultMessageFor, errorCodes, exitCodeFor } from './error-codes.ts';
 export type { ErrorCode, ExitCode } from './error-codes.ts';

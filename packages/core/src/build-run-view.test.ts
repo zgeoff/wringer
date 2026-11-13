@@ -60,6 +60,7 @@ test('it reads a running run with its endpoints, services and supervisor from it
     supervisor: { pid: 4242, socket: 'sock' },
     doctor: 'none',
     doctorResults: [],
+    revisionRead: null,
     drivesAfterDoctor: [],
   });
 });
@@ -242,3 +243,45 @@ test('it forgets the drives of an earlier doctor pass once the doctor passes aga
 
   expect(view?.drivesAfterDoctor).toStrictEqual([]);
 });
+
+test('it reads the revision the latest passed doctor wrote just before it', () => {
+  const view = buildRunView({
+    runID: runIDSchema.parse('mf3k2a-7q1z'),
+    events: [
+      {
+        type: 'run-started',
+        at: '2026-11-04T10:00:00.000Z',
+        target: 'prod',
+        mode: 'attach',
+        fingerprint: 'f00d',
+      },
+      { type: 'revision-read', at: '2026-11-04T10:00:01.000Z', revision: '5e1d0a7' },
+      { type: 'doctor-passed', at: '2026-11-04T10:00:01.000Z', results: [] },
+    ],
+  });
+
+  expect(view?.revisionRead).toBe('5e1d0a7');
+});
+
+test.each(['doctor-failed', 'doctor-passed'] as const)(
+  'it forgets the revision when a later %s event follows no revision-read',
+  (type) => {
+    const view = buildRunView({
+      runID: runIDSchema.parse('mf3k2a-7q1z'),
+      events: [
+        {
+          type: 'run-started',
+          at: '2026-11-04T10:00:00.000Z',
+          target: 'prod',
+          mode: 'attach',
+          fingerprint: 'f00d',
+        },
+        { type: 'revision-read', at: '2026-11-04T10:00:01.000Z', revision: '5e1d0a7' },
+        { type: 'doctor-passed', at: '2026-11-04T10:00:01.000Z', results: [] },
+        { type, at: '2026-11-04T10:00:02.000Z', results: [] },
+      ],
+    });
+
+    expect(view?.revisionRead).toBeNull();
+  },
+);

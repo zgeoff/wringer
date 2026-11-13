@@ -1,4 +1,5 @@
 import { isAbsolute, join } from 'node:path';
+import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { buildChangeFactsRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
@@ -19,11 +20,13 @@ import {
   reportSchema,
   verdictSchema,
 } from '../report-schema.ts';
-import type { Claim, Report, Verdict } from '../report-schema.ts';
+import type { Claim, Pin, Report, Verdict } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
 import { uploadEvidence } from '../upload-evidence.ts';
 import { WringerError } from '../wringer-error.ts';
+import { buildDeployedPin } from './build-deployed-pin.ts';
+import { readDeployedCommit } from './read-deployed-commit.ts';
 
 const doneArgsSchema = z.strictObject({
   feature: z.string().min(1).optional(),
@@ -124,24 +127,10 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     });
   }
 
-  // The run read its feature fingerprints at the default base, so the launch check uses that base;
-  // the verdict takes the base the PR's gate will use.
-  const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
-  const treeFacts = await readCurrentFacts(ctx, defaultBase);
-
-  const treeFingerprint = treeFacts.featureFingerprints.get(feature);
-
-  if (treeFingerprint === undefined) {
+  if (!ctx.wringer.features.some((definition) => definition.name === feature)) {
     throw new WringerError('usage', {
       message: `\`${feature}\` is not a feature of the registry.`,
       hint: 'Pass the name of a feature the registry lists.',
-    });
-  }
-
-  if (ctx.target.mode === 'launch' && ctx.run.scopesRead?.get(feature) !== treeFingerprint) {
-    throw new WringerError('doctor-required', {
-      message: `The files of ${feature} changed since this run started, or the run recorded none.`,
-      hint: 'Run `up --restart` and `doctor`, then drive the feature again.',
     });
   }
 
@@ -153,6 +142,36 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
       hint: `Drive the feature with \`--feature ${feature}\`, then run \`done\` again.`,
     });
   }
+
+  // The run read its feature fingerprints at the default base, so the launch check uses that base;
+  // the verdict takes the base the PR's gate will use.
+  const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
+  const deployed = await readDeployedCommit(ctx, ctx.run);
+
+  const treeFacts = await readChangeFacts(ctx.session.repoHost, {
+    ...buildChangeFactsRequest(ctx.wringer, ctx.session.root, defaultBase),
+    deployed,
+  });
+
+  const treeFingerprint = treeFacts.featureFingerprints.get(feature);
+
+  invariant(treeFingerprint !== undefined, `The change facts hold no fingerprint of ${feature}.`);
+
+  if (ctx.target.mode === 'launch' && ctx.run.scopesRead?.get(feature) !== treeFingerprint) {
+    throw new WringerError('doctor-required', {
+      message: `The files of ${feature} changed since this run started, or the run recorded none.`,
+      hint: 'Run `up --restart` and `doctor`, then drive the feature again.',
+    });
+  }
+
+  const pin: Pin =
+    ctx.target.mode === 'launch'
+      ? { kind: 'local' }
+      : buildDeployedPin(ctx.wringer, {
+          feature,
+          deployed,
+          deployedPaths: treeFacts.deployedPaths ?? [],
+        });
 
   const scopeFacts =
     args.base === undefined || args.base === defaultBase
@@ -166,7 +185,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     run: ctx.run.runID,
     at: ctx.now().toISOString(),
     target: { name: ctx.targetName, evidence: ctx.target.evidence ?? 'local' },
-    pin: ctx.target.mode === 'launch' ? { kind: 'local' } : { kind: 'unpinned' },
+    pin,
     evidence: drives.flatMap((envelope) => envelope.evidence),
   };
 }
