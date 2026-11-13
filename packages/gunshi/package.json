@@ -38,16 +38,17 @@
   "dependencies": {
     "gunshi": "catalog:",
     "tiny-invariant": "catalog:",
-    "ts-pattern": "catalog:",
-    "zod": "catalog:"
+    "ts-pattern": "catalog:"
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
     "@wringer/http": "workspace:*",
-    "@zgeoff/testing": "catalog:"
+    "@zgeoff/testing": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@wringer/core": "workspace:*"
+    "@wringer/core": "workspace:*",
+    "zod": "^4.0.0"
   },
   "engines": {
     "bun": ">=1.3"

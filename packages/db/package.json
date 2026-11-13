@@ -31,16 +31,17 @@
     "typecheck": "tsrs --noEmit"
   },
   "dependencies": {
-    "ts-pattern": "catalog:",
-    "zod": "catalog:"
+    "ts-pattern": "catalog:"
   },
   "devDependencies": {
     "@wringer/core": "workspace:*",
     "@zgeoff/testing": "catalog:",
-    "tiny-invariant": "catalog:"
+    "tiny-invariant": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@wringer/core": "workspace:*"
+    "@wringer/core": "workspace:*",
+    "zod": "^4.0.0"
   },
   "engines": {
     "bun": ">=1.3"

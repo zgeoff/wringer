@@ -30,16 +30,15 @@
     "build": "rm -rf dist && tsrs -p tsconfig.build.json",
     "typecheck": "tsrs --noEmit"
   },
-  "dependencies": {
-    "zod": "catalog:"
-  },
   "devDependencies": {
     "@mswjs/interceptors": "catalog:",
     "@wringer/core": "workspace:*",
-    "msw": "catalog:"
+    "msw": "catalog:",
+    "zod": "catalog:"
   },
   "peerDependencies": {
-    "@wringer/core": "workspace:*"
+    "@wringer/core": "workspace:*",
+    "zod": "^4.0.0"
   },
   "engines": {
     "bun": ">=1.3"

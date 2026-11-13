@@ -54,7 +54,10 @@ those paths. Change one of them in zgeoff/tools.
 - Every external version lives once, in the root `workspaces.catalog`. A package writes `"catalog:"`
   for an external dependency and `"workspace:*"` for an internal one.
 - The root `package.json` declares only tooling.
-- Pin exact versions, with no `^` or `~` ranges.
+- Pin exact versions, with no `^` or `~` ranges. The one exception is a peer dependency, which takes
+  a range whose floor is the oldest release with every API the source uses, such as `zod` at
+  `^4.0.0`. An exact peer pin would force every consumer onto one version. Each package also lists
+  its peer in `devDependencies` through `catalog:`.
 
 ## Public repo
 

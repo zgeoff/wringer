@@ -37,13 +37,16 @@
   "dependencies": {
     "@zgeoff/std": "catalog:",
     "ts-pattern": "catalog:",
-    "xstate": "catalog:",
-    "zod": "catalog:"
+    "xstate": "catalog:"
   },
   "devDependencies": {
     "@zgeoff/testing": "catalog:",
     "ajv": "catalog:",
-    "tiny-invariant": "catalog:"
+    "tiny-invariant": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
   },
   "engines": {
     "bun": ">=1.3"

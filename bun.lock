@@ -33,14 +33,15 @@
         "playwright-core": "catalog:",
         "tiny-invariant": "catalog:",
         "xstate": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/testing": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
     "packages/core": {
@@ -50,12 +51,15 @@
         "@zgeoff/std": "catalog:",
         "ts-pattern": "catalog:",
         "xstate": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@zgeoff/testing": "catalog:",
         "ajv": "catalog:",
         "tiny-invariant": "catalog:",
+        "zod": "catalog:",
+      },
+      "peerDependencies": {
+        "zod": "^4.0.0",
       },
     },
     "packages/db": {
@@ -63,15 +67,16 @@
       "version": "0.1.2",
       "dependencies": {
         "ts-pattern": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/testing": "catalog:",
         "tiny-invariant": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
     "packages/gunshi": {
@@ -84,30 +89,30 @@
         "gunshi": "catalog:",
         "tiny-invariant": "catalog:",
         "ts-pattern": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@wringer/http": "workspace:*",
         "@zgeoff/testing": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
     "packages/http": {
       "name": "@wringer/http",
       "version": "0.1.2",
-      "dependencies": {
-        "zod": "catalog:",
-      },
       "devDependencies": {
         "@mswjs/interceptors": "catalog:",
         "@wringer/core": "workspace:*",
         "msw": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
     "packages/shop-example": {
@@ -136,16 +141,17 @@
       "version": "0.1.2",
       "dependencies": {
         "xstate": "catalog:",
-        "zod": "catalog:",
       },
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/std": "catalog:",
         "@zgeoff/testing": "catalog:",
         "tiny-invariant": "catalog:",
+        "zod": "catalog:",
       },
       "peerDependencies": {
         "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
       },
     },
   },
