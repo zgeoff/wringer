@@ -8,14 +8,14 @@ test('it builds inputs that pass lint when the SKILL.md text is valid', async ()
 
   const fixture = buildLintFixture(
     wringer,
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n',
   );
 
   const result = await resolveLintFailures({
     wringer,
     ...fixture,
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({ commands: 1, failures: [] });

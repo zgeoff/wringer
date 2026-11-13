@@ -10,8 +10,8 @@ import {
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { buildCLIWringer } from './build-cli-wringer.ts';
 import { readRepoRoot } from './read-repo-root.ts';
+import { readTemplateHash } from './read-template-hash.ts';
 import { runCLI } from './run-cli.ts';
-import { templateVersion } from './template-version.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 import { writeLintSkill } from './test-utils/write-lint-skill.ts';
@@ -76,7 +76,7 @@ test.each([
         '---',
         'name: verify',
         'metadata:',
-        `  wringer-template: ${templateVersion}`,
+        `  wringer-template: ${await readTemplateHash()}`,
         '  wringer-command: bun verify',
         '---',
         '',
@@ -108,7 +108,7 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
   const ctx = await setupTest();
 
   await ctx.writeSkill(
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   const exitCode = await ctx.lint('docs/verify', '--json');
@@ -147,7 +147,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
     [
       '---',
       'metadata:',
-      `  wringer-template: ${templateVersion}`,
+      `  wringer-template: ${await readTemplateHash()}`,
       '  wringer-command: bun verify',
       '---',
       '',
@@ -191,7 +191,7 @@ test('it fails a journey line that sets a feature the map lacks', async () => {
     [
       '---',
       'metadata:',
-      `  wringer-template: ${templateVersion}`,
+      `  wringer-template: ${await readTemplateHash()}`,
       '  wringer-command: bun verify',
       '---',
       '',
@@ -226,7 +226,7 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
   await Bun.write(join(ctx.root, 'docs/verify/references/old.md'), '# Old\n');
 
   await ctx.writeSkill(
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   await ctx.git('add', '.');
@@ -274,7 +274,7 @@ test.each([
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
 
   await ctx.writeSkill(
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   const actualExit = await ctx.lint('docs/verify', '--json');
@@ -289,7 +289,7 @@ test('it reports the uncovered registry file in the envelope', async () => {
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
 
   await ctx.writeSkill(
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   await ctx.lint('docs/verify', '--json');
@@ -326,7 +326,7 @@ test.each([
   await Bun.write(join(ctx.root, '..verify/registry.ts'), 'export const registry = 1;\n');
 
   await ctx.writeSkill(
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   const actualExit = await ctx.lint('docs/verify', '--json');

@@ -236,6 +236,8 @@ jobs:
 - The template hash covers each file under `guide/template/` except tests, in sorted path order, as
   the SHA-256 of each path, a NUL byte, its bytes and a NUL byte; the hash keeps its first 12 hex
   digits.
+- The hash reads the `wringer-template` line of the template's `SKILL.md` with its value left out,
+  so the skill can record its own hash. A test fails until that line holds the current hash.
 - `lint` fails with check `template` when `wringer-template` is a number or a hash other than the
   installed one. The hint gives `bun verify guide template` and the new hash.
 - `guide` reads only files inside the installed `@wringer/gunshi` package.

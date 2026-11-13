@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createWringer, local } from '@wringer/core';
+import { readTemplateHash } from './read-template-hash.ts';
 import { resolveLintFailures } from './resolve-lint-failures.ts';
-import { templateVersion } from './template-version.ts';
 import { buildLintFixture } from './test-utils/build-lint-fixture.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
@@ -12,7 +12,7 @@ test('it returns no failure when every glob matches, every line parses and the t
     '---',
     'name: verify',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '',
@@ -28,41 +28,49 @@ test('it returns no failure when every glob matches, every line parses and the t
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({ commands: 3, failures: [] });
 });
 
-test('it fails a skill written from an older template version', async () => {
-  const skill = '---\nmetadata:\n  wringer-template: 3\n  wringer-command: bun verify\n---\n';
-  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+test.each([
+  ['an integer', '3', 'a template version number, 3'],
+  ['another hash', "'sha256:111111111111'", 'template sha256:111111111111'],
+])(
+  'it fails a skill whose `wringer-template` is %s, and the hint gives the new hash',
+  async (_case, recorded, problem) => {
+    const skill = `---\nmetadata:\n  wringer-template: ${recorded}\n  wringer-command: bun verify\n---\n`;
+    const wringer = createDemoWringer({ ignore: ['skill/**'] });
 
-  const result = await resolveLintFailures({
-    wringer,
-    ...buildLintFixture(wringer, skill),
-    registryFile: null,
-    templateVersion: 4,
-  });
+    const result = await resolveLintFailures({
+      wringer,
+      ...buildLintFixture(wringer, skill),
+      registryFile: null,
+      templateHash: 'sha256:0a1b2c3d4e5f',
+    });
 
-  expect(result).toStrictEqual({
-    commands: 1,
-    failures: [
-      {
-        check: 'template',
-        where: 'skill/SKILL.md',
-        problem:
-          'The skill follows template 3, and the installed @wringer/gunshi ships template 4.',
-      },
-    ],
-  });
-});
+    expect(result).toStrictEqual({
+      commands: 1,
+      failures: [
+        {
+          check: 'template',
+          where: 'skill/SKILL.md',
+          problem: expect.stringContaining(problem),
+        },
+      ],
+    });
+
+    expect(result.failures[0]?.problem).toContain('`bun verify guide template`');
+    expect(result.failures[0]?.problem).toContain('`sha256:0a1b2c3d4e5f`');
+  },
+);
 
 test('it fails a journey line whose arguments fail the command schema', async () => {
   const skill = [
     '---',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '```bash',
@@ -76,7 +84,7 @@ test('it fails a journey line whose arguments fail the command schema', async ()
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -94,7 +102,9 @@ test('it fails a journey line whose arguments fail the command schema', async ()
 });
 
 test('it fails a journey line in a reference file of the skill', async () => {
-  const skill = '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+  const skill =
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
+
   const reference = ['# Greeting', '', '```bash', 'bun verify wave', '```'].join('\n');
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
 
@@ -104,7 +114,7 @@ test('it fails a journey line in a reference file of the skill', async () => {
       { path: 'skill/references/greeting.md', text: reference },
     ]),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -126,7 +136,7 @@ test('it fails a missing verify skill', async () => {
     skillPath: 'skill/SKILL.md',
     registryFile: null,
     skillFiles: [],
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -149,7 +159,7 @@ test.each([
   const skill = [
     '---',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '```bash',
@@ -163,7 +173,7 @@ test.each([
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -185,7 +195,7 @@ test.each([
   const skill = [
     '---',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '```bash',
@@ -199,7 +209,7 @@ test.each([
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({ commands: 2, failures: [] });
@@ -209,7 +219,7 @@ test('it fails a journey line whose repo command names an unknown feature', asyn
   const skill = [
     '---',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '```bash',
@@ -223,7 +233,7 @@ test('it fails a journey line whose repo command names an unknown feature', asyn
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -243,7 +253,7 @@ test('it fails a journey line with an unclosed quote', async () => {
   const skill = [
     '---',
     'metadata:',
-    '  wringer-template: 4',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
     '  wringer-command: bun verify',
     '---',
     '```bash',
@@ -257,7 +267,7 @@ test('it fails a journey line with an unclosed quote', async () => {
     wringer,
     ...buildLintFixture(wringer, skill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result).toStrictEqual({
@@ -279,7 +289,7 @@ test('it fails a registry file that only an ignore glob matches', async () => {
     wringer,
     ...buildLintFixture(
       wringer,
-      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n',
     ),
     files: [
       'src/cart.ts',
@@ -288,7 +298,7 @@ test('it fails a registry file that only an ignore glob matches', async () => {
       'skill/references/feature-cart.md',
     ],
     registryFile: 'verify/registry.ts',
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -311,11 +321,11 @@ test.each([
     wringer,
     ...buildLintFixture(
       wringer,
-      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n',
     ),
     files: ['src/cart.ts', registryFile, 'skill/SKILL.md', 'skill/references/feature-cart.md'],
     registryFile,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([]);
@@ -331,10 +341,10 @@ test('it fails a target that uploads its evidence when the registry has no uploa
     wringer,
     ...buildLintFixture(
       wringer,
-      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n',
     ),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -362,10 +372,10 @@ test('it passes a target that uploads its evidence when the registry has the upl
     wringer,
     ...buildLintFixture(
       wringer,
-      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n',
     ),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([]);
@@ -373,7 +383,7 @@ test('it passes a target that uploads its evidence when the registry has the upl
 
 test('it fails a feature with no feature file', async () => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
   const fixture = buildLintFixture(wringer, currentSkill);
@@ -384,7 +394,7 @@ test('it fails a feature with no feature file', async () => {
     files: fixture.files.filter((file) => !file.endsWith('feature-greeting.md')),
     skillFiles: fixture.skillFiles.filter((file) => !file.path.endsWith('feature-greeting.md')),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -398,7 +408,7 @@ test('it fails a feature with no feature file', async () => {
 
 test('it fails a feature file that matches no feature', async () => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
 
@@ -411,7 +421,7 @@ test('it fails a feature file that matches no feature', async () => {
       },
     ]),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -450,7 +460,7 @@ test.each([
   ],
 ])('it fails a feature file when %s', async (_case, text, where, problem) => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
   const fixture = buildLintFixture(wringer, currentSkill);
@@ -462,7 +472,7 @@ test.each([
       file.path.endsWith('feature-greeting.md') ? { path: file.path, text } : file,
     ),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -476,7 +486,7 @@ test.each([
 
 test('it fails a feature table that an edit changed, and a missing span', async () => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
   const fixture = buildLintFixture(wringer, currentSkill);
@@ -490,7 +500,7 @@ test('it fails a feature table that an edit changed, and a missing span', async 
         : file,
     ),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   const missing = await resolveLintFailures({
@@ -500,7 +510,7 @@ test('it fails a feature table that an edit changed, and a missing span', async 
       file.path === 'skill/SKILL.md' ? { path: file.path, text: currentSkill } : file,
     ),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect([edited.failures, missing.failures]).toStrictEqual([
@@ -528,7 +538,7 @@ test.each([
   ['a shared glob', { shared: ['package.json'] }, 'shared'],
 ])('it fails %s that matches no file', async (_case, options, where) => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createCoverWringer({ ignore: ['skill/**'], ...options });
 
@@ -536,7 +546,7 @@ test.each([
     wringer,
     ...buildLintFixture(wringer, currentSkill),
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -550,7 +560,7 @@ test.each([
 
 test('it fails a file that no feature, shared or ignore glob matches', async () => {
   const currentSkill =
-    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+    '---\nmetadata:\n  wringer-template: sha256:0a1b2c3d4e5f\n  wringer-command: bun verify\n---\n';
 
   const wringer = createDemoWringer({ ignore: ['skill/**'] });
   const fixture = buildLintFixture(wringer, currentSkill);
@@ -560,7 +570,7 @@ test('it fails a file that no feature, shared or ignore glob matches', async () 
     ...fixture,
     files: [...fixture.files, 'config/app.toml'],
     registryFile: null,
-    templateVersion: 4,
+    templateHash: 'sha256:0a1b2c3d4e5f',
   });
 
   expect(result.failures).toStrictEqual([
@@ -587,7 +597,7 @@ test('it passes an upgraded skill whose template example feature file is deleted
     ...fixture,
     files: ['src/greet.ts'],
     registryFile: null,
-    templateVersion,
+    templateHash: await readTemplateHash(),
   });
 
   expect(result.failures).toStrictEqual([]);
@@ -614,7 +624,7 @@ test('it fails an upgraded skill that keeps the template example feature file', 
     ...fixture,
     files: ['src/greet.ts'],
     registryFile: null,
-    templateVersion,
+    templateHash: await readTemplateHash(),
   });
 
   expect(result.failures.filter((failure) => failure.check === 'feature-file')).toStrictEqual([

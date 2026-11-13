@@ -4,8 +4,8 @@ import { WringerError, buildBuiltinCommand } from '@wringer/core';
 import type { BuiltinContext, RegisteredCommand } from '@wringer/core';
 import { z } from 'zod';
 import { collectLintFiles } from './collect-lint-files.ts';
+import { readTemplateHash } from './read-template-hash.ts';
 import { lintFailureSchema, resolveLintFailures } from './resolve-lint-failures.ts';
-import { templateVersion } from './template-version.ts';
 
 const lintArgsSchema = z.strictObject({});
 
@@ -72,7 +72,7 @@ async function runLint(
     skillPath,
     registryFile: await resolveRegistryFile(root, registryFile),
     skillFiles,
-    templateVersion,
+    templateHash: await readTemplateHash(),
   });
 
   const data = { skill: skillPath, commands: result.commands, failures: [...result.failures] };

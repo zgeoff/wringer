@@ -4,22 +4,24 @@ import { parseShellWords } from './parse-shell-words.ts';
 export type SkillMetadata =
   | {
       readonly ok: true;
-      readonly templateVersion: number;
+      readonly template: string | number;
       readonly cliWords: readonly string[];
     }
   | { readonly ok: false; readonly reason: string };
 
+const templateFieldSchema = z.union([z.string().min(1), z.number()]);
+
 const frontmatterSchema = z.looseObject({
   metadata: z.looseObject({
-    'wringer-template': z.number().int().positive(),
+    'wringer-template': templateFieldSchema,
     'wringer-command': z.string().min(1),
   }),
 });
 
 const frontmatterPattern = /^---\r?\n(?<yaml>[\s\S]*?)\r?\n---\r?\n/u;
 
-// The wringer fields of a verify skill's YAML frontmatter: the template version the skill was
-// written from, and the words that call the repo's CLI, such as `bun verify`.
+// The wringer fields of a verify skill's YAML frontmatter: the template hash the skill was written
+// from, and the words that call the repo's CLI, such as `bun verify`.
 export function parseSkillMetadata(text: string): SkillMetadata {
   const yaml = frontmatterPattern.exec(text)?.groups?.['yaml'];
 
@@ -33,7 +35,7 @@ export function parseSkillMetadata(text: string): SkillMetadata {
     return {
       ok: false,
       reason:
-        'The frontmatter lacks `metadata.wringer-template` as a whole number or `metadata.wringer-command` as text.',
+        'The frontmatter lacks `metadata.wringer-template` as a hash or `metadata.wringer-command` as text.',
     };
   }
 
@@ -43,7 +45,7 @@ export function parseSkillMetadata(text: string): SkillMetadata {
     return { ok: false, reason: '`metadata.wringer-command` is not a command line.' };
   }
 
-  return { ok: true, templateVersion: parsed.data.metadata['wringer-template'], cliWords };
+  return { ok: true, template: parsed.data.metadata['wringer-template'], cliWords };
 }
 
 // Bun's YAML parser throws on text that is not YAML; the schema then reports the field as missing.

@@ -41,7 +41,7 @@ export interface LintInput {
 
   // The Markdown files of the verify skill's folder, its SKILL.md included when it exists.
   readonly skillFiles: readonly MarkdownFile[];
-  readonly templateVersion: number;
+  readonly templateHash: string;
 }
 
 export interface LintResult {
@@ -90,7 +90,7 @@ export async function resolveLintFailures(input: LintInput): Promise<LintResult>
       ...journeyFailures.filter((failure) => failure !== null),
       ...collectFeatureFileFailures(input, cliWords),
       ...collectFeatureTableFailures(input, skill?.text ?? null, cliWords),
-      ...collectTemplateFailures(metadata, input.skillPath, input.templateVersion),
+      ...collectTemplateFailures(metadata, input.skillPath, input.templateHash),
     ],
   };
 }
@@ -253,7 +253,7 @@ function collectFeatureTableFailures(
 function collectTemplateFailures(
   metadata: SkillMetadata | null,
   skillPath: string,
-  templateVersion: number,
+  templateHash: string,
 ): readonly LintFailure[] {
   if (metadata === null) {
     return [{ check: 'template', where: skillPath, problem: 'The verify skill is missing.' }];
@@ -263,15 +263,20 @@ function collectTemplateFailures(
     return [{ check: 'template', where: skillPath, problem: metadata.reason }];
   }
 
-  if (metadata.templateVersion === templateVersion) {
+  if (metadata.template === templateHash) {
     return [];
   }
+
+  const recorded =
+    typeof metadata.template === 'number'
+      ? `a template version number, ${metadata.template}`
+      : `template ${metadata.template}`;
 
   return [
     {
       check: 'template',
       where: skillPath,
-      problem: `The skill follows template ${metadata.templateVersion}, and the installed @wringer/gunshi ships template ${templateVersion}.`,
+      problem: `The skill records ${recorded}, and the installed @wringer/gunshi ships template ${templateHash}. Run \`bun verify guide template\` for the template folder, bring the skill up to date with it, and set \`metadata.wringer-template\` to \`${templateHash}\`.`,
     },
   ];
 }

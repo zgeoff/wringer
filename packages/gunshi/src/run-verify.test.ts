@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
-import { templateVersion } from './template-version.ts';
+import { readTemplateHash } from './read-template-hash.ts';
 import { createCLIRunner } from './test-utils/create-cli-runner.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { writeLintSkill } from './test-utils/write-lint-skill.ts';
@@ -132,7 +132,7 @@ test('it lints the cover of the registry file in its `registry` option', async (
   await writeLintSkill(
     ctx.root,
     createCoverWringer(),
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   const result = await ctx.createRunner(join(ctx.root, 'verify/run.ts')).run('lint', '--json');
@@ -162,7 +162,7 @@ test('it lints the cover of the running script when no `registry` option is give
   await writeLintSkill(
     ctx.root,
     createCoverWringer(),
-    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
   );
 
   const result = await ctx.createRunner(join(ctx.root, 'verify/run.ts')).run('lint', '--json');

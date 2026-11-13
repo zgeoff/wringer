@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change to the shop example in the running app, run the
   journey of a feature, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 1
+  wringer-template: 'sha256:f772261ecbc7'
   wringer-command: bun verify
 ---
 
@@ -178,17 +178,18 @@ file is a skill edit. Before you make one, follow the skill steps in
   PR. You may edit any line of a feature file.
 - A feature file needs `## Journey`, whose first `bash` line is `bun verify use --feature <name>`,
   and `## End state`.
-- In this SKILL.md, edit only the frontmatter's `name` and `description`, the `#` title, and the
-  lines inside each `<!-- repo: <name> -->` block. An upgrade of the template replaces every other
-  line.
-- Replace the table between the `wringer:features` markers with the output of
-  `bun verify features --markdown`.
+- In this SKILL.md, edit only these parts. An upgrade of the template replaces every other line.
+  - the frontmatter's `name` and `description`, and the `#` title;
+  - the lines inside each `<!-- repo: <name> -->` block;
+  - the table between the `wringer:features` markers: replace it with the output of
+    `bun verify features --markdown`.
+- Leave `metadata.wringer-template` as it is. When `lint` fails with check `template`, run
+  `bun verify guide maintain`, and follow its steps to upgrade the template.
 - Make each changed file match a feature's `paths` or a glob in the registry's `.ignore` list. The
   gate fails on a changed file that matches neither. `bun verify features` lists each feature's
   `paths`.
 - After you change this skill, a feature file or the registry, run `bun verify lint`, and fix each
-  failure it reports. When it reports an older template, run `bun verify guide maintain`, and follow
-  its steps to upgrade the template.
+  failure it reports.
 
 **Reply:** the output of `bun verify report --human`, and each feature you could not verify, with
 the command that failed and its `error.code`, or the end state you expected and the `data` you got.

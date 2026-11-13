@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { readTemplateHash } from '../../src/read-template-hash.ts';
 import { resolveLintFailures } from '../../src/resolve-lint-failures.ts';
-import { templateVersion } from '../../src/template-version.ts';
 import { createVerifyRegistry } from './verify-registry.ts';
 
-test('it pairs with a verify skill whose journeys parse and whose template version is current', async () => {
+test('it pairs with a verify skill whose journeys parse and whose template hash is current', async () => {
   const skillPath = '.claude/skills/verify/SKILL.md';
   const featurePath = '.claude/skills/verify/references/feature-add-item.md';
 
@@ -31,7 +31,7 @@ test('it pairs with a verify skill whose journeys parse and whose template versi
       { path: skillPath, text: skill },
       { path: featurePath, text: feature },
     ],
-    templateVersion,
+    templateHash: await readTemplateHash(),
   });
 
   expect(result).toStrictEqual({ commands: 5, failures: [] });

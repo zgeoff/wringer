@@ -102,8 +102,9 @@ These locations are defaults. When you change one, change each place that refers
 In the `verify` skill's `SKILL.md`, each `<!-- repo: <part> -->` block ends at `<!-- /repo -->` and
 holds what only this repo knows. Rewrite those blocks, the frontmatter's `name` and `description`,
 and the `#` title. Keep every other line. The repo owns each `references/feature-*.md` whole. Keep
-`metadata.wringer-template` as the template has it: `lint` compares it with the version that
-`@wringer/gunshi` ships.
+`metadata.wringer-template` as the template has it. `lint` compares that value with the hash of the
+template that the installed `@wringer/gunshi` ships. The `maintain` topic's upgrade copies in the
+new value.
 
 ## Create
 
@@ -130,7 +131,8 @@ Wire these into the repo, as the `maintain` topic shows:
 - **The gate on each PR.** A PR that touches a feature's `paths` needs a verdict recorded on the
   PR's latest code. A PR that touches a file outside every feature's `paths` and the ignore list
   fails until you add the file to one of them.
-- **`lint` in CI.** It needs no running app.
+- **`lint` in CI.** It needs no running app. When it reports another template hash, upgrade the
+  template as the `maintain` topic says.
 - **A journey fixed with its feature.** A PR that changes a feature fixes the feature's journey.
 
 Add no scheduled job. The gate checks a feature each time a PR changes it.

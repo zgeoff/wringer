@@ -71,7 +71,7 @@ on a fresh checkout. It exits with code 1 and `check-failed` on any of these:
 - a line in a fenced code block of the skill's Markdown files that calls the CLI and fails to parse,
   fails the command's schema, or names a feature or target the registry lacks;
 - a missing `SKILL.md`, a frontmatter without `metadata.wringer-template` or
-  `metadata.wringer-command`, or another template version. The `maintain` guide topic upgrades it.
+  `metadata.wringer-command`, or another template hash. The `maintain` guide topic upgrades it.
 
 `metadata.wringer-command` holds the words that call the CLI, such as `bun verify`. `lint` checks
 only code block lines that start with them, after an optional `$ ` prompt and assignments.
