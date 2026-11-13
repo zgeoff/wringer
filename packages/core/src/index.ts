@@ -51,6 +51,7 @@ export type { FingerprintHost, FingerprintRequest } from './read-fingerprint.ts'
 export { readStreamLines } from './read-stream-lines.ts';
 export { readText } from './read-text.ts';
 export { renderReportMarkdown } from './render-report-markdown.ts';
+export { reportMarkers } from './report-markers.ts';
 export { reportSchema, verdictSchema } from './report-schema.ts';
 export type { FeatureStatus, Report, Verdict } from './report-schema.ts';
 
@@ -74,3 +75,5 @@ export type * from './types.ts';
 export { createNodeRepoHost } from './create-node-repo-host.ts';
 export { WringerError } from './wringer-error.ts';
 export type { WringerErrorDetails } from './wringer-error.ts';
+export { writeReportSpan } from './write-report-span.ts';
+export type { ReportSpanEdit } from './write-report-span.ts';
