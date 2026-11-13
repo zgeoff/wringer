@@ -7,6 +7,9 @@ export interface SetTimeoutStep {
 
   // How many timeouts this step makes the connection set, counting this one.
   readonly sets: number;
+
+  // The slowest round trip any step so far took.
+  readonly slowestMs: number;
 }
 
 export type StatementTimeoutStep =
@@ -31,15 +34,21 @@ export function pickStatementTimeoutStep(
   }
 
   if (previous === null) {
-    return { kind: 'set', timeoutMs: leftMs, leftMs, sets: 1 };
+    return { kind: 'set', timeoutMs: leftMs, leftMs, sets: 1, slowestMs: 0 };
   }
 
   if (previous.timeoutMs <= leftMs) {
     return { kind: 'run' };
   }
 
-  if (previous.sets >= maxTimeoutSets) {
+  const slowestMs = Math.max(previous.slowestMs, previous.leftMs - leftMs);
+
+  if (previous.sets > maxTimeoutSets) {
     return { kind: 'expired' };
+  }
+
+  if (previous.sets === maxTimeoutSets) {
+    return pickFallbackStep(slowestMs, leftMs, previous.sets);
   }
 
   // The next set takes about as long as the last, so the timeout leaves out two round trips: the
@@ -50,5 +59,20 @@ export function pickStatementTimeoutStep(
     return { kind: 'expired' };
   }
 
-  return { kind: 'set', timeoutMs, leftMs, sets: previous.sets + 1 };
+  return { kind: 'set', timeoutMs, leftMs, sets: previous.sets + 1, slowestMs };
+}
+
+// Round trips that vary can use up the sets with most of the time left. One last set, from the
+// slowest round trip seen, then follows, but only while that round trip is under this share of the
+// time left; a database slower than that fails the query.
+const maxFallbackShare = 0.1;
+
+function pickFallbackStep(slowestMs: number, leftMs: number, sets: number): StatementTimeoutStep {
+  const timeoutMs = leftMs - 2 * slowestMs;
+
+  if (slowestMs > leftMs * maxFallbackShare || timeoutMs < 1) {
+    return { kind: 'expired' };
+  }
+
+  return { kind: 'set', timeoutMs, leftMs, sets: sets + 1, slowestMs };
 }
