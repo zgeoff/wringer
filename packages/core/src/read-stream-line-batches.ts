@@ -53,6 +53,8 @@ export async function* readStreamLineBatches(
     signal?.removeEventListener('abort', onAbort);
 
     await cancel();
+
+    reader.releaseLock();
   }
 
   pending = `${pending}${decoder.decode()}`.slice(0, streamLineCapChars);

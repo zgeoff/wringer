@@ -58,3 +58,11 @@ test('it ends and keeps the lines read so far when the signal aborts while a rea
 
   expect(batches).toStrictEqual([['pear'], ['plu']]);
 });
+
+test('it leaves the stream unlocked once it has read to the end', async () => {
+  const stream = buildChunkStream(['pear\n']);
+
+  await Array.fromAsync(readStreamLineBatches(stream));
+
+  expect(stream.locked).toBe(false);
+});

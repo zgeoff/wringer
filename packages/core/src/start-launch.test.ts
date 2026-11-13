@@ -53,13 +53,11 @@ async function setupTest() {
 
     // A process the app started in a session of its own outlives the app's group, so the test
     // stops it before the folder goes.
-    stopOutputHolder: async (pidPath: string) => {
-      const pidText = await readFile(pidPath, 'utf8');
+    stopOutputHolder: (pidPath: string) => {
+      stack.defer(async () => {
+        const pidText = await readFile(pidPath, 'utf8');
 
-      const pid = Number(pidText);
-
-      stack.defer(() => {
-        killProcessGroup(pid);
+        killProcessGroup(Number(pidText));
       });
     },
   };
@@ -162,7 +160,7 @@ test('it fails a stop with an environment error when a process outside the app h
     stopGraceMs: 5000,
   });
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   const [stopped] = await Promise.allSettled([launch.stop()]);
 
@@ -205,18 +203,20 @@ test('it lets the process that launched the app exit after a stop gave up on a p
     cwd: import.meta.dir,
     stdout: 'pipe',
     stderr: 'inherit',
+
+    // The holder sleeps 30 s, so a launcher that exits before this limit let go of its pipes.
+    timeout: 4000,
   });
 
-  const startedAt = performance.now();
+  onTestFinished(() => {
+    launcher.kill();
+  });
+
+  ctx.stopOutputHolder(pidPath);
 
   const [output] = await Promise.all([new Response(launcher.stdout).text(), launcher.exited]);
 
-  const elapsedMs = performance.now() - startedAt;
-
-  await ctx.stopOutputHolder(pidPath);
-
-  // The holder sleeps 30 s, so an exit well before then means the launcher let go of its pipes.
-  expect(elapsedMs).toBeLessThan(15_000);
+  expect(launcher.signalCode).toBeNull();
   expect(output).toContain("The app's output still had not reached its log");
 });
 
@@ -245,7 +245,7 @@ test('it keeps the startup failure and adds the failed stop when an app that nev
     }),
   ]);
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   expect(launched).toStrictEqual({
     status: 'rejected',
@@ -282,7 +282,7 @@ test('it reports the failed stop of an app that never got ready to its caller', 
     }),
   ]);
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   expect(onStopFailed.mock.calls).toStrictEqual([
     [expect.stringContaining("The app's output still had not reached its log")],
