@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
+import { templateVersion } from './template-version.ts';
 import { createCLIRunner } from './test-utils/create-cli-runner.ts';
 
 // These tests start the demo repo's verify script as a process, so `up` and `attach` start the real
@@ -21,7 +22,12 @@ async function setupTest() {
     await repo.remove();
   });
 
-  return { run: cli.run };
+  return {
+    run: cli.run,
+    root: repo.root,
+    createRunner: (script: string) =>
+      createCLIRunner({ script, cwd: repo.root, onCleanup: onTestFinished }),
+  };
 }
 
 test('it starts the app under a supervisor process with `up`, and stops it with `down`', async () => {
@@ -103,4 +109,64 @@ test("it streams the doctor's check event before its envelope, each in the publi
     last: result.envelope.command,
     errors: result.errors,
   }).toStrictEqual({ events: ['check'], last: 'doctor', errors: [] });
+});
+
+test('it lints the cover of the registry file in its `registry` option', async () => {
+  const ctx = await setupTest();
+
+  // The script is a shared glob and the option's file is not, so only the option can fail the lint.
+  await Bun.write(
+    join(ctx.root, 'verify/run.ts'),
+    [
+      `import { runVerify } from ${JSON.stringify(join(import.meta.dir, 'run-verify.ts'))};`,
+      `import { createCoverWringer } from ${JSON.stringify(join(import.meta.dir, 'test-utils/create-cover-wringer.ts'))};`,
+      "await runVerify(createCoverWringer({ shared: ['verify/run.ts'] }), { skill: 'docs/verify', registry: 'verify/registry.ts' });",
+    ].join('\n'),
+  );
+
+  await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
+  await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  const result = await ctx.createRunner(join(ctx.root, 'verify/run.ts')).run('lint', '--json');
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 1,
+    data: expect.objectContaining({
+      failures: [expect.objectContaining({ check: 'registry', where: 'verify/registry.ts' })],
+    }),
+  });
+});
+
+test('it lints the cover of the running script when no `registry` option is given', async () => {
+  const ctx = await setupTest();
+
+  await Bun.write(
+    join(ctx.root, 'verify/run.ts'),
+    [
+      `import { runVerify } from ${JSON.stringify(join(import.meta.dir, 'run-verify.ts'))};`,
+      `import { createCoverWringer } from ${JSON.stringify(join(import.meta.dir, 'test-utils/create-cover-wringer.ts'))};`,
+      "await runVerify(createCoverWringer(), { skill: 'docs/verify' });",
+    ].join('\n'),
+  );
+
+  await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  const result = await ctx.createRunner(join(ctx.root, 'verify/run.ts')).run('lint', '--json');
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 1,
+    data: expect.objectContaining({
+      failures: [expect.objectContaining({ check: 'registry', where: 'verify/run.ts' })],
+    }),
+  });
 });

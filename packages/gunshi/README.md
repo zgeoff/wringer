@@ -62,8 +62,8 @@ absolute path of the installed template folder, to copy from. `--human` prints a
 run it on a fresh checkout. It exits with code 1, with `check-failed` in its envelope's
 `error.code`, when it finds any of these:
 
-- a feature's `paths` glob that matches no tracked file, and no untracked file outside git's ignore
-  rules;
+- a feature's `paths` glob that matches no file git tracks or leaves unignored;
+- a registry file that no `.shared()` or feature `paths` glob matches, whatever `.ignore` lists;
 - a line in a fenced code block of the verify skill's Markdown files that calls the CLI and fails to
   parse, whose arguments fail the command's schema, or that names a feature or a target the registry
   lacks;

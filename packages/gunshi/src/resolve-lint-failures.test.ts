@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { resolveLintFailures } from './resolve-lint-failures.ts';
+import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
 test('it returns no failure when every glob matches, every line parses and the template is current', async () => {
@@ -21,6 +22,7 @@ test('it returns no failure when every glob matches, every line parses and the t
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -35,6 +37,7 @@ test('it fails a skill written from an older template version', async () => {
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -68,6 +71,7 @@ test('it fails a journey line whose arguments fail the command schema', async ()
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -94,6 +98,7 @@ test('it fails a journey line in a reference file of the skill', async () => {
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md', 'skill/references/greeting.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [
       { path: 'skill/SKILL.md', text: skill },
       { path: 'skill/references/greeting.md', text: reference },
@@ -118,6 +123,7 @@ test('it fails a missing verify skill', async () => {
     wringer: createDemoWringer(),
     files: ['src/greet.ts'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [],
     templateVersion: 4,
   });
@@ -149,6 +155,7 @@ test.each([
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -184,6 +191,7 @@ test.each([
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -207,6 +215,7 @@ test('it fails a journey line whose repo command names an unknown feature', asyn
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -240,6 +249,7 @@ test('it fails a journey line with an unclosed quote', async () => {
     wringer: createDemoWringer(),
     files: ['src/greet.ts', 'skill/SKILL.md'],
     skillPath: 'skill/SKILL.md',
+    registryFile: null,
     skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
@@ -254,4 +264,50 @@ test('it fails a journey line with an unclosed quote', async () => {
       },
     ],
   });
+});
+
+test('it fails a registry file that only an ignore glob matches', async () => {
+  const result = await resolveLintFailures({
+    wringer: createCoverWringer(),
+    files: ['src/cart.ts', 'verify/registry.ts', 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    registryFile: 'verify/registry.ts',
+    skillFiles: [
+      {
+        path: 'skill/SKILL.md',
+        text: '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      },
+    ],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'registry',
+      where: 'verify/registry.ts',
+      problem:
+        'No shared glob and no feature `paths` glob matches the registry file, so a change to it leaves every verdict standing. Add the file to `.shared()`.',
+    },
+  ]);
+});
+
+test.each([
+  ['a shared glob', { shared: ['verify/**'] }, 'verify/registry.ts'],
+  ['a feature glob', { paths: ['verify/**'] }, 'verify/registry.ts'],
+])('it passes a registry file that %s matches', async (_case, options, registryFile) => {
+  const result = await resolveLintFailures({
+    wringer: createCoverWringer(options),
+    files: ['src/cart.ts', registryFile, 'skill/SKILL.md'],
+    skillPath: 'skill/SKILL.md',
+    registryFile,
+    skillFiles: [
+      {
+        path: 'skill/SKILL.md',
+        text: '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+      },
+    ],
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([]);
 });

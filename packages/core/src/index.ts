@@ -39,6 +39,7 @@ export { defaultMessageFor, errorCodes, exitCodeFor } from './error-codes.ts';
 export type { ErrorCode, ExitCode } from './error-codes.ts';
 export type { Access, FollowRequest, Host, HostRequest } from './host.ts';
 export { isErrorCode } from './is-error-code.ts';
+export { isGlobMatch } from './is-glob-match.ts';
 export { launchLineSchema } from './launch-line-schema.ts';
 export type { LaunchLine } from './launch-line-schema.ts';
 export { local } from './local.ts';

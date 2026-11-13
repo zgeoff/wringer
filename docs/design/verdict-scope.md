@@ -320,7 +320,9 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
 - `.shared()` adds only the globs the registry lists. Neither the registry's folder nor any other
   path joins the shared globs on its own.
 - `lint` fails when the registry's own file matches no shared glob and no feature's `paths`. An
-  ignore glob does not count as cover.
+  ignore glob does not count as cover. The registry's own file is the `registry` option of
+  `runVerify`, a path from the repo root, and defaults to the script that runs the CLI. `lint` skips
+  the check when that file lies outside the repo.
 - A path is unmapped when it matches no feature's `paths`, no shared glob and no ignore glob.
 - `build` refuses a feature name or a target name longer than 64 characters.
 - `done` refuses a feature the registry does not list, as a usage error, because it has no

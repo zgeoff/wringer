@@ -15,6 +15,10 @@ import type { CLIPorts } from './run-cli.ts';
 export interface VerifyOptions {
   // The folder of the repo's verify skill, relative to the repo root, which `lint` checks.
   readonly skill?: string | undefined;
+
+  // The registry's own file, relative to the repo root, which `lint` checks for cover by a shared
+  // glob or a feature's `paths`. It defaults to the script that runs the CLI.
+  readonly registry?: string | undefined;
 }
 
 const defaultSkillFolder = '.claude/skills/verify';
@@ -23,7 +27,15 @@ const defaultSkillFolder = '.claude/skills/verify';
 // supervisor, so the supervisor's command is the runtime and the script, without the user's
 // arguments.
 export async function runVerify(wringer: Wringer, options: VerifyOptions = {}): Promise<void> {
-  await runWringer(buildCLIWringer(wringer, options.skill ?? defaultSkillFolder));
+  const [, script] = process.argv;
+
+  await runWringer(
+    buildCLIWringer(
+      wringer,
+      options.skill ?? defaultSkillFolder,
+      options.registry ?? script ?? null,
+    ),
+  );
 }
 
 // Runs a registry as the process's CLI, with the process's arguments, streams and exit code.

@@ -1,3 +1,4 @@
+import { isGlobMatch } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { z } from 'zod';
 import { collectDeadGlobs } from './collect-dead-globs.ts';
@@ -8,7 +9,7 @@ import type { SkillMetadata } from './parse-skill-metadata.ts';
 import { resolveJourneyProblem } from './resolve-journey-problem.ts';
 
 export const lintFailureSchema = z.strictObject({
-  check: z.enum(['paths', 'journey', 'template']),
+  check: z.enum(['paths', 'registry', 'journey', 'template']),
   where: z.string(),
   problem: z.string(),
 });
@@ -21,6 +22,10 @@ export interface LintInput {
   // Every file of the repo that git tracks or does not ignore, relative to its root.
   readonly files: readonly string[];
   readonly skillPath: string;
+
+  // The registry's own file, relative to the repo root, or null when it is unknown or lies outside
+  // the repo.
+  readonly registryFile: string | null;
 
   // The Markdown files of the verify skill's folder, its SKILL.md included when it exists.
   readonly skillFiles: readonly MarkdownFile[];
@@ -58,6 +63,7 @@ export async function resolveLintFailures(input: LintInput): Promise<LintResult>
     commands: journeys.length,
     failures: [
       ...pathFailures,
+      ...collectRegistryFailures(input.wringer, input.registryFile),
       ...journeyFailures.filter((failure) => failure !== null),
       ...collectTemplateFailures(metadata, input.skillPath, input.templateVersion),
     ],
@@ -82,6 +88,34 @@ async function resolveJourneyFailure(
     where: `${journey.path}:${journey.line}`,
     problem: `\`${journey.text}\`: ${problem}`,
   };
+}
+
+// The registry file must sit under a shared glob or a feature's `paths`, so a change to it makes
+// the verdicts it can affect stale. An ignore glob does not count as cover.
+function collectRegistryFailures(
+  wringer: Wringer,
+  registryFile: string | null,
+): readonly LintFailure[] {
+  if (registryFile === null) {
+    return [];
+  }
+
+  const covered =
+    isGlobMatch(registryFile, wringer.shared) ||
+    wringer.features.some((feature) => isGlobMatch(registryFile, feature.paths));
+
+  if (covered) {
+    return [];
+  }
+
+  return [
+    {
+      check: 'registry',
+      where: registryFile,
+      problem:
+        'No shared glob and no feature `paths` glob matches the registry file, so a change to it leaves every verdict standing. Add the file to `.shared()`.',
+    },
+  ];
 }
 
 function collectTemplateFailures(

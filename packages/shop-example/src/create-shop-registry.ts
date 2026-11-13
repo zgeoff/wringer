@@ -144,6 +144,7 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
         ],
       },
     )
+    .shared('packages/shop-example/src/create-shop-registry.ts')
     .ignore('**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**')
     .build();
 }

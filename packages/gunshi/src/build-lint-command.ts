@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { realpath } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { WringerError, buildBuiltinCommand } from '@wringer/core';
 import type { BuiltinContext, RegisteredCommand } from '@wringer/core';
 import { z } from 'zod';
@@ -19,7 +20,10 @@ const lintDataSchema = z.strictObject({
 type LintData = z.infer<typeof lintDataSchema>;
 
 // `lint` needs no run, so CI can call it on a fresh checkout.
-export function buildLintCommand(skillFolder: string): RegisteredCommand {
+export function buildLintCommand(
+  skillFolder: string,
+  registryFile: string | null,
+): RegisteredCommand {
   return buildBuiltinCommand<LintArgs, LintData>({
     path: ['lint'],
     summary: 'Check the feature paths and the verify skill against the CLI, with no running app',
@@ -28,11 +32,15 @@ export function buildLintCommand(skillFolder: string): RegisteredCommand {
     effect: 'read',
     needsRun: false,
     needsDoctor: false,
-    run: (_args, ctx) => runLint(ctx, skillFolder),
+    run: (_args, ctx) => runLint(ctx, skillFolder, registryFile),
   });
 }
 
-async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintData> {
+async function runLint(
+  ctx: BuiltinContext,
+  skillFolder: string,
+  registryFile: string | null,
+): Promise<LintData> {
   const root = ctx.session.root;
 
   const [listed, deleted] = await Promise.all([
@@ -62,6 +70,7 @@ async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintDa
     wringer: ctx.wringer,
     files: lintFiles.files,
     skillPath,
+    registryFile: await resolveRegistryFile(root, registryFile),
     skillFiles,
     templateVersion,
   });
@@ -74,6 +83,23 @@ async function runLint(ctx: BuiltinContext, skillFolder: string): Promise<LintDa
   }
 
   return data;
+}
+
+// The registry file as a path from the repo root, or null when it is unknown or outside the repo.
+// Both sides go through `realpath`, so a symlinked checkout still compares equal.
+async function resolveRegistryFile(root: string, file: string | null): Promise<string | null> {
+  if (file === null) {
+    return null;
+  }
+
+  const [realRoot, realFile] = await Promise.all([
+    realpath(root).catch(() => root),
+    realpath(resolve(root, file)).catch(() => resolve(root, file)),
+  ]);
+
+  const path = relative(realRoot, realFile).split('\\').join('/');
+
+  return path === '..' || path.startsWith('../') || isAbsolute(path) ? null : path;
 }
 
 function buildLintError(data: LintData): WringerError | null {

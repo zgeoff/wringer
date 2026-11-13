@@ -12,15 +12,18 @@ import { buildCLIWringer } from './build-cli-wringer.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 import { runCLI } from './run-cli.ts';
 import { templateVersion } from './template-version.ts';
+import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
 // `lint` runs through the CLI in a real git repo, with no run, as CI calls it.
-async function setupTest() {
+async function setupTest(
+  wringer = createDemoWringer(),
+  pickRegistryFile: (root: string) => string | null = () => null,
+) {
   const repo = await createTestRepo(import.meta.dir);
 
   onTestFinished(() => repo.remove());
 
-  const wringer = createDemoWringer();
   const stdout: string[] = [];
 
   const ports = {
@@ -48,7 +51,10 @@ async function setupTest() {
     git: repo.git,
     stdout,
     lint: (skillFolder: string, ...flags: readonly string[]) =>
-      runCLI(buildCLIWringer(wringer, skillFolder), { ...ports, argv: ['lint', ...flags] }),
+      runCLI(buildCLIWringer(wringer, skillFolder, pickRegistryFile(repo.root)), {
+        ...ports,
+        argv: ['lint', ...flags],
+      }),
   };
 }
 
@@ -258,4 +264,72 @@ test('it prints each failure with its place for a person', async () => {
     stdout:
       'lint failed (check-failed): 1 lint failure(s). docs/verify/SKILL.md: The verify skill is missing.\nhint: Fix each failure in the feature map or the verify skill, then run `lint` again.\n',
   });
+});
+
+test.each([
+  ['fails a registry file that only an ignore glob matches', [], 1],
+  ['passes once .shared() lists the registry file', ['verify/registry.ts'], 0],
+])('it %s', async (_title, shared, exitCode) => {
+  const ctx = await setupTest(createCoverWringer({ shared }), () => 'verify/registry.ts');
+
+  await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
+  await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  const actualExit = await ctx.lint('docs/verify', '--json');
+
+  expect(actualExit).toBe(exitCode);
+});
+
+test('it reports the uncovered registry file in the envelope', async () => {
+  const ctx = await setupTest(createCoverWringer(), () => 'verify/registry.ts');
+
+  await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
+  await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  await ctx.lint('docs/verify', '--json');
+
+  const envelope = envelopeSchema.parse(JSON.parse(ctx.stdout.join('')));
+
+  expect(envelope.data).toStrictEqual({
+    skill: 'docs/verify/SKILL.md',
+    commands: 0,
+    failures: [
+      {
+        check: 'registry',
+        where: 'verify/registry.ts',
+        problem: expect.stringContaining('Add the file to `.shared()`'),
+      },
+    ],
+  });
+});
+
+test.each([
+  ['inside the repo, as an absolute path', 1, (root: string) => join(root, 'verify/registry.ts')],
+  ['outside the repo', 0, () => '/elsewhere/registry.ts'],
+  ['in a folder whose name starts with two dots', 1, () => '..verify/registry.ts'],
+])('it handles a registry file %s', async (_case, exitCode, pickRegistryFile) => {
+  const ctx = await setupTest(createCoverWringer(), pickRegistryFile);
+
+  await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
+  await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
+  await Bun.write(join(ctx.root, '..verify/registry.ts'), 'export const registry = 1;\n');
+
+  await Bun.write(
+    join(ctx.root, 'docs/verify/SKILL.md'),
+    `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  const actualExit = await ctx.lint('docs/verify', '--json');
+
+  expect(actualExit).toBe(exitCode);
 });

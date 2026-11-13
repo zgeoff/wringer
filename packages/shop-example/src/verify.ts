@@ -5,4 +5,5 @@ import { createShopRegistry } from './create-shop-registry.ts';
 // `bun verify <command>`.
 await runVerify(createShopRegistry({ demoURL: process.env['SHOP_DEMO_URL'] }), {
   skill: '.claude/skills/verify-shop',
+  registry: 'packages/shop-example/src/create-shop-registry.ts',
 });

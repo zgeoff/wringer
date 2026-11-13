@@ -17,6 +17,7 @@ test('it pairs with a verify skill whose journeys parse and whose template versi
     wringer: createVerifyRegistry(),
     files: ['src/items/add-item.ts', 'src/pages/pantry/pantry.tsx', skillPath, mapPath],
     skillPath,
+    registryFile: 'scripts/verify/verify-registry.ts',
     skillFiles: [
       { path: skillPath, text: skill },
       { path: mapPath, text: map },

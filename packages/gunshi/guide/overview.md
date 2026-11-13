@@ -93,7 +93,8 @@ Skip `verify-registry.test.ts` in the template: it tests the template inside wri
 These locations are defaults. When you change one, change each place that refers to it:
 
 - the folder `scripts/verify/`: the `verify` script's path in `package.json`, and its glob in the
-  registry's `.ignore` list;
+  registry's `.shared` list, and the `registry` option of `runVerify` when the registry lives apart
+  from that script;
 - the skill folder: `runVerify`'s `skill` option, a path from the repo root;
 - the script name `verify`: the `package.json` script and the skill's `metadata.wringer-command`,
   such as `bun verify`.
