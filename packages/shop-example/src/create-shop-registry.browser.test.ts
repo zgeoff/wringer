@@ -51,7 +51,6 @@ test('#report keeps a verdict on place-order verified after an edit to the order
     ['order-failure', 'missing'],
     ['list-orders', 'missing'],
     ['order-log', 'missing'],
-    ['guide', 'unchanged'],
   ]);
 });
 
@@ -73,6 +72,5 @@ test('#report marks a verdict on place-order stale after an edit to the page it 
     ['order-failure', 'missing'],
     ['list-orders', 'unchanged'],
     ['order-log', 'unchanged'],
-    ['guide', 'unchanged'],
   ]);
 });

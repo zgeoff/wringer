@@ -311,6 +311,10 @@ list in [The wringer registry](#the-wringer-registry); `bun run verify:shop` run
 **Depends on:** `.shared()` from [VS]. Until it lands, each feature lists the shared paths in its
 own `paths`.
 
+Until work item 5 moves the shop's skill, `verify:shop` lints `.claude/skills/verify-shop` and the
+root `verify` lints `.claude/skills/verify`, which work item 8 writes. The shop registry's `guide`
+feature moves to the wringer registry, whose `guide` feature owns `packages/gunshi/guide/**`.
+
 - [ ] Both registries list the same targets, actions, commands and doctor checks. Evidence: a test.
 - [ ] A change only to a test file or a README leaves every verdict fresh. Evidence: a test.
 - [ ] Every tracked file maps to a feature, a shared glob or an ignore glob. Evidence: a test of
