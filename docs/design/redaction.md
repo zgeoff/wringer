@@ -267,6 +267,9 @@ path that matches nothing changes nothing.
   declared secret, at `launch-ready` and at attach. So a `launch-ready` event keeps its endpoints
   unscrubbed, for later commands to read back.
 - An env value that is all digits, or a URL with no password, is never collected.
+- A collected value under 4 characters is never scrubbed by value, so a copy outside its redacted
+  field stays. Such a value has at most 62³ spellings and protects nothing, and scrubbing it would
+  wreck the evidence.
 - A driver adds a secret it learns at runtime before it writes any evidence that holds the secret.
 - The envelope is scrubbed after its `data` passes the command's schema, so a placeholder never
   fails that check.
