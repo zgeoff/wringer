@@ -225,12 +225,12 @@ export const reportSchema = z.strictObject({
 
 ### Data comment
 
-`report` builds the data comment from the report with `toReportComment`, and `gate` reads it with
-`parseReportComment`. It holds one claim per verdict the report holds, and no path list, so its size
-grows with the number of features only.
+`report` builds the data comment from the report and the registry's name with `toReportComment`, and
+`gate` reads it with `parseReportComment`. It holds one claim per verdict the report holds, and no
+path list, so its size grows with the number of features only.
 
 ```ts
-const comment = renderReportComment(toReportComment(report));
+const comment = renderReportComment(toReportComment(report, wringer.name));
 // → '<!-- wringer-data v2 {"version":2,"base":"origin/main",…} -->'
 
 const read = parseReportComment(prBody);
@@ -324,7 +324,8 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
   `runVerify`, a path from the repo root, and defaults to the script that runs the CLI. `lint` skips
   the check when that file lies outside the repo.
 - A path is unmapped when it matches no feature's `paths`, no shared glob and no ignore glob.
-- `build` refuses a feature name or a target name longer than 64 characters.
+- `build` refuses a registry name, a feature name or a target name longer than 64 characters, and an
+  empty registry name.
 - `done` refuses a feature the registry does not list, as a usage error, because it has no
   fingerprint to record.
 - On a launch target, `done` compares the feature's fingerprint at the default base with the run's

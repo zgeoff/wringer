@@ -1,6 +1,6 @@
 import { isGlobMatch } from './is-glob-match.ts';
 import type { FeatureStatus, Report, Verdict } from './report-schema.ts';
-import type { FeatureDefinition } from './types.ts';
+import type { FeatureDefinition, GatePolicy } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface ReportInput {
@@ -12,10 +12,11 @@ export interface ReportInput {
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly verdicts: ReadonlyMap<string, Verdict>;
+  readonly policy: GatePolicy;
 }
 
 // A feature is changed when the diff limited to its scope is not empty, and then needs a verdict
-// at its own fingerprint. An unchanged feature is `unchanged`, whatever its verdict. A changed path
+// at its own fingerprint; an unpinned verdict fails only under a policy that refuses it. An unchanged feature is `unchanged`, whatever its verdict. A changed path
 // that no feature, shared glob or ignore glob maps is unmapped, and leaves the report incomplete.
 export function buildReport(input: ReportInput): Report {
   const features = input.features.map((feature) => {
@@ -32,7 +33,7 @@ export function buildReport(input: ReportInput): Report {
     return {
       name: feature.name,
       changed: current !== 'empty',
-      status: pickFeatureStatus(current, verdict),
+      status: pickFeatureStatus(current, verdict, input.policy),
       verdict,
     };
   });
@@ -55,7 +56,11 @@ export function buildReport(input: ReportInput): Report {
   };
 }
 
-function pickFeatureStatus(current: string, verdict: Verdict | null): FeatureStatus {
+function pickFeatureStatus(
+  current: string,
+  verdict: Verdict | null,
+  policy: GatePolicy,
+): FeatureStatus {
   if (current === 'empty') {
     return 'unchanged';
   }
@@ -64,5 +69,9 @@ function pickFeatureStatus(current: string, verdict: Verdict | null): FeatureSta
     return 'missing';
   }
 
-  return verdict.featureFingerprint === current ? 'verified' : 'stale';
+  if (verdict.featureFingerprint !== current) {
+    return 'stale';
+  }
+
+  return verdict.pin.kind === 'unpinned' && policy.unpinned === 'refuse' ? 'unpinned' : 'verified';
 }

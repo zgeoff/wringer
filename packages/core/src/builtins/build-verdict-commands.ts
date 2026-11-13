@@ -4,7 +4,6 @@ import { buildChangeFactsRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
 import type { Evidence } from '../envelope.ts';
-import { parseReportBlock } from '../parse-report-block.ts';
 import { pickUploadRefusal } from '../pick-upload-refusal.ts';
 import { readChangeFacts } from '../read-change-facts.ts';
 import type { ChangeFacts } from '../read-change-facts.ts';
@@ -13,8 +12,16 @@ import { readRunSecrets } from '../read-run-secrets.ts';
 import { readUploadCandidate } from '../read-upload-candidate.ts';
 import { doneCommand, readVerdicts } from '../read-verdicts.ts';
 import { renderReportMarkdown } from '../render-report-markdown.ts';
-import { reportSchema, verdictSchema } from '../report-schema.ts';
-import type { Report, Verdict } from '../report-schema.ts';
+import { parseReportComment } from '../report-comment.ts';
+import type { CommentRead } from '../report-comment.ts';
+import {
+  featureStatusSchema,
+  maxBaseLength,
+  maxNameLength,
+  reportSchema,
+  verdictSchema,
+} from '../report-schema.ts';
+import type { Claim, Report, Verdict } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
@@ -26,7 +33,9 @@ const doneArgsSchema = z.strictObject({
 
 type DoneArgs = z.infer<typeof doneArgsSchema>;
 
-const reportArgsSchema = z.strictObject({ base: z.string().min(1).optional() });
+const reportArgsSchema = z.strictObject({
+  base: z.string().min(1).max(maxBaseLength).optional(),
+});
 
 type ReportArgs = z.infer<typeof reportArgsSchema>;
 
@@ -38,12 +47,17 @@ const gateArgsSchema = z.strictObject({ base: z.string().min(1), bodyFile: z.str
 
 type GateArgs = z.infer<typeof gateArgsSchema>;
 
-const gateFailureSchema = z.strictObject({ name: z.string(), reason: z.string() });
+const gateFailureSchema = z.strictObject({
+  name: z.string(),
+  reason: z.string(),
+  status: featureStatusSchema,
+});
 
 const gateDataSchema = z.strictObject({
   fingerprint: z.string(),
   failing: z.array(gateFailureSchema),
   unmapped: z.array(z.string()),
+  unknownClaims: z.array(z.string().min(1).max(maxNameLength)),
 });
 
 type GateData = z.infer<typeof gateDataSchema>;
@@ -75,7 +89,7 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
       const built = await readReport(ctx, args.base);
       const linked = await linkEvidence(ctx, built);
 
-      return { report: linked, markdown: renderReportMarkdown(linked) };
+      return { report: linked, markdown: renderReportMarkdown(linked, ctx.wringer.name) };
     },
   };
 
@@ -182,6 +196,7 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
     verdicts,
+    policy: ctx.wringer.gate,
   });
 }
 
@@ -279,6 +294,9 @@ async function readSecretsOfVerdicts(ctx: BuiltinContext, report: Report): Promi
   }
 }
 
+const upgradeHint = 'Upgrade wringer, then run `report` and `publish` again.';
+const publishHint = 'Run `report` and `publish` again.';
+
 async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData> {
   const bodyPath = isAbsolute(args.bodyFile)
     ? args.bodyFile
@@ -286,17 +304,11 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
 
   const body = await ctx.session.repoHost.readText(bodyPath);
 
-  const block = parseReportBlock(body);
+  const read = checkCommentRegistry(parseReportComment(body), ctx.wringer.name);
 
   const facts = await readCurrentFacts(ctx, args.base);
 
-  const claimed = block.ok
-    ? block.report.features.flatMap((feature) =>
-        feature.verdict === null ? [] : [[feature.name, feature.verdict] as const],
-      )
-    : [];
-
-  const verdicts = new Map(claimed);
+  const claims = read.ok ? read.comment.claims : [];
 
   const computed = buildReport({
     base: args.base,
@@ -306,27 +318,40 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     changedPaths: facts.changedPaths,
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
-    verdicts,
+    verdicts: new Map(claims.map((claim) => [claim.feature, toVerdict(claim)] as const)),
+    policy: ctx.wringer.gate,
   });
+
+  // A body that holds no comment, or an unusable one, fails once; only a missing comment also
+  // fails each changed feature.
+  const bodyFailure = read.ok || read.reason === 'none' ? null : read;
 
   const failing = computed.features.flatMap((feature) => {
-    if (feature.status === 'missing') {
-      return [{ name: feature.name, reason: block.ok ? 'no verdict in the report' : block.reason }];
-    }
+    const reason = pickFailureReason(feature, read, facts);
 
-    if (feature.status === 'stale') {
-      return [
-        {
-          name: feature.name,
-          reason: `verdict at ${feature.verdict?.featureFingerprint ?? ''}, tree at ${facts.featureFingerprints.get(feature.name) ?? ''}`,
-        },
-      ];
-    }
-
-    return [];
+    return reason === null || bodyFailure !== null
+      ? []
+      : [{ name: feature.name, reason, status: feature.status }];
   });
 
-  const data = { fingerprint: facts.fingerprint, failing, unmapped: computed.unmapped };
+  const known = new Set(ctx.wringer.features.map((feature) => feature.name));
+
+  const data = {
+    fingerprint: facts.fingerprint,
+    failing,
+    unmapped: computed.unmapped,
+    unknownClaims: claims
+      .filter((claim) => !known.has(claim.feature))
+      .map((claim) => claim.feature),
+  };
+
+  if (bodyFailure !== null) {
+    throw new WringerError('check-failed', {
+      message: bodyFailure.message,
+      hint: bodyFailure.reason === 'newer-version' ? upgradeHint : publishHint,
+      data,
+    });
+  }
 
   if (failing.length > 0 || computed.unmapped.length > 0) {
     throw new WringerError('check-failed', {
@@ -339,13 +364,52 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
   return data;
 }
 
+// A comment that another registry wrote says nothing about this one's features.
+function checkCommentRegistry(read: CommentRead, registry: string): CommentRead {
+  if (!read.ok || read.comment.registry === registry) {
+    return read;
+  }
+
+  return {
+    ok: false,
+    reason: 'invalid',
+    message: `The data comment is from ${read.comment.registry}; this CLI is ${registry}.`,
+  };
+}
+
+function toVerdict(claim: Claim): Verdict {
+  const { evidenceDigest: _digest, evidenceCount: _count, ...verdict } = claim;
+
+  return { ...verdict, evidence: [] };
+}
+
+function pickFailureReason(
+  feature: Report['features'][number],
+  read: CommentRead,
+  facts: ChangeFacts,
+): string | null {
+  if (feature.status === 'missing') {
+    return read.ok ? 'no claim in the data comment' : read.message;
+  }
+
+  if (feature.status === 'stale') {
+    return `verdict at ${feature.verdict?.featureFingerprint ?? ''}, tree at ${facts.featureFingerprints.get(feature.name) ?? ''}`;
+  }
+
+  if (feature.status === 'unpinned') {
+    return 'the target reports no commit, and the registry refuses an unpinned verdict';
+  }
+
+  return null;
+}
+
 function formatGateFailure(
   failing: readonly { readonly name: string }[],
   unmapped: readonly string[],
 ): string {
   const lines = [
     failing.length > 0
-      ? `${failing.length} changed feature(s) lack a verdict at the current fingerprint: ${failing.map((feature) => feature.name).join(', ')}.`
+      ? `${failing.length} changed feature(s) fail the gate: ${failing.map((feature) => feature.name).join(', ')}.`
       : null,
     unmapped.length > 0
       ? `${unmapped.length} changed path(s) map to no feature: ${unmapped.join(', ')}.`

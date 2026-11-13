@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { bindDrivers } from '../bind-drivers.ts';
 import { createWringer } from '../create-wringer.ts';
 import { local } from '../local.ts';
-import type { Wringer } from '../types.ts';
+import type { GatePolicy, Wringer } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { notes } from './notes-driver.ts';
 
@@ -15,10 +15,11 @@ const directorySchema = z.strictObject({ directory: z.string() });
 // A verify CLI for tests: launch targets `local`, `broken` (exits first) and `slow` (ready after
 // 0.5 s), read-only `prod` (hinted) and `archive`, `constructor`, named for an inherited key, and
 // actions that read, write, keep evidence, hang, throw, flood and pause.
-export function createShopWringer(): Wringer {
+export function createShopWringer(options: { readonly gate?: GatePolicy } = {}): Wringer {
   const shop = bindDrivers([notes({ prefix: '' })] as const);
 
   return createWringer({ name: 'shop' })
+    .gate(options.gate ?? { unpinned: 'allow' })
     .use(...shop.drivers)
     .secret('SHOP_API_TOKEN')
     .target(

@@ -1,7 +1,5 @@
+import { renderReportComment, toReportComment } from './report-comment.ts';
 import type { Report } from './report-schema.ts';
-
-export const reportBlockOpen = '<!-- wringer-report v1';
-export const reportBlockClose = '-->';
 
 const statusLabels = {
   verified: 'verified',
@@ -11,9 +9,8 @@ const statusLabels = {
   unpinned: 'unpinned: the target reports no commit',
 } as const;
 
-// The readable summary comes first, then the JSON report in a hidden block that `gate` reads back.
-// JSON never holds `-->`, because every `>` in it is escaped.
-export function renderReportMarkdown(report: Report): string {
+// The readable summary comes first, then the data comment that `gate` reads back.
+export function renderReportMarkdown(report: Report, registry: string): string {
   const lines = [
     '## wringer report',
     '',
@@ -27,9 +24,7 @@ export function renderReportMarkdown(report: Report): string {
     ),
     '',
     ...formatUnmapped(report.unmapped),
-    reportBlockOpen,
-    JSON.stringify(report).replaceAll('>', String.raw`\u003e`),
-    reportBlockClose,
+    renderReportComment(toReportComment(report, registry)),
     '',
   ];
 

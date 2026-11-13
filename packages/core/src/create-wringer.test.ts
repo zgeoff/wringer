@@ -202,6 +202,22 @@ test('it refuses a target name of 65 characters', () => {
   );
 });
 
+test.each([
+  ['65 characters', 'r'.repeat(65)],
+  ['no characters', ''],
+])('it refuses a registry name of %s', (_label, name) => {
+  const builder = createWringer({ name }).target('local', {
+    mode: 'attach',
+    access: 'read-write',
+    host: local(),
+  });
+
+  expect(() => builder.build()).toThrowWithMessage(
+    WringerError,
+    /The registry name `r*` must hold 1 to 64 characters/u,
+  );
+});
+
 test('it accepts a feature name of 64 characters', () => {
   const wringer = createWringer({ name: 'shop' })
     .target('local', { mode: 'attach', access: 'read-write', host: local() })

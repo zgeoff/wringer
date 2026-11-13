@@ -443,6 +443,10 @@ export interface RunnableRepoCheck {
   readonly run: (ctx: DriveContext) => Promise<void>;
 }
 
+export interface GatePolicy {
+  readonly unpinned: 'allow' | 'refuse';
+}
+
 export interface Wringer {
   readonly name: string;
   readonly stateDir: string;
@@ -452,11 +456,15 @@ export interface Wringer {
   readonly checks: readonly RunnableRepoCheck[];
   readonly features: readonly FeatureDefinition[];
 
-  // Globs of paths with no runtime effect, such as docs: a change to one maps to no feature and
-  // leaves the fingerprint alone.
   // Globs of paths that change every feature's behaviour: only what `.shared()` lists.
   readonly shared: readonly string[];
+
+  // Globs of paths with no runtime effect, such as docs: a change to one maps to no feature and
+  // leaves the fingerprint alone.
   readonly ignore: readonly string[];
+
+  // What `gate` does with a verdict on an attach target that reports no commit.
+  readonly gate: GatePolicy;
   readonly hooks: Partial<HookHandlers>;
 
   // The names of the environment variables that hold the repo's secrets.

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { evidenceSchema } from './envelope.ts';
 
 export const maxNameLength = 64;
+export const maxBaseLength = 256;
 const nameSchema = z.string().min(1).max(maxNameLength);
 
 // A patch ID, or 'empty' for a diff with no file. A patch ID is a SHA-1 or a SHA-256 hash in hex.
@@ -44,7 +45,13 @@ export const verdictSchema = z.strictObject({
 
 export type Verdict = z.infer<typeof verdictSchema>;
 
-const featureStatusSchema = z.enum(['verified', 'stale', 'missing', 'unchanged', 'unpinned']);
+export const featureStatusSchema = z.enum([
+  'verified',
+  'stale',
+  'missing',
+  'unchanged',
+  'unpinned',
+]);
 
 export type FeatureStatus = z.infer<typeof featureStatusSchema>;
 
@@ -68,3 +75,27 @@ export const reportSchema = z.strictObject({
 });
 
 export type Report = z.infer<typeof reportSchema>;
+
+function hasUniqueFeatures(claims: readonly { readonly feature: string }[]): boolean {
+  return new Set(claims.map((claim) => claim.feature)).size === claims.length;
+}
+
+// A claim is the verdict record with its evidence list swapped for a digest and a count, so the
+// comment grows with the number of features only.
+export const claimSchema = verdictSchema.omit({ evidence: true }).extend({
+  evidenceDigest: z.string().regex(/^[0-9a-f]{64}$/u),
+  evidenceCount: z.number().int().nonnegative(),
+});
+
+export type Claim = z.infer<typeof claimSchema>;
+
+// The part of the report that `gate` reads back from the PR body.
+export const reportCommentSchema = z.strictObject({
+  version: z.literal(2),
+  registry: nameSchema,
+  base: z.string().max(maxBaseLength),
+  fingerprint: fingerprintSchema,
+  claims: z.array(claimSchema).refine(hasUniqueFeatures, 'two claims name one feature'),
+});
+
+export type ReportComment = z.infer<typeof reportCommentSchema>;

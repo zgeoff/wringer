@@ -50,8 +50,8 @@ export { defaultRefusalHint } from './make-fence.ts';
 export { makeProcessSupervisorPort } from './make-process-supervisor-port.ts';
 export type { ProcessSupervisorOptions } from './make-process-supervisor-port.ts';
 export { emptyFingerprint } from './parse-patch-id.ts';
-export { parseReportBlock } from './parse-report-block.ts';
-export type { ReportBlockResult } from './parse-report-block.ts';
+export { parseReportComment, renderReportComment, toReportComment } from './report-comment.ts';
+export type { CommentRead } from './report-comment.ts';
 export { readChangeFacts } from './read-change-facts.ts';
 export { collectFeatureScopes } from './collect-feature-scopes.ts';
 
@@ -68,8 +68,8 @@ export { readText } from './read-text.ts';
 export { buildFeatureFile, renderFeatureTable } from './render-feature-table.ts';
 export { renderReportMarkdown } from './render-report-markdown.ts';
 export { reportMarkers } from './report-markers.ts';
-export { reportSchema, verdictSchema } from './report-schema.ts';
-export type { FeatureStatus, Report, Verdict } from './report-schema.ts';
+export { claimSchema, reportCommentSchema, reportSchema, verdictSchema } from './report-schema.ts';
+export type { Claim, FeatureStatus, Report, ReportComment, Verdict } from './report-schema.ts';
 
 export {
   checkResultSchema,

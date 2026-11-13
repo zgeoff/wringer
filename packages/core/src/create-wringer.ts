@@ -12,6 +12,7 @@ import type {
   CheckDefinition,
   CommandSpec,
   FeatureDefinition,
+  GatePolicy,
   HookHandlers,
   RegisteredCommand,
   RunnableRepoCheck,
@@ -37,6 +38,7 @@ export interface WringerBuilder<Ds extends AnyDrivers> {
   readonly feature: (...features: readonly FeatureDefinition[]) => WringerBuilder<Ds>;
   readonly shared: (...globs: readonly string[]) => WringerBuilder<Ds>;
   readonly ignore: (...globs: readonly string[]) => WringerBuilder<Ds>;
+  readonly gate: (policy: GatePolicy) => WringerBuilder<Ds>;
   readonly hook: <Name extends keyof HookHandlers>(
     name: Name,
     handler: HookHandlers[Name],
@@ -56,6 +58,7 @@ export function createWringer(options: WringerOptions): WringerBuilder<readonly 
     features: [],
     shared: [],
     ignore: [],
+    gatePolicy: { unpinned: 'allow' },
     hooks: {},
     secrets: [],
   });
@@ -70,6 +73,7 @@ interface Parts {
   readonly features: readonly FeatureDefinition[];
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
+  readonly gatePolicy: GatePolicy;
   readonly hooks: Partial<HookHandlers>;
   readonly secrets: readonly string[];
 }
@@ -96,6 +100,7 @@ function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
     shared: (...globs) => makeBuilder({ ...parts, shared: [...parts.shared, ...globs] }),
     secret: (...envNames) => makeBuilder({ ...parts, secrets: [...parts.secrets, ...envNames] }),
     ignore: (...globs) => makeBuilder({ ...parts, ignore: [...parts.ignore, ...globs] }),
+    gate: (policy) => makeBuilder({ ...parts, gatePolicy: policy }),
     hook: (name, handler) => makeBuilder({ ...parts, hooks: { ...parts.hooks, [name]: handler } }),
     build: () => buildWringer(parts),
   };
@@ -106,6 +111,13 @@ export const defaultStateDir = '.wringer';
 function buildWringer(parts: Parts): Wringer {
   if (parts.targets.length === 0) {
     throw new WringerError('usage', { message: 'A wringer CLI needs at least one target.' });
+  }
+
+  if (parts.options.name.length === 0 || parts.options.name.length > maxNameLength) {
+    throw new WringerError('usage', {
+      message: `The registry name \`${parts.options.name}\` must hold 1 to ${maxNameLength} characters.`,
+      hint: 'Give the registry a name the data comment can hold.',
+    });
   }
 
   const longName = [
@@ -174,6 +186,7 @@ function buildWringer(parts: Parts): Wringer {
     features: Object.freeze([...parts.features]),
     shared: Object.freeze([...parts.shared]),
     ignore: Object.freeze([...parts.ignore]),
+    gate: Object.freeze({ ...parts.gatePolicy }),
     hooks: Object.freeze({ ...parts.hooks }),
     secrets: Object.freeze([...parts.secrets]),
   });
