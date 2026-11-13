@@ -43,7 +43,7 @@
     "prose": "bash .claude/skills/docs-writing/scripts/check-length.sh && bash .claude/skills/docs-writing/scripts/check-prose.sh AGENTS.md",
     "test": "bun scripts/remove-stale-test-folders.ts && bun test --randomize --pass-with-no-tests --path-ignore-patterns='**/*.browser.test.ts' --path-ignore-patterns='**/*.docker.test.ts'",
     "test:browser": "bun run --filter @wringer/browser browser:install && bun scripts/remove-stale-test-folders.ts && bun test --randomize --timeout 10000 .browser.test.ts",
-    "test:docker": "bun test --timeout 15000 .docker.test.ts",
+    "test:docker": "bun packages/db/src/test-utils/create-test-images.ts && bun test --timeout 15000 .docker.test.ts",
     "typecheck": "tsrs --noEmit && bun run --filter '*' typecheck",
     "verify": "bun packages/shop-example/src/verify-wringer.ts",
     "verify:shop": "bun packages/shop-example/src/verify-shop.ts",

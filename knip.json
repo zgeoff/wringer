@@ -11,6 +11,8 @@
   "workspaces": {
     ".": { "entry": ["scripts/**/*.test.ts"] },
     "packages/*": { "entry": ["src/**/*.test.ts"] },
+    // the root `test:docker` script runs the image build before the docker tests
+    "packages/db": { "entry": ["src/**/*.test.ts", "src/test-utils/create-test-images.ts"] },
     // the verify CLI tests start this script as a process, and a repo copies the template's entry
     // point, so no module imports either
     "packages/gunshi": {

@@ -1,3 +1,5 @@
+import type { DockerImage } from '@wringer/core/test-utils/create-docker-image.ts';
+import { createDockerImage } from '@wringer/core/test-utils/create-docker-image.ts';
 import {
   readRemainingMs,
   setupBudgetMs,
@@ -10,10 +12,24 @@ export interface TestPostgres {
   readonly remove: () => void;
 }
 
+// A build pulls the base image, so a cold host pulls it before the setup budget starts, never
+// inside a `docker run`.
+export const testPostgresImage: DockerImage = {
+  tag: 'wringer-test-postgres:1',
+  dockerfile: 'FROM postgres:17-alpine\n',
+};
+
 // A throwaway Postgres in Docker on a free local port, for the tests that need the real engine. Its
-// image starts a temporary server without TCP first, so the probe asks over TCP. The whole setup
-// keeps to one budget, and `signal` aborts when the test ends, so no probe outlives the test.
+// image starts a temporary server without TCP first, so the probe asks over TCP. The budget leaves
+// out the image build, and `signal` aborts when the test ends, so no probe outlives the test.
 export async function createTestPostgres(signal: AbortSignal): Promise<TestPostgres> {
+  await createDockerImage(testPostgresImage);
+
+  // The abort listener below never fires for a signal that aborted during the build.
+  if (signal.aborted) {
+    throw new Error('Postgres was not ready before the test ended');
+  }
+
   const deadlineAtMs = Date.now() + setupBudgetMs;
 
   const started = Bun.spawnSync(
@@ -28,7 +44,7 @@ export async function createTestPostgres(signal: AbortSignal): Promise<TestPostg
       'POSTGRES_PASSWORD=shop',
       '--publish',
       '127.0.0.1::5432',
-      'postgres:17-alpine',
+      testPostgresImage.tag,
     ],
     { timeout: readRemainingMs(deadlineAtMs, 'docker run') },
   );

@@ -1,5 +1,7 @@
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { DockerImage } from './create-docker-image.ts';
+import { createDockerImage } from './create-docker-image.ts';
 import { readRemainingMs, setupBudgetMs, waitUntilReady } from './wait-until-ready.ts';
 
 export interface TestSSHPostgres {
@@ -10,38 +12,31 @@ export interface TestSSHPostgres {
   readonly remove: () => void;
 }
 
-const image = 'wringer-test-ssh-postgres:2';
-
 // Postgres with sshd beside it, so psql runs on the "remote" host the way a `via: 'exec'` target
 // over ssh runs it. psql reaches the database over its local socket, which the image trusts.
-const dockerfile = `FROM postgres:17-alpine
+export const testSSHPostgresImage: DockerImage = {
+  tag: 'wringer-test-ssh-postgres:2',
+  dockerfile: `FROM postgres:17-alpine
 RUN apk add --no-cache openssh && ssh-keygen -A && adduser -D -h /srv/shop shop && passwd -u shop
 CMD ["sh", "-c", "mkdir -p /srv/shop/.ssh && cp /run/key.pub /srv/shop/.ssh/authorized_keys && chown -R shop /srv/shop/.ssh && /usr/sbin/sshd && exec docker-entrypoint.sh postgres"]
-`;
+`,
+};
 
 // `directory` holds the key pair and an ssh wrapper that passes the key and the port, so the
 // caller's ssh host needs only `binary` and `destination`. `signal` aborts when the test ends, so
-// no probe outlives the cleanup that removes `directory`.
+// no probe outlives the cleanup that removes `directory`. The budget leaves out the image build.
 export async function createTestSSHPostgres(
   directory: string,
   signal: AbortSignal,
 ): Promise<TestSSHPostgres> {
-  const deadlineAtMs = Date.now() + setupBudgetMs;
+  await createDockerImage(testSSHPostgresImage);
 
-  const built = Bun.spawnSync(['docker', 'build', '--quiet', '--tag', image, '-'], {
-    stdin: new TextEncoder().encode(dockerfile),
-    timeout: readRemainingMs(deadlineAtMs, 'docker build'),
-  });
-
-  if (built.exitCode !== 0) {
-    const reason =
-      built.exitedDueToTimeout === true
-        ? 'ran past the setup budget'
-        : `failed: ${built.stderr.toString()}`;
-
-    throw new Error(`docker build ${reason}`);
+  // The abort listener below never fires for a signal that aborted during the build.
+  if (signal.aborted) {
+    throw new Error('Postgres over ssh was not ready before the test ended');
   }
 
+  const deadlineAtMs = Date.now() + setupBudgetMs;
   const key = join(directory, 'key');
 
   Bun.spawnSync(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', key]);
@@ -66,7 +61,7 @@ export async function createTestSSHPostgres(
       '127.0.0.1::5432',
       '--publish',
       '127.0.0.1::22',
-      image,
+      testSSHPostgresImage.tag,
     ],
     { timeout: readRemainingMs(deadlineAtMs, 'docker run') },
   );
