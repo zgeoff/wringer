@@ -17,8 +17,8 @@
       "entry": [
         "src/**/*.test.ts",
         "src/test-utils/demo-cli.ts",
-        "skills/**/*.test.ts",
-        "skills/wringer/template/verify.ts"
+        "guide/**/*.test.ts",
+        "guide/template/verify.ts"
       ]
     },
     // the journey test launches the example app as a process, the app's page loads its script from
