@@ -1,15 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
 import { emptyFingerprint } from './parse-patch-id.ts';
-import { readFingerprint } from './read-fingerprint.ts';
+import { readChangeFacts } from './read-change-facts.ts';
+import type { ChangeFacts, ChangeFactsHost, ChangeFactsRequest } from './read-change-facts.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit, runGitBytes } from './run-git.ts';
 import { createTestFolder } from './test-utils/create-test-folder.ts';
 import { reverseDiffFiles } from './test-utils/reverse-diff-files.ts';
 
 async function setupTest() {
-  const repo = await createTestFolder(import.meta.dir, 'read-fingerprint');
+  const repo = await createTestFolder(import.meta.dir, 'read-change-facts');
 
   onTestFinished(() => rm(repo, { recursive: true, force: true }));
 
@@ -19,14 +20,38 @@ async function setupTest() {
   await runGit({ cwd: repo, args: ['config', 'commit.gpgsign', 'false'] });
 
   // A clone or a worktree goes in a folder of its own, so it never shows in the repo's change.
-  const elsewhere = await createTestFolder(import.meta.dir, 'read-fingerprint-elsewhere');
+  const elsewhere = await createTestFolder(import.meta.dir, 'read-change-facts-elsewhere');
 
   onTestFinished(() => rm(elsewhere, { recursive: true, force: true }));
+
+  const git = (...args: readonly string[]) => runGit({ cwd: repo, args });
 
   return {
     repo,
     elsewhere,
-    git: (...args: readonly string[]) => runGit({ cwd: repo, args }),
+    readFingerprintWith: async (
+      host: ChangeFactsHost,
+      request: Omit<ChangeFactsRequest, 'scopes' | 'deployed'>,
+    ): Promise<string> => {
+      const facts = await readChangeFacts(host, { ...request, scopes: [], deployed: null });
+
+      return facts.fingerprint;
+    },
+    scopes: [
+      { name: 'cart', globs: ['src/cart/**', 'package.json'] },
+      { name: 'checkout', globs: ['src/checkout/**', 'package.json'] },
+    ],
+    seedShop: async () => {
+      await mkdir(join(repo, 'src', 'cart'), { recursive: true });
+      await mkdir(join(repo, 'src', 'checkout'), { recursive: true });
+      await writeFile(join(repo, 'src', 'cart', 'add.ts'), 'export const add = 1;\n');
+      await writeFile(join(repo, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+      await writeFile(join(repo, 'package.json'), '{}\n');
+      await writeFile(join(repo, 'README.md'), '# shop\n');
+      await git('add', '.');
+      await git('commit', '--quiet', '-m', 'start');
+    },
+    git,
 
     // Runs git with an author in any folder, such as a clone made in `elsewhere`.
     gitIn: (cwd: string, ...args: readonly string[]) =>
@@ -34,16 +59,30 @@ async function setupTest() {
         cwd,
         args: ['-c', 'user.email=tester@example.com', '-c', 'user.name=Tester', ...args],
       }),
-    readFingerprint: (cwd = repo, base = 'main') =>
-      readFingerprint(
+    readFingerprint: async (cwd = repo, base = 'main') => {
+      const facts = await readChangeFacts(
         { runGit, runGitBytes, removeDirectory },
-        { cwd, base, exclude: ['.wringer'], ignore: [] },
-      ),
-    readFingerprintIgnoring: (ignore: readonly string[]) =>
-      readFingerprint(
+        { cwd, base, exclude: ['.wringer'], ignore: [], scopes: [], deployed: null },
+      );
+
+      return facts.fingerprint;
+    },
+    readFacts: (
+      scopes: readonly { name: string; globs: readonly string[] }[],
+      ignore: readonly string[] = [],
+    ): Promise<ChangeFacts> =>
+      readChangeFacts(
         { runGit, runGitBytes, removeDirectory },
-        { cwd: repo, base: 'main', exclude: ['.wringer'], ignore },
+        { cwd: repo, base: 'main', exclude: ['.wringer'], ignore, scopes, deployed: null },
       ),
+    readFingerprintIgnoring: async (ignore: readonly string[]) => {
+      const facts = await readChangeFacts(
+        { runGit, runGitBytes, removeDirectory },
+        { cwd: repo, base: 'main', exclude: ['.wringer'], ignore, scopes: [], deployed: null },
+      );
+
+      return facts.fingerprint;
+    },
   };
 }
 
@@ -170,7 +209,7 @@ test('it gives the same fingerprint whatever order the diff lists the files in',
 
   const before = await ctx.readFingerprint();
 
-  const after = await readFingerprint(
+  const after = await ctx.readFingerprintWith(
     {
       runGit,
       runGitBytes: async (request) => {
@@ -244,7 +283,7 @@ test('it gives the same fingerprint when the environment sets GIT_DIFF_OPTS', as
 
   const before = await ctx.readFingerprint();
 
-  const after = await readFingerprint(
+  const after = await ctx.readFingerprintWith(
     {
       runGit: (request) =>
         runGit({ ...request, env: { GIT_DIFF_OPTS: '--unified=0', ...request.env } }),
@@ -302,9 +341,9 @@ test.each([
 
   const request = { cwd: ctx.repo, base: 'main', exclude: ['*.log'], ignore: [] };
 
-  const before = await readFingerprint({ runGit, runGitBytes, removeDirectory }, request);
+  const before = await ctx.readFingerprintWith({ runGit, runGitBytes, removeDirectory }, request);
 
-  const after = await readFingerprint(
+  const after = await ctx.readFingerprintWith(
     {
       runGit: (gitRequest) => runGit({ ...gitRequest, env: { [name]: '1', ...gitRequest.env } }),
       runGitBytes: (gitRequest) =>
@@ -1437,4 +1476,230 @@ test('it fails with an environment error in a repo with no commit', async () => 
       message: 'The repo has no commit yet, so its change has no fingerprint.',
     }),
   });
+});
+
+test('it changes only the fingerprint of the feature whose file changed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const before = await ctx.readFacts(ctx.scopes);
+
+  await writeFile(join(ctx.repo, 'src', 'cart', 'add.ts'), 'export const add = 2;\n');
+
+  const after = await ctx.readFacts(ctx.scopes);
+
+  expect({
+    cartChanged: after.featureFingerprints.get('cart') !== before.featureFingerprints.get('cart'),
+    checkout: after.featureFingerprints.get('checkout'),
+    whole: after.fingerprint !== before.fingerprint,
+    changedPaths: after.changedPaths,
+  }).toStrictEqual({
+    cartChanged: true,
+    checkout: before.featureFingerprints.get('checkout'),
+    whole: true,
+    changedPaths: ['src/cart/add.ts'],
+  });
+});
+
+test('it gives a feature with no changed file the empty fingerprint', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await writeFile(join(ctx.repo, 'src', 'cart', 'add.ts'), 'export const add = 2;\n');
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect(facts.featureFingerprints.get('checkout')).toBe(emptyFingerprint);
+});
+
+test('it changes every feature fingerprint when a shared path changes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const before = await ctx.readFacts(ctx.scopes);
+
+  await writeFile(join(ctx.repo, 'package.json'), '{"name":"shop"}\n');
+
+  const after = await ctx.readFacts(ctx.scopes);
+
+  expect(
+    [...after.featureFingerprints].map(([name, value]) => [
+      name,
+      value !== before.featureFingerprints.get(name),
+    ]),
+  ).toStrictEqual([
+    ['cart', true],
+    ['checkout', true],
+  ]);
+});
+
+test('it gives the same fingerprint for a feature whose scope holds the whole change', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await writeFile(join(ctx.repo, 'src', 'cart', 'add.ts'), 'export const add = 2;\n');
+
+  const facts = await ctx.readFacts([{ name: 'all', globs: ['**'] }]);
+
+  expect(facts.featureFingerprints.get('all')).toBe(facts.fingerprint);
+});
+
+test('it leaves a path only an ignore glob matches out of every fingerprint and the changed paths', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const before = await ctx.readFacts(ctx.scopes, ['**/*.md']);
+
+  await writeFile(join(ctx.repo, 'README.md'), '# shop, edited\n');
+  await writeFile(join(ctx.repo, 'NOTES.md'), 'notes\n');
+
+  const after = await ctx.readFacts(
+    [...ctx.scopes, { name: 'docs', globs: ['**/*.md'] }],
+    ['**/*.md'],
+  );
+
+  expect({
+    fingerprint: after.fingerprint,
+    changedPaths: after.changedPaths,
+    docs: after.featureFingerprints.get('docs'),
+    cart: after.featureFingerprints.get('cart'),
+  }).toStrictEqual({
+    fingerprint: before.fingerprint,
+    changedPaths: [],
+    docs: emptyFingerprint,
+    cart: before.featureFingerprints.get('cart'),
+  });
+});
+
+test('it lists a path hidden only by info/exclude as changed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await writeFile(join(ctx.repo, '.git', 'info', 'exclude'), 'src/cart/hidden.ts\n');
+  await writeFile(join(ctx.repo, 'src', 'cart', 'hidden.ts'), 'export const hidden = 1;\n');
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect(facts.changedPaths).toStrictEqual(['src/cart/hidden.ts']);
+});
+
+test('it lists committed, staged, edited and untracked paths sorted, without the state folder', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+  await ctx.git('switch', '--quiet', '-c', 'feature');
+
+  await writeFile(join(ctx.repo, 'src', 'cart', 'new.ts'), 'export {};\n');
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'new');
+
+  await writeFile(join(ctx.repo, 'package.json'), '{"a":1}\n');
+  await writeFile(join(ctx.repo, 'src', 'café.ts'), 'export {};\n');
+  await mkdir(join(ctx.repo, '.wringer'));
+  await writeFile(join(ctx.repo, '.wringer', 'state.json'), '{}\n');
+
+  await ctx.git('add', '--force', '.wringer/state.json');
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect(facts.changedPaths).toStrictEqual(['package.json', 'src/café.ts', 'src/cart/new.ts']);
+});
+
+test('it keeps a byte-order mark at the start of a path for the ignore globs', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await writeFile(join(ctx.repo, '\uFEFFguide.md'), '# guide\n');
+
+  const facts = await ctx.readFacts(ctx.scopes, ['\uFEFF*.md']);
+
+  expect(facts.changedPaths).toStrictEqual([]);
+});
+
+test('it splits a path with a space, a quote and a newline into its own chunk', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const name = 'src/cart/a "b"\nc.ts';
+
+  await writeFile(join(ctx.repo, name), 'export {};\n');
+
+  const facts = await ctx.readFacts([
+    { name: 'odd', globs: [name.replaceAll('"', '?')] },
+    ...ctx.scopes,
+  ]);
+
+  expect({
+    changedPaths: facts.changedPaths,
+    odd: facts.featureFingerprints.get('odd') !== emptyFingerprint,
+    checkout: facts.featureFingerprints.get('checkout'),
+  }).toStrictEqual({ changedPaths: [name], odd: true, checkout: emptyFingerprint });
+});
+
+test('it counts a file that became a symlink once, with both its chunks in its scope', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await rm(join(ctx.repo, 'src', 'cart', 'add.ts'));
+  await symlink('../checkout/pay.ts', join(ctx.repo, 'src', 'cart', 'add.ts'));
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect({
+    changedPaths: facts.changedPaths,
+    cartChanged: facts.featureFingerprints.get('cart') !== emptyFingerprint,
+    checkout: facts.featureFingerprints.get('checkout'),
+  }).toStrictEqual({
+    changedPaths: ['src/cart/add.ts'],
+    cartChanged: true,
+    checkout: emptyFingerprint,
+  });
+});
+
+test('it lists the paths that differ from a deployed commit, leaving out ignored ones', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const head = await ctx.git('rev-parse', 'HEAD');
+
+  const deployed = head.stdout.trim();
+
+  await writeFile(join(ctx.repo, 'src', 'cart', 'add.ts'), 'export const add = 2;\n');
+  await writeFile(join(ctx.repo, 'README.md'), '# edited\n');
+  await rm(join(ctx.repo, 'src', 'checkout', 'pay.ts'));
+
+  const facts = await readChangeFacts(
+    { runGit, runGitBytes, removeDirectory },
+    {
+      cwd: ctx.repo,
+      base: 'main',
+      exclude: ['.wringer'],
+      ignore: ['**/*.md'],
+      scopes: ctx.scopes,
+      deployed,
+    },
+  );
+
+  expect(facts.deployedPaths).toStrictEqual(['src/cart/add.ts', 'src/checkout/pay.ts']);
+});
+
+test('it gives no deployed paths without a deployed commit', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect(facts.deployedPaths).toBeNull();
 });

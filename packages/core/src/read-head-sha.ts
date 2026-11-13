@@ -1,10 +1,10 @@
-import type { FingerprintHost } from './read-fingerprint.ts';
+import type { ChangeFactsHost } from './read-change-facts.ts';
 import { WringerError } from './wringer-error.ts';
 
 // The SHA only labels an envelope, so a git that fails or cannot start leaves it null and the
 // command's own result stands.
 export async function readHeadSHA(
-  host: Pick<FingerprintHost, 'runGit'>,
+  host: Pick<ChangeFactsHost, 'runGit'>,
   root: string,
 ): Promise<string | null> {
   const result = await host

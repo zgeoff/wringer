@@ -6,7 +6,7 @@ import type { StatePort } from './create-file-state.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
 import type { LaunchLine } from './launch-line-schema.ts';
-import type { FingerprintHost } from './read-fingerprint.ts';
+import type { ChangeFactsHost } from './read-change-facts.ts';
 import type { Endpoints, RunID } from './run-events.ts';
 import type { ProcessResult } from './run-process.ts';
 
@@ -430,6 +430,8 @@ export interface Wringer {
 
   // Globs of paths with no runtime effect, such as docs: a change to one maps to no feature and
   // leaves the fingerprint alone.
+  // Globs of paths that change every feature's behaviour: only what `.shared()` lists.
+  readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly hooks: Partial<HookHandlers>;
 }
@@ -461,7 +463,7 @@ export interface EvidenceFiles {
 
 // Everything a command reads from or writes to the repo: its git, the files a command names, and
 // its evidence.
-export interface RepoHost extends FingerprintHost, EvidenceFiles {
+export interface RepoHost extends ChangeFactsHost, EvidenceFiles {
   readonly readText: (path: string) => Promise<string>;
 }
 
