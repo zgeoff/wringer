@@ -1,12 +1,6 @@
----
-name: wringer
-description:
-  "Builds a repo's verify CLI, feature map and verify skill on wringer, proves them, and keeps them
-  true. Load it to add wringer to a repo, to prove a verify CLI before its PR, when `verify lint`
-  fails, or when a new @wringer/gunshi ships a new template version."
----
-
 # Build a verify CLI with wringer
+
+What a verify CLI is, and the steps to add one to a repo and keep it true
 
 Give the repo's agents one way to use its real app and keep the evidence of what they checked. Build
 these in the repo:
@@ -47,7 +41,7 @@ proof in its description. The mistakes that cost the most:
 
 ## Key rules
 
-- [Install the skill](#install-the-skill): copy it from `@wringer/gunshi`, at the version the repo
+- [Install](#install): add the packages, then read this guide from the CLI at the version the repo
   installs.
 - [The template](#the-template): the files to copy, with fixed parts and repo parts.
 - [Create](#create): read the repo, then write the CLI, the actions, the checks, 3 to 5 features,
@@ -56,27 +50,26 @@ proof in its description. The mistakes that cost the most:
   refuses what it should.
 - [Maintain](#maintain): the gate and `lint` in CI, and a template upgrade when `lint` asks.
 
-## References
+## Topics
 
-- [Create](./references/create.md): writing the CLI, the registry and the `verify` skill in a repo.
-- [Prove](./references/prove.md): the proof steps and what each shows in the PR.
-- [Fresh subagent brief](./references/fresh-subagent-brief.md): the brief to give the subagent in
-  the prove flow.
-- [Maintain](./references/maintain.md): wiring the gate and `lint` into CI, and upgrading the
-  template.
+Run `bunx wringer-gunshi guide <topic>` in a repo with no verify CLI yet, or
+`bun verify guide <topic>` in one that has it. Each prints the guide of the installed
+`@wringer/gunshi`, so it matches the packages the repo runs.
 
-## Install the skill
+- `create`: writing the CLI, the registry and the `verify` skill in a repo.
+- `prove`: the proof steps and what each shows in the PR.
+- `fresh-subagent-brief`: the brief to give the subagent in the prove flow.
+- `maintain`: wiring the gate and `lint` into CI, and upgrading the template.
+- `template`: where the template files are, to copy from.
 
-This skill ships inside `@wringer/gunshi`, so its version matches the packages the repo installs.
-These commands put it in `.claude/skills/wringer/`, where an agent can load it, and replace any
-older copy there. Commit that folder with the rest of the work:
+## Install
 
 ```bash
 bun add --dev --exact @wringer/core @wringer/gunshi zod
-bunx @wringer/gunshi skill install
+bunx wringer-gunshi guide
 ```
 
-Run the second command again after each upgrade of `@wringer/gunshi`.
+The second command lists the topics. Read the guide again after each upgrade of `@wringer/gunshi`.
 
 The CLI runs on Bun. When the repo installs packages with another package manager, use it for
 `bun add` and `bunx`, such as `pnpm add` and `pnpm dlx`. Also use it in the `verify` skill's
@@ -85,15 +78,17 @@ the CLI with `bun`.
 
 ## The template
 
-[`template/`](./template/) holds a working example for an invented app, Larder:
+`bun verify guide template`, or `bunx wringer-gunshi guide template` before the repo has a verify
+CLI, prints the absolute path of the installed template folder. It holds a working example for an
+invented app, Larder:
 
-| File                                                  | Copy to                             | Holds                                                           |
-| ----------------------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| [`verify.ts`](./template/verify.ts)                   | `scripts/verify/verify.ts`          | the entry point that calls `runVerify`                          |
-| [`verify-registry.ts`](./template/verify-registry.ts) | `scripts/verify/verify-registry.ts` | targets, a driver, an action, a command, a check, a feature     |
-| [`verify/`](./template/verify/)                       | `.claude/skills/verify/`            | the repo's `verify` skill, and its feature map in `references/` |
+| File                 | Copy to                             | Holds                                                           |
+| -------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| `verify.ts`          | `scripts/verify/verify.ts`          | the entry point that calls `runVerify`                          |
+| `verify-registry.ts` | `scripts/verify/verify-registry.ts` | targets, a driver, an action, a command, a check, a feature     |
+| `verify/`            | `.claude/skills/verify/`            | the repo's `verify` skill, and its feature map in `references/` |
 
-Skip `verify-registry.test.ts` in `template/`: it tests the template inside wringer.
+Skip `verify-registry.test.ts` in the template: it tests the template inside wringer.
 
 These locations are defaults. When you change one, change each place that refers to it:
 
@@ -111,14 +106,13 @@ and the `#` title. Keep every other line. The repo owns `references/feature-map.
 
 ## Create
 
-Read how the app starts, what it prints when it is ready, and which state it keeps. Then follow
-[Create](./references/create.md): it ends with 3 to 5 features in the registry, each with a journey
-in the `verify` skill, an ignore list for the files with no runtime effect, and `bun verify lint`
-passing.
+Read how the app starts, what it prints when it is ready, and which state it keeps. Then follow the
+`create` topic: it ends with 3 to 5 features in the registry, each with a journey in the `verify`
+skill, an ignore list for the files with no runtime effect, and `bun verify lint` passing.
 
 ## Prove
 
-The work is done only when each of these holds. [Prove](./references/prove.md) gives the commands.
+The work is done only when each of these holds. the `prove` topic gives the commands.
 
 1. `bun verify doctor` passes on `local`.
 2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. A new
@@ -130,7 +124,7 @@ The work is done only when each of these holds. [Prove](./references/prove.md) g
 
 ## Maintain
 
-Wire these into the repo, as [Maintain](./references/maintain.md) shows:
+Wire these into the repo, as the `maintain` topic shows:
 
 - **The gate on each PR.** A PR that touches a feature's `paths` needs a verdict recorded on the
   PR's latest code. A PR that touches a file outside every feature's `paths` and the ignore list

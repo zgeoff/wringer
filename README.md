@@ -36,18 +36,17 @@ workspace publishes to npm.
    bun add --dev --exact @wringer/core @wringer/gunshi zod
    ```
 
-2. Install the agent skill to `.claude/skills/wringer/`. The command replaces any older copy there.
+2. Ask your coding agent to read the guide and add a verify CLI to the repo. The guide ships in the
+   package, so it matches the version you installed:
 
    ```bash
-   bunx @wringer/gunshi skill install
+   bunx wringer-gunshi guide
    ```
 
-   Expect: `Installed the wringer skill to <repo_root>/.claude/skills/wringer`, where `<repo_root>`
-   is the repo's absolute path.
+   Expect: the version and the list of topics. `bunx wringer-gunshi guide overview` prints where to
+   start.
 
-3. Ask your coding agent to load the `wringer` skill and add a verify CLI to the repo.
-
-The gunshi README's [Agent skill](./packages/gunshi/README.md#agent-skill) section says more.
+The gunshi README's [Guide](./packages/gunshi/README.md#guide) section says more.
 
 ## Work on wringer
 
@@ -74,8 +73,8 @@ rehearsal of the npm publish of each package.
   it holds an example shop app and the verify CLI for it. The browser tests drive the app through
   that CLI's registry with the `@wringer/http`, `db`, `stream` and `browser` packages, and
   `bun verify` runs the CLI.
-- `packages/gunshi/skills/wringer/`: the agent skill that adds a verify CLI to a repo, with the
-  template files it copies. It ships in `@wringer/gunshi`.
+- `packages/gunshi/guide/`: the guide that adds a verify CLI to a repo, with the template files it
+  copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
 - `.claude/`: the agent skills that zgeoff/tools syncs, the hook that blocks an agent's edit until

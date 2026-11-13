@@ -134,6 +134,15 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
         summary: 'Log one line for each order placed',
         paths: ['packages/shop-example/src/shop-app.ts'],
       },
+      {
+        name: 'guide',
+        summary: 'Print the guide for adding a verify CLI, or one of its topics',
+        paths: [
+          'packages/gunshi/src/build-guide-command.ts',
+          'packages/gunshi/src/pick-guide-data.ts',
+          'packages/gunshi/src/read-guide.ts',
+        ],
+      },
     )
     .ignore('**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**')
     .build();
