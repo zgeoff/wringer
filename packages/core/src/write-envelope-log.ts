@@ -1,11 +1,12 @@
 import type { RunView } from './build-run-view.ts';
-import type { RunViewRefusal, StatePort } from './create-file-state.ts';
+import type { Pointers, RunViewRefusal, StatePort } from './create-file-state.ts';
 import type { Envelope } from './envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { WringerError } from './wringer-error.ts';
 
 export interface LogRequest {
-  readonly drive: boolean;
+  // Decided from the pointers as they stand under the pointers' lock, which the append holds.
+  readonly drive: (pointers: Pointers) => boolean;
   readonly failure: WringerError | null;
   readonly now: () => Date;
 
@@ -23,7 +24,9 @@ export async function writeEnvelopeLog(
   request: LogRequest,
 ): Promise<WringerError | null> {
   try {
-    await logEnvelope(state, run, envelope, request);
+    await state.withPointersLock((pointers) =>
+      logEnvelope(state, run, envelope, { ...request, drive: request.drive(pointers) }),
+    );
 
     return null;
   } catch (error) {
@@ -31,11 +34,16 @@ export async function writeEnvelopeLog(
   }
 }
 
+// The request with its drive decided under the pointers' lock.
+interface LogEntry extends Omit<LogRequest, 'drive'> {
+  readonly drive: boolean;
+}
+
 async function logEnvelope(
   state: StatePort,
   run: RunView,
   envelope: Envelope,
-  request: LogRequest,
+  request: LogEntry,
 ): Promise<void> {
   const at = request.now().toISOString();
 
@@ -48,7 +56,12 @@ async function logEnvelope(
     });
   }
 
-  const event = { type: 'envelope', at, drive: request.drive && envelope.ok, envelope } as const;
+  const event = {
+    type: 'envelope',
+    at,
+    drive: request.drive && envelope.ok,
+    envelope,
+  } as const;
 
   await (request.refuse === null
     ? state.appendEvent(run.runID, event)

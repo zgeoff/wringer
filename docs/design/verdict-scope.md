@@ -121,6 +121,12 @@ interface Wringer {
   readonly gate: GatePolicy; // { unpinned: 'allow' } when the registry sets none
 }
 
+interface FeatureDefinition {
+  // …existing name, summary and paths
+  // Commands that check the feature without touching the app, such as `guide`, by their path.
+  readonly commands?: readonly string[] | undefined;
+}
+
 interface GatePolicy {
   readonly unpinned: 'allow' | 'refuse';
 }
@@ -340,6 +346,14 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
   empty registry name.
 - `done` refuses a feature the registry does not list, as a usage error, because it has no
   fingerprint to record.
+- `done` counts as a drive each envelope logged on the run after the doctor passed, with the feature
+  current, that passed and either came from a command that needs a run and the doctor or from one
+  the feature's `commands` lists. It refuses a feature with no such drive. A command another feature
+  lists never counts, and a listed command that failed never counts. A listed command is logged
+  under the run and feature it started with, and counts only when the doctor had passed on that run
+  when it started, and that run and that feature are still current when its envelope is logged.
+  Dispatch reads the pointers and appends the envelope under the pointers' lock, so `use` and `up`
+  never move them between that check and the append.
 - On a launch target, `done` compares the feature's fingerprint at the default base with the run's
   `scopes-read` value, and refuses with the hint `up --restart` when they differ or the run has no
   `scopes-read`.
@@ -408,6 +422,9 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
   upload record, so a verdict with many files never makes the PR body too long.
 - **`gate` refuses version 1 outright.** A version 1 block holds no feature fingerprint, so `gate`
   cannot judge it.
+- **A feature that never touches the app names the commands that check it.** A verdict on `guide`
+  rests on `guide` commands, so the journey and the report show what was checked; an extra app
+  command would make the verdict claim a check the journey never made.
 - **An unmapped path fails the gate.** Every changed path either belongs to a feature, is shared, or
   is ignored as having no effect.
 

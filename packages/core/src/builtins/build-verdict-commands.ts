@@ -72,7 +72,7 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
   const done: BuiltinCommandSpec<DoneArgs, Verdict> = {
     path: [doneCommand],
     summary:
-      'Record a verdict for a feature from its commands that touched the app since the doctor passed',
+      'Record a verdict for a feature from its commands that touched the app, or that it names, since the doctor passed',
     args: doneArgsSchema,
     data: verdictSchema,
     effect: 'read',
@@ -158,7 +158,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
 
   if (drives.length === 0) {
     throw new WringerError('check-failed', {
-      message: `No command of ${feature} that touches the app passed on run ${ctx.run.runID} since the doctor passed.`,
+      message: `No command of ${feature} that touches the app or that ${feature} names passed on run ${ctx.run.runID} since the doctor passed.`,
       hint: `Drive the feature with \`--feature ${feature}\`, then run \`done\` again.`,
     });
   }

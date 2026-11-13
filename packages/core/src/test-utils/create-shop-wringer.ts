@@ -209,6 +209,16 @@ export function createShopWringer(options: { readonly gate?: GatePolicy } = {}):
       },
     })
     .command({
+      path: ['reindex'],
+      summary: 'Rebuild the search index without a run, failing at once',
+      args: emptySchema,
+      data: emptySchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: () => Promise.reject(new Error('The search index is locked.')),
+    })
+    .command({
       path: ['restock'],
       summary: 'Restock the shelves, with no declared effect',
       args: emptySchema,
@@ -500,7 +510,12 @@ export function createShopWringer(options: { readonly gate?: GatePolicy } = {}):
       }),
     )
     .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
-    .feature({ name: 'search', summary: 'Find a product', paths: ['src/search/**'] })
+    .feature({
+      name: 'search',
+      summary: 'Find a product',
+      paths: ['src/search/**'],
+      commands: ['features', 'reindex'],
+    })
     .shared('package.json')
     .ignore('**/*.md')
     .build();

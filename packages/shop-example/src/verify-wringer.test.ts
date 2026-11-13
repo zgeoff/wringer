@@ -34,3 +34,11 @@ test('it claims every file of the repo with a feature, a shared glob or an ignor
     failures.filter((failure) => ['paths', 'unclaimed'].includes(failure.check)),
   ).toStrictEqual([]);
 });
+
+test('it passes lint over wringer verify skill, its feature files and its feature table', async () => {
+  const ctx = setupTest();
+
+  const failures = await ctx.readLintFailures();
+
+  expect(failures).toStrictEqual([]);
+});

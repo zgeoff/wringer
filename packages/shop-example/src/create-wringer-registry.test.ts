@@ -80,6 +80,19 @@ test('it names the wringer registry and registers one feature for each package',
   });
 });
 
+test('it names `features` as the cli command and `guide` as the guide command, and no other', () => {
+  const registry = createWringerRegistry();
+
+  expect(
+    registry.features
+      .filter((feature) => feature.commands !== undefined)
+      .map((feature) => [feature.name, feature.commands]),
+  ).toStrictEqual([
+    ['cli', ['features']],
+    ['guide', ['guide']],
+  ]);
+});
+
 test('it leaves every verdict fresh after a change only to a test file or a README', async () => {
   const ctx = await setupTest();
 

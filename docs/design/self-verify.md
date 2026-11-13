@@ -57,6 +57,9 @@ A `verify:shop` script runs `createShopRegistry` with the skill folder
 | `cli`            | `packages/gunshi/package.json`, `packages/gunshi/src/**`                              |
 | `guide`          | `packages/gunshi/guide/**`                                                            |
 
+`cli` lists `features`, and `guide` lists `guide`, in their `commands`, so each journey's own
+commands are its drives, as [verdict-scope.md](./verdict-scope.md) defines.
+
 ```ts
 // createWringerRegistry
 .shared('bun.lock', 'package.json', '.bun-version', 'bunfig.toml', 'packages/shop-example/**')

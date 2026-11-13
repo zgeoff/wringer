@@ -114,6 +114,40 @@ async function setupTest() {
 
       return `${markdown.slice(0, start)}<!-- wringer-data v2 ${edited} -->${markdown.slice(end)}`;
     },
+
+    // Runs the command, and runs `between` after its body and before dispatch reads the pointers
+    // it records the envelope under.
+    runSwitchingBeforeRecord: (path: readonly string[], between: () => Promise<unknown>) => {
+      const hooks = [() => Promise.resolve(), between];
+
+      const switching: StatePort = {
+        ...shop.state,
+        readPointers: async () => {
+          await hooks.shift()?.();
+
+          return shop.state.readPointers();
+        },
+      };
+
+      return dispatch(wringer, path, {}, { ...shop.session, state: switching, target: 'local' });
+    },
+
+    // Runs the command, and runs `between` once dispatch has read the pointers it records the
+    // envelope under, when it reads the run's cursors just before it logs the envelope.
+    runSwitchingBeforeLog: (path: readonly string[], between: () => Promise<unknown>) => {
+      const hooks = [between];
+
+      const switching: StatePort = {
+        ...shop.state,
+        readCursors: async (runID) => {
+          await hooks.shift()?.();
+
+          return shop.state.readCursors(runID);
+        },
+      };
+
+      return dispatch(wringer, path, {}, { ...shop.session, state: switching, target: 'local' });
+    },
     runPausedDone: () =>
       dispatch(wringer, ['done'], {}, { ...shop.session, state: pausedState, target: 'local' }),
     writing: writing.promise,
@@ -459,6 +493,152 @@ test('#done refuses a feature with no passing drive since the doctor', async () 
     exitCode: 1,
     code: 'check-failed',
   });
+});
+
+test('#done records a verdict from a command the feature names that needs no run', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.run(['features']);
+
+  const result = await ctx.run(['done']);
+
+  expect(result.envelope.data).toStrictEqual({
+    feature: 'search',
+    fingerprint: 'empty',
+    featureFingerprint: 'empty',
+    run: result.envelope.instance,
+    at: expect.any(String),
+    target: { name: 'local', evidence: 'local' },
+    pin: { kind: 'local' },
+    evidence: [],
+  });
+});
+
+test('#done refuses a feature whose only command since the doctor is one another feature names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['features']);
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+  });
+});
+
+test('#done refuses a feature whose named command finished after `use` switched to another feature', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.runSwitchingBeforeRecord(['features'], () => ctx.run(['use'], { feature: 'checkout' }));
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+  });
+});
+
+test('#done refuses a feature whose named command was logged after `use` switched away and back', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.runSwitchingBeforeLog(['features'], () => ctx.run(['use'], { feature: 'checkout' }));
+  await ctx.run(['use'], { feature: 'search' });
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+  });
+});
+
+test('it logs a named command as no drive when `use` switched the feature just before the log', async () => {
+  const ctx = await setupTest();
+  const up = await ctx.run(['up']);
+
+  const runID = runIDSchema.parse(up.envelope.instance);
+
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.runSwitchingBeforeLog(['features'], () => ctx.run(['use'], { feature: 'checkout' }));
+
+  const events = await ctx.readEvents(runID);
+
+  expect(
+    events.filter((event) => event.type === 'envelope' && event.envelope.command === 'features'),
+  ).toStrictEqual([expect.objectContaining({ drive: false })]);
+});
+
+test('#done refuses a feature whose named command finished after the run restarted and passed its doctor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+
+  await ctx.runSwitchingBeforeRecord(['features'], async () => {
+    await ctx.run(['up'], { restart: true });
+    await ctx.run(['doctor']);
+  });
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+  });
+});
+
+test('#done refuses a feature whose only named command since the doctor failed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.run(['reindex']);
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 1,
+    code: 'check-failed',
+  });
+});
+
+test('#report lists the named commands that verified a feature as its journey steps', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'search'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'search', 'find.ts'), 'export const find = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'search' });
+  await ctx.run(['features']);
+  await ctx.run(['done']);
+
+  const result = await ctx.run(['report']);
+
+  const markdown = ctx.parseReportData(result.envelope.data).markdown;
+
+  expect({
+    features: markdown.includes('<td><code>features</code></td>'),
+    use: markdown.includes('<td><code>use</code></td>'),
+  }).toStrictEqual({ features: true, use: false });
 });
 
 test('#done refuses a run whose doctor has not passed, with exit code 3', async () => {

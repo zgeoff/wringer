@@ -13,6 +13,8 @@ import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
 import type { ExitCode } from './error-codes.ts';
 import type { Access } from './host.ts';
+import { isDriveCounted } from './is-drive-counted.ts';
+import { isFeatureCommand } from './is-feature-command.ts';
 import { keepCancelledCall } from './keep-cancelled-call.ts';
 import { defaultRefusalHint } from './make-fence.ts';
 import { makeSecretCollector } from './make-secret-collector.ts';
@@ -21,6 +23,7 @@ import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
 import { pickCommandNeeds } from './pick-command-needs.ts';
 import { pickCommandPlan } from './pick-command-plan.ts';
+import type { DriveReason } from './pick-command-plan.ts';
 import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
@@ -32,6 +35,7 @@ import { readChangeFacts } from './read-change-facts.ts';
 import { readCommandContext } from './read-command-context.ts';
 import type { CommandContext } from './read-command-context.ts';
 import { readDefaultBase } from './read-default-base.ts';
+import { readEnvelopeCursors } from './read-envelope-cursors.ts';
 import { readHeadSHA } from './read-head-sha.ts';
 import { readSecretWriteFailure } from './read-secret-write-failure.ts';
 import type { RunID } from './run-events.ts';
@@ -74,8 +78,8 @@ interface CommandOutcome {
 // deadline still reports the evidence it kept and the run and feature it drove.
 interface DriveTrace {
   readonly evidence: (readonly Evidence[])[];
-  drive: boolean;
-  ranOnRun: boolean;
+  drive: DriveReason;
+  keepsStart: boolean;
   boundRun: RunID | null;
   readonly late: Promise<void>[];
 
@@ -114,8 +118,8 @@ export async function dispatch(
 
   const trace: DriveTrace = {
     evidence: [],
-    drive: false,
-    ranOnRun: false,
+    drive: 'none',
+    keepsStart: false,
     boundRun: null,
     late: [],
     calls: [],
@@ -183,7 +187,7 @@ export async function dispatch(
 
   const bound = await readBoundRun(state, trace.boundRun);
 
-  const settled = pickEnvelopeContext(before, after, trace.ranOnRun);
+  const settled = pickEnvelopeContext(before, after, trace.keepsStart);
   const run = pickEnvelopeRun(before, settled, bound);
   const feature = settled?.feature ?? null;
 
@@ -242,7 +246,8 @@ export async function dispatch(
     run === undefined
       ? null
       : await writeEnvelopeLog(state, run, envelope, {
-          drive: trace.drive,
+          drive: (pointers) =>
+            isDriveCounted(trace.drive, before, { pointers, sessionFeature: session.feature }),
           failure: input.error,
           now,
           refuse: pickLogRefusal(envelope, before?.run),
@@ -289,6 +294,7 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
     needsRun: needs.needsRun,
     needsDoctor: needs.needsDoctor,
     isRepoCommand: request.command.kind === 'repo',
+    isFeatureCommand: isFeatureCommand(request.wringer.features, context.feature, info.path),
     run: context.run,
     targetName: context.targetName,
     mode: context.target.mode,
@@ -324,7 +330,9 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   }
 
   request.trace.drive = plan.drive;
-  request.trace.ranOnRun = plan.driveKind === 'run';
+
+  // A command the feature names reports the run and feature it started under, as a drive does.
+  request.trace.keepsStart = plan.driveKind === 'run' || plan.drive === 'feature-command';
 
   // A secret a driver collected reaches the run's secrets file before the command ends, on a failure
   // too, so a write that failed fails the command.
@@ -569,17 +577,6 @@ async function readBoundRun(state: StatePort, runID: RunID | null): Promise<RunV
     return view ?? null;
   } catch {
     return null;
-  }
-}
-
-async function readEnvelopeCursors(
-  state: StatePort,
-  runID: RunID,
-): Promise<Record<string, number> | WringerError> {
-  try {
-    return await state.readCursors(runID);
-  } catch (error) {
-    return toWringerError(error);
   }
 }
 

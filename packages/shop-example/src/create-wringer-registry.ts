@@ -42,11 +42,13 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
         name: 'cli',
         summary: 'Parse the command line and print each envelope',
         paths: ['packages/gunshi/package.json', 'packages/gunshi/src/**'],
+        commands: ['features'],
       },
       {
         name: 'guide',
         summary: 'Print the guide for adding a verify CLI, or one of its topics',
         paths: ['packages/gunshi/guide/**'],
+        commands: ['guide'],
       },
     )
     .shared('bun.lock', 'package.json', '.bun-version', 'bunfig.toml', 'packages/shop-example/**')

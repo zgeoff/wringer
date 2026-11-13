@@ -320,6 +320,10 @@ export interface FeatureDefinition {
   readonly name: string;
   readonly summary: string;
   readonly paths: readonly string[];
+
+  // Commands that check this feature without touching the app, such as `guide`: a passing one
+  // counts as a drive for `done` while this feature is current.
+  readonly commands?: readonly string[] | undefined;
 }
 
 export interface HookHandlers {

@@ -35,6 +35,10 @@ export interface StatePort {
   readonly readPointers: () => Promise<Pointers>;
   readonly withTargetLock: <T>(target: string, work: () => Promise<T>) => Promise<T>;
   readonly writePointers: (change: (current: Pointers) => Pointers) => Promise<Pointers>;
+
+  // Runs the work with the pointers read under the pointers' lock, held until the work settles, so
+  // no pointer write lands between the read and what the work writes.
+  readonly withPointersLock: <T>(work: (pointers: Pointers) => Promise<T>) => Promise<T>;
   readonly appendEvent: (runID: RunID, event: RunEvent) => Promise<void>;
 
   // Rejects with the refusal, and writes nothing, when `refuse` returns one for the run as its log
@@ -152,6 +156,12 @@ export function createFileState(options: FileStateOptions): StatePort {
         await fs.writeTextAtomic(paths.state, `${JSON.stringify(next, null, 2)}\n`);
 
         return next;
+      }),
+    withPointersLock: (work) =>
+      withLock('state.lock', async () => {
+        const pointers = await readPointers();
+
+        return work(pointers);
       }),
     appendEvent: (runID, event) => appendCheckedEvent(runID, event, null),
     appendEventUnless: (runID, event, refuse) => appendCheckedEvent(runID, event, refuse),

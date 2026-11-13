@@ -9,6 +9,7 @@ export interface CommandFacts {
   readonly needsRun: boolean;
   readonly needsDoctor: boolean;
   readonly isRepoCommand: boolean;
+  readonly isFeatureCommand: boolean;
   readonly run: RunView | undefined;
   readonly targetName: string;
   readonly mode: Mode;
@@ -16,14 +17,16 @@ export interface CommandFacts {
   readonly deadlinePassed: boolean;
 }
 
+// Why the command's envelope goes into the run's log as a drive: it drives the app, the current
+// feature names it, or neither.
+export type DriveReason = 'app' | 'feature-command' | 'none';
+
 export type CommandPlan =
   | { readonly kind: 'refuse'; readonly failure: WringerError }
   | {
       readonly kind: 'run';
       readonly driveKind: DriveKind;
-
-      // The command drives the app, so its envelope goes into the run's log as a drive.
-      readonly drive: boolean;
+      readonly drive: DriveReason;
     };
 
 // The envelope answers at the deadline without waiting for the command, so a body that would start
@@ -46,6 +49,14 @@ export function pickCommandPlan(facts: CommandFacts): CommandPlan {
       needsRun: facts.needsRun,
       isRepoCommand: facts.isRepoCommand,
     }),
-    drive: facts.needsRun && facts.needsDoctor,
+    drive: pickDriveReason(facts),
   };
+}
+
+function pickDriveReason(facts: CommandFacts): DriveReason {
+  if (facts.needsRun && facts.needsDoctor) {
+    return 'app';
+  }
+
+  return facts.isFeatureCommand ? 'feature-command' : 'none';
 }
