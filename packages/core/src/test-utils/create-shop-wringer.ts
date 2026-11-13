@@ -3,6 +3,7 @@ import { bindDrivers } from '../bind-drivers.ts';
 import { createWringer } from '../create-wringer.ts';
 import { local } from '../local.ts';
 import type { Wringer } from '../types.ts';
+import { WringerError } from '../wringer-error.ts';
 import { notes } from './notes-driver.ts';
 
 const emptySchema = z.strictObject({});
@@ -19,6 +20,7 @@ export function createShopWringer(): Wringer {
 
   return createWringer({ name: 'shop' })
     .use(...shop.drivers)
+    .secret('SHOP_API_TOKEN')
     .target(
       'local',
       shop.defineTarget({
@@ -33,6 +35,25 @@ export function createShopWringer(): Wringer {
               : null,
         }),
         drivers: { notes: () => ({}) },
+      }),
+    )
+    .target(
+      'secured',
+      shop.defineTarget({
+        mode: 'launch',
+        access: 'read-write',
+        host: local(),
+        launch: () => ({
+          command: ['sh', '-c', `echo '{"event":"listening","port":4002}'; exec sleep 60`],
+          ready: (line) =>
+            line['event'] === 'listening' ? { web: 'http://127.0.0.1:4002' } : null,
+        }),
+        drivers: {
+          notes: () => ({
+            apiToken: 'driver-config-token',
+            url: 'postgres://shopper:driver-url-pass@db.internal/shop',
+          }),
+        },
       }),
     )
     .target(
@@ -73,6 +94,16 @@ export function createShopWringer(): Wringer {
           ready: (line) =>
             line['event'] === 'listening' ? { web: 'http://127.0.0.1:4001' } : null,
         }),
+      }),
+    )
+    .target(
+      'credentialed',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: 'https://shopper:planted-pass-word@shop.example' }),
+        drivers: { notes: () => ({}) },
       }),
     )
     .target(
@@ -243,6 +274,78 @@ export function createShopWringer(): Wringer {
           await ctx.evidence.writeFile('note', 'receipt.txt', 'paid 12 for the cart');
 
           return {};
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'photo',
+        summary: 'Keep a photo of the cart as evidence, with a receipt beside it',
+        effect: 'read',
+        input: emptySchema,
+        data: emptySchema,
+        run: async (_input, ctx) => {
+          await ctx.evidence.writeFile('note', 'receipt.txt', 'paid 12 for the cart');
+          await ctx.evidence.writeFile('screenshot', 'cart.png', Buffer.from('cart pixels'));
+
+          return {};
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'echo',
+        summary: 'Return, emit and keep the text it is given',
+        effect: 'read',
+        input: textSchema,
+        data: textSchema,
+        run: async (input, ctx) => {
+          ctx.emit('echoed', { text: input.text });
+
+          await ctx.evidence.writeFile('note', 'echo.txt', input.text);
+
+          return { text: input.text };
+        },
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'echo-fail',
+        summary: 'Fail with the text it is given in the message',
+        effect: 'read',
+        input: textSchema,
+        data: emptySchema,
+        run: (input) =>
+          Promise.reject(
+            new WringerError('check-failed', {
+              message: `The shelf said ${input.text}.`,
+              hint: `Try again after ${input.text} changes.`,
+              data: { said: input.text },
+            }),
+          ),
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'echo-flood',
+        summary: 'Return more data than the cap, with the text it is given inside',
+        effect: 'read',
+        input: textSchema,
+        data: textSchema,
+        run: (input) => Promise.resolve({ text: `${'x'.repeat(40 * 1024)}${input.text}` }),
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'learn',
+        summary: 'Hand a value to the notes driver as a secret it learned',
+        effect: 'read',
+        input: textSchema,
+        data: emptySchema,
+        run: (input, ctx) => {
+          ctx.drivers.notes.learn(input.text);
+
+          return Promise.resolve({});
         },
       }),
     )

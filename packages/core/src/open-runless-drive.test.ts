@@ -2,6 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createNodeRepoHost } from './create-node-repo-host.ts';
+import { createSecretSet } from './create-secret-set.ts';
 import { getTarget } from './get-target.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { createShopWringer } from './test-utils/create-shop-wringer.ts';
@@ -31,6 +32,7 @@ async function setupTest() {
           // The drive emits nothing here.
         },
         files: createNodeRepoHost(),
+        secrets: createSecretSet(),
       }),
   };
 }

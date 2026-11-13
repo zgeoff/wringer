@@ -1,15 +1,22 @@
 import { dirname } from 'node:path';
 import { match } from 'ts-pattern';
 import { createActor, waitFor } from 'xstate';
+import { addEnvSecrets } from './add-env-secrets.ts';
 import { buildRunHandle } from './build-run-handle.ts';
 import { buildShutDownSteps } from './build-shut-down-steps.ts';
+import { collectEnvSecrets } from './collect-env-secrets.ts';
 import type { StatePort } from './create-file-state.ts';
+import { createScrubbingState } from './create-scrubbing-state.ts';
+import { createSecretSet, minimumTokenLength } from './create-secret-set.ts';
+import type { SecretSet } from './create-secret-set.ts';
 import { getTarget } from './get-target.ts';
 import { defaultRefusalHint } from './make-fence.ts';
+import { pickEndpointRefusal } from './pick-endpoint-refusal.ts';
 import { pickPendingCleanups } from './pick-pending-cleanups.ts';
 import { pickSupervisorOperation } from './pick-supervisor-operation.ts';
 import { raceDeadline } from './race-deadline.ts';
 import type { LaunchHost } from './read-launch-host.ts';
+import { readRunSecrets } from './read-run-secrets.ts';
 import type { Endpoints, RunEvent } from './run-events.ts';
 import { appStopGraceMs, startLaunch } from './start-launch.ts';
 import type { Launch } from './start-launch.ts';
@@ -18,7 +25,7 @@ import { supervisorMachine } from './supervisor-machine.ts';
 import type { ShutDownPlan } from './supervisor-machine.ts';
 import type { SupervisorRequest } from './supervisor-protocol.ts';
 import { toWringerError } from './to-wringer-error.ts';
-import type { ServiceInstance, TargetDefinition, Wringer } from './types.ts';
+import type { LaunchPlan, ServiceInstance, TargetDefinition, Wringer } from './types.ts';
 import type { WringerError } from './wringer-error.ts';
 
 export interface SupervisorOptions {
@@ -52,8 +59,18 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const serviceCommands = new AbortController();
   const startupCommands = new AbortController();
 
+  // The supervisor's own set: the registry and env sources, the launch env, and the run's secrets
+  // file, which it reloads before each append so it also scrubs what a command collected.
+  const secrets = createSecretSet();
+
+  addEnvSecrets(secrets, { declared: options.wringer.secrets, env: options.launchHost.env });
+
+  const scrubbingState = createScrubbingState(options.state, secrets, {
+    beforeAppend: (runID) => readRunSecrets(options.state, secrets, runID),
+  });
+
   const append = (event: RunEvent): Promise<void> =>
-    options.state.appendEvent(options.runID, event);
+    scrubbingState.appendEvent(options.runID, event);
 
   const at = (): string => options.now().toISOString();
   let launch: Launch | undefined;
@@ -164,7 +181,15 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   const startUp = async (): Promise<void> => {
     await append({ type: 'supervisor-ready', at: at(), pid: process.pid, socket });
 
+    const plan =
+      target.mode === 'launch' ? target.launch({ runDirectory: run.paths.directory }) : null;
+
+    // The launch env goes into the set and the secrets file before the app starts, so no later
+    // line of the run's log can hold a value of it.
+    await keepLaunchSecrets(options, secrets, plan);
+
     launch = await startTarget(target, {
+      plan,
       launchHost: options.launchHost,
       runDirectory: run.paths.directory,
       appLog: run.childLog('app').path,
@@ -180,6 +205,12 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
     });
 
     lifetime.signal.throwIfAborted();
+
+    const refusal = pickEndpointRefusal(launch.endpoints, secrets);
+
+    if (refusal !== null) {
+      throw refusal;
+    }
 
     await append({ type: 'launch-ready', at: at(), endpoints: launch.endpoints });
 
@@ -291,7 +322,24 @@ async function runCleanups(cleanups: readonly Cleanup[], stopWaitMs: number): Pr
   );
 }
 
+// The launch env values under a secret-looking key are collected, and the run's other processes
+// read them from the secrets file.
+async function keepLaunchSecrets(
+  options: SupervisorOptions,
+  secrets: SecretSet,
+  plan: LaunchPlan | null,
+): Promise<void> {
+  for (const secret of collectEnvSecrets({ declared: [], env: plan?.env ?? {} })) {
+    secrets.add(secret);
+
+    if (secret.value.length >= minimumTokenLength) {
+      await options.state.appendSecret(options.runID, { name: secret.name, value: secret.value });
+    }
+  }
+}
+
 interface TargetStart {
+  readonly plan: LaunchPlan | null;
   readonly launchHost: LaunchHost;
   readonly runDirectory: string;
   readonly appLog: string;
@@ -303,10 +351,10 @@ interface TargetStart {
 }
 
 async function startTarget(target: TargetDefinition, start: TargetStart): Promise<Launch> {
-  if (target.mode === 'launch') {
+  if (start.plan !== null) {
     return startLaunch({
       host: start.launchHost,
-      plan: target.launch({ runDirectory: start.runDirectory }),
+      plan: start.plan,
       logPath: start.appLog,
       readyTimeoutMs: start.readyTimeoutMs,
       signal: start.signal,

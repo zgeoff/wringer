@@ -6,6 +6,9 @@ export const evidenceSchema = z.strictObject({
   kind: z.string().min(1),
   path: z.string().min(1),
   sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+
+  // Optional, so stored runs and verdicts still parse. Absent reads as 'opaque'.
+  scrub: z.enum(['text', 'opaque']).optional(),
 });
 
 export type Evidence = z.infer<typeof evidenceSchema>;

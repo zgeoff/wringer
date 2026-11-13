@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { appendFile, readdir, rename, stat, truncate, writeFile } from 'node:fs/promises';
+import { appendFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import { readOptionalText } from '@zgeoff/std';
 import { createDirectory } from './create-directory.ts';
 import { isErrorCode } from './is-error-code.ts';
@@ -12,6 +12,10 @@ export interface StateFileSystem {
   readonly readFileSize: (path: string) => Promise<number>;
   readonly createDirectory: (path: string) => Promise<void>;
   readonly appendText: (path: string, text: string) => Promise<void>;
+
+  // Creates the file with mode 0600 when it is new.
+  readonly appendPrivateText: (path: string, text: string) => Promise<void>;
+  readonly removeFile: (path: string) => Promise<void>;
   readonly truncateFile: (path: string, length: number) => Promise<void>;
   readonly writeTextAtomic: (path: string, text: string) => Promise<void>;
 }
@@ -36,6 +40,8 @@ export function createNodeStateFileSystem(): StateFileSystem {
     },
     createDirectory,
     appendText: appendFile,
+    appendPrivateText: (path, text) => appendFile(path, text, { mode: 0o600 }),
+    removeFile: (path) => rm(path, { force: true }),
     readFileSize: async (path) => {
       const info = await stat(path);
 

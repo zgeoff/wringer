@@ -1,4 +1,5 @@
 import { createEvidenceWriter } from './create-evidence-writer.ts';
+import type { SecretSet } from './create-secret-set.ts';
 import type { Evidence } from './envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
 import type { EvidenceFiles } from './types.ts';
@@ -11,6 +12,7 @@ export interface CapRequest {
   readonly directory: string;
   readonly now: () => Date;
   readonly files: EvidenceFiles;
+  readonly secrets: SecretSet;
 }
 
 export interface CappedData {

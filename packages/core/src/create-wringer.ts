@@ -32,6 +32,7 @@ export interface WringerBuilder<Ds extends AnyDrivers> {
   readonly command: <Args, Data>(spec: CommandSpec<Args, Data, Ds>) => WringerBuilder<Ds>;
   readonly action: <Input, Data>(action: ActionDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
   readonly check: <Input, Data>(check: CheckDefinition<Input, Data, Ds>) => WringerBuilder<Ds>;
+  readonly secret: (...envNames: readonly string[]) => WringerBuilder<Ds>;
   readonly feature: (...features: readonly FeatureDefinition[]) => WringerBuilder<Ds>;
   readonly shared: (...globs: readonly string[]) => WringerBuilder<Ds>;
   readonly ignore: (...globs: readonly string[]) => WringerBuilder<Ds>;
@@ -55,6 +56,7 @@ export function createWringer(options: WringerOptions): WringerBuilder<readonly 
     shared: [],
     ignore: [],
     hooks: {},
+    secrets: [],
   });
 }
 
@@ -68,6 +70,7 @@ interface Parts {
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly hooks: Partial<HookHandlers>;
+  readonly secrets: readonly string[];
 }
 
 function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
@@ -90,6 +93,7 @@ function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
       makeBuilder({ ...parts, checks: [...parts.checks, (names) => buildRepoCheck(check, names)] }),
     feature: (...features) => makeBuilder({ ...parts, features: [...parts.features, ...features] }),
     shared: (...globs) => makeBuilder({ ...parts, shared: [...parts.shared, ...globs] }),
+    secret: (...envNames) => makeBuilder({ ...parts, secrets: [...parts.secrets, ...envNames] }),
     ignore: (...globs) => makeBuilder({ ...parts, ignore: [...parts.ignore, ...globs] }),
     hook: (name, handler) => makeBuilder({ ...parts, hooks: { ...parts.hooks, [name]: handler } }),
     build: () => buildWringer(parts),
@@ -158,6 +162,7 @@ function buildWringer(parts: Parts): Wringer {
     shared: Object.freeze([...parts.shared]),
     ignore: Object.freeze([...parts.ignore]),
     hooks: Object.freeze({ ...parts.hooks }),
+    secrets: Object.freeze([...parts.secrets]),
   });
 }
 

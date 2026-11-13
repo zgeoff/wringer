@@ -1,12 +1,18 @@
-import { basename, join, relative } from 'node:path';
+import { basename, isAbsolute, join, relative } from 'node:path';
+import type { SecretSet } from './create-secret-set.ts';
 import type { Evidence } from './envelope.ts';
+import { pickEvidenceScrub } from './pick-evidence-scrub.ts';
 import type { EvidenceFiles, EvidenceWriter } from './types.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface EvidenceWriterOptions {
   readonly root: string;
   readonly directory: string;
   readonly now: () => Date;
   readonly files: EvidenceFiles;
+
+  // No writer exists without a set: every text file passes through it.
+  readonly secrets: SecretSet;
 }
 
 export interface CollectingEvidenceWriter {
@@ -18,11 +24,17 @@ export interface CollectingEvidenceWriter {
 export function createEvidenceWriter(options: EvidenceWriterOptions): CollectingEvidenceWriter {
   const collected: Evidence[] = [];
 
-  const record = (kind: string, path: string, content: Uint8Array): Evidence => {
+  const record = (
+    kind: string,
+    path: string,
+    content: Uint8Array,
+    scrub: 'text' | 'opaque',
+  ): Evidence => {
     const evidence = {
       kind,
       path: relative(options.root, path),
       sha256: new Bun.CryptoHasher('sha256').update(content).digest('hex'),
+      scrub,
     };
 
     collected.push(evidence);
@@ -35,7 +47,14 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
     writer: {
       directory: options.directory,
       writeFile: async (kind, name, content) => {
-        const bytes = typeof content === 'string' ? Buffer.from(content) : content;
+        const plan = pickEvidenceScrub(name, content);
+
+        if (plan.kind === 'refuse') {
+          throw new WringerError('internal', { message: plan.message });
+        }
+
+        // The whole file goes through the set at once, so a secret never splits across chunks.
+        const bytes = plan.scrub ? Buffer.from(options.secrets.scrubText(plan.text)) : plan.bytes;
 
         await options.files.createDirectory(options.directory);
 
@@ -46,12 +65,14 @@ export function createEvidenceWriter(options: EvidenceWriterOptions): Collecting
           bytes,
         );
 
-        return record(kind, path, bytes);
+        return record(kind, path, bytes, plan.recorded);
       },
       addFile: async (kind, path) => {
+        await refuseUnsafeFile(options, path);
+
         const bytes = await options.files.readBytes(path);
 
-        return record(kind, path, bytes);
+        return record(kind, path, bytes, 'opaque');
       },
     },
   };
@@ -79,4 +100,25 @@ async function writeNumberedFile(
 
 function formatStamp(date: Date): string {
   return date.toISOString().replaceAll(/[:.]/gu, '-');
+}
+
+// A tool wrote the file, and wringer never rewrites it, so it must be a plain file in the writer's
+// own folder: a symlink could point at any file on the machine.
+async function refuseUnsafeFile(options: EvidenceWriterOptions, path: string): Promise<void> {
+  const facts = await options.files.inspectFile(path);
+  const folder = await options.files.inspectFile(options.directory);
+
+  if (facts === null || !facts.isRegularFile) {
+    throw new WringerError('internal', {
+      message: `The evidence file ${basename(path)} is not a regular file.`,
+    });
+  }
+
+  const inside = folder === null ? '' : relative(folder.realPath, facts.realPath);
+
+  if (inside === '' || inside.startsWith('..') || isAbsolute(inside)) {
+    throw new WringerError('internal', {
+      message: `The evidence file ${basename(path)} is outside the evidence folder.`,
+    });
+  }
 }

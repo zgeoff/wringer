@@ -4,6 +4,7 @@ import type { RunView } from './build-run-view.ts';
 import { buildServiceKey } from './build-service-key.ts';
 import { collectDriverConfigs } from './collect-driver-configs.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
+import type { SecretSet } from './create-secret-set.ts';
 import type { Access } from './host.ts';
 import { makeFence } from './make-fence.ts';
 import { makeDriverExec, makeRepoExec } from './make-fenced-exec.ts';
@@ -12,6 +13,7 @@ import type {
   Emit,
   EvidenceFiles,
   OpenedDriver,
+  SecretCollector,
   SupervisorPort,
   TargetDefinition,
   Wringer,
@@ -37,6 +39,10 @@ export interface DriveRequest {
   readonly emit: Emit;
   readonly files: EvidenceFiles;
   readonly callSupervisor: SupervisorPort['call'];
+  readonly secrets: SecretSet;
+
+  // Adds a value a driver learns at runtime to the set, and keeps it for the run's later commands.
+  readonly collectSecret: SecretCollector['add'];
 }
 
 export const unassignedFeature = 'unassigned';
@@ -51,6 +57,7 @@ export function openDrive(request: DriveRequest): Drive {
     directory: join(run.paths.features, request.feature ?? unassignedFeature),
     now: request.now,
     files: request.files,
+    secrets: request.secrets,
   });
 
   const execOptions = {
@@ -68,6 +75,12 @@ export function openDrive(request: DriveRequest): Drive {
     run,
   });
 
+  for (const entry of entries) {
+    for (const secret of entry.configured.collectSecrets()) {
+      request.secrets.add(secret);
+    }
+  }
+
   const drivers = new Map<string, OpenedDriver>(
     entries.map((entry) => [
       entry.name,
@@ -82,6 +95,7 @@ export function openDrive(request: DriveRequest): Drive {
         signal: request.signal,
         timeLeftMs: () => Math.max(0, request.deadlineAt - request.now().getTime()),
         fence,
+        secrets: { add: request.collectSecret },
         service: (service) => ({
           call: (method, args) =>
             request.callSupervisor({

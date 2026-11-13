@@ -3,6 +3,7 @@ import type { RunView } from './build-run-view.ts';
 import type { RunPaths } from './build-state-paths.ts';
 import type { SupervisorCall } from './call-supervisor.ts';
 import type { StatePort } from './create-file-state.ts';
+import type { Secret, SecretSet } from './create-secret-set.ts';
 import type { Evidence } from './envelope.ts';
 import type { Access, Host } from './host.ts';
 import type { LaunchLine } from './launch-line-schema.ts';
@@ -75,6 +76,19 @@ export interface DriverSession<Options, TargetConfig> {
   // database server that a client program talks to.
   readonly timeLeftMs: () => number;
   readonly service: (name: string) => ServiceCaller;
+
+  // Adds a value the driver learns at runtime to the command's secret set. Add it before writing
+  // any evidence that holds it.
+  readonly secrets: SecretCollector;
+}
+
+export interface CollectedSecret {
+  readonly name: string;
+  readonly value: string;
+}
+
+export interface SecretCollector {
+  readonly add: (secret: CollectedSecret) => void;
 }
 
 export interface ClientCall<Args, Result> {
@@ -188,6 +202,7 @@ export interface SessionParts {
   readonly timeLeftMs: () => number;
   readonly fence: Fence;
   readonly service: (name: string) => ServiceCaller;
+  readonly secrets: SecretCollector;
 }
 
 export interface ServiceParts {
@@ -218,6 +233,8 @@ export interface OpenedDriver {
 }
 
 export interface ConfiguredDriver {
+  // The secret values of the target config: what the driver declares, and the password of each URL.
+  readonly collectSecrets: () => readonly Secret[];
   readonly open: (parts: SessionParts) => OpenedDriver;
   readonly startService: (name: string, parts: ServiceParts) => Promise<ServiceInstance>;
 }
@@ -304,6 +321,9 @@ export interface UploadRequest {
   readonly path: string;
   readonly kind: string;
   readonly sha256: string;
+
+  // Whether wringer scrubbed the file's text; absent reads as 'opaque'.
+  readonly scrub?: 'text' | 'opaque' | undefined;
 }
 
 export interface HookHandlers {
@@ -378,6 +398,10 @@ export interface BuiltinContext {
 
   // A poll waits between reads through this, the timer that goes with `now`.
   readonly wait: (delayMs: number) => Promise<void>;
+
+  // The command's secret set, as it stands: a command that writes text outside the evidence writer
+  // scrubs it here.
+  readonly secrets: SecretSet;
   readonly emit: Emit;
   readonly openDrive: (access: Access, deadline?: Deadline) => Drive;
 
@@ -434,6 +458,9 @@ export interface Wringer {
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly hooks: Partial<HookHandlers>;
+
+  // The names of the environment variables that hold the repo's secrets.
+  readonly secrets: readonly string[];
 }
 
 export interface SupervisorStartRequest {
@@ -459,6 +486,17 @@ export interface EvidenceFiles {
   // False, with nothing written, when the path exists.
   readonly writeNewFile: (path: string, bytes: Uint8Array) => Promise<boolean>;
   readonly readBytes: (path: string) => Promise<Uint8Array>;
+
+  // Null for a path that does not exist.
+  readonly inspectFile: (path: string) => Promise<FileFacts | null>;
+}
+
+export interface FileFacts {
+  // The path after symlinks are resolved.
+  readonly realPath: string;
+
+  // From lstat: a symlink is not a regular file.
+  readonly isRegularFile: boolean;
 }
 
 // Everything a command reads from or writes to the repo: its git, the files a command names, and
@@ -502,6 +540,9 @@ export interface Session {
   readonly timeoutMs?: number | undefined;
   readonly output: OutputPort;
   readonly supervisor: SupervisorPort;
+
+  // The process environment: its secret-looking values join the command's secret set.
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly now?: (() => Date) | undefined;
   readonly wait?: ((delayMs: number) => Promise<void>) | undefined;
 }

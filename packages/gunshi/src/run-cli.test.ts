@@ -30,6 +30,7 @@ async function setupTest() {
       cwd,
       isTTY: false,
       isAgent: false,
+      env: {},
       writeStdout: (text) => {
         written.push(text);
       },

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { createDirectory } from './create-directory.ts';
+import { inspectFile } from './inspect-file.ts';
 import { readText } from './read-text.ts';
 import { removeDirectory } from './remove-directory.ts';
 import { runGit, runGitBytes } from './run-git.ts';
@@ -16,5 +17,6 @@ export function createNodeRepoHost(): RepoHost {
     createDirectory,
     writeNewFile,
     readBytes: readFile,
+    inspectFile,
   };
 }

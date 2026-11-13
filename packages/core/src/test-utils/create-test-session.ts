@@ -21,6 +21,9 @@ export interface TestSession {
 export interface TestSessionOptions {
   readonly parent: string;
   readonly wringer: Wringer;
+
+  // The process environment of the commands and of the supervisors; empty when omitted.
+  readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
 // A test repo and a session whose supervisors run inside the test process, so a test drives the
@@ -64,6 +67,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
       state,
       repoHost: createNodeRepoHost(),
       pullRequests: createFakePullRequestHost([]),
+      env: options.env ?? {},
       output: {
         writeLine: (line) => {
           lines.push(line);
@@ -77,7 +81,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
           supervisors.push(
             runSupervisor({
               wringer: options.wringer,
-              launchHost: readLaunchHost(),
+              launchHost: { ...readLaunchHost(), env: { ...readLaunchHost().env, ...options.env } },
               state,
               runID: request.runID,
               target: request.target,

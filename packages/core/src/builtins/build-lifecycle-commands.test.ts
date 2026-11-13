@@ -535,3 +535,18 @@ test('#detach ends the run of an attach target', async () => {
 
   expect(view?.status).toBe('ended');
 });
+
+test('#attach refuses an endpoint that holds URL credentials without printing them', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('credentialed', ['attach']);
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+    leaked: JSON.stringify(result.envelope).includes('planted-pass-word'),
+  }).toStrictEqual({
+    code: 'environment',
+    message: expect.stringContaining('The endpoint web holds URL credentials.'),
+    leaked: false,
+  });
+});

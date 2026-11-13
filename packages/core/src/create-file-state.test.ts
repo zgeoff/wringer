@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock } from '@zgeoff/std/with-file-lock';
 import { buildRunPaths } from './build-state-paths.ts';
@@ -380,4 +380,64 @@ test('it lists the runs that have a log folder', async () => {
   const runs = await ctx.state.listRuns();
 
   expect(runs).toStrictEqual(['mf3k2a-7q1z']);
+});
+
+test('it keeps a secret in a file of mode 0600 and reads it back', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+
+  const info = await stat(buildRunPaths(ctx.stateDir, runID).secrets);
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect({ mode: info.mode & 0o777, secrets }).toStrictEqual({
+    mode: 0o600,
+    secrets: [{ name: 'notes.session', value: 'planted-session-value' }],
+  });
+});
+
+test('it appends a secret the file already holds once', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await Promise.all([
+    ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' }),
+    ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' }),
+  ]);
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
+});
+
+test('it reads no secrets for a run with no file, and after the file is removed', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  const before = await ctx.state.readSecrets(runID);
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+  await ctx.state.removeSecrets(runID);
+
+  const after = await ctx.state.readSecrets(runID);
+
+  expect({ before, after }).toStrictEqual({ before: [], after: [] });
+});
+
+test('it skips a torn line of the secrets file', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+
+  await appendFile(buildRunPaths(ctx.stateDir, runID).secrets, '{"name":"torn","val');
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
 });

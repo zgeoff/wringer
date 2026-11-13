@@ -29,6 +29,9 @@ export interface CLIPorts {
   readonly cwd: string;
   readonly isTTY: boolean;
   readonly isAgent: boolean;
+
+  // The process environment, whose secret-looking values every command scrubs from what it writes.
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly writeStdout: (text: string) => void;
   readonly readRepoRoot: (cwd: string) => Promise<string | WringerError>;
   readonly openRepo: (root: string) => RepoPorts;
@@ -86,6 +89,7 @@ async function dispatchInvocation(
     repoHost: repo.repoHost,
     pullRequests: repo.pullRequests,
     supervisor: repo.supervisor,
+    env: ports.env,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
     timeoutMs: invocation.globals.timeoutMs,
