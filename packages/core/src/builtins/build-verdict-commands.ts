@@ -4,13 +4,12 @@ import { z } from 'zod';
 import { buildChangeFactsRequest } from '../build-change-request.ts';
 import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
-import type { Evidence } from '../envelope.ts';
 import { readChangeFacts } from '../read-change-facts.ts';
 import type { ChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
-import { readRunSecrets } from '../read-run-secrets.ts';
+import { readReportDocument } from '../read-report-document.ts';
 import { doneCommand, readVerdicts } from '../read-verdicts.ts';
-import { renderReportMarkdown } from '../render-report-markdown.ts';
+import { renderReport } from '../render-report.ts';
 import { parseReportComment } from '../report-comment.ts';
 import type { CommentRead } from '../report-comment.ts';
 import {
@@ -21,9 +20,7 @@ import {
   verdictSchema,
 } from '../report-schema.ts';
 import type { Claim, Pin, Report, Verdict } from '../report-schema.ts';
-import { runIDSchema } from '../run-events.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
-import { uploadEvidence } from '../upload-evidence.ts';
 import { WringerError } from '../wringer-error.ts';
 import { buildDeployedPin } from './build-deployed-pin.ts';
 import { readDeployedCommit } from './read-deployed-commit.ts';
@@ -89,9 +86,20 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
     needsDoctor: false,
     run: async (args, ctx) => {
       const built = await readReport(ctx, args.base);
-      const linked = await linkEvidence(ctx, built);
 
-      return { report: linked, markdown: renderReportMarkdown(linked, ctx.wringer.name) };
+      const document = await readReportDocument(
+        {
+          wringer: ctx.wringer,
+          state: ctx.state,
+          files: ctx.session.repoHost,
+          root: ctx.session.root,
+          stateDir: ctx.stateDir,
+        },
+        built,
+        { isUploadAllowed: false },
+      );
+
+      return { report: built, markdown: renderReport(document, ctx.secrets) };
     },
   };
 
@@ -224,85 +232,6 @@ function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<s
   }
 
   return readDefaultBase(ctx.session.repoHost, ctx.session.root);
-}
-
-// The repo's uploader turns each local evidence file into a link, behind the upload guard: a refused
-// file stays local, with no link, except a file with a known secret in it, which fails the command.
-async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report> {
-  await readSecretsOfVerdicts(ctx, report);
-
-  const uploader = ctx.wringer.hooks.upload;
-
-  if (uploader === undefined) {
-    return report;
-  }
-
-  const verdicts = report.features.flatMap((feature) =>
-    feature.verdict === null || feature.status !== 'verified' ? [] : [feature.verdict],
-  );
-
-  const items = verdicts.flatMap((verdict) =>
-    verdict.evidence.map((evidence) => ({
-      evidence,
-      targetUploads:
-        verdict.target.evidence === 'upload' &&
-        ctx.wringer.targets.get(verdict.target.name)?.evidence === 'upload',
-      label: `${ctx.wringer.name}/${verdict.feature}`,
-    })),
-  );
-
-  const outcomes = await uploadEvidence(items, {
-    uploader,
-    state: ctx.state,
-    files: ctx.session.repoHost,
-    root: ctx.session.root,
-    stateDir: ctx.stateDir,
-    secrets: ctx.secrets,
-    now: ctx.now,
-    signal: ctx.signal,
-  });
-
-  const urls = new Map<Evidence, string>();
-
-  items.forEach((item, index) => {
-    const outcome = outcomes[index];
-
-    if (outcome?.kind === 'linked') {
-      urls.set(item.evidence, outcome.link.url);
-    }
-  });
-
-  const features = report.features.map((feature) => {
-    if (feature.verdict === null || feature.status !== 'verified') {
-      return feature;
-    }
-
-    const evidence = feature.verdict.evidence.map((item) => {
-      const url = urls.get(item);
-
-      return url === undefined ? item : { ...item, url };
-    });
-
-    return { ...feature, verdict: { ...feature.verdict, evidence } };
-  });
-
-  return { ...report, features };
-}
-
-// The set holds the registry and process env sources, and the secrets file of each run a verdict
-// names. It builds no driver config.
-async function readSecretsOfVerdicts(ctx: BuiltinContext, report: Report): Promise<void> {
-  const runIDs = new Set(
-    report.features.flatMap((feature) => (feature.verdict === null ? [] : [feature.verdict.run])),
-  );
-
-  for (const run of runIDs) {
-    const parsed = runIDSchema.safeParse(run);
-
-    if (parsed.success) {
-      await readRunSecrets(ctx.state, ctx.secrets, parsed.data);
-    }
-  }
 }
 
 const upgradeHint = 'Upgrade wringer, then run `report` and `publish` again.';

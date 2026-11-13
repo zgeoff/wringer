@@ -66,29 +66,10 @@ async function setupTest() {
     },
   };
 
-  const run = (path: readonly string[], args: unknown = {}) =>
-    dispatch(wringer, path, args, { ...shop.session, target: 'local' });
-
   return {
     root: shop.repo.root,
     git: shop.repo.git,
 
-    // Drives the checkout feature with one action, then records its verdict.
-    verifyCheckout: async (action: string) => {
-      await mkdir(join(shop.repo.root, 'src', 'checkout'), { recursive: true });
-      await writeFile(join(shop.repo.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
-
-      const up = await run(['up']);
-
-      await run(['doctor']);
-      await run(['use'], { feature: 'checkout' });
-      await run(['action', action]);
-      await run(['done']);
-
-      return up.envelope.instance ?? '';
-    },
-    keepSecret: (runID: string, name: string, value: string) =>
-      shop.state.appendSecret(runID, { name, value }),
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
@@ -650,7 +631,7 @@ test('#report gives each changed feature its status and embeds the data comment'
   ]);
 });
 
-test('#report uploads the evidence of a verified feature with its bytes, name, type and label', async () => {
+test('#report makes no upload when the registry has an upload hook', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
@@ -663,18 +644,10 @@ test('#report uploads the evidence of a verified feature with its bytes, name, t
   await ctx.run(['done']);
   await ctx.runWithUpload(['report']);
 
-  expect(ctx.uploads).toStrictEqual([
-    {
-      bytes: expect.any(Uint8Array),
-      filename: expect.stringMatching(/-receipt\.txt$/u),
-      contentType: 'text/plain',
-      label: 'shop/checkout',
-      sha256: expect.any(String),
-    },
-  ]);
+  expect(ctx.uploads).toStrictEqual([]);
 });
 
-test('#report links each uploaded evidence file to the URL the hook returns', async () => {
+test('#report renders the journey of a verified feature with its steps and local evidence', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
@@ -686,21 +659,24 @@ test('#report links each uploaded evidence file to the URL the hook returns', as
   await ctx.run(['action', 'receipt']);
   await ctx.run(['done']);
 
-  const result = await ctx.runWithUpload(['report']);
+  const result = await ctx.run(['report']);
 
-  const checkout = ctx
-    .parseReportData(result.envelope.data)
-    .report.features.find((feature) => feature.name === 'checkout');
+  const data = ctx.parseReportData(result.envelope.data);
+  const markdown = data.markdown;
+  const report = data.report;
 
-  expect(checkout?.verdict?.evidence).toStrictEqual([
-    {
-      kind: 'note',
-      path: expect.stringMatching(/^\.wringer\/runs\/.+-receipt\.txt$/u),
-      sha256: expect.any(String),
-      scrub: 'text',
-      url: 'https://files.example/receipt',
-    },
-  ]);
+  expect({
+    markers: [
+      markdown.startsWith('<!-- wringer:report -->'),
+      markdown.trimEnd().endsWith('<!-- /wringer:report -->'),
+    ],
+    steps: markdown.includes('<td><code>action receipt</code></td>'),
+    file: /<td>[^<]*-receipt\.txt \(\d+ B\)<\/td>/u.test(markdown),
+    note: markdown.includes('recorded while its target kept evidence local'),
+    linked: report.features
+      .flatMap((feature) => feature.verdict?.evidence ?? [])
+      .some((item) => item.url !== undefined),
+  }).toStrictEqual({ markers: [true, true], steps: true, file: true, note: true, linked: false });
 });
 
 test('#gate passes a PR into another branch when done took the same base', async () => {
@@ -1068,7 +1044,7 @@ test('#report lists each changed path that no feature maps', async () => {
   }).toStrictEqual({
     complete: false,
     unmapped: ['scripts/seed.ts'],
-    markdown: expect.stringContaining('`scripts/seed.ts`'),
+    markdown: expect.stringContaining('<code>scripts/seed.ts</code>'),
   });
 });
 
@@ -1125,79 +1101,7 @@ test('#action runs when a path the repo ignores changed after the doctor passed'
   });
 });
 
-test('#report keeps an opaque file local and never passes it to the upload hook', async () => {
-  const ctx = await setupTest();
-
-  await ctx.verifyCheckout('photo');
-
-  const result = await ctx.runWithUpload(['report']);
-
-  const checkout = ctx
-    .parseReportData(result.envelope.data)
-    .report.features.find((feature) => feature.name === 'checkout');
-
-  expect({
-    uploaded: ctx.uploads.map((file) => file.contentType),
-    urls: checkout?.verdict?.evidence.map((item) => [item.kind, item.url]),
-  }).toStrictEqual({
-    uploaded: ['text/plain'],
-    urls: [
-      ['note', 'https://files.example/receipt'],
-      ['screenshot', undefined],
-    ],
-  });
-});
-
-test('#report keeps a file changed after it was recorded local', async () => {
-  const ctx = await setupTest();
-
-  await ctx.verifyCheckout('receipt');
-
-  const [verdict] = await ctx.readVerdicts().then((verdicts) => [...verdicts.values()]);
-
-  await writeFile(join(ctx.root, verdict?.evidence[0]?.path ?? ''), 'swapped after the fact');
-
-  const result = await ctx.runWithUpload(['report']);
-
-  expect({ ok: result.envelope.ok, uploads: ctx.uploads }).toStrictEqual({ ok: true, uploads: [] });
-});
-
-test('#report fails with an internal error before it sends any file when one holds a known secret', async () => {
-  const ctx = await setupTest();
-
-  await ctx.verifyCheckout('photo');
-
-  const result = await ctx.runWithUpload(['report'], { SHOP_API_TOKEN: 'for the cart' });
-
-  expect({
-    code: result.envelope.error?.code,
-    exitCode: result.exitCode,
-    uploads: ctx.uploads,
-  }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
-});
-
-test.each([
-  { name: 'notes.apiToken', value: 'for the cart' },
-  { name: 'notes.url', value: 'paid 12 for' },
-])(
-  '#report refuses an upload that holds the driver config secret $name that a drive kept',
-  async (secret) => {
-    const ctx = await setupTest();
-    const runID = await ctx.verifyCheckout('photo');
-
-    await ctx.keepSecret(runID, secret.name, secret.value);
-
-    const result = await ctx.runWithUpload(['report']);
-
-    expect({
-      code: result.envelope.error?.code,
-      exitCode: result.exitCode,
-      uploads: ctx.uploads,
-    }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
-  },
-);
-
-test('#done records the evidence setting of its target, and #report then uploads an opaque file', async () => {
+test('#done records the evidence setting of its target', async () => {
   const ctx = await setupTest();
 
   await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
@@ -1208,15 +1112,32 @@ test('#done records the evidence setting of its target, and #report then uploads
   await ctx.runOnUploadingTarget(['use'], { feature: 'checkout' });
   await ctx.runOnUploadingTarget(['action', 'photo']);
   await ctx.runOnUploadingTarget(['done']);
-  await ctx.runOnUploadingTarget(['report']);
 
   const verdicts = await ctx.readVerdicts();
 
+  expect([...verdicts.values()].map((verdict) => verdict.target.evidence)).toStrictEqual([
+    'upload',
+  ]);
+});
+
+test('#report makes no upload, and names the no-upload flag, for a journey on a target that uploads', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.runOnUploadingTarget(['up']);
+  await ctx.runOnUploadingTarget(['doctor']);
+  await ctx.runOnUploadingTarget(['use'], { feature: 'checkout' });
+  await ctx.runOnUploadingTarget(['action', 'photo']);
+  await ctx.runOnUploadingTarget(['done']);
+
+  const result = await ctx.runOnUploadingTarget(['report']);
+
   expect({
-    evidence: [...verdicts.values()].map((verdict) => verdict.target.evidence),
-    uploaded: ctx.uploads.map((file) => file.contentType),
-  }).toStrictEqual({
-    evidence: ['upload'],
-    uploaded: ['text/plain', 'image/png'],
-  });
+    uploads: ctx.uploads,
+    note: ctx
+      .parseReportData(result.envelope.data)
+      .markdown.includes('the report was built with <code>--no-upload</code>'),
+  }).toStrictEqual({ uploads: [], note: true });
 });

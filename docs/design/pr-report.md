@@ -254,10 +254,13 @@ column when a shown row has data:
 ````
 
 ```ts
-// core. Pure: the same document and plan always give the same text.
+// core. Pure: the same document and plan always give the same text. The journey report builds the
+// block with no cuts, as `renderReport(document, secrets)`; the size planner adds the plan.
 const block = renderReport(document, plan);
 
 interface ReportDocument {
+  readonly registry: string; // the `createWringer` name, for the data comment
+  readonly linkHosts: readonly string[]; // the uploader's `linkHosts`; empty while nothing uploads
   readonly report: Report; // the verdict-scope report
   readonly journeys: ReadonlyMap<string, Journey>; // by feature: each feature whose status is `verified`
 }
@@ -355,9 +358,11 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
 
 ### Rendering
 
-- `renderReport` HTML-escapes `&`, `<`, `>`, `"` and `'` in every value from the registry, a run or
-  a verdict, and collapses its whitespace to one space.
-- A Command cell keeps only the command path, in `<code>`, with each backtick, `<` and `>` dropped.
+- `renderReport` scrubs each value with the command's secret set, then HTML-escapes `&`, `<`, `>`,
+  `"`, `'` and the backtick in every value from the registry, a run or a verdict, and collapses its
+  whitespace to one space.
+- A Command cell keeps only the command path, with its segments joined by spaces, in `<code>`, with
+  each backtick, `<` and `>` dropped.
 - A link in the report is `https`, its host is in the uploader's `linkHosts`, and the renderer
   percent-encodes each space, quote, `<`, `>`, `(`, `)`, backtick, `\` and `|` in it.
 - An Evidence cell shows a raster image (`png`, `jpg`, `jpeg`, `gif`, `webp`) as
@@ -374,6 +379,9 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
   `"[redacted]"`, and the user and password of every URL in a string removed.
 - A step with no data, empty data, or data that is one evidence item of that step shows no data. A
   table with no shown data leaves out its Data column.
+- `report` builds the document with no upload, so a journey that would upload carries the cause
+  `no-upload-flag`. When more than one cause holds, the note names the first of: `run-log-missing`,
+  `recorded-local`, `target-gone`, `target-local`, `no-upload-flag`.
 - A journey whose evidence stays local carries one note naming its cause, from this table:
 
 | Cause             | The note gives                                                     |

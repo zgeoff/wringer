@@ -1,0 +1,45 @@
+import { basename, extname } from 'node:path';
+import type { SecretSet } from './create-secret-set.ts';
+import { escapeReportText } from './escape-report-text.ts';
+import { formatReportLink } from './format-report-link.ts';
+import type { JourneyFile } from './report-document.ts';
+
+// One step's files: a raster image as an image, any other uploaded file as a link named by its
+// kind, and a file that stayed local by its name and size.
+export function renderEvidenceCell(
+  files: readonly JourneyFile[],
+  linkHosts: readonly string[],
+  secrets: SecretSet,
+): string {
+  return files.map((file) => renderFile(file, linkHosts, secrets)).join('<br>');
+}
+
+const rasterExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+
+function renderFile(file: JourneyFile, linkHosts: readonly string[], secrets: SecretSet): string {
+  const link = file.url === null ? null : formatReportLink(file.url, linkHosts, secrets);
+
+  if (link === null) {
+    return renderLocalFile(file, secrets);
+  }
+
+  return rasterExtensions.has(extname(file.evidence.path).toLowerCase())
+    ? `<img src="${link}" width="320" />`
+    : `<a href="${link}">${escapeReportText(file.evidence.kind, secrets)}</a>`;
+}
+
+function renderLocalFile(file: JourneyFile, secrets: SecretSet): string {
+  const name = escapeReportText(basename(file.evidence.path), secrets);
+
+  return file.bytes === null ? `${name} (missing)` : `${name} (${formatSize(file.bytes)})`;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  return bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(1)} KB`
+    : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}

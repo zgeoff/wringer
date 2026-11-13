@@ -69,7 +69,16 @@ export type {
 export { readStreamLines } from './read-stream-lines.ts';
 export { readText } from './read-text.ts';
 export { buildFeatureFile, renderFeatureTable } from './render-feature-table.ts';
-export { renderReportMarkdown } from './render-report-markdown.ts';
+export { renderReport } from './render-report.ts';
+
+export type {
+  Journey,
+  JourneyFile,
+  JourneyStep,
+  LocalCause,
+  ReportDocument,
+} from './report-document.ts';
+
 export { reportMarkers } from './report-markers.ts';
 export { claimSchema, reportCommentSchema, reportSchema, verdictSchema } from './report-schema.ts';
 export type { Claim, FeatureStatus, Report, ReportComment, Verdict } from './report-schema.ts';
