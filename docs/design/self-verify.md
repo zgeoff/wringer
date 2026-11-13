@@ -78,7 +78,7 @@ A `verify:shop` script runs `createShopRegistry` with the skill folder
 //                  file: 'references/feature-http-driver.md' }],
 //     shared: ['bun.lock', …], ignore: ['*.md', …] }
 // bun verify features --markdown
-// → data.markdown: the feature table that SKILL.md holds, byte for byte; --human prints it raw
+// → data.markdown: the feature table that SKILL.md holds; --human prints it raw
 
 // core module, the existing `features` built-in, now with `file`, `shared`, `ignore` and
 // `--markdown` (it dropped `current`; `status` still names the current feature):
@@ -99,7 +99,8 @@ const featuresDataSchema = z.strictObject({
 ```
 
 The table has the columns Feature, Summary and File, in registry order, with each File cell a
-relative link. It sits in SKILL.md between `<!-- wringer:features -->` and
+relative link. `lint` compares the span with it cell by cell, so the column padding that a Markdown
+formatter adds does not fail it. It sits in SKILL.md between `<!-- wringer:features -->` and
 `<!-- /wringer:features -->`.
 
 ### The verify skill shape
@@ -133,12 +134,13 @@ export const lintFailureSchema = z.strictObject({
   check: z.enum([
     'paths', // a feature, shared or ignore glob that matches no file
     'unclaimed', // a listed file that no feature, shared or ignore glob matches
+    'registry', // the registry file sits under no shared glob and no feature's paths
     'journey', // a CLI line in the skill's code blocks that would fail to parse
     'feature-file', // a missing, orphaned or misshapen feature file
     'feature-table', // the SKILL.md span differs from `features --markdown`
     'template', // missing frontmatter, or a template hash that differs from the installed one
   ]),
-  where: z.string(), // `feature http-driver`, `ignore`, `shared`, or `<path>:<line>`
+  where: z.string(), // `feature http-driver`, `ignore`, `shared`, `<path>` or `<path>:<line>`
   problem: z.string(),
 });
 ```
@@ -229,6 +231,8 @@ jobs:
 - `lint` fails when the SKILL.md span is missing or differs from `features --markdown`. The hint
   says to replace the span with that output.
 - `lint` reads only the git listing and the skill folder, and starts no run.
+- The shop registry claims every file of the repo too, so its ignore list names each folder and root
+  file outside the shop example, and its `lint` passes over the whole tree.
 - The template hash covers each file under `guide/template/` except tests, in sorted path order, as
   the SHA-256 of each path, a NUL byte, its bytes and a NUL byte; the hash keeps its first 12 hex
   digits.
@@ -311,9 +315,9 @@ list in [The wringer registry](#the-wringer-registry); `bun run verify:shop` run
 **Depends on:** `.shared()` from [VS]. Until it lands, each feature lists the shared paths in its
 own `paths`.
 
-Until work item 5 moves the shop's skill, `verify:shop` lints `.claude/skills/verify-shop` and the
-root `verify` lints `.claude/skills/verify`, which work item 8 writes. The shop registry's `guide`
-feature moves to the wringer registry, whose `guide` feature owns `packages/gunshi/guide/**`.
+`verify:shop` lints the shop's skill in `packages/shop-example/verify-skill/`, and the root `verify`
+lints `.claude/skills/verify`, which work item 8 writes. The shop registry's `guide` feature moves
+to the wringer registry, whose `guide` feature owns `packages/gunshi/guide/**`.
 
 - [ ] Both registries list the same targets, actions, commands and doctor checks. Evidence: a test.
 - [ ] A change only to a test file or a README leaves every verdict fresh. Evidence: a test.

@@ -80,9 +80,11 @@ The mistakes that cost the most:
       run them in.
     - `registry`: the path of the registry file.
 
-    Then rewrite `references/feature-map.md` with one `##` entry per feature, in the template's
-    form: what it does, how a user reaches it, its journey as a block of commands that run as
-    written, and its end state.
+    Then delete `references/feature-add-item.md` and write one `references/feature-<name>.md` per
+    feature, in the template's form: what it does, how a user reaches it, a `## Journey` section
+    whose first `bash` block starts with `bun verify use --feature <name>` and runs as written, and
+    a `## End state` section. Replace the feature table between the `wringer:features` markers with
+    the output of `bun verify features --markdown`.
 
 13. Run `bun verify lint`. Expect: `ok: true`, and `data.commands`, the count of journey lines it
     parsed, above 0. A count of 0 means it found no journey.

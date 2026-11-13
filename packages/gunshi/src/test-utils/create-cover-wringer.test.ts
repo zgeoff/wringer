@@ -8,5 +8,9 @@ test('it builds a registry with the options as its shared globs and the cart pat
     shared: wringer.shared,
     ignore: wringer.ignore,
     paths: wringer.features.map((feature) => feature.paths),
-  }).toStrictEqual({ shared: ['package.json'], ignore: ['verify/**'], paths: [['lib/**']] });
+  }).toStrictEqual({
+    shared: ['package.json'],
+    ignore: ['verify/**', 'docs/**', '.gitignore', 'README.md'],
+    paths: [['lib/**']],
+  });
 });

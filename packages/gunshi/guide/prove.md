@@ -24,7 +24,7 @@ that adds them.
 3. Check that the CLI refuses to run against a changed tree:
    1. Run `bun verify up`, then `bun verify doctor`. Expect: `data.passed: true`.
    2. Add a blank line to a file that a feature's `paths` globs match.
-   3. From that feature's journey in the `verify` skill's feature map, run one command that touches
+   3. From that feature's journey in the `verify` skill's feature file, run one command that touches
       the app, such as an `action` or a `browser` command. Expect: exit code 3 and `error.code`
       `doctor-required`.
    4. Undo the edit, and run `bun verify down`.

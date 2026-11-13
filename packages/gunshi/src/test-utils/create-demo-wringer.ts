@@ -31,10 +31,14 @@ const tiltArgsSchema = z.strictObject({
 const leanArgsSchema = z.strictObject({ degrees: z.number() });
 const moveArgsSchema = z.strictObject({ item: z.string().min(1), target: z.string().min(1) });
 
+export interface DemoOptions {
+  readonly ignore?: readonly string[] | undefined;
+}
+
 // A repo's verify CLI for the adapter's tests: targets `local` and read-only `prod`, an action with
 // every flag type, commands with positionals, union arguments or signed numbers, a positional named
 // after a global flag, a command that never finishes, and a doctor check that passes.
-export function createDemoWringer(): Wringer {
+export function createDemoWringer(options: DemoOptions = {}): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
       mode: 'launch',
@@ -137,5 +141,6 @@ export function createDemoWringer(): Wringer {
       run: () => Promise.resolve({}),
     })
     .feature({ name: 'greeting', summary: 'Greet a visitor', paths: ['src/**'] })
+    .ignore(...(options.ignore ?? []))
     .build();
 }

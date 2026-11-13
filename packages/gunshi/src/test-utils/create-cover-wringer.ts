@@ -4,6 +4,7 @@ import type { Wringer } from '@wringer/core';
 export interface CoverOptions {
   readonly shared?: readonly string[] | undefined;
   readonly paths?: readonly string[] | undefined;
+  readonly ignore?: readonly string[] | undefined;
 }
 
 // A registry for the registry-cover check: one attach target, a `cart` feature, and an ignore glob
@@ -18,6 +19,6 @@ export function createCoverWringer(options: CoverOptions = {}): Wringer {
     })
     .feature({ name: 'cart', summary: 'Add items', paths: [...(options.paths ?? ['src/**'])] })
     .shared(...(options.shared ?? []))
-    .ignore('verify/**')
+    .ignore(...(options.ignore ?? ['verify/**', 'docs/**', '.gitignore', 'README.md']))
     .build();
 }

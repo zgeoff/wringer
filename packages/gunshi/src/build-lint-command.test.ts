@@ -14,10 +14,11 @@ import { runCLI } from './run-cli.ts';
 import { templateVersion } from './template-version.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
+import { writeLintSkill } from './test-utils/write-lint-skill.ts';
 
 // `lint` runs through the CLI in a real git repo, with no run, as CI calls it.
 async function setupTest(
-  wringer = createDemoWringer(),
+  wringer = createDemoWringer({ ignore: ['docs/**', '.gitignore', 'README.md'] }),
   pickRegistryFile: (root: string) => string | null = () => null,
 ) {
   const repo = await createTestRepo(import.meta.dir);
@@ -51,6 +52,7 @@ async function setupTest(
     root: repo.root,
     git: repo.git,
     stdout,
+    writeSkill: (skillText: string) => writeLintSkill(repo.root, wringer, skillText),
     lint: (skillFolder: string, ...flags: readonly string[]) =>
       runCLI(buildCLIWringer(wringer, skillFolder, pickRegistryFile(repo.root)), {
         ...ports,
@@ -69,8 +71,7 @@ test.each([
 
     await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-    await Bun.write(
-      join(ctx.root, 'docs/verify/SKILL.md'),
+    await ctx.writeSkill(
       [
         '---',
         'name: verify',
@@ -97,7 +98,7 @@ test.each([
       exitCode: 0,
       envelope: expect.objectContaining({
         ok: true,
-        data: { skill: 'docs/verify/SKILL.md', commands: 2, failures: [] },
+        data: { skill: 'docs/verify/SKILL.md', commands: 3, failures: [] },
       }),
     });
   },
@@ -106,8 +107,7 @@ test.each([
 test('it fails with exit code 1 on a feature glob that matches no file', async () => {
   const ctx = await setupTest();
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -125,7 +125,7 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
       error: expect.objectContaining({ code: 'check-failed' }),
       data: {
         skill: 'docs/verify/SKILL.md',
-        commands: 0,
+        commands: 1,
         failures: [
           {
             check: 'paths',
@@ -143,8 +143,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
 
   await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     [
       '---',
       'metadata:',
@@ -170,7 +169,7 @@ test('it fails with exit code 1 on a journey line that calls an unknown command'
     envelope: expect.objectContaining({
       data: {
         skill: 'docs/verify/SKILL.md',
-        commands: 1,
+        commands: 2,
         failures: [
           {
             check: 'journey',
@@ -188,8 +187,7 @@ test('it fails a journey line that sets a feature the map lacks', async () => {
 
   await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     [
       '---',
       'metadata:',
@@ -209,7 +207,7 @@ test('it fails a journey line that sets a feature the map lacks', async () => {
 
   expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
     skill: 'docs/verify/SKILL.md',
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -227,8 +225,7 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
   await Bun.write(join(ctx.root, 'src/greet.ts'), 'export const greet = 1;\n');
   await Bun.write(join(ctx.root, 'docs/verify/references/old.md'), '# Old\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -244,7 +241,7 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
 
   expect(envelopeSchema.parse(JSON.parse(result.stdout)).data).toStrictEqual({
     skill: 'docs/verify/SKILL.md',
-    commands: 0,
+    commands: 1,
     failures: [
       { check: 'paths', where: 'feature greeting', problem: 'The glob `src/**` matches no file.' },
     ],
@@ -263,7 +260,7 @@ test('it prints each failure with its place for a person', async () => {
   expect(result).toStrictEqual({
     exitCode: 1,
     stdout:
-      'lint failed (check-failed): 1 lint failure(s). docs/verify/SKILL.md: The verify skill is missing.\nhint: Fix each failure in the feature map or the verify skill, then run `lint` again.\n',
+      'lint failed (check-failed): 3 lint failure(s). ignore: The glob `docs/**` matches no file. feature greeting: The skill folder has no `references/feature-greeting.md`. Write it with a Journey and an End state. docs/verify/SKILL.md: The verify skill is missing.\nhint: Fix each failure in the feature map or the verify skill, then run `lint` again.\n',
   });
 });
 
@@ -276,8 +273,7 @@ test.each([
   await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -292,8 +288,7 @@ test('it reports the uncovered registry file in the envelope', async () => {
   await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -303,7 +298,7 @@ test('it reports the uncovered registry file in the envelope', async () => {
 
   expect(envelope.data).toStrictEqual({
     skill: 'docs/verify/SKILL.md',
-    commands: 0,
+    commands: 1,
     failures: [
       {
         check: 'registry',
@@ -319,14 +314,18 @@ test.each([
   ['outside the repo', 0, () => '/elsewhere/registry.ts'],
   ['in a folder whose name starts with two dots', 1, () => '..verify/registry.ts'],
 ])('it handles a registry file %s', async (_case, exitCode, pickRegistryFile) => {
-  const ctx = await setupTest(createCoverWringer(), pickRegistryFile);
+  const ctx = await setupTest(
+    createCoverWringer({
+      ignore: ['verify/**', '..verify/**', 'docs/**', '.gitignore', 'README.md'],
+    }),
+    pickRegistryFile,
+  );
 
   await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
   await Bun.write(join(ctx.root, '..verify/registry.ts'), 'export const registry = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await ctx.writeSkill(
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 

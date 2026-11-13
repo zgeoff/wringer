@@ -32,7 +32,7 @@ test('it passes lint over the shop verify skill and its feature map', async () =
 
   expect(result).toStrictEqual({
     exitCode: 0,
-    data: { skill: '.claude/skills/verify-shop/SKILL.md', commands: 17, failures: [] },
+    data: { skill: 'packages/shop-example/verify-skill/SKILL.md', commands: 17, failures: [] },
     stderr: '',
   });
 });
@@ -77,8 +77,24 @@ test('#features --markdown lists the shop features, the ignore list and the feat
           file: 'references/feature-order-log.md',
         },
       ],
-      shared: ['packages/shop-example/src/create-shop-registry.ts'],
-      ignore: ['**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**'],
+      shared: [
+        'packages/shop-example/package.json',
+        'packages/shop-example/src/build-shop-base.ts',
+        'packages/shop-example/src/create-shop-registry.ts',
+        'packages/shop-example/src/verify-shop.ts',
+      ],
+      ignore: [
+        '**/*.md',
+        '**/*.test.ts',
+        'docs/**',
+        '.github/**',
+        '.claude/**',
+        '.lefthook/**',
+        'scripts/**',
+        '*',
+        'packages/{browser,core,db,gunshi,http,stream}/**',
+        'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/verify-wringer.ts}',
+      ],
       markdown: [
         '| Feature | Summary | File |',
         '| --- | --- | --- |',

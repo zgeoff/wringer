@@ -34,7 +34,23 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
         paths: ['packages/shop-example/src/shop-app.ts'],
       },
     )
-    .shared('packages/shop-example/src/create-shop-registry.ts')
-    .ignore('**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**')
+    .shared(
+      'packages/shop-example/package.json',
+      'packages/shop-example/src/build-shop-base.ts',
+      'packages/shop-example/src/create-shop-registry.ts',
+      'packages/shop-example/src/verify-shop.ts',
+    )
+    .ignore(
+      '**/*.md',
+      '**/*.test.ts',
+      'docs/**',
+      '.github/**',
+      '.claude/**',
+      '.lefthook/**',
+      'scripts/**',
+      '*',
+      'packages/{browser,core,db,gunshi,http,stream}/**',
+      'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/verify-wringer.ts}',
+    )
     .build();
 }

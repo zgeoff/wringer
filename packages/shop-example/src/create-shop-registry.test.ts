@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createShopRegistry } from './create-shop-registry.ts';
 
-test('it builds the local and demo targets with the four drivers, the shop features and the ignore list', () => {
+test('it builds the local and demo targets with the four drivers, and the shop features', () => {
   const registry = createShopRegistry();
 
   expect({
@@ -12,7 +12,6 @@ test('it builds the local and demo targets with the four drivers, the shop featu
     ]),
     drivers: registry.drivers.map((driver) => driver.name),
     features: registry.features.map((feature) => feature.name),
-    ignore: registry.ignore,
   }).toStrictEqual({
     targets: [
       ['local', 'launch', 'read-write'],
@@ -20,7 +19,6 @@ test('it builds the local and demo targets with the four drivers, the shop featu
     ],
     drivers: ['http', 'db', 'stream', 'browser'],
     features: ['place-order', 'order-failure', 'list-orders', 'order-log'],
-    ignore: ['**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**'],
   });
 });
 

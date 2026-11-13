@@ -58,23 +58,23 @@ absolute path of the installed template folder, to copy from. `--human` prints a
 
 ## lint
 
-`bun verify.ts lint` checks the feature map and the verify skill without starting the app, so CI can
-run it on a fresh checkout. It exits with code 1, with `check-failed` in its envelope's
-`error.code`, when it finds any of these:
+`bun verify.ts lint` checks the features and the verify skill with no running app, so CI can run it
+on a fresh checkout. It exits with code 1 and `check-failed` on any of these:
 
-- a feature's `paths` glob that matches no file git tracks or leaves unignored;
-- a registry file that no `.shared()` or feature `paths` glob matches, whatever `.ignore` lists;
-- a line in a fenced code block of the verify skill's Markdown files that calls the CLI and fails to
-  parse, whose arguments fail the command's schema, or that names a feature or a target the registry
-  lacks;
-- a skill folder with no `SKILL.md`;
-- a verify skill whose frontmatter lacks `metadata.wringer-template` or `metadata.wringer-command`,
-  or whose `metadata.wringer-template` differs from the template version that this package ships.
-  The `maintain` topic of the guide gives the upgrade steps.
+- a feature, `.shared()` or `.ignore()` glob that matches no file, or a file that no such glob
+  matches;
+- a missing or orphaned `references/feature-<name>.md`, or a feature file without `## Journey` and
+  `## End state` or whose first `bash` line is not `<cli> use --feature <name>`;
+- a `SKILL.md` feature table, between the `wringer:features` markers, that differs from
+  `features --markdown`;
+- a registry file that no `.shared()` or feature `paths` glob matches;
+- a line in a fenced code block of the skill's Markdown files that calls the CLI and fails to parse,
+  fails the command's schema, or names a feature or target the registry lacks;
+- a missing `SKILL.md`, a frontmatter without `metadata.wringer-template` or
+  `metadata.wringer-command`, or another template version. The `maintain` guide topic upgrades it.
 
 `metadata.wringer-command` holds the words that call the CLI, such as `bun verify`. `lint` checks
-only the code block lines that start with those words, after an optional `$ ` prompt and environment
-assignments.
+only code block lines that start with them, after an optional `$ ` prompt and assignments.
 
 ## Behaviour
 

@@ -17,8 +17,8 @@ The rules a task needs are not repeated here. Load the skill for the work before
 | `deslop`        | editing the prose of a skill you wrote or changed, before its PR                   |
 | `ci-design`     | adding, changing, or reviewing a workflow, a job, or a trigger                     |
 
-When you write or edit a skill, including a file in its `references/`, such as the `verify-shop`
-skill's feature map:
+When you write or edit a skill, including a file in its `references/`, such as a feature file of the
+`verify-shop` skill in `packages/shop-example/verify-skill/`:
 
 1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.claude/skills/`. repo-sync
    delivers them there at the `zgeoff/skills` commit that `zgeoff/tools` pins, so install none of

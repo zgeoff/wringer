@@ -53,9 +53,9 @@ Keep it a workflow of its own, so a body edit reruns only this job.
 
 A journey breaks when a change to its feature, such as a renamed button, makes a command of its
 journey fail, or leaves the app different from the end state the journey expects. Fix the feature's
-journey in the `verify` skill's `references/feature-map.md`, in the same PR. Then follow the
-`verify` skill's "Check a change" for that feature. Replace the whole report in the PR body with the
-new output of `bun verify report --human`.
+journey in the feature's `references/feature-<name>.md` in the `verify` skill, in the same PR. Then
+follow the `verify` skill's "Check a change" for that feature. Replace the whole report in the PR
+body with the new output of `bun verify report --human`.
 
 ## Upgrade the template
 
@@ -68,10 +68,13 @@ When `lint` reports that the skill follows an older template:
    so git ignores it without a change to `.gitignore`.
 3. Copy `verify/` from that template folder to the folder that `runVerify`'s `skill` option names,
    which no longer exists.
-4. Copy the old skill's `references/feature-map.md` over the template's. Copy the frontmatter's
-   `name`, `description` and `metadata.wringer-command`, the `#` title, and each `<!-- repo -->`
-   block, from the old `SKILL.md` into the new one. When the new template renames or adds a block,
-   fill it from the old skill's matching content.
+4. Delete the template's `references/feature-add-item.md`, its example feature, which fails `lint`
+   unless the repo has a feature of that name. Copy the old skill's `references/feature-*.md` files
+   into `references/`. Replace the feature table between the `wringer:features` markers with the
+   output of `bun verify features --markdown`. Copy the frontmatter's `name`, `description` and
+   `metadata.wringer-command`, the `#` title, and each `<!-- repo -->` block, from the old
+   `SKILL.md` into the new one. When the new template renames or adds a block, fill it from the old
+   skill's matching content.
 5. Read the release notes of each `@wringer/gunshi` version since the old one on
    <https://github.com/zgeoff/wringer/releases>. Apply what they ask of the `<!-- repo -->` blocks,
    `verify.ts` and the registry.

@@ -1,21 +1,28 @@
-import type { FeatureDefinition } from '@wringer/core';
+import type { Wringer } from '@wringer/core';
 
 export interface DeadGlob {
-  readonly feature: string;
+  // `feature <name>`, `shared` or `ignore`.
+  readonly where: string;
   readonly glob: string;
 }
 
-// Each feature's `paths` glob that matches none of the repo's files. A dead glob maps no change to
-// its feature, so the gate never asks for that feature's verdict.
-export function collectDeadGlobs(
-  features: readonly FeatureDefinition[],
-  files: readonly string[],
-): readonly DeadGlob[] {
-  return features.flatMap((feature) =>
-    feature.paths.flatMap((glob) => {
+// Each feature, shared and ignore glob that matches none of the repo's files. A dead glob maps no
+// change to its feature, or claims nothing, so it hides a rename or a typo.
+export function collectDeadGlobs(wringer: Wringer, files: readonly string[]): readonly DeadGlob[] {
+  const groups = [
+    ...wringer.features.map((feature) => ({
+      where: `feature ${feature.name}`,
+      globs: feature.paths,
+    })),
+    { where: 'shared', globs: wringer.shared },
+    { where: 'ignore', globs: wringer.ignore },
+  ];
+
+  return groups.flatMap((group) =>
+    group.globs.flatMap((glob) => {
       const pattern = new Bun.Glob(glob);
 
-      return files.some((file) => pattern.match(file)) ? [] : [{ feature: feature.name, glob }];
+      return files.some((file) => pattern.match(file)) ? [] : [{ where: group.where, glob }];
     }),
   );
 }

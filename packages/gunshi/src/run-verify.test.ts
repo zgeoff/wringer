@@ -3,6 +3,8 @@ import { join } from 'node:path';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { templateVersion } from './template-version.ts';
 import { createCLIRunner } from './test-utils/create-cli-runner.ts';
+import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
+import { writeLintSkill } from './test-utils/write-lint-skill.ts';
 
 // These tests start the demo repo's verify script as a process, so `up` and `attach` start the real
 // supervisor process, detached, as they do for a repo. Each event line and the final envelope the
@@ -127,8 +129,9 @@ test('it lints the cover of the registry file in its `registry` option', async (
   await Bun.write(join(ctx.root, 'verify/registry.ts'), 'export const registry = 1;\n');
   await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await writeLintSkill(
+    ctx.root,
+    createCoverWringer(),
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 
@@ -156,8 +159,9 @@ test('it lints the cover of the running script when no `registry` option is give
 
   await Bun.write(join(ctx.root, 'src/cart.ts'), 'export const cart = 1;\n');
 
-  await Bun.write(
-    join(ctx.root, 'docs/verify/SKILL.md'),
+  await writeLintSkill(
+    ctx.root,
+    createCoverWringer(),
     `---\nmetadata:\n  wringer-template: ${templateVersion}\n  wringer-command: bun verify\n---\n`,
   );
 

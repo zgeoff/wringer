@@ -9,8 +9,8 @@ these in the repo:
 - its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
   the features, with each feature's `paths` globs, and the ignore list, set with `.ignore`: the
   globs of the files the running app never reads;
-- a `verify` skill, with a feature map in its `references/feature-map.md` that gives each feature's
-  journey.
+- a `verify` skill, with a feature file for each feature, `references/feature-<name>.md`, that gives
+  its journey and end state.
 
 These terms hold across this skill and its references:
 
@@ -82,11 +82,11 @@ the CLI with `bun`.
 CLI, prints the absolute path of the installed template folder. It holds a working example for an
 invented app, Larder:
 
-| File                 | Copy to                             | Holds                                                           |
-| -------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| `verify.ts`          | `scripts/verify/verify.ts`          | the entry point that calls `runVerify`                          |
-| `verify-registry.ts` | `scripts/verify/verify-registry.ts` | targets, a driver, an action, a command, a check, a feature     |
-| `verify/`            | `.claude/skills/verify/`            | the repo's `verify` skill, and its feature map in `references/` |
+| File                 | Copy to                             | Holds                                                             |
+| -------------------- | ----------------------------------- | ----------------------------------------------------------------- |
+| `verify.ts`          | `scripts/verify/verify.ts`          | the entry point that calls `runVerify`                            |
+| `verify-registry.ts` | `scripts/verify/verify-registry.ts` | targets, a driver, an action, a command, a check, a feature       |
+| `verify/`            | `.claude/skills/verify/`            | the repo's `verify` skill, and its feature files in `references/` |
 
 Skip `verify-registry.test.ts` in the template: it tests the template inside wringer.
 
@@ -101,7 +101,7 @@ These locations are defaults. When you change one, change each place that refers
 
 In the `verify` skill's `SKILL.md`, each `<!-- repo: <part> -->` block ends at `<!-- /repo -->` and
 holds what only this repo knows. Rewrite those blocks, the frontmatter's `name` and `description`,
-and the `#` title. Keep every other line. The repo owns `references/feature-map.md` whole. Keep
+and the `#` title. Keep every other line. The repo owns each `references/feature-*.md` whole. Keep
 `metadata.wringer-template` as the template has it: `lint` compares it with the version that
 `@wringer/gunshi` ships.
 
@@ -116,8 +116,8 @@ skill, an ignore list for the files with no runtime effect, and `bun verify lint
 The work is done only when each of these holds. the `prove` topic gives the commands.
 
 1. `bun verify doctor` passes on `local`.
-2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. A new
-   feature map needs one pass by an agent who did not write it, and this run is that pass.
+2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. New
+   feature files need one pass by an agent who did not write it, and this run is that pass.
 3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
    `doctor-required`. A read-only target, if the repo has one, refuses one write with `read-only`.
 4. The whole report is in the description of the PR that adds the CLI. The gate reads the report

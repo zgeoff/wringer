@@ -77,9 +77,10 @@ rehearsal of the npm publish of each package.
   copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
-- `.claude/`: the agent skills that zgeoff/tools syncs, the hook that blocks an agent's edit until
-  it loads the skill for that file, and `verify-shop`, the skill that tells an agent how to drive
-  the shop example with `bun verify`.
+- `packages/shop-example/verify-skill/`: the `verify-shop` skill that tells an agent how to drive
+  the shop example with `bun run verify:shop`, with a feature file for each shop feature.
+- `.claude/`: the agent skills that zgeoff/tools syncs, and the hook that blocks an agent's edit
+  until it loads the skill for that file.
 
 ## Documentation
 

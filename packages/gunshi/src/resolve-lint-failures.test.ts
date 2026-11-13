@@ -1,6 +1,9 @@
 import { expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { createWringer, local } from '@wringer/core';
 import { resolveLintFailures } from './resolve-lint-failures.ts';
+import { templateVersion } from './template-version.ts';
+import { buildLintFixture } from './test-utils/build-lint-fixture.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
@@ -19,32 +22,31 @@ test('it returns no failure when every glob matches, every line parses and the t
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
-  expect(result).toStrictEqual({ commands: 2, failures: [] });
+  expect(result).toStrictEqual({ commands: 3, failures: [] });
 });
 
 test('it fails a skill written from an older template version', async () => {
   const skill = '---\nmetadata:\n  wringer-template: 3\n  wringer-command: bun verify\n---\n';
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
 
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 0,
+    commands: 1,
     failures: [
       {
         check: 'template',
@@ -68,17 +70,17 @@ test('it fails a journey line whose arguments fail the command schema', async ()
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -94,21 +96,19 @@ test('it fails a journey line whose arguments fail the command schema', async ()
 test('it fails a journey line in a reference file of the skill', async () => {
   const skill = '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
   const reference = ['# Greeting', '', '```bash', 'bun verify wave', '```'].join('\n');
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
 
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md', 'skill/references/greeting.md'],
-    skillPath: 'skill/SKILL.md',
-    registryFile: null,
-    skillFiles: [
-      { path: 'skill/SKILL.md', text: skill },
+    wringer,
+    ...buildLintFixture(wringer, skill, [
       { path: 'skill/references/greeting.md', text: reference },
-    ],
+    ]),
+    registryFile: null,
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -132,6 +132,11 @@ test('it fails a missing verify skill', async () => {
   expect(result).toStrictEqual({
     commands: 0,
     failures: [
+      {
+        check: 'feature-file',
+        where: 'feature greeting',
+        problem: expect.stringContaining('`references/feature-greeting.md`'),
+      },
       { check: 'template', where: 'skill/SKILL.md', problem: 'The verify skill is missing.' },
     ],
   });
@@ -152,17 +157,17 @@ test.each([
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -188,16 +193,16 @@ test.each([
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
-  expect(result).toStrictEqual({ commands: 1, failures: [] });
+  expect(result).toStrictEqual({ commands: 2, failures: [] });
 });
 
 test('it fails a journey line whose repo command names an unknown feature', async () => {
@@ -212,17 +217,17 @@ test('it fails a journey line whose repo command names an unknown feature', asyn
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -246,17 +251,17 @@ test('it fails a journey line with an unclosed quote', async () => {
     '```',
   ].join('\n');
 
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createDemoWringer(),
-    files: ['src/greet.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(wringer, skill),
     registryFile: null,
-    skillFiles: [{ path: 'skill/SKILL.md', text: skill }],
     templateVersion: 4,
   });
 
   expect(result).toStrictEqual({
-    commands: 1,
+    commands: 2,
     failures: [
       {
         check: 'journey',
@@ -268,17 +273,21 @@ test('it fails a journey line with an unclosed quote', async () => {
 });
 
 test('it fails a registry file that only an ignore glob matches', async () => {
+  const wringer = createCoverWringer({ ignore: ['verify/**', 'skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createCoverWringer(),
-    files: ['src/cart.ts', 'verify/registry.ts', 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
-    registryFile: 'verify/registry.ts',
-    skillFiles: [
-      {
-        path: 'skill/SKILL.md',
-        text: '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
-      },
+    wringer,
+    ...buildLintFixture(
+      wringer,
+      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+    ),
+    files: [
+      'src/cart.ts',
+      'verify/registry.ts',
+      'skill/SKILL.md',
+      'skill/references/feature-cart.md',
     ],
+    registryFile: 'verify/registry.ts',
     templateVersion: 4,
   });
 
@@ -294,19 +303,18 @@ test('it fails a registry file that only an ignore glob matches', async () => {
 
 test.each([
   ['a shared glob', { shared: ['verify/**'] }, 'verify/registry.ts'],
-  ['a feature glob', { paths: ['verify/**'] }, 'verify/registry.ts'],
+  ['a feature glob', { paths: ['verify/**', 'src/**'] }, 'verify/registry.ts'],
 ])('it passes a registry file that %s matches', async (_case, options, registryFile) => {
+  const wringer = createCoverWringer({ ...options, ignore: ['skill/**'] });
+
   const result = await resolveLintFailures({
-    wringer: createCoverWringer(options),
-    files: ['src/cart.ts', registryFile, 'skill/SKILL.md'],
-    skillPath: 'skill/SKILL.md',
+    wringer,
+    ...buildLintFixture(
+      wringer,
+      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+    ),
+    files: ['src/cart.ts', registryFile, 'skill/SKILL.md', 'skill/references/feature-cart.md'],
     registryFile,
-    skillFiles: [
-      {
-        path: 'skill/SKILL.md',
-        text: '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
-      },
-    ],
     templateVersion: 4,
   });
 
@@ -316,22 +324,25 @@ test.each([
 test('it fails a target that uploads its evidence when the registry has no upload hook', async () => {
   const wringer = createWringer({ name: 'demo' })
     .target('preview', { mode: 'attach', access: 'read-only', evidence: 'upload', host: local() })
+    .ignore('src/**', 'skill/**')
     .build();
 
   const result = await resolveLintFailures({
     wringer,
-    files: [],
-    skillPath: 'skill/SKILL.md',
+    ...buildLintFixture(
+      wringer,
+      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+    ),
     registryFile: null,
-    skillFiles: [],
     templateVersion: 4,
   });
 
-  expect(result.failures.filter((failure) => failure.check === 'registry')).toStrictEqual([
+  expect(result.failures).toStrictEqual([
     {
       check: 'registry',
       where: 'target preview',
-      problem: expect.stringContaining('no `upload` hook'),
+      problem:
+        "The target sets `evidence: 'upload'` and the registry has no `upload` hook. Add `.hook('upload', createHostUploader(…))`, or set `evidence: 'local'`.",
     },
   ]);
 });
@@ -344,16 +355,274 @@ test('it passes a target that uploads its evidence when the registry has the upl
       linkHosts: ['files.example'],
       upload: () => Promise.reject(new Error('unused')),
     })
+    .ignore('src/**', 'skill/**')
     .build();
 
   const result = await resolveLintFailures({
     wringer,
-    files: [],
-    skillPath: 'skill/SKILL.md',
+    ...buildLintFixture(
+      wringer,
+      '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n',
+    ),
     registryFile: null,
-    skillFiles: [],
     templateVersion: 4,
   });
 
-  expect(result.failures.filter((failure) => failure.check === 'registry')).toStrictEqual([]);
+  expect(result.failures).toStrictEqual([]);
+});
+
+test('it fails a feature with no feature file', async () => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+  const fixture = buildLintFixture(wringer, currentSkill);
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    files: fixture.files.filter((file) => !file.endsWith('feature-greeting.md')),
+    skillFiles: fixture.skillFiles.filter((file) => !file.path.endsWith('feature-greeting.md')),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'feature-file',
+      where: 'feature greeting',
+      problem: expect.stringContaining('`references/feature-greeting.md`'),
+    },
+  ]);
+});
+
+test('it fails a feature file that matches no feature', async () => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...buildLintFixture(wringer, currentSkill, [
+      {
+        path: 'skill/references/feature-farewell.md',
+        text: '# farewell\n',
+      },
+    ]),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'feature-file',
+      where: 'skill/references/feature-farewell.md:1',
+      problem: expect.stringContaining('no feature named farewell'),
+    },
+  ]);
+});
+
+test.each([
+  [
+    'it has no Journey section',
+    '# greeting\n\n## End state\n\n- Done.\n',
+    'greeting.md:1',
+    'no `## Journey`',
+  ],
+  [
+    'it has no End state section',
+    '# greeting\n\n## Journey\n\n```bash\nbun verify use --feature greeting\n```\n',
+    'greeting.md:1',
+    'no `## End state`',
+  ],
+  [
+    'its Journey starts with another command',
+    '# greeting\n\n## Journey\n\n```bash\nbun verify up\n```\n\n## End state\n\n- Done.\n',
+    'greeting.md:6',
+    'must be `bun verify use --feature greeting`',
+  ],
+  [
+    'its Journey has no bash block',
+    '# greeting\n\n## Journey\n\nRun it.\n\n## End state\n\n- Done.\n',
+    'greeting.md:3',
+    'no `bash` block',
+  ],
+])('it fails a feature file when %s', async (_case, text, where, problem) => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+  const fixture = buildLintFixture(wringer, currentSkill);
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    skillFiles: fixture.skillFiles.map((file) =>
+      file.path.endsWith('feature-greeting.md') ? { path: file.path, text } : file,
+    ),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'feature-file',
+      where: `skill/references/feature-${where}`,
+      problem: expect.stringContaining(problem),
+    },
+  ]);
+});
+
+test('it fails a feature table that an edit changed, and a missing span', async () => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+  const fixture = buildLintFixture(wringer, currentSkill);
+
+  const edited = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    skillFiles: fixture.skillFiles.map((file) =>
+      file.path === 'skill/SKILL.md'
+        ? { path: file.path, text: file.text.replace('Greet a visitor', 'Greet someone') }
+        : file,
+    ),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  const missing = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    skillFiles: fixture.skillFiles.map((file) =>
+      file.path === 'skill/SKILL.md' ? { path: file.path, text: currentSkill } : file,
+    ),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect([edited.failures, missing.failures]).toStrictEqual([
+    [
+      {
+        check: 'feature-table',
+        where: 'skill/SKILL.md:7',
+        problem: expect.stringContaining(
+          'Replace the span with the output of `bun verify features --markdown`.',
+        ),
+      },
+    ],
+    [
+      {
+        check: 'feature-table',
+        where: 'skill/SKILL.md:1',
+        problem: expect.stringContaining('no `<!-- wringer:features -->` marker'),
+      },
+    ],
+  ]);
+});
+
+test.each([
+  ['an ignore glob', { ignore: ['skill/**', 'docs/**'] }, 'ignore'],
+  ['a shared glob', { shared: ['package.json'] }, 'shared'],
+])('it fails %s that matches no file', async (_case, options, where) => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createCoverWringer({ ignore: ['skill/**'], ...options });
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...buildLintFixture(wringer, currentSkill),
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    {
+      check: 'paths',
+      where,
+      problem: expect.stringMatching(/^The glob `[^`]+` matches no file\.$/u),
+    },
+  ]);
+});
+
+test('it fails a file that no feature, shared or ignore glob matches', async () => {
+  const currentSkill =
+    '---\nmetadata:\n  wringer-template: 4\n  wringer-command: bun verify\n---\n';
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+  const fixture = buildLintFixture(wringer, currentSkill);
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    files: [...fixture.files, 'config/app.toml'],
+    registryFile: null,
+    templateVersion: 4,
+  });
+
+  expect(result.failures).toStrictEqual([
+    { check: 'unclaimed', where: 'config/app.toml', problem: expect.stringContaining('.ignore()') },
+  ]);
+});
+
+// The state a repo reaches after step 4 of "Upgrade the template" in guide/maintain.md: the
+// template's SKILL.md with the repo's feature table and feature files.
+test('it passes an upgraded skill whose template example feature file is deleted', async () => {
+  const templateSkill = await Bun.file(
+    join(import.meta.dir, '..', 'guide', 'template', 'verify', 'SKILL.md'),
+  ).text();
+
+  const wringer = createDemoWringer();
+
+  const fixture = buildLintFixture(
+    wringer,
+    templateSkill.slice(0, templateSkill.indexOf('<!-- wringer:features -->')),
+  );
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    files: ['src/greet.ts'],
+    registryFile: null,
+    templateVersion,
+  });
+
+  expect(result.failures).toStrictEqual([]);
+});
+
+test('it fails an upgraded skill that keeps the template example feature file', async () => {
+  const templateFolder = join(import.meta.dir, '..', 'guide', 'template', 'verify');
+
+  const [templateSkill, exampleFeature] = await Promise.all([
+    Bun.file(join(templateFolder, 'SKILL.md')).text(),
+    Bun.file(join(templateFolder, 'references', 'feature-add-item.md')).text(),
+  ]);
+
+  const wringer = createDemoWringer();
+
+  const fixture = buildLintFixture(
+    wringer,
+    templateSkill.slice(0, templateSkill.indexOf('<!-- wringer:features -->')),
+    [{ path: 'skill/references/feature-add-item.md', text: exampleFeature }],
+  );
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...fixture,
+    files: ['src/greet.ts'],
+    registryFile: null,
+    templateVersion,
+  });
+
+  expect(result.failures.filter((failure) => failure.check === 'feature-file')).toStrictEqual([
+    {
+      check: 'feature-file',
+      where: 'skill/references/feature-add-item.md:1',
+      problem:
+        'The registry has no feature named add-item. Remove the file, or register the feature.',
+    },
+  ]);
 });

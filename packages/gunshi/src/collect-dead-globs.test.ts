@@ -1,20 +1,23 @@
 import { expect, test } from 'bun:test';
 import { collectDeadGlobs } from './collect-dead-globs.ts';
+import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 
-test('it returns each glob that matches no file, with its feature', () => {
-  const features = [
-    { name: 'brew', summary: 'Brew a pot', paths: ['src/brew/**', 'src/kettle.ts'] },
-    { name: 'pour', summary: 'Pour a cup', paths: ['src/pour/**'] },
-  ];
+test('it returns each feature, shared and ignore glob that matches no file, with its place', () => {
+  const wringer = createCoverWringer({
+    paths: ['src/**', 'src/kettle.ts'],
+    shared: ['package.json'],
+    ignore: ['docs/**'],
+  });
 
-  expect(collectDeadGlobs(features, ['src/brew/steep.ts', 'README.md'])).toStrictEqual([
-    { feature: 'brew', glob: 'src/kettle.ts' },
-    { feature: 'pour', glob: 'src/pour/**' },
+  expect(collectDeadGlobs(wringer, ['src/cart.ts', 'README.md'])).toStrictEqual([
+    { where: 'feature cart', glob: 'src/kettle.ts' },
+    { where: 'shared', glob: 'package.json' },
+    { where: 'ignore', glob: 'docs/**' },
   ]);
 });
 
 test('it returns nothing when every glob matches a file', () => {
-  const features = [{ name: 'brew', summary: 'Brew a pot', paths: ['src/**/*.ts'] }];
+  const wringer = createCoverWringer({ paths: ['src/**/*.ts'], ignore: ['verify/**'] });
 
-  expect(collectDeadGlobs(features, ['src/brew/steep.ts'])).toStrictEqual([]);
+  expect(collectDeadGlobs(wringer, ['src/brew/steep.ts', 'verify/a.ts'])).toStrictEqual([]);
 });
