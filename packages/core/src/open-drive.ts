@@ -78,6 +78,7 @@ export function openDrive(request: DriveRequest): Drive {
   for (const entry of entries) {
     for (const secret of entry.configured.collectSecrets()) {
       request.secrets.add(secret);
+      request.collectSecret({ name: secret.name, value: secret.value });
     }
   }
 

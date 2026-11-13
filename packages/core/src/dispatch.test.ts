@@ -934,6 +934,42 @@ test('it keeps a driver config secret and a URL password out of an action result
   });
 });
 
+test('it keeps the driver config secrets of a target in the secrets file for the run', async () => {
+  const ctx = await setupTest();
+  const up = await ctx.run('secured', ['up']);
+
+  const runID = up.envelope.instance ?? '';
+
+  await ctx.run('secured', ['doctor']);
+  await ctx.run('secured', ['action', 'echo'], { text: 'hello' });
+
+  const kept = await ctx.readSecretsFile(runID);
+
+  expect([...new Set(kept.split('\n').filter((line) => line !== ''))].toSorted()).toStrictEqual([
+    '{"name":"notes.apiToken","value":"driver-config-token"}',
+    '{"name":"notes.url","value":"driver-url-pass"}',
+    '{"name":"notes.url","value":"shopper:driver-url-pass"}',
+  ]);
+});
+
+test('it keeps the driver config secrets out of every sink of a run', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('secured', ['up']);
+  await ctx.run('secured', ['doctor']);
+
+  await ctx.run('secured', ['action', 'echo'], {
+    text: 'driver-config-token driver-url-pass shopper:driver-url-pass',
+  });
+
+  const sinks = await ctx.readSinks();
+
+  expect({
+    token: sinks.includes('driver-config-token'),
+    password: sinks.includes('driver-url-pass'),
+  }).toStrictEqual({ token: false, password: false });
+});
+
 test('it scrubs a value a driver collects at runtime in a later command', async () => {
   const ctx = await setupTest();
 
