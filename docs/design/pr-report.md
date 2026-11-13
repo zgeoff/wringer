@@ -324,6 +324,16 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
   span under it.
 - When it holds more than one opening or closing marker, or a closing marker before the opening one,
   `publish` fails with `check-failed` and writes nothing.
+- When it holds an opening marker with no closing one, or the reverse, `publish` fails the same way.
+- `writeReportSpan` takes a block that starts with its one opening marker and ends with its one
+  closing marker, and refuses any other block. It trims the block's outer whitespace.
+- `writeReportSpan` uses the first `## Verification` heading outside a fenced code block. A heading
+  matches with up to 3 spaces of indent and optional closing hashes. A fence is a run of 3 or more
+  backticks or tildes, indented by up to 3 spaces, closed by a run of the same character at least as
+  long. A fence that never closes runs to the end of the description, and `writeReportSpan` refuses
+  to put a new span inside it.
+- When the description holds one span and it already equals the block, with line endings turned to
+  LF, `writeReportSpan` returns the description untouched with `action: 'unchanged'`.
 
 ### Rendering
 
