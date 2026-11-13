@@ -6,6 +6,7 @@ import type { ExecOutput } from './build-exec-query.ts';
 import { DatabaseClientError } from './database-client-error.ts';
 import { rowSchema } from './db-result-schema.ts';
 import type { DbResult, Row } from './db-result-schema.ts';
+import { toSafeInteger } from './to-safe-integer.ts';
 
 export interface ExecResultInput {
   readonly result: ProcessResult;
@@ -79,8 +80,14 @@ function parseCommandTag(stdout: string): number | null {
   return count === undefined ? null : Number(count);
 }
 
-function parseClientJSON<T>(text: string, schema: z.ZodType<T>): T {
-  const parsed = schema.safeParse(parseJSON(text));
+interface ReviverContext {
+  readonly source?: string;
+}
+
+type JSONReviver = (key: string, value: unknown, context?: ReviverContext) => unknown;
+
+function parseClientJSON<T>(text: string, schema: z.ZodType<T>, reviver?: JSONReviver): T {
+  const parsed = schema.safeParse(parseJSON(text, reviver));
 
   if (!parsed.success) {
     throw new WringerError('environment', {
@@ -92,9 +99,9 @@ function parseClientJSON<T>(text: string, schema: z.ZodType<T>): T {
   return parsed.data;
 }
 
-function parseJSON(text: string): unknown {
+function parseJSON(text: string, reviver?: JSONReviver): unknown {
   try {
-    const parsed: unknown = JSON.parse(text);
+    const parsed: unknown = JSON.parse(text, reviver);
 
     return parsed;
   } catch {
@@ -106,5 +113,19 @@ function parseJSON(text: string): unknown {
 function parseRows(stdout: string): readonly Row[] {
   const text = stdout.trim();
 
-  return text === '' ? [] : parseClientJSON(text, rowsSchema);
+  return text === '' ? [] : parseClientJSON(text, rowsSchema, reviveSafeInteger);
+}
+
+const integerLiteralPattern = /^-?\d+$/u;
+
+// JSON.parse rounds an integer literal beyond 2^53 before a reviver sees it, so the reviver reads
+// the literal's source text instead.
+function reviveSafeInteger(_key: string, value: unknown, context?: ReviverContext): unknown {
+  const source = context?.source;
+
+  if (typeof value !== 'number' || source === undefined || !integerLiteralPattern.test(source)) {
+    return value;
+  }
+
+  return toSafeInteger(BigInt(source));
 }

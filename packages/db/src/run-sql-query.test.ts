@@ -351,3 +351,37 @@ test('it refuses a parameter SQLite cannot bind with a usage error', async () =>
     code: 'usage',
   });
 });
+
+test('it returns an integer beyond 2^53 as its digits and a small one as a number', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  const result = await ctx.runQuery(
+    'select 9007199254740993 as big, -9007199254740993 as low, 5 as small, 1.5 as real',
+  );
+
+  expect(result.rows).toStrictEqual([
+    { big: '9007199254740993', low: '-9007199254740993', small: 5, real: 1.5 },
+  ]);
+});
+
+test('it serialises a row with an integer beyond 2^53 as JSON', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes([]);
+
+  const result = await ctx.runQuery('select 9223372036854775807 as big');
+
+  expect(JSON.stringify(result.rows)).toBe('[{"big":"9223372036854775807"}]');
+});
+
+test('it still counts the rows a write changed', async () => {
+  const ctx = await setupTest();
+
+  ctx.seedNotes(['pay', 'ship']);
+
+  const result = await ctx.runQuery("update notes set text = 'done'", { write: true });
+
+  expect(result.rowCount).toBe(2);
+});

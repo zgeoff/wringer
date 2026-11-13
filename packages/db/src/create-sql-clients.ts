@@ -4,7 +4,9 @@ import type { SQLClients } from './run-sql-query.ts';
 
 export function createSQLClients(): SQLClients {
   return {
-    openSqlite: (file, mode) => new Database(file, { [mode]: true }),
+    // `safeIntegers` reads each integer as a bigint, so the driver can turn one a number cannot hold
+    // into its digits.
+    openSqlite: (file, mode) => new Database(file, { [mode]: true, safeIntegers: true }),
 
     // Each session runs one statement or one transaction, so it needs one connection. With more,
     // Bun.SQL retries a refused connection on each spare slot before the call fails.

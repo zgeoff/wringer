@@ -7,10 +7,11 @@ import { z } from 'zod';
 import { buildColumnProbe } from './build-column-probe.ts';
 import { buildPostgresResult } from './build-postgres-result.ts';
 import { rowSchema } from './db-result-schema.ts';
-import type { DbResult } from './db-result-schema.ts';
+import type { DbResult, Row } from './db-result-schema.ts';
 import { initialCancelState, pickCancelStep } from './pick-cancel-step.ts';
 import type { CancelEvent } from './pick-cancel-step.ts';
 import { pickStatementTimeoutStep } from './pick-statement-timeout-step.ts';
+import { toSafeInteger } from './to-safe-integer.ts';
 
 // A write opens an existing file read-write, so a mistyped path fails, never makes a new database.
 type SqliteMode = 'readonly' | 'readwrite';
@@ -68,7 +69,7 @@ function runSqliteQuery(input: SQLQueryInput, clients: SQLClients): DbResult {
     }
 
     const statement = database.query(input.sql);
-    const rows = rowsSchema.parse(statement.all(...params));
+    const rows = rowsSchema.parse(statement.all(...params)).map((row) => toSafeRow(row));
 
     return {
       columns: [...statement.columnNames],
@@ -96,10 +97,19 @@ function parseSqliteParams(params: readonly unknown[]): SQLQueryBindings[] {
   return parsed.data;
 }
 
-const changesSchema = z.strictObject({ count: z.number() });
+function toSafeRow(row: Row): Row {
+  return Object.fromEntries(
+    Object.entries(row).map(([column, value]) => [
+      column,
+      typeof value === 'bigint' ? toSafeInteger(value) : value,
+    ]),
+  );
+}
+
+const changesSchema = z.strictObject({ count: z.bigint() });
 
 function readChanges(database: Database): number {
-  return changesSchema.parse(database.query('select changes() as count').get()).count;
+  return Number(changesSchema.parse(database.query('select changes() as count').get()).count);
 }
 
 interface QueryProgress {

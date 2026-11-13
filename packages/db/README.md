@@ -47,23 +47,22 @@ with `--write` for a statement that writes, and the doctor check `db.connect`.
 
 - `via: 'sql'` connects from the CLI with `bun:sqlite` or Bun.SQL to the database in `url`. Postgres
   stops a query at a `statement_timeout` of the time left, and the driver cancels it at the
-  deadline. A `bun:sqlite` call is synchronous, so a SQLite write can commit after the timeout.
+  deadline. A SQLite call is synchronous, so a write can commit after the timeout.
 - `via: 'exec'` runs the database's own client on the target's host, with the SQL on stdin:
-  `sqlite3 -json`, or `psql` with the rows turned into JSON by `json_agg`. `program` replaces the
-  client's command, such as `['docker', 'exec', '-i', 'db', 'psql']`.
+  `sqlite3 -json` or `psql`. `program` replaces its command, as in `docker exec -i db psql`.
 
 A query through `via: 'exec'` has these limits:
 
 - It takes no `params`.
 - sqlite3 runs in `-safe` mode, which turns off the dot-commands that reach past the database.
 - A statement for psql, or a read for sqlite3, runs alone, and one for psql holds no backslash.
-- A Postgres write returns no rows. Connect with `via: 'sql'` to read its `RETURNING` rows.
+- A Postgres write returns no rows. Use `via: 'sql'` to read its `RETURNING` rows.
 - An `explain` read, or a `show` through psql, fails with a usage error. sqlite3 runs a `pragma`
   read as its table-valued function, with no schema, so run a pragma that sets a value as a write.
 - At the deadline, the host stops the client's process group. A client that `program` starts in a
   container, such as with `docker exec`, runs on, so a sqlite3 write there can commit after it.
-- psql gets a `statement_timeout` of the time left when it starts, by the database host's clock,
-  which must agree with the CLI's. It refuses to start once no time is left.
+- psql gets a `statement_timeout` of the time left, by the database host's clock, which must agree
+  with the CLI's. It refuses to start once no time is left.
 
 ## Results
 
@@ -72,14 +71,15 @@ A query returns `{ columns, rows, rowCount }`.
 - `rowCount` counts the rows a read returned, or the rows a write changed. It is null for a write
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
 - `columns` holds a read's columns in order, also with no rows: from the statement on SQLite
-  `via: 'sql'`, else from a wrapper, or from the first row of a Postgres `show` or `explain`.
+  `via: 'sql'`, else from a wrapper, or the first row of a Postgres `show` or `explain`.
+- On SQLite, an integer outside JavaScript's safe range is a string of its digits, not a number.
 
 ## Reads and writes
 
 - A query is a read unless it passes `write: true`, and a read runs read-only in the database. On
   SQLite, `via: 'sql'` opens the file read-only with `query_only` on, and `via: 'exec'` runs sqlite3
   with `-readonly`. Postgres runs a read in a read-only transaction.
-- A query through `via: 'sql'` holds one statement, so a read cannot end its transaction early.
+- A query through `via: 'sql'` holds one statement, so a read cannot end its transaction.
 - On SQLite, a read starts with `select`, `with`, `values`, `explain` or `pragma`, and one that runs
   `attach`, `vacuum` or `query_only` counts as a write. A read-only handle still runs `VACUUM INTO`,
   which copies the database to any path.
