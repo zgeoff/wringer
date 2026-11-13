@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { buildRunPaths } from './build-state-paths.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { buildSupervisorArgv } from './supervisor-protocol.ts';
-import type { SupervisorPort } from './types.ts';
+import type { SupervisorExit, SupervisorPort } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 export interface ProcessSupervisorOptions {
@@ -17,8 +17,11 @@ export interface ProcessSupervisorOptions {
 // process group, so it outlives the command that started it and loads the same registry. Calls
 // reach it over its Unix socket.
 export function makeProcessSupervisorPort(options: ProcessSupervisorOptions): SupervisorPort {
+  const exits = new Map<string, Promise<SupervisorExit>>();
+
   return {
     call: callSupervisor,
+    watchExit: (runID) => exits.get(runID) ?? new Promise<SupervisorExit>(() => {}),
     start: (request) => {
       const paths = buildRunPaths(join(options.root, options.stateDir), request.runID);
 
@@ -27,6 +30,9 @@ export function makeProcessSupervisorPort(options: ProcessSupervisorOptions): Su
       const log = openSync(paths.supervisorLog, 'a');
       const [command = 'bun', ...args] = options.selfCommand;
       const started = Promise.withResolvers<void>();
+      const exited = Promise.withResolvers<SupervisorExit>();
+
+      exits.set(request.runID, exited.promise);
 
       const child = spawn(
         command,
@@ -44,6 +50,10 @@ export function makeProcessSupervisorPort(options: ProcessSupervisorOptions): Su
       // A command that cannot start, such as one missing from the PATH, fails after spawn returns.
       child.once('spawn', () => {
         started.resolve();
+      });
+
+      child.once('exit', (code, signal) => {
+        exited.resolve({ code, signal });
       });
 
       child.once('error', (error) => {

@@ -6,7 +6,7 @@ import { readChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
 import { toWringerError } from '../to-wringer-error.ts';
-import type { BuiltinContext } from '../types.ts';
+import type { BuiltinContext, SupervisorExit } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { writeLateFailure } from '../write-late-failure.ts';
 import { callRunSupervisor, isSupervisorGone } from './call-run-supervisor.ts';
@@ -93,7 +93,7 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     }
 
     try {
-      const ready = await waitForReady(ctx, runID, request.readyTimeoutMs);
+      const ready = await waitForReady(ctx, runID, request.readyTimeoutMs, trackExit(ctx, runID));
 
       return toRunData(ready, false);
     } catch (error) {
@@ -180,10 +180,15 @@ function buildRunID(date: Date): string {
 
 const readyPollMs = 50;
 
+interface ExitTracker {
+  readonly read: () => SupervisorExit | null;
+}
+
 async function waitForReady(
   ctx: BuiltinContext,
   runID: string,
   timeoutMs: number,
+  tracker: ExitTracker,
 ): Promise<RunView> {
   const deadline = ctx.now().getTime() + timeoutMs;
 
@@ -194,6 +199,10 @@ async function waitForReady(
         hint: 'Pass a longer `--timeout-ms`, then run `up` again.',
       });
     }
+
+    // The exit is read before the log, so a supervisor that wrote its last event and then exited
+    // is never taken for one that exited silently.
+    const exit = tracker.read();
 
     const view = await ctx.state.readRun(runID);
 
@@ -208,6 +217,21 @@ async function waitForReady(
       });
     }
 
+    if (exit !== null) {
+      const reason = `the supervisor exited with ${describeExit(exit)} before the run was ready`;
+
+      await ctx.state.appendEvent(runID, {
+        type: 'crashed',
+        at: ctx.now().toISOString(),
+        reason,
+      });
+
+      throw new WringerError('environment', {
+        message: `Run ${runID} stopped while it started: ${reason}.`,
+        hint: `Read .wringer/runs/${runID}/supervisor.log.`,
+      });
+    }
+
     await ctx.wait(readyPollMs);
   }
 
@@ -215,6 +239,30 @@ async function waitForReady(
     message: `Run ${runID} was not ready within ${timeoutMs} ms.`,
     hint: `Read .wringer/runs/${runID}/children/app.log, then run \`up\` again.`,
   });
+}
+
+function describeExit(exit: SupervisorExit): string {
+  return exit.signal === null ? `code ${exit.code}` : `signal ${exit.signal}`;
+}
+
+// Remembers how the run's supervisor process exited, once it has, for the readiness loop to read
+// between polls. A port without exit news never reports one.
+function trackExit(ctx: BuiltinContext, runID: string): ExitTracker {
+  let exit: SupervisorExit | null = null;
+
+  const watch = async (): Promise<void> => {
+    try {
+      const found = await ctx.session.supervisor.watchExit?.(runID);
+
+      exit = found ?? null;
+    } catch {
+      // A watch that fails leaves the readiness loop on the run's log alone.
+    }
+  };
+
+  void watch();
+
+  return { read: () => exit };
 }
 
 // A run that missed its deadline must not keep its app and services up behind the error. The stop

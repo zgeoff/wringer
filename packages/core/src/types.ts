@@ -441,10 +441,20 @@ export interface SupervisorStartRequest {
   readonly target: string;
 }
 
+// How a supervisor process ended: its exit code, or the signal that killed it.
+export interface SupervisorExit {
+  readonly code: number | null;
+  readonly signal: string | null;
+}
+
 // How a command reaches a run's supervisor: it starts one, and sends one request over the run's
 // socket and reads the answer.
 export interface SupervisorPort {
   readonly start: (request: SupervisorStartRequest) => Promise<void>;
+
+  // Resolves once the supervisor that `start` spawned for the run exits. A port whose supervisor
+  // is not a process of its own leaves it out, and `up` then waits on the run's log alone.
+  readonly watchExit?: ((runID: string) => Promise<SupervisorExit>) | undefined;
   readonly call: (call: SupervisorCall) => Promise<unknown>;
 }
 

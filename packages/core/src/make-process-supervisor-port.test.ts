@@ -47,3 +47,18 @@ test('it rejects with an environment error when the command cannot start', async
     code: 'environment',
   });
 });
+
+test.each([
+  { name: 'its exit code', script: 'exit 7', exit: { code: 7, signal: null } },
+  { name: 'its signal', script: 'kill -KILL $$', exit: { code: null, signal: 'SIGKILL' } },
+])('it resolves $name once the command exits', async (row) => {
+  const ctx = await setupTest();
+
+  const port = ctx.makePort(['sh', '-c', row.script, 'supervisor']);
+
+  await port.start({ runID: 'mf3k2a-7q1z', target: 'box' });
+
+  const exit = await port.watchExit?.('mf3k2a-7q1z');
+
+  expect(exit).toStrictEqual(row.exit);
+});

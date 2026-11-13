@@ -106,6 +106,24 @@ async function setupTest() {
       shop.state.withTargetLock(target, () => Promise.resolve()),
 
     // The supervisor's command names no program on this machine, so its spawn fails.
+    // The supervisor's command is a shell script, which exits at once as a supervisor that fails
+    // before its run is ready does.
+    runWithExitingSupervisor: (target: string, script: string) =>
+      dispatch(
+        wringer,
+        ['up'],
+        {},
+        {
+          ...shop.session,
+          target,
+          supervisor: makeProcessSupervisorPort({
+            selfCommand: ['sh', '-c', script, 'supervisor'],
+            root: shop.repo.root,
+            stateDir: wringer.stateDir,
+          }),
+        },
+      ),
+
     runWithMissingSupervisor: (target: string, path: readonly string[]) =>
       dispatch(
         wringer,
@@ -391,6 +409,34 @@ test('#up marks the new run crashed when its supervisor cannot start', async () 
     status: 'crashed',
   });
 });
+
+test.each([
+  { name: 'an exit code', script: 'echo boom >&2; exit 7', reason: 'code 7' },
+  { name: 'a signal', script: 'kill -KILL $$', reason: 'signal SIGKILL' },
+  { name: 'a clean exit', script: 'exit 0', reason: 'code 0' },
+])(
+  '#up fails at once with an environment error when the supervisor exits with $name before its run is ready',
+  async (row) => {
+    const ctx = await setupTest();
+
+    const started = Date.now();
+
+    const result = await ctx.runWithExitingSupervisor('local', row.script);
+    const view = await ctx.state.readRun(result.envelope.instance ?? '');
+
+    expect({
+      code: result.envelope.error?.code,
+      message: result.envelope.error?.message,
+      status: view?.status,
+      quick: Date.now() - started < 3000,
+    }).toStrictEqual({
+      code: 'environment',
+      message: expect.stringContaining(row.reason),
+      status: 'crashed',
+      quick: true,
+    });
+  },
+);
 
 test('#up refuses an attach target with a usage error naming attach', async () => {
   const ctx = await setupTest();
