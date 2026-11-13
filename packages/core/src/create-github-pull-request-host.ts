@@ -176,8 +176,6 @@ async function readGHToken(options: GitHubPullRequestHostOptions): Promise<strin
 
 const defaultAPIURL = 'https://api.github.com';
 
-const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
-
 function buildRequestURL(
   env: Readonly<Record<string, string | undefined>>,
   repo: GitHubRepo,
@@ -191,11 +189,6 @@ function buildRequestURL(
 
   const apiURL = new URL(base);
 
-  // The token goes in a header, so a plain-HTTP API would send it in the clear.
-  if (apiURL.protocol !== 'https:' && !loopbackHosts.has(apiURL.hostname)) {
-    throw new WringerError('environment', { message: 'GITHUB_API_URL must be an https URL.' });
-  }
-
   const url = new URL(
     `${apiURL.pathname.replace(/\/+$/u, '')}/repos/${repo.owner}/${repo.name}/${request.path}`,
     apiURL,
@@ -203,7 +196,19 @@ function buildRequestURL(
 
   url.search = request.query?.toString() ?? '';
 
+  // The token goes in a header, so a plain-HTTP API would send it in the clear. A path such as
+  // `//host` resolves to another host, so the check reads the resolved request URL.
+  if (url.origin !== apiURL.origin || !isSecureURL(url)) {
+    throw new WringerError('environment', { message: 'GITHUB_API_URL must be an https URL.' });
+  }
+
   return url;
+}
+
+const loopbackHosts = new Set(['127.0.0.1', '[::1]', 'localhost']);
+
+function isSecureURL(url: URL): boolean {
+  return url.protocol === 'https:' || loopbackHosts.has(url.hostname);
 }
 
 async function sendGitHubRequest(

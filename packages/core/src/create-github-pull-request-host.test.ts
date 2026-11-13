@@ -288,7 +288,34 @@ test('it keeps a token that is not a header value out of the error', async () =>
 });
 
 test('it does not follow a redirect with the token', async () => {
-  const ctx = await setupTest({ forceStatus: 301 });
+  const ctx = await setupTest({ pulls: [buildStandInPull()] });
 
-  expect(ctx.host.readBody(7)).rejects.toMatchObject({ message: 'GitHub answered HTTP 301.' });
+  const target = createGitHubStandIn({ token: ctx.token, pulls: [buildStandInPull()] });
+
+  const redirecting = createGitHubStandIn({
+    token: ctx.token,
+    pulls: [],
+    redirectTo: `${target.url}/repos/acme/shop/pulls/7`,
+  });
+
+  const host = createGitHubPullRequestHost({
+    root: ctx.root,
+    env: { GITHUB_API_URL: redirecting.url, GITHUB_TOKEN: ctx.token },
+    runGit,
+    runProcess,
+    fetch,
+  });
+
+  expect(host.readBody(7)).rejects.toMatchObject({ message: 'GitHub answered HTTP 302.' });
+  expect(target.requests).toStrictEqual([]);
+});
+
+test('it refuses an API URL whose path resolves to another plain-HTTP host', async () => {
+  const ctx = await setupTest({
+    env: { GITHUB_API_URL: 'http://localhost//outside.example.test' },
+  });
+
+  expect(ctx.host.readBody(7)).rejects.toMatchObject({
+    message: 'GITHUB_API_URL must be an https URL.',
+  });
 });

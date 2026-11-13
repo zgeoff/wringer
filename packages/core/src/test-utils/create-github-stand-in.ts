@@ -24,6 +24,9 @@ export interface StandInOptions {
 
   // Answers every request with this status.
   readonly forceStatus?: number | undefined;
+
+  // Answers every request with a 302 whose Location is this URL.
+  readonly redirectTo?: string | undefined;
 }
 
 export interface GitHubStandIn {
@@ -55,6 +58,10 @@ export function createGitHubStandIn(options: StandInOptions): GitHubStandIn {
         head: url.searchParams.get('head'),
         authorization: request.headers.get('authorization'),
       });
+
+      if (options.redirectTo !== undefined) {
+        return new Response(null, { status: 302, headers: { Location: options.redirectTo } });
+      }
 
       if (options.forceStatus !== undefined) {
         return new Response('{"message":"forced"}', { status: options.forceStatus });
