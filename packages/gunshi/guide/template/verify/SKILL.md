@@ -5,16 +5,16 @@ description:
   feature works. Load it before you check a change in the running app, run the journey of a feature,
   or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:f772261ecbc7'
+  wringer-template: 'sha256:5ad8a6ead397'
   wringer-command: bun verify
 ---
 
 # Verify Larder
 
 Use `bun verify` to start the app, use each feature your change touches the way a user would, and
-record a verdict that it works. Hand back the output of `bun verify report --human` and each feature
-you could not verify. The CI gate, `bun verify gate`, fails a PR that changes a feature with no
-verdict.
+record a verdict that it works. Put the report in the PR with `bun verify publish`, and hand back
+the PR link and each feature you could not verify. The CI gate, `bun verify gate`, fails a PR that
+changes a feature with no verdict.
 
 The mistakes that cost the most time:
 
@@ -77,11 +77,11 @@ journey of `bun verify` commands, and the end state that shows it works.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
    in the order of the table in [References](#references). When [Targets](#targets) names a journey
    to run last, run it last.
-8. Run `bun verify report --human`. Expect: `verified` on each changed feature. After `done`, an
-   edit to a file under a feature's `paths` makes its verdict `stale`; a commit alone leaves each
-   verdict as it was. Repeat steps 4 to 6 for each stale feature.
-9. Put the whole output in the PR body, in place of any older report. Keep the HTML comment at the
-   end of the output: the gate reads the report from it.
+8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature.
+   After `done`, an edit to a file under a feature's `paths` makes its verdict `stale`; a commit
+   alone leaves each verdict as it was. Repeat steps 4 to 6 for each stale feature.
+9. Run `bun verify publish`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
+   `unchanged`. It writes the report into the description of the branch's open PR.
 10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
@@ -167,5 +167,6 @@ checks and features, with each feature's `paths`.
 - After you change this skill, a feature file or the registry, run `bun verify lint`, and fix each
   failure it reports.
 
-**Reply:** the output of `bun verify report --human`, and each feature you could not verify, with
-the command that failed and its `error.code`, or the end state you expected and the `data` you got.
+**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
+could not verify, with the command that failed and its `error.code`, or the end state you expected
+and the `data` you got.

@@ -343,7 +343,8 @@ function formatGateFailure(
   return lines.filter((line) => line !== null).join(' ');
 }
 
-const verdictHint = 'Drive each feature, run `done` and `report --human`, and update the PR body.';
+const verdictHint =
+  'Drive each feature, run `done`, then run `publish` to write the report into the PR description.';
 
 const unmappedHint =
   "Add each unmapped path to a feature's `paths`, or to the registry's ignore list when it has no runtime effect.";

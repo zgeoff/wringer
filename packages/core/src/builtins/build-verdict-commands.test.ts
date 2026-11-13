@@ -205,7 +205,7 @@ test.each([
     {
       exitCode: 1,
       message: expect.stringContaining('checkout'),
-      hint: expect.stringContaining('update the PR body'),
+      hint: expect.stringContaining('run `publish`'),
       failing: [{ name: 'checkout', status: 'missing' }],
     },
   ],

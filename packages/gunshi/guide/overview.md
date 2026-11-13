@@ -38,8 +38,9 @@ Hand back the PR that adds them, with the proof in its description. The mistakes
 - [The template](#the-template): the files to copy, with fixed parts and repo parts.
 - [Create](#create): read the repo, then write the CLI, the actions, the checks, 3 to 5 features,
   the ignore list and the `verify` skill.
-- [Prove](#prove): doctor passes, a fresh subagent reaches `done` on every feature, and the CLI
-  refuses a command before the doctor passes and a write on a read-only target.
+- [Prove](#prove): doctor passes, a fresh subagent reaches `done` on every feature, the CLI refuses
+  a command before the doctor passes and a write on a read-only target, and `bun verify publish`
+  writes the report into the PR.
 - [Maintain](#maintain): the gate and `lint` in CI, and a template upgrade when `lint` asks.
 
 ## Topics
@@ -115,8 +116,8 @@ The work is done only when each of these holds. The `prove` topic gives the comm
 3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
    `doctor-required`. On a read-only target, if the repo has one, try one write: the CLI refuses it
    with `read-only`.
-4. The whole report that `bun verify report --human` prints is in the description of the PR that
-   adds the CLI. The gate reads the report from the HTML comment at the report's end.
+4. `bun verify publish` has written the report into the description of the PR that adds the CLI. The
+   gate reads the report from the HTML comment at the report's end.
 
 ## Maintain
 

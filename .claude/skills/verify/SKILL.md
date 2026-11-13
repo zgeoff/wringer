@@ -5,15 +5,15 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:f772261ecbc7'
+  wringer-template: 'sha256:5ad8a6ead397'
   wringer-command: bun verify
 ---
 
 # Verify wringer
 
 Use `bun verify` to start the shop example app, drive each feature your change touches through the
-real CLI, and record a verdict. Hand back the output of `bun verify report --human` and each feature
-you could not verify.
+real CLI, and record a verdict. Put the report in the PR with `bun verify publish`, and hand back
+the PR link and each feature you could not verify.
 
 The mistakes that cost the most time:
 
@@ -70,9 +70,10 @@ Read a feature's file before you run its journey.
 5. Run `bun verify done`. Expect: `ok: true`.
 6. Repeat steps 3 to 5 for each changed feature. An edit to a file under a feature's `paths` after
    `done` makes its verdict `stale`, so repeat them for it.
-7. Run `bun verify report --human`. Expect: `verified` on each changed feature. Put the whole output
-   in the PR body, in place of any older report.
-8. Run `bun verify down`.
+7. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature.
+8. Run `bun verify publish`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
+   `unchanged`. It writes the report into the description of the branch's open PR.
+9. Run `bun verify down`.
 
 ## Read the envelope
 
@@ -121,5 +122,6 @@ the skill steps in [AGENTS.md](../../../AGENTS.md), and give their proof in the 
 - Then run `bun verify lint`, and fix each failure. When it fails with check `template`, run
   `bun verify guide maintain`.
 
-**Reply:** the output of `bun verify report --human`, and each feature you could not verify, with
-the command that failed and its `error.code`, or the end state you expected and the `data` you got.
+**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
+could not verify, with the command that failed and its `error.code`, or the end state you expected
+and the `data` you got.

@@ -10,7 +10,7 @@ The mistakes that cost the most:
 - **A shallow checkout.** The gate needs the merge base with the PR's base branch, so it fails on a
   checkout without the full history.
 - **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
-  `edited` event misses the report an author pastes later.
+  `edited` event misses a report that `bun verify publish` writes later.
 - **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Move the old
   `verify` skill folder away first, as step 2 of the upgrade does.
 
@@ -54,8 +54,8 @@ Keep it a workflow of its own, so a body edit reruns only this job.
 A journey breaks when a change to its feature, such as a renamed button, makes a command of its
 journey fail, or leaves the app different from the end state the journey expects. Fix the feature's
 journey in the feature's `references/feature-<name>.md` in the `verify` skill, in the same PR. Then
-follow the `verify` skill's "Check a change" for that feature. Replace the whole report in the PR
-body with the new output of `bun verify report --human`.
+follow the `verify` skill's "Check a change" for that feature. Run `bun verify publish` to replace
+the report in the PR description.
 
 ## Upgrade the template
 
