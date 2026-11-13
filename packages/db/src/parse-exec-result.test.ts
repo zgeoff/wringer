@@ -129,3 +129,26 @@ test.each([
     }),
   ).toThrow(expect.objectContaining({ message: row.stderr.trim(), errno: row.errno }));
 });
+
+test('it keeps the digits of a sqlite3 integer beyond 2^53 and a small integer as a number', () => {
+  const parsed = parseExecResult({
+    result: {
+      exitCode: 0,
+      stdout:
+        '[{"big":9007199254740993,"low":-9007199254740993,"small":5,"real":1.5,"text":"12345678901234567890"}]\n',
+      stderr: '',
+    },
+    output: 'rows',
+    write: false,
+  });
+
+  expect(parsed.rows).toStrictEqual([
+    {
+      big: '9007199254740993',
+      low: '-9007199254740993',
+      small: 5,
+      real: 1.5,
+      text: '12345678901234567890',
+    },
+  ]);
+});
