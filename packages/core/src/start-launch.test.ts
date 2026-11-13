@@ -53,13 +53,11 @@ async function setupTest() {
 
     // A process the app started in a session of its own outlives the app's group, so the test
     // stops it before the folder goes.
-    stopOutputHolder: async (pidPath: string) => {
-      const pidText = await readFile(pidPath, 'utf8');
+    stopOutputHolder: (pidPath: string) => {
+      stack.defer(async () => {
+        const pidText = await readFile(pidPath, 'utf8');
 
-      const pid = Number(pidText);
-
-      stack.defer(() => {
-        killProcessGroup(pid);
+        killProcessGroup(Number(pidText));
       });
     },
   };
@@ -162,7 +160,7 @@ test('it fails a stop with an environment error when a process outside the app h
     stopGraceMs: 5000,
   });
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   const [stopped] = await Promise.allSettled([launch.stop()]);
 
@@ -173,6 +171,53 @@ test('it fails a stop with an environment error when a process outside the app h
       message: expect.stringContaining("The app's output still had not reached its log"),
     }),
   });
+});
+
+test('it lets the process that launched the app exit after a stop gave up on a process holding its output', async () => {
+  const ctx = await setupTest();
+
+  const pidPath = join(ctx.directory, 'holder.pid');
+
+  const script = [
+    "import { readLaunchHost } from './read-launch-host.ts';",
+    "import { startLaunch } from './start-launch.ts';",
+    'const launch = await startLaunch({',
+    '  host: readLaunchHost(),',
+    '  plan: {',
+    `    command: ['sh', '-c', ${JSON.stringify(
+      `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
+    )}, ${JSON.stringify(pidPath)}],`,
+    "    ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),",
+    '  },',
+    `  logPath: ${JSON.stringify(ctx.logPath)},`,
+    '  readyTimeoutMs: 10_000,',
+    '  signal: new AbortController().signal,',
+    '  onCrash: () => {},',
+    '  onStopFailed: () => {},',
+    '  stopGraceMs: 5000,',
+    '});',
+    'await launch.stop().catch((error) => console.log(error.message));',
+  ].join('\n');
+
+  const launcher = Bun.spawn([process.execPath, '--eval', script], {
+    cwd: import.meta.dir,
+    stdout: 'pipe',
+    stderr: 'inherit',
+
+    // The holder sleeps 30 s, so a launcher that exits before this limit let go of its pipes.
+    timeout: 4000,
+  });
+
+  onTestFinished(() => {
+    launcher.kill();
+  });
+
+  ctx.stopOutputHolder(pidPath);
+
+  const [output] = await Promise.all([new Response(launcher.stdout).text(), launcher.exited]);
+
+  expect(launcher.signalCode).toBeNull();
+  expect(output).toContain("The app's output still had not reached its log");
 });
 
 test('it keeps the startup failure and adds the failed stop when an app that never got ready cannot be stopped cleanly', async () => {
@@ -200,7 +245,7 @@ test('it keeps the startup failure and adds the failed stop when an app that nev
     }),
   ]);
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   expect(launched).toStrictEqual({
     status: 'rejected',
@@ -237,7 +282,7 @@ test('it reports the failed stop of an app that never got ready to its caller', 
     }),
   ]);
 
-  await ctx.stopOutputHolder(pidPath);
+  ctx.stopOutputHolder(pidPath);
 
   expect(onStopFailed.mock.calls).toStrictEqual([
     [expect.stringContaining("The app's output still had not reached its log")],
