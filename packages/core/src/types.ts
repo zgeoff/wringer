@@ -467,11 +467,36 @@ export interface RepoHost extends ChangeFactsHost, EvidenceFiles {
   readonly readText: (path: string) => Promise<string>;
 }
 
+export interface PullRequestView {
+  readonly number: number;
+  readonly url: string;
+  readonly body: string;
+  readonly baseBranch: string;
+  readonly state: 'open' | 'closed' | 'merged';
+}
+
+export type PullRequestFound =
+  | { readonly kind: 'one'; readonly pr: PullRequestView }
+  | { readonly kind: 'none' }
+  | { readonly kind: 'many'; readonly numbers: readonly number[] };
+
+// A PR host's pull requests, as a command reads and writes their descriptions. A failure throws a
+// WringerError with code `environment`, whose message never carries the host's token.
+export interface PullRequestHost {
+  // `branch` is the current branch. `number` comes from `--pr`, and finds that PR in any state.
+  readonly findOpen: (
+    request: { readonly branch: string } | { readonly number: number },
+  ) => Promise<PullRequestFound>;
+  readonly readBody: (number: number) => Promise<PullRequestView>;
+  readonly writeBody: (number: number, body: string) => Promise<void>;
+}
+
 // What the CLI adapter knows about one invocation.
 export interface Session {
   readonly root: string;
   readonly state: StatePort;
   readonly repoHost: RepoHost;
+  readonly pullRequests: PullRequestHost;
   readonly target?: string | undefined;
   readonly feature?: string | undefined;
   readonly timeoutMs?: number | undefined;

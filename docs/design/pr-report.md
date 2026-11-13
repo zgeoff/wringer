@@ -134,6 +134,16 @@ The CLI adapter builds the GitHub port at the entry point:
   of the branch's push remote, from `branch.<name>.pushRemote` or `branch.<name>.remote`, else
   `origin`, so a branch pushed to a fork finds its PR.
 - `writeBody` sends `PATCH /repos/{owner}/{name}/pulls/{number}` with `{ body }`.
+- `findOpen` with a number reads `GET /repos/{owner}/{name}/pulls/{number}` and returns that PR in
+  any state, so the caller checks `state`. `state` is `merged` when GitHub gives a `merged_at` time.
+- The adapter reads the repo and the token on its first request, so a command that touches no PR
+  needs neither. A repo it cannot read from `GITHUB_REPOSITORY` or `origin` fails with
+  `environment`, and the message never repeats the remote URL, which can hold a password.
+- Every failure the port reports has the code `environment`. A network failure and a status the list
+  below leaves out give a fixed message with no response text.
+- The port sends the token only to an `https` API URL, or one on a loopback host. It does not follow
+  a redirect, which would carry the token to another place, and it fails on a token that is not a
+  valid header value without echoing it.
 
 ### The evidence uploader
 

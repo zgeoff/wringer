@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import {
+  createNodePullRequestHost,
   createNodeRepoHost,
   createRepoState,
   envelopeSchema,
@@ -36,6 +37,7 @@ async function setupTest() {
       openRepo: (root) => ({
         state: createRepoState(root, wringer.stateDir),
         repoHost: createNodeRepoHost(),
+        pullRequests: createNodePullRequestHost(root),
         supervisor: makeProcessSupervisorPort({ selfCommand, root, stateDir: wringer.stateDir }),
       }),
       runSupervisor: (_wringer, supervisorArgv) => {

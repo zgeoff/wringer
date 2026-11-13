@@ -1,5 +1,12 @@
 import { dispatch, supervisorCommandName } from '@wringer/core';
-import type { RepoHost, StatePort, SupervisorPort, Wringer, WringerError } from '@wringer/core';
+import type {
+  PullRequestHost,
+  RepoHost,
+  StatePort,
+  SupervisorPort,
+  Wringer,
+  WringerError,
+} from '@wringer/core';
 import { parseArgs } from 'gunshi';
 import type { Invocation } from './build-gunshi-commands.ts';
 import { pickCLIOutcome } from './pick-cli-outcome.ts';
@@ -13,6 +20,7 @@ import { resolveInvocation } from './resolve-invocation.ts';
 interface RepoPorts {
   readonly state: StatePort;
   readonly repoHost: RepoHost;
+  readonly pullRequests: PullRequestHost;
   readonly supervisor: SupervisorPort;
 }
 
@@ -76,6 +84,7 @@ async function dispatchInvocation(
     root: plan.root,
     state: repo.state,
     repoHost: repo.repoHost,
+    pullRequests: repo.pullRequests,
     supervisor: repo.supervisor,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
