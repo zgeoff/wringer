@@ -23,7 +23,8 @@ The package runs on [Bun](https://bun.sh) 1.3 or newer.
 
 ## Usage
 
-A repo builds its registry with the typed builder, then hands it to a CLI adapter:
+A repo builds its [registry](../../docs/reference/terms.md#registry) with the typed builder, then
+hands it to a CLI adapter such as [`@wringer/gunshi`](../gunshi/README.md):
 
 ```ts
 import { createWringer, local } from '@wringer/core';
@@ -43,42 +44,37 @@ export const registry = createWringer({ name: 'shop' })
   .build();
 ```
 
-Add drivers with `.use(...)`. `bindDrivers(drivers)` returns `defineAction`, `defineTarget`,
-`defineCommand` and `defineCheck`, typed against those drivers, so a repo can define each one in its
-own file.
+Add [drivers](../../docs/reference/terms.md#driver) with `.use(...)`. `bindDrivers(drivers)` returns
+`defineAction`, `defineTarget`, `defineCommand` and `defineCheck`, typed against those drivers, so a
+repo can define each one in its own file.
 
 ## Features
 
-- The typed builder. Each action and command declares `effect: 'read' | 'write'`, and is a write
-  unless it says otherwise.
+- The typed builder. Each action and command takes `effect: 'read' | 'write'`, which defaults to
+  `write`.
 - Read-only targets: each driver client and exec refuses a write there with `read-only` and the
   target's hint. A target's driver config lists the writes it grants.
 - One supervisor process per run, which owns the app and every driver service.
-- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`. `done` records the
-  fingerprint of the diff limited to the feature's `paths` and the registry's `.shared()` globs, so
-  an edit to another feature's files leaves the verdict standing. `gate` fails a PR when a changed
-  feature lacks a verdict at its own current fingerprint, and when a changed path matches neither a
-  feature's `paths` nor an `.ignore` glob. `report` lists those unmapped paths.
-- The ignore list: `.ignore(...globs)` names the paths with no runtime effect, such as docs and
-  tests. Any path an ignore glob matches counts as no change, even when a feature's `paths` match it
-  too. The gate skips it and the fingerprint leaves it out, so a README edit keeps each verdict
-  fresh. Feature `paths` and ignore globs both match with `Bun.Glob`.
+- The built-in commands, such as `up`, `doctor`, `done`, `report` and `gate`. `done` records a
+  [verdict](../../docs/reference/terms.md#verdict) at the feature's
+  [fingerprint](../../docs/reference/terms.md#fingerprint), so an edit to another feature's files
+  leaves the verdict standing. For the git version a fingerprint needs, and when it changes or
+  fails, see the [Verdict scope constraints](../../docs/design/verdict-scope.md#constraints).
+  `report` lists each path changed since the merge base with the base branch that no feature, shared
+  glob or ignore glob matches.
+- The [gate](../../docs/reference/terms.md#gate), and its policy:
+  `.gate({ unpinned: 'allow' | 'refuse' })` sets whether `gate` accepts a verdict on an
+  [attach target](../../docs/reference/terms.md#target) that reports no commit. The default is
+  `allow`; `refuse` fails the gate on such a verdict.
+- The [ignore list](../../docs/reference/terms.md#ignore-list): `.ignore(...globs)`. Any path an
+  ignore glob matches counts as no change, even when a feature's `paths` match it too. Feature
+  `paths` and ignore globs both match with `Bun.Glob`.
+- The [shared globs](../../docs/reference/terms.md#shared-glob): `.shared(...globs)`. A change to a
+  path one matches changes every feature's fingerprint.
 - Secret scrubbing: `.secret(...envNames)` names the environment variables that hold the repo's
   secrets. Core replaces every known secret with `[redacted:<name>]` in evidence, the envelope and
   the run log, and checks each file again before `report` uploads it.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
-- The fingerprint: `git patch-id --verbatim` of the working tree against the merge base, less the
-  state folder and the ignored paths, which stays the same across a commit and across a clean rebase
-  that leaves the 3 lines around each change as they were. A rebase that changes those lines changes
-  the fingerprint, because the hash keeps the diff's context. It needs git 2.39 or later. Only the
-  tracked files and git's defaults shape it: the config, attributes and ignore files of the clone,
-  the user and the system never apply, so the same change gets the same fingerprint in any clone. A
-  clone whose config converts a file as git adds it, such as `core.autocrlf` or a clean filter, can
-  get another fingerprint once the change is committed; the verdict then reads as stale, never as
-  fresh. A sparse checkout, a linked worktree, a shallow or partial clone and a detached HEAD get
-  the fingerprint of the same change in a full clone, and a file on disk that the index marks
-  skip-worktree counts as any other. A repo with no commit, a shallow clone that lacks the merge
-  base, and a submodule that holds work it has not committed fail with an `environment` error.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer. Each host also follows a long-running command, such as `tail -F`, line by line.
 
@@ -93,7 +89,7 @@ A command that passes exits `0`. A command that fails puts one of these in the e
 | `usage`              | 2    | The command or its arguments are not valid.    |
 | `read-only`          | 3    | A read-only target refused a write.            |
 | `doctor-required`    | 3    | The doctor has not passed on the current run.  |
-| `not-running`        | 3    | The target has no running run.                 |
+| `not-running`        | 3    | The target has no run in progress.             |
 | `target-not-allowed` | 3    | The command does not run on this target.       |
 | `environment`        | 4    | A tool, a host or the network failed.          |
 | `internal`           | 4    | wringer failed; the stack is in the run's log. |

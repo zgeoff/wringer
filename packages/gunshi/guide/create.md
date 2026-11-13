@@ -2,9 +2,10 @@
 
 Write the verify CLI, its registry and the repo's verify skill
 
-Add the verify CLI, its registry and the repo's `verify` skill. The registry is the file that
-declares the targets, drivers, actions, repo commands, doctor checks and features;
-`verify-registry.ts` in the template shows one of each, on the builder that `createWringer` returns.
+Add the verify CLI, its
+[registry](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md#registry) and the
+repo's `verify` skill. `verify-registry.ts` in the template shows one target, driver, action, repo
+command, doctor check and feature, on the builder that `createWringer` returns.
 
 The mistakes that cost the most:
 

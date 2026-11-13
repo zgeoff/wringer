@@ -6,48 +6,40 @@ Give the repo's agents one way to use its real app and keep the evidence of what
 these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
-- its registry: the code that declares the targets, the drivers, the actions, the doctor checks and
-  the features, with each feature's `paths` globs, and the ignore list, set with `.ignore`: the
-  globs of the files the running app never reads;
+- its [registry](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md#registry), with
+  each feature's `paths` globs and the ignore list set with `.ignore`;
 - a `verify` skill, with a feature file for each feature, `references/feature-<name>.md`, that gives
   its journey and end state.
 
-These terms hold across this skill and its references:
+The [terms page](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md) defines each
+word this guide uses: registry, target, driver, action, command, feature, journey, run, doctor,
+verdict, fingerprint, evidence, report, gate, shared glob and ignore list.
 
-| Term      | Meaning                                                                                                                                             |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| target    | where the app runs: `local`, which the CLI starts, or an instance it attaches to                                                                    |
-| read-only | a target's access that refuses each write with exit code 3                                                                                          |
-| driver    | a package that adds a group of commands, such as `@wringer/http` and `http request`                                                                 |
-| action    | a named step of the repo's own, run as `bun verify action <name>`                                                                                   |
-| doctor    | `bun verify doctor`: the checks that must pass before any command that touches the app                                                              |
-| journey   | the `bun verify` commands that use one feature, and the end state that shows it works                                                               |
-| verdict   | what `bun verify done` records: the feature works on the current code                                                                               |
-| gate      | `bun verify gate` in CI: it fails a PR on a changed feature without a verdict, and on a changed file outside every `paths` glob and the ignore list |
-| report    | the output of `bun verify report --human`, which the PR body holds for the gate                                                                     |
+Then prove that the CLI, the registry and the skill work, and wire the checks that keep them true.
+Hand back the PR that adds them, with the proof in its description. The mistakes that cost the most:
 
-Then prove them, and wire the checks that keep them true. Hand back the PR that adds them, with the
-proof in its description. The mistakes that cost the most:
-
-- **Calling it done before a fresh agent uses it.** You know the app; the repo's next agent knows
-  only the `verify` skill. Run a subagent with none of your context to show that the skill works.
+- **Calling the work done before a fresh agent uses the skill.** You know the app; the repo's next
+  agent knows only the `verify` skill. Run a subagent with none of your context to show that the
+  skill works.
 - **Copying commands into the `verify` skill.** The CLI lists its own commands in `--help`, and a
   copy goes stale. Point at `--help`, and write only what the help can't say.
-- **A `paths` glob that matches no file.** The files it should cover then fail the gate as unmapped,
-  unless another feature's glob covers them. Run `bun verify lint` to find one.
+- **A `paths` glob that matches no file.** The gate then fails on each file the glob should cover,
+  and lists it as unmapped. A file that another feature's glob covers passes. Run `bun verify lint`
+  to find such a glob.
 - **Writing a repo's own choices outside the `<!-- repo -->` blocks of the `verify` skill.** An
   upgrade of the template replaces every line outside them. Put each choice, such as where an agent
   reports a refused write, in a block or in the repo's code.
 
 ## Key rules
 
+- [Topics](#topics): `guide <topic>` prints the commands for each step.
 - [Install](#install): add the packages, then read this guide from the CLI at the version the repo
   installs.
 - [The template](#the-template): the files to copy, with fixed parts and repo parts.
 - [Create](#create): read the repo, then write the CLI, the actions, the checks, 3 to 5 features,
   the ignore list and the `verify` skill.
 - [Prove](#prove): doctor passes, a fresh subagent reaches `done` on every feature, and the CLI
-  refuses what it should.
+  refuses a command before the doctor passes and a write on a read-only target.
 - [Maintain](#maintain): the gate and `lint` in CI, and a template upgrade when `lint` asks.
 
 ## Topics
@@ -92,9 +84,10 @@ Skip `verify-registry.test.ts` in the template: it tests the template inside wri
 
 These locations are defaults. When you change one, change each place that refers to it:
 
-- the folder `scripts/verify/`: the `verify` script's path in `package.json`, and its glob in the
-  registry's `.shared` list, and the `registry` option of `runVerify` when the registry lives apart
-  from that script;
+- the folder `scripts/verify/`:
+  - the `verify` script's path in `package.json`;
+  - its glob in the registry's `.shared` list;
+  - the `registry` option of `runVerify`, when the registry lives apart from `verify.ts`;
 - the skill folder: `runVerify`'s `skill` option, a path from the repo root;
 - the script name `verify`: the `package.json` script and the skill's `metadata.wringer-command`,
   such as `bun verify`.
@@ -114,27 +107,28 @@ skill, an ignore list for the files with no runtime effect, and `bun verify lint
 
 ## Prove
 
-The work is done only when each of these holds. the `prove` topic gives the commands.
+The work is done only when each of these holds. The `prove` topic gives the commands.
 
 1. `bun verify doctor` passes on `local`.
 2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. New
    feature files need one pass by an agent who did not write it, and this run is that pass.
 3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
-   `doctor-required`. A read-only target, if the repo has one, refuses one write with `read-only`.
-4. The whole report is in the description of the PR that adds the CLI. The gate reads the report
-   from the HTML comment at the report's end.
+   `doctor-required`. On a read-only target, if the repo has one, try one write: the CLI refuses it
+   with `read-only`.
+4. The whole report that `bun verify report --human` prints is in the description of the PR that
+   adds the CLI. The gate reads the report from the HTML comment at the report's end.
 
 ## Maintain
 
-Wire these into the repo, as the `maintain` topic shows:
+Keep these in place, as the `maintain` topic shows:
 
-- **The gate on each PR.** A PR that touches a feature's `paths` needs a verdict recorded on the
-  PR's latest code. A PR that touches a file outside every feature's `paths` and the ignore list
-  fails until you add the file to one of them.
+- **The gate on each PR.** A PR that touches a feature's `paths` needs a verdict that the agent
+  recorded with `bun verify done` on the PR's latest code. A PR that touches a file outside every
+  feature's `paths` and the ignore list fails until you add the file to one of them.
 - **`lint` in CI.** It needs no running app. When it reports another template hash, upgrade the
   template as the `maintain` topic says.
-- **A journey fixed with its feature.** A PR that changes a feature fixes the feature's journey.
+- **A journey fixed with its feature.** A PR that changes a feature updates the feature's journey.
 
-Add no scheduled job. The gate checks a feature each time a PR changes it.
+Don't add a scheduled job. The gate checks a feature each time a PR changes it.
 
 **Reply:** the PR link, and for each prove step, the command and the output lines that show it held.

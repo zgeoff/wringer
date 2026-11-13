@@ -312,6 +312,18 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
   unmapped.
 - A file that only the clone's `info/exclude`, the user's excludes or the user's attributes hide
   counts as changed, because the isolated index reads none of them.
+- A fingerprint stays the same across a commit, and across a rebase that leaves the 3 lines of
+  context around each change as they were. A rebase that changes those lines changes the
+  fingerprint, because `patch-id --verbatim` hashes the diff's context.
+- A fingerprint needs git 2.39 or later, the first release with `patch-id --verbatim`.
+- A clone whose config converts a file as git adds it, such as `core.autocrlf` or a clean filter,
+  can get another fingerprint once the change is committed. Its verdict then reads as stale, never
+  as fresh.
+- A sparse checkout, a linked worktree, a shallow or partial clone and a detached `HEAD` get the
+  fingerprint that the same change gets in a full clone. A file on disk that the index marks
+  skip-worktree counts as any other file.
+- Reading the change facts fails with `environment` in a repo with no commit, in a shallow clone
+  that lacks the merge base, and when a submodule holds work it has not committed.
 - The split gives each name from `--name-only -z` its chunks in order, never by a name parsed from a
   `diff --git` header, so a space, a quote or a newline in a path is safe. A type change, such as a
   file that became a symlink, owns two chunks. A chunk count that does not match the names throws
