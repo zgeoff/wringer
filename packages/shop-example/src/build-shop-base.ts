@@ -12,12 +12,17 @@ export interface ShopRegistryOptions {
   readonly demoURL?: string | undefined;
 }
 
+export interface ShopBaseOptions extends ShopRegistryOptions {
+  // Whether the `local` target puts its evidence in the PR description. The default keeps it local.
+  readonly evidence?: 'upload' | 'local' | undefined;
+}
+
 const orderCountSchema = z.strictObject({ orders: z.number().int().nonnegative() });
 
 // What every registry over the shop app shares, defined once: the shop's API token, a launch target
 // for the shop app with its database in the run folder, a read-only attach target for a shop started
 // apart, all four drivers, the action, command and doctor check, and no features.
-export function buildShopBase(name: string, options: ShopRegistryOptions = {}) {
+export function buildShopBase(name: string, options: ShopBaseOptions = {}) {
   const shop = bindDrivers([http({}), db({}), stream({}), browser({})] as const);
 
   return createWringer({ name })
@@ -28,6 +33,7 @@ export function buildShopBase(name: string, options: ShopRegistryOptions = {}) {
       shop.defineTarget({
         mode: 'launch',
         access: 'read-write',
+        evidence: options.evidence,
         host: local(),
         launch: (ctx) => ({
           command: ['bun', join(import.meta.dir, 'shop-app.ts')],
