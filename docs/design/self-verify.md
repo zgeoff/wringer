@@ -80,7 +80,9 @@ A `verify:shop` script runs `createShopRegistry` with the skill folder
 // bun verify features --markdown
 // → data.markdown: the feature table that SKILL.md holds, byte for byte; --human prints it raw
 
-// gunshi module, a built-in like `lint`: needsRun false, needsDoctor false, effect 'read'
+// core module, the existing `features` built-in, now with `file`, `shared`, `ignore` and
+// `--markdown` (it dropped `current`; `status` still names the current feature):
+// needsRun false, needsDoctor false, effect 'read'
 const featuresDataSchema = z.strictObject({
   features: z.array(
     z.strictObject({

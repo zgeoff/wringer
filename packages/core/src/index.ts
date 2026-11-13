@@ -62,6 +62,7 @@ export type {
 
 export { readStreamLines } from './read-stream-lines.ts';
 export { readText } from './read-text.ts';
+export { buildFeatureFile, renderFeatureTable } from './render-feature-table.ts';
 export { renderReportMarkdown } from './render-report-markdown.ts';
 export { reportMarkers } from './report-markers.ts';
 export { reportSchema, verdictSchema } from './report-schema.ts';

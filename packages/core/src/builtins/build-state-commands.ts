@@ -4,6 +4,7 @@ import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildRunPaths } from '../build-state-paths.ts';
 import { findOwnValue } from '../find-own-value.ts';
 import { unassignedFeature } from '../open-drive.ts';
+import { buildFeatureFile, renderFeatureTable } from '../render-feature-table.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { buildUsePointers } from './build-use-pointers.ts';
@@ -43,10 +44,17 @@ const featureEntrySchema = z.strictObject({
   name: z.string(),
   summary: z.string(),
   paths: z.array(z.string()),
-  current: z.boolean(),
+  file: z.string(),
 });
 
-const featuresDataSchema = z.strictObject({ features: z.array(featureEntrySchema) });
+const featuresArgsSchema = z.strictObject({ markdown: z.boolean().default(false) });
+
+const featuresDataSchema = z.strictObject({
+  features: z.array(featureEntrySchema),
+  shared: z.array(z.string()),
+  ignore: z.array(z.string()),
+  markdown: z.string().optional(),
+});
 
 type FeaturesData = z.infer<typeof featuresDataSchema>;
 
@@ -129,23 +137,33 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
     },
   };
 
-  const features: BuiltinCommandSpec<Record<string, never>, FeaturesData> = {
+  const features: BuiltinCommandSpec<z.infer<typeof featuresArgsSchema>, FeaturesData> = {
     path: ['features'],
-    summary: "List the repo's feature map, with each feature's paths",
-    args: z.strictObject({}),
+    summary:
+      "List the repo's feature map, with each feature's paths, and the paths that map to none",
+    args: featuresArgsSchema,
     data: featuresDataSchema,
     effect: 'read',
     needsRun: false,
     needsDoctor: false,
-    run: (_args, ctx) =>
-      Promise.resolve({
-        features: ctx.wringer.features.map((feature) => ({
+    run: (args, ctx) => {
+      const registered = ctx.wringer.features;
+
+      const data = {
+        features: registered.map((feature) => ({
           name: feature.name,
           summary: feature.summary,
           paths: [...feature.paths],
-          current: feature.name === ctx.feature,
+          file: buildFeatureFile(feature.name),
         })),
-      }),
+        shared: [...ctx.wringer.shared],
+        ignore: [...ctx.wringer.ignore],
+      };
+
+      const result = args.markdown ? { ...data, markdown: renderFeatureTable(registered) } : data;
+
+      return Promise.resolve(result);
+    },
   };
 
   return [buildBuiltinCommand(status), buildBuiltinCommand(use), buildBuiltinCommand(features)];

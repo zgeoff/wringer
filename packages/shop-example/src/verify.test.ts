@@ -2,28 +2,111 @@ import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { envelopeSchema } from '@wringer/core';
 
-// `lint` reads the repo's own files, so the script runs from the repo root, as CI would call it.
-test('it passes lint over the shop verify skill and its feature map', async () => {
+function setupTest() {
+  // Commands such as `lint` read the repo's own files, so the script runs from the repo root, as CI
+  // would call it.
   const root = join(import.meta.dir, '..', '..', '..');
 
-  const child = Bun.spawn(
-    [process.execPath, join(import.meta.dir, 'verify.ts'), 'lint', '--json'],
-    {
-      cwd: root,
-      stdout: 'pipe',
-      stderr: 'pipe',
+  return {
+    runVerify: async (...args: readonly string[]) => {
+      const child = Bun.spawn(
+        [process.execPath, join(import.meta.dir, 'verify.ts'), ...args, '--json'],
+        { cwd: root, stdout: 'pipe', stderr: 'pipe' },
+      );
+
+      const [exitCode, stdout, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+      ]);
+
+      return { exitCode, data: envelopeSchema.parse(JSON.parse(stdout)).data, stderr };
     },
-  );
+  };
+}
 
-  const [exitCode, stdout, stderr] = await Promise.all([
-    child.exited,
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-  ]);
+test('it passes lint over the shop verify skill and its feature map', async () => {
+  const ctx = setupTest();
 
-  expect({ exitCode, data: envelopeSchema.parse(JSON.parse(stdout)).data, stderr }).toStrictEqual({
+  const result = await ctx.runVerify('lint');
+
+  expect(result).toStrictEqual({
     exitCode: 0,
     data: { skill: '.claude/skills/verify-shop/SKILL.md', commands: 21, failures: [] },
     stderr: '',
   });
+});
+
+test('#features --markdown lists the shop and guide features, the ignore list and the feature table', async () => {
+  const ctx = setupTest();
+
+  const result = await ctx.runVerify('features', '--markdown');
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    data: {
+      features: [
+        {
+          name: 'place-order',
+          summary: 'Place an order from the shop page',
+          paths: [
+            'packages/shop-example/src/shop-page.html',
+            'packages/shop-example/src/shop-page.ts',
+          ],
+          file: 'references/feature-place-order.md',
+        },
+        {
+          name: 'order-failure',
+          summary: 'Show on the page that an order failed',
+          paths: ['packages/shop-example/src/shop-page.ts'],
+          file: 'references/feature-order-failure.md',
+        },
+        {
+          name: 'list-orders',
+          summary: 'List the placed orders through the orders API',
+          paths: [
+            'packages/shop-example/src/shop-app.ts',
+            'packages/shop-example/src/shop-contract.ts',
+          ],
+          file: 'references/feature-list-orders.md',
+        },
+        {
+          name: 'order-log',
+          summary: 'Log one line for each order placed',
+          paths: ['packages/shop-example/src/shop-app.ts'],
+          file: 'references/feature-order-log.md',
+        },
+        {
+          name: 'guide',
+          summary: 'Print the guide for adding a verify CLI, or one of its topics',
+          paths: [
+            'packages/gunshi/src/build-guide-command.ts',
+            'packages/gunshi/src/pick-guide-data.ts',
+            'packages/gunshi/src/read-guide.ts',
+          ],
+          file: 'references/feature-guide.md',
+        },
+      ],
+      shared: ['packages/shop-example/src/create-shop-registry.ts'],
+      ignore: ['**/*.md', '**/*.test.ts', 'docs/**', '.github/**', '.claude/**'],
+      markdown: [
+        '| Feature | Summary | File |',
+        '| --- | --- | --- |',
+        '| place-order | Place an order from the shop page | [references/feature-place-order.md](references/feature-place-order.md) |',
+        '| order-failure | Show on the page that an order failed | [references/feature-order-failure.md](references/feature-order-failure.md) |',
+        '| list-orders | List the placed orders through the orders API | [references/feature-list-orders.md](references/feature-list-orders.md) |',
+        '| order-log | Log one line for each order placed | [references/feature-order-log.md](references/feature-order-log.md) |',
+        '| guide | Print the guide for adding a verify CLI, or one of its topics | [references/feature-guide.md](references/feature-guide.md) |',
+      ].join('\n'),
+    },
+    stderr: '',
+  });
+});
+
+test('#features omits the feature table without --markdown', async () => {
+  const ctx = setupTest();
+
+  const result = await ctx.runVerify('features');
+
+  expect(result.data).not.toHaveProperty('markdown');
 });

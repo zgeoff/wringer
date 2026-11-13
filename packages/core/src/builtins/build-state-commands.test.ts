@@ -117,3 +117,62 @@ test('#use --target marks the cursors of the run of the target it selects', asyn
 
   expect(result.envelope.data).toStrictEqual({ target: 'prod', feature: null, cursors: {} });
 });
+
+test('#features lists each feature with its paths and file, the shared globs and the ignore list, with no run', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['features']);
+
+  expect({ ok: result.envelope.ok, instance: result.envelope.instance }).toStrictEqual({
+    ok: true,
+    instance: null,
+  });
+
+  expect(result.envelope.data).toStrictEqual({
+    features: [
+      {
+        name: 'checkout',
+        summary: 'Pay for the cart',
+        paths: ['src/checkout/**'],
+        file: 'references/feature-checkout.md',
+      },
+      {
+        name: 'search',
+        summary: 'Find a product',
+        paths: ['src/search/**'],
+        file: 'references/feature-search.md',
+      },
+    ],
+    shared: ['package.json'],
+    ignore: ['**/*.md'],
+  });
+});
+
+test('#features --markdown adds the feature table, one row per feature in registry order', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['features'], { markdown: true });
+
+  expect(result.envelope.data).toStrictEqual({
+    features: [
+      {
+        name: 'checkout',
+        summary: 'Pay for the cart',
+        paths: ['src/checkout/**'],
+        file: 'references/feature-checkout.md',
+      },
+      {
+        name: 'search',
+        summary: 'Find a product',
+        paths: ['src/search/**'],
+        file: 'references/feature-search.md',
+      },
+    ],
+    shared: ['package.json'],
+    ignore: ['**/*.md'],
+    markdown: [
+      '| Feature | Summary | File |',
+      '| --- | --- | --- |',
+      '| checkout | Pay for the cart | [references/feature-checkout.md](references/feature-checkout.md) |',
+      '| search | Find a product | [references/feature-search.md](references/feature-search.md) |',
+    ].join('\n'),
+  });
+});
