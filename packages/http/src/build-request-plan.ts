@@ -8,6 +8,9 @@ export interface RequestPlanInput {
   readonly baseURL: string | undefined;
   readonly method: string;
   readonly path: string;
+
+  // The path with each redacted query value replaced, for the messages.
+  readonly shownPath: string;
   readonly headers: Readonly<Record<string, string>>;
   readonly json: unknown;
 }
@@ -36,13 +39,21 @@ export function buildRequestPlan(input: RequestPlanInput): RequestPlan {
 
   const base = new URL(input.baseURL);
 
+  if (hasCredentials(base)) {
+    return refuseCredentials(base.origin);
+  }
+
   const url = URL.parse(input.path, base.href);
+
+  if (url !== null && hasCredentials(url)) {
+    return refuseCredentials(url.origin);
+  }
 
   // A path such as `//host/` resolves to another origin, which the target's grants never cover.
   if (url === null || url.origin !== base.origin) {
     return {
       kind: 'refuse',
-      message: `${input.path} is not a path of the app at ${base.origin}.`,
+      message: `${input.shownPath} is not a path of the app at ${base.origin}.`,
       hint: 'Pass a path that starts with one /, such as /api/search.',
     };
   }
@@ -74,5 +85,18 @@ export function buildRequestPlan(input: RequestPlanInput): RequestPlan {
       redirect: 'manual',
       ...(hasBody ? { body: JSON.stringify(input.json) } : {}),
     },
+  };
+}
+
+function hasCredentials(url: URL): boolean {
+  return url.username !== '' || url.password !== '';
+}
+
+// The message holds the origin only, so the password never reaches an error.
+function refuseCredentials(origin: string): RequestRefusal {
+  return {
+    kind: 'refuse',
+    message: `A request to ${origin} carries a username or password in its URL.`,
+    hint: 'Send credentials as a header built from a declared secret, never in the URL.',
   };
 }

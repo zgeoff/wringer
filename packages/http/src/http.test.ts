@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'bun:test';
+import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { dispatch } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
@@ -32,7 +33,62 @@ async function setupTest() {
     wringer: loopbackWringer,
   });
 
+  const failing = mock<HttpTransport>((url, init) =>
+    url.pathname === '/'
+      ? fetch(url, init)
+      : Promise.reject(new Error(`connect failed for ${url.href}`)),
+  );
+
+  const failingWringer = createHttpWringer(SHOP_API_URL, failing);
+
+  const failingShop = await createTestSession({
+    parent: import.meta.dir,
+    wringer: failingWringer,
+  });
+
+  const redactingWringer = createHttpWringer(SHOP_API_URL, undefined, {
+    headers: ['x-shop-trace'],
+    query: ['signature'],
+    bodyPaths: ['$.method'],
+  });
+
+  const redactingShop = await createTestSession({
+    parent: import.meta.dir,
+    wringer: redactingWringer,
+  });
+
   return {
+    // Every file wringer keeps for an upload or a report: the features folders and the run logs.
+    readSinks: async (root: string): Promise<string> => {
+      const stateDir = join(root, wringer.stateDir);
+
+      const names = await readdir(stateDir, { recursive: true });
+
+      const sinks = names.filter(
+        (name) => /(?:^|\/)features\//u.test(name) || name.endsWith('/log.ndjson'),
+      );
+
+      const texts = await Promise.all(
+        sinks.map(async (name) => {
+          const info = await stat(join(stateDir, name));
+
+          return info.isFile() ? readFile(join(stateDir, name), 'utf8') : '';
+        }),
+      );
+
+      return texts.join('\n');
+    },
+    stdout: () => shop.lines.join('\n'),
+    redactingRoot: redactingShop.repo.root,
+    readRedactingEvidence: async (path: string) => {
+      const evidence: unknown = await Bun.file(join(redactingShop.repo.root, path)).json();
+
+      return evidence;
+    },
+    runRedacting: (path: readonly string[], args: unknown = {}) =>
+      dispatch(redactingWringer, path, args, { ...redactingShop.session, target: 'local' }),
+    runFailing: (path: readonly string[], args: unknown = {}) =>
+      dispatch(failingWringer, path, args, { ...failingShop.session, target: 'local' }),
     root: shop.repo.root,
     transport,
     stopApp: () => app.stop(),
@@ -505,4 +561,217 @@ test('it fails the doctor when the app answers its health path with a 5xx', asyn
       results: [expect.objectContaining({ name: 'http.reachable', status: 'failed' })],
     },
   });
+});
+
+test('it keeps a planted query token and cookie out of the features folder, the run log, stdout and the envelope', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], {
+    path: '/api/orders?token=planted-query-token',
+    header: ['cookie: sid=planted-cookie-token'],
+  });
+
+  const everything = [
+    await ctx.readSinks(ctx.root),
+    ctx.stdout(),
+    JSON.stringify(result.envelope),
+  ].join('\n');
+
+  expect({
+    leaked: everything.match(/planted-(?:query|cookie)-token/gu),
+    kept: everything.includes('http.query.token') && everything.includes('http.cookie.sid'),
+  }).toStrictEqual({ leaked: null, kept: true });
+});
+
+test('it redacts a configured header, query parameter and body path in the evidence', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRedacting(['attach']);
+  await ctx.runRedacting(['doctor']);
+
+  const result = await ctx.runRedacting(['http', 'request'], {
+    path: '/api/cart?signature=planted-signature',
+    header: ['x-shop-trace: planted-trace'],
+  });
+
+  const evidence = await ctx.readRedactingEvidence(result.envelope.evidence[0]?.path ?? '');
+
+  expect({ data: result.envelope.data, evidence }).toStrictEqual({
+    data: expect.objectContaining({
+      body: '{"method":"[redacted:http.body]","path":"/api/cart"}',
+      json: { method: '[redacted:http.body]', path: '/api/cart' },
+    }),
+    evidence: {
+      request: {
+        method: 'GET',
+        path: '/api/cart?signature=[redacted:http.query.signature]',
+        headers: { 'x-shop-trace': '[redacted:http.header.x-shop-trace]' },
+        url: `${SHOP_API_URL}/api/cart?signature=[redacted:http.query.signature]`,
+      },
+      response: expect.objectContaining({
+        json: { method: '[redacted:http.body]', path: '/api/cart' },
+      }),
+    },
+  });
+});
+
+test('it answers a transport failure on a redacted query without the value', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runFailing(['attach']);
+  await ctx.runFailing(['doctor']);
+
+  const result = await ctx.runFailing(['http', 'request'], {
+    path: '/api/cart?token=planted-query-token',
+  });
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+  }).toStrictEqual({
+    code: 'environment',
+    message: `GET ${SHOP_API_URL}/api/cart?token=[redacted:http.query.token] failed: Error: connect failed for ${SHOP_API_URL}/api/cart?token=[redacted:http.query.token]`,
+  });
+});
+
+test('it scrubs an Authorization token that an action passes on into its data', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'send-auth'], { token: 'planted-auth-token' });
+
+  expect(result.envelope.data).toStrictEqual({
+    sent: '[redacted:http.header.authorization]',
+    isReal: true,
+  });
+});
+
+test('it writes no evidence file for a request with evidence off, and the action gets the real response', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRedacting(['attach']);
+  await ctx.runRedacting(['doctor']);
+
+  const result = await ctx.runRedacting(['action', 'send-auth'], { token: 'planted-auth-token' });
+
+  expect({ evidence: result.envelope.evidence, data: result.envelope.data }).toStrictEqual({
+    evidence: [],
+    data: { sent: '[redacted:http.header.authorization]', isReal: true },
+  });
+});
+
+test('it keeps two planted set-cookie values out of every sink when the body echoes them', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/login`, () => {
+      const headers = new Headers();
+
+      headers.append('set-cookie', 'sid=planted-first-cookie; Path=/');
+      headers.append('set-cookie', 'cart=planted-second-cookie; Path=/');
+
+      return HttpResponse.json(
+        { echoed: ['planted-first-cookie', 'planted-second-cookie'] },
+        { headers },
+      );
+    }),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/login' });
+
+  const everything = [
+    await ctx.readSinks(ctx.root),
+    ctx.stdout(),
+    JSON.stringify(result.envelope),
+  ].join('\n');
+
+  expect(everything.match(/planted-(?:first|second)-cookie/gu)).toBeNull();
+});
+
+test('it keeps the unquoted copy of a quoted request cookie out of every sink when the body echoes it', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/echo-cookie`, (info) =>
+      HttpResponse.json({ echoed: info.request.headers.get('cookie')?.replaceAll('"', '') }),
+    ),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], {
+    path: '/api/echo-cookie',
+    header: ['cookie: sid="planted-quoted-request-cookie"'],
+  });
+
+  const everything = [
+    await ctx.readSinks(ctx.root),
+    ctx.stdout(),
+    JSON.stringify(result.envelope),
+  ].join('\n');
+
+  expect({
+    leaked: everything.match(/planted-quoted-request-cookie/gu),
+    kept: everything.includes('http.cookie.sid'),
+  }).toStrictEqual({ leaked: null, kept: true });
+});
+
+test('it keeps the unquoted copy of a quoted set-cookie out of every sink when the body echoes it', async () => {
+  const ctx = await setupTest();
+
+  server.use(
+    http.get(`${SHOP_API_URL}/api/login`, () =>
+      HttpResponse.json(
+        { echoed: 'planted-quoted-response-cookie' },
+        { headers: { 'set-cookie': 'sid="planted-quoted-response-cookie"; Path=/' } },
+      ),
+    ),
+  );
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['http', 'request'], { path: '/api/login' });
+
+  const everything = [
+    await ctx.readSinks(ctx.root),
+    ctx.stdout(),
+    JSON.stringify(result.envelope),
+  ].join('\n');
+
+  expect({
+    leaked: everything.match(/planted-quoted-response-cookie/gu),
+    kept: everything.includes('http.cookie.sid'),
+  }).toStrictEqual({ leaked: null, kept: true });
+});
+
+test('it refuses an action post to a URL with a password on a read-only target without the password', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('prod', ['attach']);
+  await ctx.run('prod', ['doctor']);
+
+  const result = await ctx.run('prod', ['action', 'post-to'], {
+    path: '//visitor:planted-url-pass@shop.example/',
+  });
+
+  const everything = [
+    await ctx.readSinks(ctx.root),
+    ctx.stdout(),
+    JSON.stringify(result.envelope),
+  ].join('\n');
+
+  expect({
+    leaked: everything.match(/planted-url-pass/gu),
+    code: result.envelope.error?.code,
+  }).toStrictEqual({ leaked: null, code: 'usage' });
 });

@@ -244,7 +244,9 @@ function buildRedactedExchange(exchange: HttpExchange, redaction: Redaction): Re
 | query        | `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`, `password`, `sig`, `code` |
 
 A body path is `$` followed by `.name` or `[*]` steps, and its placeholder name is `http.body`. A
-path that matches nothing changes nothing.
+path that matches nothing changes nothing. When a body path matches the response JSON, the driver
+rebuilds the response `body` string as compact JSON from the redacted `json`. When none matches, the
+`body` stays as received.
 
 ## Constraints
 
@@ -307,11 +309,16 @@ path that matches nothing changes nothing.
 - Each cookie in `cookie` and `set-cookie` keeps its name and loses its value.
 - A redacted query value is replaced in the evidence URL, in the access check's `describe` text, and
   in every error message. Error messages use the redacted URL, never `url.href`.
-- Before it writes evidence, the driver adds each redacted value to `session.secrets`: the whole
-  header value, the token after an auth scheme, each cookie value, each query value and each string
-  at a body path.
-- The `http request` command returns the redacted exchange as its data. A client call from an action
-  or a check returns the real response.
+- The driver redacts the query of a `location` or `referer` header with the same parameter list,
+  because a redirect carries an OAuth `code`.
+- Before it writes evidence, the driver adds these values to `session.secrets`:
+  - the whole value of each redacted header;
+  - the token after the auth scheme, for `authorization` and `proxy-authorization`;
+  - each cookie value, and its unquoted form when it is quoted;
+  - the decoded and the raw value of each redacted query parameter;
+  - each string under a body path, at any depth.
+- The `http request` command returns the redacted response, `{ status, headers, body, json }`, as
+  its data. A client call from an action or a check returns the real response.
 - `evidence: false` writes no evidence file. The driver still adds the request's secrets to the set,
   and its errors still use the redacted URL.
 

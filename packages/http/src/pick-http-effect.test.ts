@@ -19,6 +19,12 @@ test.each([
     effect: 'write',
   },
   {
+    name: 'a POST to a URL with credentials as a read, for the usage refusal to answer',
+    method: 'POST',
+    path: '//visitor:planted-url-pass@shop.example/',
+    effect: 'read',
+  },
+  {
     name: 'a grant for another method as a write',
     method: 'DELETE',
     path: '/api/search/a',

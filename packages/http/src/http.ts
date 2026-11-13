@@ -1,8 +1,11 @@
 import { WringerError, defineDriver, findOwnValue } from '@wringer/core';
 import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
+import { buildRedactedExchange, buildRedactedRequest } from './build-redacted-exchange.ts';
+import { buildRedaction } from './build-redaction.ts';
 import { buildRequestPlan } from './build-request-plan.ts';
 import { pickHttpEffect } from './pick-http-effect.ts';
+import { showPath } from './show-path.ts';
 
 const methodSchema = z.enum(['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -11,6 +14,9 @@ export const httpRequestSchema = z.strictObject({
   path: z.string().startsWith('/'),
   headers: z.record(z.string(), z.string()).default({}),
   json: z.unknown().optional(),
+
+  // false: no evidence file for this request. Its secrets still join the set.
+  evidence: z.boolean().default(true),
 });
 
 export type HttpRequest = z.input<typeof httpRequestSchema>;
@@ -30,7 +36,20 @@ export interface HttpClient {
 
 export type HttpTransport = (url: URL, init: RequestInit) => Promise<Response>;
 
+const bodyPathSchema = z.string().regex(/^\$(?:\.[^.[\]]+|\[\*\])*$/u);
+const nameListSchema = z.array(z.string().min(1)).default([]);
+
+// Added to the default lists: header names in any case, query parameter names, and `$` paths of
+// `.name` and `[*]` steps into request and response JSON.
+const redactSchema = z.strictObject({
+  headers: nameListSchema,
+  query: nameListSchema,
+  bodyPaths: z.array(bodyPathSchema).default([]),
+});
+
 const optionsSchema = z.strictObject({
+  redact: redactSchema.prefault({}),
+
   timeoutMs: z.number().int().positive().default(30_000),
 
   // Sends each request. A repo passes its own, such as one that goes through a proxy.
@@ -70,8 +89,16 @@ export const http = defineDriver({
     request: fence({
       effect: (request: HttpRequest) =>
         pickHttpEffect(request.method ?? 'GET', request.path, session.config.readOnly?.allow ?? []),
-      describe: (request) => `${request.method ?? 'GET'} ${request.path}`,
-      run: (request) => sendRequest(session, httpRequestSchema.parse(request)),
+      describe: (request) => {
+        const shown = showPath(request.path, buildRedaction(session.options.redact));
+
+        return `${request.method ?? 'GET'} ${shown}`;
+      },
+      run: async (request) => {
+        const sent = await sendRequest(session, httpRequestSchema.parse(request));
+
+        return sent.real;
+      },
     }),
   }),
   commands: (command) => [
@@ -82,13 +109,20 @@ export const http = defineDriver({
       data: httpResponseSchema,
       decideEffect: (args, config) =>
         pickHttpEffect(args.method, args.path, config.readOnly?.allow ?? []),
-      run: (args, ctx) =>
-        ctx.client.request({
+      run: async (args, ctx) => {
+        const headers = Object.fromEntries(args.header.map((header) => splitHeader(header)));
+
+        const request = httpRequestSchema.parse({
           method: args.method,
           path: args.path,
-          headers: Object.fromEntries(args.header.map((header) => splitHeader(header))),
+          headers,
           json: args.body,
-        }),
+        });
+
+        const exchange = await sendRequest(ctx.session, request);
+
+        return exchange.redacted;
+      },
     }),
   ],
   checks: [
@@ -114,16 +148,27 @@ type HttpConfig = z.infer<typeof targetConfigSchema>;
 
 type ParsedRequest = z.infer<typeof httpRequestSchema>;
 
+interface SentRequest {
+  // What the action or check that called gets.
+  readonly real: HttpResponse;
+
+  // What leaves the driver: the command's data.
+  readonly redacted: HttpResponse;
+}
+
 async function sendRequest(
   session: DriverSession<HttpOptions, HttpConfig>,
   request: ParsedRequest,
-): Promise<HttpResponse> {
+): Promise<SentRequest> {
+  const redaction = buildRedaction(session.options.redact);
+
   const plan = buildRequestPlan({
     target: session.target,
     endpoint: session.config.endpoint,
     baseURL: session.config.baseURL ?? findOwnValue(session.endpoints, session.config.endpoint),
     method: request.method,
     path: request.path,
+    shownPath: showPath(request.path, redaction),
     headers: request.headers,
     json: request.json,
   });
@@ -132,25 +177,60 @@ async function sendRequest(
     throw new WringerError('usage', { message: plan.message, hint: plan.hint });
   }
 
+  const given = {
+    method: request.method,
+    path: request.path,
+    headers: request.headers,
+    json: request.json,
+    url: plan.url.href,
+  };
+
+  // The request's secrets join the set before it leaves, so an error that holds one is scrubbed.
+  const redactedRequest = buildRedactedRequest(given, redaction);
+
+  addSecrets(session, redactedRequest.secrets);
+
   const signal = AbortSignal.any([session.signal, AbortSignal.timeout(session.options.timeoutMs)]);
 
-  const fetched = await sendFetch(session.options.transport, plan.url, plan.init, signal);
+  const fetched = await sendFetch(
+    session.options.transport,
+    plan,
+    redactedRequest.request.url,
+    signal,
+  );
 
-  const result: HttpResponse = {
+  const real: HttpResponse = {
     status: fetched.response.status,
-    headers: Object.fromEntries(fetched.response.headers),
+    headers: readResponseHeaders(fetched.response.headers),
     body: fetched.body,
     json: parseJSONBody(fetched.body),
   };
 
-  await session.evidence.writeFile(
-    'http',
-    `${request.method.toLowerCase()}.json`,
-    JSON.stringify({ request: { ...request, url: plan.url.href }, response: result }, null, 2),
-  );
+  const exchange = buildRedactedExchange({ request: given, response: real }, redaction);
 
-  return result;
+  addSecrets(session, exchange.secrets);
+
+  if (request.evidence) {
+    await session.evidence.writeFile(
+      'http',
+      `${request.method.toLowerCase()}.json`,
+      JSON.stringify({ request: exchange.request, response: exchange.response }, null, 2),
+    );
+  }
+
+  return { real, redacted: exchange.response };
 }
+
+function addSecrets(
+  session: DriverSession<HttpOptions, HttpConfig>,
+  secrets: readonly { readonly name: string; readonly value: string }[],
+): void {
+  for (const secret of secrets) {
+    session.secrets.add(secret);
+  }
+}
+
+type SendPlan = Extract<ReturnType<typeof buildRequestPlan>, { kind: 'send' }>;
 
 interface FetchedResponse {
   readonly response: Response;
@@ -161,24 +241,24 @@ interface FetchedResponse {
 // then stall or drop the connection mid-body.
 async function sendFetch(
   transport: HttpTransport,
-  url: URL,
-  init: RequestInit,
+  plan: SendPlan,
+  shownURL: string,
   signal: AbortSignal,
 ): Promise<FetchedResponse> {
   try {
-    const response = await transport(url, { ...init, signal });
+    const response = await transport(plan.url, { ...plan.init, signal });
     const body = await readBodyText(response, signal);
 
     return { response, body };
   } catch (error) {
     if (signal.aborted) {
       throw new WringerError('timeout', {
-        message: `${init.method ?? 'GET'} ${url.href} timed out.`,
+        message: `${plan.init.method ?? 'GET'} ${shownURL} timed out.`,
       });
     }
 
     throw new WringerError('environment', {
-      message: `${init.method ?? 'GET'} ${url.href} failed: ${String(error)}`,
+      message: `${plan.init.method ?? 'GET'} ${shownURL} failed: ${String(error).replaceAll(plan.url.href, shownURL)}`,
       hint: 'Check that the app is up, then run `status`.',
     });
   }
@@ -214,6 +294,26 @@ async function readBodyText(response: Response, signal: AbortSignal): Promise<st
   } finally {
     signal.removeEventListener('abort', cancel);
   }
+}
+
+// Iterating `Headers` yields each `set-cookie` on its own, so an object built from it keeps the last
+// one. The cookies rejoin with a comma, which the cookie redaction splits again.
+function readResponseHeaders(headers: Headers): Record<string, string> {
+  const result: Record<string, string> = {};
+
+  for (const [name, value] of headers) {
+    if (name !== 'set-cookie') {
+      result[name] = value;
+    }
+  }
+
+  const cookies = headers.getSetCookie();
+
+  if (cookies.length > 0) {
+    result['set-cookie'] = cookies.join(', ');
+  }
+
+  return result;
 }
 
 function parseJSONBody(body: string): unknown {

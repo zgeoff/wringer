@@ -47,6 +47,32 @@ request fails with a usage error before the driver sends it.
 `RequestInit` that returns a `Response`. The driver sends each request through `transport`, which is
 `fetch` unless the repo passes its own.
 
+## Redaction
+
+The driver redacts each exchange before it leaves: in the evidence file, in the `http request`
+command's data and in every error message. An action or a check still gets the real response.
+
+- Headers: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, and any
+  header whose name holds `token`, `secret`, `apikey`, `session` or `passw`. Each cookie keeps its
+  name and loses its value.
+- Query parameters: `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`,
+  `password`, `sig` and `code`.
+- JSON body paths, in the request and the response, that the repo names.
+
+```ts
+http({
+  redact: {
+    headers: ['x-shop-session'], // added to the default list, any case
+    query: ['signature'], // added to the default list
+    bodyPaths: ['$.customer.card', '$.items[*].coupon'], // `$`, then `.name` or `[*]` steps
+  },
+});
+```
+
+Each value it redacts joins core's secret set, so a copy of it anywhere else in a run is scrubbed
+too. A request that sets `evidence: false` writes no evidence file. The driver refuses a request
+whose URL holds a username or a password: send credentials as a header.
+
 ## Target config
 
 | Field        | Default | Meaning                                                     |
