@@ -1,20 +1,25 @@
-import { basename, extname } from 'node:path';
+import { basename } from 'node:path';
 import type { SecretSet } from './create-secret-set.ts';
 import { escapeReportText } from './escape-report-text.ts';
 import { formatReportLink } from './format-report-link.ts';
+import { isRasterFile } from './is-raster-file.ts';
+import { pickCellFiles } from './pick-cell-files.ts';
 import type { JourneyFile } from './report-document.ts';
 
 // One step's files: a raster image as an image, any other uploaded file as a link named by its
-// kind, and a file that stayed local by its name and size.
+// kind, and a file that stayed local by its name and size. A shortened cell names how many files
+// it leaves out.
 export function renderEvidenceCell(
   files: readonly JourneyFile[],
   linkHosts: readonly string[],
   secrets: SecretSet,
+  shortened: boolean,
 ): string {
-  return files.map((file) => renderFile(file, linkHosts, secrets)).join('<br>');
-}
+  const cell = pickCellFiles(files, shortened);
+  const parts = cell.kept.map((file) => renderFile(file, linkHosts, secrets));
 
-const rasterExtensions = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp']);
+  return (cell.hidden > 0 ? [...parts, `+${cell.hidden} more`] : parts).join('<br>');
+}
 
 function renderFile(file: JourneyFile, linkHosts: readonly string[], secrets: SecretSet): string {
   const link = file.url === null ? null : formatReportLink(file.url, linkHosts, secrets);
@@ -23,7 +28,7 @@ function renderFile(file: JourneyFile, linkHosts: readonly string[], secrets: Se
     return renderLocalFile(file, secrets);
   }
 
-  return rasterExtensions.has(extname(file.evidence.path).toLowerCase())
+  return isRasterFile(file)
     ? `<img src="${link}" width="320" />`
     : `<a href="${link}">${escapeReportText(file.evidence.kind, secrets)}</a>`;
 }

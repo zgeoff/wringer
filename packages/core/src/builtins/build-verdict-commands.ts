@@ -12,6 +12,7 @@ import { doneCommand, readVerdicts } from '../read-verdicts.ts';
 import { renderReport } from '../render-report.ts';
 import { parseReportComment } from '../report-comment.ts';
 import type { CommentRead } from '../report-comment.ts';
+import { noCuts } from '../report-plan.ts';
 import {
   featureStatusSchema,
   maxBaseLength,
@@ -99,7 +100,7 @@ export function buildVerdictCommands(): readonly RegisteredCommand[] {
         { isUploadAllowed: false },
       );
 
-      return { report: built, markdown: renderReport(document, ctx.secrets) };
+      return { report: built, markdown: renderReport(document, noCuts, ctx.secrets) };
     },
   };
 

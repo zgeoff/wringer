@@ -3,6 +3,7 @@ import { createSecretSet } from './create-secret-set.ts';
 import { renderReport } from './render-report.ts';
 import { parseReportComment } from './report-comment.ts';
 import type { JourneyFile, JourneyStep, LocalCause, ReportDocument } from './report-document.ts';
+import { noCuts } from './report-plan.ts';
 import type { Verdict } from './report-schema.ts';
 
 interface DocumentOptions {
@@ -86,10 +87,11 @@ function setupTest() {
     backslash,
     readDataBlock,
     render: (steps: readonly JourneyStep[], options: DocumentOptions = {}) =>
-      renderReport(buildDocument(steps, options), secrets),
-    renderDocument: (options: DocumentOptions) => renderReport(buildDocument([], options), secrets),
+      renderReport(buildDocument(steps, options), noCuts, secrets),
+    renderDocument: (options: DocumentOptions) =>
+      renderReport(buildDocument([], options), noCuts, secrets),
     renderWithUnmapped: (unmapped: readonly string[]) =>
-      renderReport(buildDocument([buildStep()], { unmapped }), secrets),
+      renderReport(buildDocument([buildStep()], { unmapped }), noCuts, secrets),
     renderWithSecretTarget: (value: string) => {
       secrets.add({ name: 'SHOP_API_TOKEN', value, origin: 'declared' });
 
@@ -97,13 +99,14 @@ function setupTest() {
         buildDocument([buildStep()], {
           verdict: buildVerdict({ target: { name: value, evidence: 'upload' } }),
         }),
+        noCuts,
         secrets,
       );
     },
     renderWithSecret: (value: string, unmapped: readonly string[]) => {
       secrets.add({ name: 'SHOP_API_TOKEN', value, origin: 'declared' });
 
-      return renderReport(buildDocument([buildStep()], { unmapped }), secrets);
+      return renderReport(buildDocument([buildStep()], { unmapped }), noCuts, secrets);
     },
   };
 }

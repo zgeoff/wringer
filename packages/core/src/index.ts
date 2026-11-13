@@ -69,7 +69,12 @@ export type {
 export { readStreamLines } from './read-stream-lines.ts';
 export { readText } from './read-text.ts';
 export { buildFeatureFile, renderFeatureTable } from './render-feature-table.ts';
+export { collectShownFiles } from './collect-shown-files.ts';
+export { planReport } from './plan-report.ts';
+export type { PlanOptions, PlanResult } from './plan-report.ts';
 export { renderReport } from './render-report.ts';
+export { noCuts, reportCutsSchema } from './report-plan.ts';
+export type { FeaturePlan, ReportCuts, ReportPlan } from './report-plan.ts';
 
 export type {
   Journey,

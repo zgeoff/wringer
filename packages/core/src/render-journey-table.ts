@@ -1,60 +1,65 @@
+import { collectStepData } from './collect-step-data.ts';
 import type { SecretSet } from './create-secret-set.ts';
-import { escapeReportText } from './escape-report-text.ts';
-import { formatStepData } from './format-step-data.ts';
+import { formatDataBlock } from './format-data-block.ts';
+import { pickJourneyRows } from './pick-journey-rows.ts';
 import { renderEvidenceCell } from './render-evidence-cell.ts';
+import { renderGapRow } from './render-gap-row.ts';
+import { renderJourneyRow } from './render-journey-row.ts';
+import { renderTableHeader } from './render-table-header.ts';
 import type { Journey, JourneyStep } from './report-document.ts';
+import type { FeaturePlan } from './report-plan.ts';
 
-// The journey's rows as an HTML table, with a Data column when a row shows data. A code block sits
-// between blank lines, so a client that reads the cell as Markdown renders it.
+// The journey's rows as an HTML table, with a Data column when a shown row has data. The plan's
+// cuts for the feature leave out data, rows and files.
 export function renderJourneyTable(
   journey: Journey,
   linkHosts: readonly string[],
   secrets: SecretSet,
+  cuts: FeaturePlan | undefined,
 ): string {
-  const rows = journey.steps.map((step, index) => ({
-    step,
-    number: index + 1,
-    data:
-      journey.evidence === 'upload'
-        ? formatStepData(
-            step.data,
-            step.files.map((file) => file.evidence),
-            secrets,
-          )
-        : null,
-  }));
+  const shown = pickJourneyRows(journey.steps.length, cuts?.collapsed ?? false);
 
-  const hasData = rows.some((row) => row.data !== null);
+  const data = collectStepData(journey, secrets).map((text, index) =>
+    cuts?.droppedData.has(index) === true ? null : text,
+  );
 
-  const header = ['#', 'Command', 'Result', 'Evidence', ...(hasData ? ['Data'] : [])]
-    .map((title) => `<th>${title}</th>`)
-    .join('');
+  const hasData = shown.indexes.some((index) => (data[index] ?? null) !== null);
 
-  const body = rows.map((row) => {
-    const cells = [
-      String(row.number),
-      `<code>${formatCommand(row.step.command, secrets)}</code>`,
-      formatResult(row.step, secrets),
-      renderEvidenceCell(row.step.files, linkHosts, secrets),
-      ...(hasData ? [formatDataCell(row.data)] : []),
-    ];
+  const rows = shown.indexes.map((index) => {
+    const step = requireStep(journey, index);
+    const isShort = cuts?.shortCells.has(index) === true;
 
-    return `<tr>${cells.map((cell) => `<td>${cell}</td>`).join('')}</tr>`;
+    return renderJourneyRow(
+      {
+        number: index + 1,
+        step,
+        evidenceCell: renderEvidenceCell(step.files, linkHosts, secrets, isShort),
+        dataCell: hasData ? formatDataBlock(data[index] ?? null) : null,
+      },
+      secrets,
+    );
   });
 
-  return ['<table>', `<tr>${header}</tr>`, ...body, '</table>'].join('\n');
+  const columns = hasData ? 5 : 4;
+
+  const withGap =
+    shown.hidden === 0
+      ? rows
+      : [
+          ...rows.slice(0, shown.gapAfter),
+          renderGapRow(shown.hidden, columns),
+          ...rows.slice(shown.gapAfter),
+        ];
+
+  return ['<table>', renderTableHeader(hasData), ...withGap, '</table>'].join('\n');
 }
 
-function formatCommand(command: string, secrets: SecretSet): string {
-  return escapeReportText(secrets.scrubText(command).replaceAll(/[`<>]/gu, ''), secrets);
-}
+function requireStep(journey: Journey, index: number): JourneyStep {
+  const step = journey.steps[index];
 
-function formatResult(step: JourneyStep, secrets: SecretSet): string {
-  const outcome = step.ok ? 'ok' : `failed${step.code === null ? '' : `: ${step.code}`}`;
+  if (step === undefined) {
+    throw new Error(`The journey has no step ${index}.`);
+  }
 
-  return escapeReportText(`${outcome}, ${step.durationMs} ms`, secrets);
-}
-
-function formatDataCell(data: string | null): string {
-  return data === null ? '' : `\n\n\`\`\`json\n${data}\n\`\`\`\n\n`;
+  return step;
 }

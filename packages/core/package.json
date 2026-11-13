@@ -42,6 +42,7 @@
   "devDependencies": {
     "@zgeoff/testing": "catalog:",
     "ajv": "catalog:",
+    "fast-check": "catalog:",
     "tiny-invariant": "catalog:",
     "zod": "catalog:"
   },

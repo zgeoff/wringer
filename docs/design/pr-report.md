@@ -254,9 +254,9 @@ column when a shown row has data:
 ````
 
 ```ts
-// core. Pure: the same document and plan always give the same text. The journey report builds the
-// block with no cuts, as `renderReport(document, secrets)`; the size planner adds the plan.
-const block = renderReport(document, plan);
+// core. Pure: the same document and plan always give the same text. `report` renders with the plan
+// `noCuts`. Both take the command's secret set last, to scrub each value.
+const block = renderReport(document, plan, secrets);
 
 interface ReportDocument {
   readonly registry: string; // the `createWringer` name, for the data comment
@@ -296,9 +296,11 @@ interface JourneyFile {
 // budgetChars: the span's budget from Size; planReport counts the markers and the data comment in it.
 // linkChars: the uploader's maxURLLength, or 0 with `--no-upload` or `--dry-run`. A file that fails
 // the upload checks is sized as a local cell in every plan.
-const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
-// → { ok: true, plan: { droppedData, collapsed, shortCells, omitted }, chars: 58_911 }
+const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, secrets);
+// → { ok: true, plan: { cuts: { droppedData, collapsed, shortCells, omitted }, features }, chars: 58_911 }
 //   or { ok: false, minimumChars: 66_034 }
+// `features` holds each feature's cuts by name, for the renderer. `collectShownFiles(document,
+// plan, linkChars)` returns the files the plan shows as links, which `publish` uploads.
 ```
 
 ## Constraints
@@ -439,13 +441,21 @@ const plan = planReport(document, { budgetChars: 61_200, linkChars: 512 });
      first.
   4. Replace a feature's journey section with one line naming its command count, the longest section
      first.
+- A collapsed table keeps a row that names how many steps it leaves out, and a cut cell ends with
+  "+N more". A cut cell keeps the images first and shows its files in their own order. A file is
+  sized as a link when its journey uploads, `linkChars` is above 0 and the file is present in the
+  worktree; every other file is sized as a local cell. A cut that changes nothing, such as a cell in
+  rows the collapse hid, is skipped and not counted. So is a cut that makes its section longer, such
+  as the one-line replacement of a journey with no steps, so the smallest size the planner reports
+  never exceeds the uncut size.
 - The renderer builds the span from those fragments, so the rendered length equals the planned
   length when every link is `maxURLLength` long, and is shorter otherwise.
 - The cut order does not depend on the budget, so a smaller budget only adds cuts. The second plan,
   against the re-read description, never shows a file the first plan did not upload.
-- When the summary table, the data comment and every replaced section still do not fit, `publish`
-  fails with `check-failed`: "The report needs 66,034 characters, and the PR description has room
-  for 61,200 of GitHub's 65,536." `report --human` prints the uncut block and never fails on size.
+- When the summary table, the data comment and the shorter form of each section still do not fit,
+  `publish` fails with `check-failed`: "The report needs 66,034 characters, and the PR description
+  has room for 61,200 of GitHub's 65,536." `report --human` prints the uncut block and never fails
+  on size.
 
 ## Decisions
 

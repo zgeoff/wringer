@@ -38,6 +38,8 @@ export interface Journey {
   readonly evidence: 'upload' | LocalCause;
 }
 
+export type FeatureReport = Report['features'][number];
+
 export interface ReportDocument {
   readonly registry: string;
   readonly report: Report;
