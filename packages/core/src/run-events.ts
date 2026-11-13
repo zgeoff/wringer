@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { envelopeSchema } from './envelope.ts';
+import { fingerprintSchema } from './report-schema.ts';
 
 export const runIDSchema = z.string().regex(/^[a-z0-9][a-z0-9-]{2,40}$/u);
 
@@ -25,6 +26,9 @@ export type CheckResult = z.infer<typeof checkResultSchema>;
 
 const at = z.iso.datetime();
 
+// Entries, not a record: a record drops a feature named `__proto__`.
+const featureFingerprintsSchema = z.array(z.tuple([z.string(), fingerprintSchema]));
+
 // A command's work that failed after the envelope had already answered with a timeout.
 export const lateFailureEventSchema = z.strictObject({
   type: z.literal('late-failure'),
@@ -49,6 +53,11 @@ export const runEventSchema = z.discriminatedUnion('type', [
     at,
     pid: z.number().int(),
     socket: z.string(),
+  }),
+  z.strictObject({
+    type: z.literal('scopes-read'),
+    at,
+    featureFingerprints: featureFingerprintsSchema,
   }),
   z.strictObject({ type: z.literal('launch-ready'), at, endpoints: endpointsSchema }),
   z.strictObject({ type: z.literal('service-ready'), at, service: z.string() }),

@@ -54,9 +54,11 @@ own file.
 - Read-only targets: each driver client and exec refuses a write there with `read-only` and the
   target's hint. A target's driver config lists the writes it grants.
 - One supervisor process per run, which owns the app and every driver service.
-- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`. `gate` fails a PR
-  when a changed feature lacks a verdict at the current fingerprint, and when a changed path matches
-  neither a feature's `paths` nor an `.ignore` glob. `report` lists those unmapped paths.
+- The built-in commands, from `up` and `doctor` to `done`, `report` and `gate`. `done` records the
+  fingerprint of the diff limited to the feature's `paths` and the registry's `.shared()` globs, so
+  an edit to another feature's files leaves the verdict standing. `gate` fails a PR when a changed
+  feature lacks a verdict at its own current fingerprint, and when a changed path matches neither a
+  feature's `paths` nor an `.ignore` glob. `report` lists those unmapped paths.
 - The ignore list: `.ignore(...globs)` names the paths with no runtime effect, such as docs and
   tests. Any path an ignore glob matches counts as no change, even when a feature's `paths` match it
   too. The gate skips it and the fingerprint leaves it out, so a README edit keeps each verdict

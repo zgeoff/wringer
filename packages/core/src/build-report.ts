@@ -1,29 +1,38 @@
 import { isGlobMatch } from './is-glob-match.ts';
 import type { FeatureStatus, Report, Verdict } from './report-schema.ts';
 import type { FeatureDefinition } from './types.ts';
+import { WringerError } from './wringer-error.ts';
 
 export interface ReportInput {
   readonly base: string;
   readonly fingerprint: string;
   readonly features: readonly FeatureDefinition[];
+  readonly featureFingerprints: ReadonlyMap<string, string>;
   readonly changedPaths: readonly string[];
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly verdicts: ReadonlyMap<string, Verdict>;
 }
 
-// Each feature whose paths the branch changes needs a verdict at the current fingerprint. A feature
-// the branch leaves alone is `unchanged`, whatever its verdict. A changed path that no feature, shared
-// glob or ignore glob maps is unmapped, and leaves the report incomplete.
+// A feature is changed when the diff limited to its scope is not empty, and then needs a verdict
+// at its own fingerprint. An unchanged feature is `unchanged`, whatever its verdict. A changed path
+// that no feature, shared glob or ignore glob maps is unmapped, and leaves the report incomplete.
 export function buildReport(input: ReportInput): Report {
   const features = input.features.map((feature) => {
-    const changed = input.changedPaths.some((path) => isGlobMatch(path, feature.paths));
+    const current = input.featureFingerprints.get(feature.name);
+
+    if (current === undefined) {
+      throw new WringerError('internal', {
+        message: `The change facts hold no fingerprint for the feature \`${feature.name}\`.`,
+      });
+    }
+
     const verdict = input.verdicts.get(feature.name) ?? null;
 
     return {
       name: feature.name,
-      changed,
-      status: pickFeatureStatus(changed, verdict, input.fingerprint),
+      changed: current !== 'empty',
+      status: pickFeatureStatus(current, verdict),
       verdict,
     };
   });
@@ -36,7 +45,6 @@ export function buildReport(input: ReportInput): Report {
   );
 
   return {
-    version: 1,
     base: input.base,
     fingerprint: input.fingerprint,
     complete:
@@ -47,12 +55,8 @@ export function buildReport(input: ReportInput): Report {
   };
 }
 
-function pickFeatureStatus(
-  changed: boolean,
-  verdict: Verdict | null,
-  fingerprint: string,
-): FeatureStatus {
-  if (!changed) {
+function pickFeatureStatus(current: string, verdict: Verdict | null): FeatureStatus {
+  if (current === 'empty') {
     return 'unchanged';
   }
 
@@ -60,5 +64,5 @@ function pickFeatureStatus(
     return 'missing';
   }
 
-  return verdict.fingerprint === fingerprint ? 'verified' : 'stale';
+  return verdict.featureFingerprint === current ? 'verified' : 'stale';
 }

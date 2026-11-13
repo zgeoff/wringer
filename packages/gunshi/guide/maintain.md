@@ -20,7 +20,7 @@ The mistakes that cost the most:
 run in any job that has the repo's dependencies. The gate reads the last report block in the PR body
 and works out the code's fingerprint itself. It fails with exit code 1 in two cases:
 
-- A changed feature has no verdict, or a verdict for other code.
+- A changed feature has no verdict, or a verdict for other code in its own files or a shared path.
 - A changed file matches neither a feature's `paths` nor a glob in the ignore list, which the
   registry sets with `.ignore`. `bun verify gate` lists each such file in `data.unmapped`. When the
   running app never reads the file, add it to the ignore list. Otherwise add it to a feature's

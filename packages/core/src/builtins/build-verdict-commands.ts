@@ -107,14 +107,23 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
     });
   }
 
-  // The run took its fingerprint against the default base, so the tree check uses that base; the
-  // verdict takes the base the PR's gate will use.
+  // The run read its feature fingerprints at the default base, so the launch check uses that base;
+  // the verdict takes the base the PR's gate will use.
   const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
   const treeFacts = await readCurrentFacts(ctx, defaultBase);
 
-  if (ctx.target.mode === 'launch' && treeFacts.fingerprint !== ctx.run.fingerprint) {
+  const treeFingerprint = treeFacts.featureFingerprints.get(feature);
+
+  if (treeFingerprint === undefined) {
+    throw new WringerError('usage', {
+      message: `\`${feature}\` is not a feature of the registry.`,
+      hint: 'Pass the name of a feature the registry lists.',
+    });
+  }
+
+  if (ctx.target.mode === 'launch' && ctx.run.scopesRead?.get(feature) !== treeFingerprint) {
     throw new WringerError('doctor-required', {
-      message: 'The working tree changed since this run started.',
+      message: `The files of ${feature} changed since this run started, or the run recorded none.`,
       hint: 'Run `up --restart` and `doctor`, then drive the feature again.',
     });
   }
@@ -136,8 +145,11 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
   return {
     feature,
     fingerprint: scopeFacts.fingerprint,
+    featureFingerprint: scopeFacts.featureFingerprints.get(feature) ?? treeFingerprint,
     run: ctx.run.runID,
     at: ctx.now().toISOString(),
+    target: { name: ctx.targetName, evidence: 'local' },
+    pin: ctx.target.mode === 'launch' ? { kind: 'local' } : { kind: 'unpinned' },
     evidence: drives.flatMap((envelope) => envelope.evidence),
   };
 }
@@ -161,6 +173,7 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
     base,
     fingerprint: facts.fingerprint,
     features: ctx.wringer.features,
+    featureFingerprints: facts.featureFingerprints,
     changedPaths: facts.changedPaths,
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
@@ -228,6 +241,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     base: args.base,
     fingerprint: facts.fingerprint,
     features: ctx.wringer.features,
+    featureFingerprints: facts.featureFingerprints,
     changedPaths: facts.changedPaths,
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
@@ -243,7 +257,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
       return [
         {
           name: feature.name,
-          reason: `verdict at ${feature.verdict?.fingerprint ?? ''}, tree at ${facts.fingerprint}`,
+          reason: `verdict at ${feature.verdict?.featureFingerprint ?? ''}, tree at ${facts.featureFingerprints.get(feature.name) ?? ''}`,
         },
       ];
     }

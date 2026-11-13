@@ -7,6 +7,7 @@ export function buildMockRunView(overrides: Partial<RunView> = {}): RunView {
     target: 'local',
     mode: 'launch',
     fingerprint: 'f1',
+    scopesRead: null,
     status: 'running',
     startedAt: '2026-11-04T10:00:00.000Z',
     endedAt: null,

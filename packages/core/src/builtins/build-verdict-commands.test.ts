@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { StatePort } from '../create-file-state.ts';
@@ -7,7 +7,7 @@ import { dispatch } from '../dispatch.ts';
 import { readVerdicts } from '../read-verdicts.ts';
 import { reportSchema } from '../report-schema.ts';
 import { runIDSchema } from '../run-events.ts';
-import type { RunEvent } from '../run-events.ts';
+import type { RunEvent, RunID } from '../run-events.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 import type { UploadRequest } from '../types.ts';
@@ -53,6 +53,8 @@ async function setupTest() {
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
+    runOn: (target: string, path: readonly string[], args: unknown = {}) =>
+      dispatch(wringer, path, args, { ...shop.session, target }),
     runPausedDone: () =>
       dispatch(wringer, ['done'], {}, { ...shop.session, state: pausedState, target: 'local' }),
     writing: writing.promise,
@@ -60,6 +62,24 @@ async function setupTest() {
       release.resolve(undefined);
     },
     appendEvent: (runID: string, event: RunEvent) => shop.state.appendEvent(runID, event),
+    readEvents: (runID: RunID) => shop.state.readRunEvents(runID),
+
+    // Rewrites the current run's log as a run that wrote no `scopes-read`.
+    dropScopes: async () => {
+      const [runID] = await shop.state.listRuns();
+
+      const log = join(shop.repo.root, '.wringer', 'runs', String(runID), 'log.ndjson');
+
+      const text = await readFile(log, 'utf8');
+
+      await writeFile(
+        log,
+        text
+          .split('\n')
+          .filter((line) => !line.includes('"scopes-read"'))
+          .join('\n'),
+      );
+    },
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[]) =>
       dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
@@ -118,11 +138,83 @@ test('#done records a verdict with the evidence of the drives since the doctor',
   expect(result.envelope.data).toStrictEqual({
     feature: 'checkout',
     fingerprint: 'empty',
+    featureFingerprint: 'empty',
     run: result.envelope.instance,
     at: expect.any(String),
+    target: { name: 'local', evidence: 'local' },
+    pin: { kind: 'local' },
     evidence: [
       { kind: 'note', path: expect.stringMatching(/receipt\.txt$/u), sha256: expect.any(String) },
     ],
+  });
+});
+
+test('#done records an unpinned verdict on an attach target', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.runOn('prod', ['attach']);
+  await ctx.runOn('prod', ['doctor']);
+  await ctx.runOn('prod', ['use'], { feature: 'checkout' });
+  await ctx.runOn('prod', ['action', 'count']);
+  await ctx.runOn('prod', ['done']);
+
+  const recorded = await ctx.readVerdicts();
+
+  const verdicts = [...recorded.values()];
+
+  expect(verdicts.map((verdict) => [verdict.feature, verdict.target, verdict.pin])).toStrictEqual([
+    ['checkout', { name: 'prod', evidence: 'local' }, { kind: 'unpinned' }],
+  ]);
+});
+
+test('#report marks a feature verified by an unpinned verdict on an attach target', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.runOn('prod', ['attach']);
+  await ctx.runOn('prod', ['doctor']);
+  await ctx.runOn('prod', ['use'], { feature: 'checkout' });
+  await ctx.runOn('prod', ['action', 'count']);
+  await ctx.runOn('prod', ['done']);
+
+  const report = await ctx.runOn('prod', ['report']);
+
+  expect(
+    ctx
+      .parseReportData(report.envelope.data)
+      .report.features.map((feature) => [feature.name, feature.status]),
+  ).toStrictEqual([
+    ['checkout', 'verified'],
+    ['search', 'unchanged'],
+  ]);
+});
+
+test('#gate passes a report whose only verdict is unpinned on an attach target', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.runOn('prod', ['attach']);
+  await ctx.runOn('prod', ['doctor']);
+  await ctx.runOn('prod', ['use'], { feature: 'checkout' });
+  await ctx.runOn('prod', ['action', 'count']);
+  await ctx.runOn('prod', ['done']);
+
+  const report = await ctx.runOn('prod', ['report']);
+
+  await ctx.writeBody(ctx.parseReportData(report.envelope.data).markdown);
+
+  const gate = await ctx.runOn('prod', ['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: gate.exitCode, data: gate.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
   });
 });
 
@@ -417,7 +509,7 @@ test('#gate passes a PR that changes only a path the repo ignores', async () => 
   });
 });
 
-test('#gate passes a PR that changes only a path the repo shares', async () => {
+test('#gate fails each feature as missing when a PR changes only a path the repo shares', async () => {
   const ctx = await setupTest();
 
   await writeFile(join(ctx.root, 'package.json'), '{}\n');
@@ -427,8 +519,15 @@ test('#gate passes a PR that changes only a path the repo shares', async () => {
   const result = await ctx.run(['gate'], { base: 'main', bodyFile: '.wringer/body.md' });
 
   expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
-    exitCode: 0,
-    data: { fingerprint: expect.any(String), failing: [], unmapped: [] },
+    exitCode: 1,
+    data: {
+      fingerprint: expect.any(String),
+      failing: [
+        { name: 'checkout', reason: 'The PR body holds no wringer report block.' },
+        { name: 'search', reason: 'The PR body holds no wringer report block.' },
+      ],
+      unmapped: [],
+    },
   });
 });
 
@@ -456,7 +555,7 @@ test('#gate leaves an ignored path out of the unmapped paths when it became a fo
   });
 });
 
-test('#report leaves a changed path the repo shares out of the unmapped paths', async () => {
+test('#report leaves a changed path the repo shares out of the unmapped paths, and marks every feature changed', async () => {
   const ctx = await setupTest();
 
   await writeFile(join(ctx.root, 'package.json'), '{}\n');
@@ -465,9 +564,186 @@ test('#report leaves a changed path the repo shares out of the unmapped paths', 
 
   const data = ctx.parseReportData(result.envelope.data);
 
-  expect({ complete: data.report.complete, unmapped: data.report.unmapped }).toStrictEqual({
-    complete: true,
+  expect({
+    unmapped: data.report.unmapped,
+    features: data.report.features.map((feature) => [feature.name, feature.changed]),
+  }).toStrictEqual({
     unmapped: [],
+    features: [
+      ['checkout', true],
+      ['search', true],
+    ],
+  });
+});
+
+test('#report keeps a verdict on checkout verified after an edit to a search file', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await mkdir(join(ctx.root, 'src', 'search'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+  await writeFile(join(ctx.root, 'src', 'search', 'rank.ts'), 'export const rank = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['done']);
+
+  await writeFile(join(ctx.root, 'src', 'search', 'rank.ts'), 'export const rank = 2;\n');
+
+  const result = await ctx.run(['report']);
+
+  const data = ctx.parseReportData(result.envelope.data).report;
+
+  expect(data.features.map((feature) => [feature.name, feature.status])).toStrictEqual([
+    ['checkout', 'verified'],
+    ['search', 'missing'],
+  ]);
+});
+
+test('#report marks a verdict stale after an edit to a file of its own feature', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['done']);
+
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 2;\n');
+
+  const result = await ctx.run(['report']);
+
+  const data = ctx.parseReportData(result.envelope.data).report;
+
+  expect(data.features.map((feature) => [feature.name, feature.status])).toStrictEqual([
+    ['checkout', 'stale'],
+    ['search', 'unchanged'],
+  ]);
+});
+
+test('#report marks a verdict stale after an edit to a path the repo shares', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+  await ctx.run(['done']);
+
+  await writeFile(join(ctx.root, 'package.json'), '{}\n');
+
+  const result = await ctx.run(['report']);
+
+  const data = ctx.parseReportData(result.envelope.data).report;
+
+  expect(data.features.map((feature) => [feature.name, feature.status])).toStrictEqual([
+    ['checkout', 'stale'],
+    ['search', 'missing'],
+  ]);
+});
+
+test('#done refuses on a launch target after an edit inside the feature since up', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'pay' });
+
+  await writeFile(join(ctx.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+  const result = await ctx.run(['done']);
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    hint: result.envelope.error?.hint,
+  }).toStrictEqual({
+    exitCode: 3,
+    code: 'doctor-required',
+    hint: expect.stringContaining('up --restart'),
+  });
+});
+
+test('#done accepts on a launch target after an edit outside the feature since up', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'search'), { recursive: true });
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+
+  await writeFile(join(ctx.root, 'src', 'search', 'rank.ts'), 'export const rank = 1;\n');
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, error: result.envelope.error }).toStrictEqual({
+    exitCode: 0,
+    error: null,
+  });
+});
+
+test('#done refuses a launch run that recorded no scopes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['action', 'receipt']);
+  await ctx.dropScopes();
+
+  const result = await ctx.run(['done']);
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 3,
+    code: 'doctor-required',
+  });
+});
+
+test('#done refuses a feature the registry does not list', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+
+  const result = await ctx.run(['done'], { feature: 'wishlist' });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+  });
+});
+
+test('#up writes the feature fingerprints in a scopes-read event right after run-started', async () => {
+  const ctx = await setupTest();
+
+  await mkdir(join(ctx.root, 'src', 'search'), { recursive: true });
+  await writeFile(join(ctx.root, 'src', 'search', 'rank.ts'), 'export const rank = 1;\n');
+
+  const up = await ctx.run(['up']);
+  const events = await ctx.readEvents(runIDSchema.parse(up.envelope.instance));
+
+  expect(events.slice(0, 2).map((event) => event.type)).toStrictEqual([
+    'run-started',
+    'scopes-read',
+  ]);
+
+  expect(events[1]).toStrictEqual({
+    type: 'scopes-read',
+    at: expect.any(String),
+    featureFingerprints: [
+      ['checkout', 'empty'],
+      ['search', expect.stringMatching(/^[0-9a-f]{40}$/u)],
+    ],
   });
 });
 

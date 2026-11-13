@@ -5,9 +5,8 @@ import type { Report } from './report-schema.ts';
 
 test('it reads back the report that the Markdown embeds, with a > in a value', () => {
   const report: Report = {
-    version: 1,
     base: 'main',
-    fingerprint: 'f2',
+    fingerprint: 'b'.repeat(40),
     complete: true,
     features: [
       {
@@ -16,9 +15,12 @@ test('it reads back the report that the Markdown embeds, with a > in a value', (
         status: 'verified',
         verdict: {
           feature: 'checkout',
-          fingerprint: 'f2',
+          fingerprint: 'b'.repeat(40),
+          featureFingerprint: 'a'.repeat(40),
           run: 'r1',
           at: '2026-11-04T10:00:00.000Z',
+          target: { name: 'local', evidence: 'local' },
+          pin: { kind: 'local' },
           evidence: [{ kind: 'note', path: 'a-->b.txt', sha256: 'a'.repeat(64) }],
         },
       },
@@ -29,24 +31,6 @@ test('it reads back the report that the Markdown embeds, with a > in a value', (
   const parsed = parseReportBlock(`Ships the checkout.\n\n${renderReportMarkdown(report)}`);
 
   expect(parsed).toStrictEqual({ ok: true, report });
-});
-
-test('it reads a report written before reports listed unmapped paths as having none', () => {
-  const parsed = parseReportBlock(
-    '<!-- wringer-report v1\n{"version":1,"base":"main","fingerprint":"f2","complete":true,"features":[]}\n-->',
-  );
-
-  expect(parsed).toStrictEqual({
-    ok: true,
-    report: {
-      version: 1,
-      base: 'main',
-      fingerprint: 'f2',
-      complete: true,
-      features: [],
-      unmapped: [],
-    },
-  });
 });
 
 test('it explains a body that holds no report block', () => {

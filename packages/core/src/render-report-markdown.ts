@@ -8,6 +8,7 @@ const statusLabels = {
   stale: 'stale: verified at an older fingerprint',
   missing: 'missing: no verdict',
   unchanged: 'unchanged',
+  unpinned: 'unpinned: the target reports no commit',
 } as const;
 
 // The readable summary comes first, then the JSON report in a hidden block that `gate` reads back.

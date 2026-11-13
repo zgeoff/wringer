@@ -106,6 +106,7 @@ export function findRunStatusMove(eventType: RunEventType): RunStatus | null {
     .with(
       'run-started',
       'supervisor-ready',
+      'scopes-read',
       'launch-ready',
       'service-ready',
       'doctor-passed',

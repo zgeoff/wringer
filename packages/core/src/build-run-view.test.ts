@@ -23,6 +23,14 @@ test('it reads a running run with its endpoints, services and supervisor from it
         mode: 'launch',
         fingerprint: 'f00d',
       },
+      {
+        type: 'scopes-read',
+        at: '2026-11-04T10:00:00.500Z',
+        featureFingerprints: [
+          ['checkout', 'a'.repeat(40)],
+          ['search', 'empty'],
+        ],
+      },
       { type: 'supervisor-ready', at: '2026-11-04T10:00:01.000Z', pid: 4242, socket: 'sock' },
       {
         type: 'launch-ready',
@@ -39,6 +47,10 @@ test('it reads a running run with its endpoints, services and supervisor from it
     target: 'local',
     mode: 'launch',
     fingerprint: 'f00d',
+    scopesRead: new Map([
+      ['checkout', 'a'.repeat(40)],
+      ['search', 'empty'],
+    ]),
     status: 'running',
     startedAt: '2026-11-04T10:00:00.000Z',
     endedAt: null,

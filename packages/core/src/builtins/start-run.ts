@@ -74,6 +74,12 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
       fingerprint: facts.fingerprint,
     });
 
+    await ctx.state.appendEvent(runID, {
+      type: 'scopes-read',
+      at: ctx.now().toISOString(),
+      featureFingerprints: [...facts.featureFingerprints],
+    });
+
     await ctx.state.writePointers((latest) => ({
       ...latest,
       currentRun: { ...latest.currentRun, [ctx.targetName]: runID },

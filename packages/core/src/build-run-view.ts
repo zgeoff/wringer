@@ -16,6 +16,9 @@ export interface RunView {
   readonly target: string;
   readonly mode: Mode;
   readonly fingerprint: string;
+
+  // Each feature's fingerprint when the run started, or null for a run that wrote none.
+  readonly scopesRead: ReadonlyMap<string, string> | null;
   readonly status: RunStatus;
   readonly startedAt: string;
   readonly endedAt: string | null;
@@ -45,6 +48,7 @@ export function buildRunView(input: BuildRunViewInput): RunView | undefined {
     target: first.target,
     mode: first.mode,
     fingerprint: first.fingerprint,
+    scopesRead: null,
     status: 'starting',
     startedAt: first.at,
     endedAt: null,
@@ -68,6 +72,10 @@ function buildNextRunView(view: RunView, event: RunEvent): RunView {
     .with({ type: 'launch-ready' }, (ready) =>
       view.status === 'starting' ? { ...moved, endpoints: ready.endpoints } : moved,
     )
+    .with({ type: 'scopes-read' }, (read) => ({
+      ...moved,
+      scopesRead: new Map(read.featureFingerprints),
+    }))
     .with({ type: 'service-ready' }, (ready) => ({
       ...moved,
       services: [...moved.services, ready.service],

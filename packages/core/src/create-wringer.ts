@@ -4,6 +4,7 @@ import { buildExecCommand } from './builtins/build-exec-command.ts';
 import { buildLifecycleCommands } from './builtins/build-lifecycle-commands.ts';
 import { buildStateCommands } from './builtins/build-state-commands.ts';
 import { buildVerdictCommands } from './builtins/build-verdict-commands.ts';
+import { maxNameLength } from './report-schema.ts';
 import type {
   ActionDefinition,
   AnyDriver,
@@ -101,6 +102,18 @@ export const defaultStateDir = '.wringer';
 function buildWringer(parts: Parts): Wringer {
   if (parts.targets.length === 0) {
     throw new WringerError('usage', { message: 'A wringer CLI needs at least one target.' });
+  }
+
+  const longName = [
+    ...parts.features.map((feature) => ['feature', feature.name] as const),
+    ...parts.targets.map(([name]) => ['target', name] as const),
+  ].find(([, name]) => name.length > maxNameLength);
+
+  if (longName !== undefined) {
+    throw new WringerError('usage', {
+      message: `The ${longName[0]} name \`${longName[1]}\` is longer than ${maxNameLength} characters.`,
+      hint: 'Shorten the name.',
+    });
   }
 
   const driverNames = parts.drivers.map((driver) => driver.name);

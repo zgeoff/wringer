@@ -5,6 +5,7 @@ import { createWringer } from './create-wringer.ts';
 import { defineDriver } from './define-driver.ts';
 import { local } from './local.ts';
 import { notes } from './test-utils/notes-driver.ts';
+import { WringerError } from './wringer-error.ts';
 
 test('it registers the built-ins, the driver commands and each action under `action`', () => {
   const wringer = createWringer({ name: 'shop' })
@@ -175,4 +176,37 @@ test('it shares no path unless the repo lists some', () => {
     .build();
 
   expect(wringer.shared).toStrictEqual([]);
+});
+
+test('it refuses a feature name of 65 characters', () => {
+  const builder = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .feature({ name: 'a'.repeat(65), summary: 'Pay', paths: ['src/**'] });
+
+  expect(() => builder.build()).toThrowWithMessage(
+    WringerError,
+    /The feature name `a{65}` is longer than 64 characters/u,
+  );
+});
+
+test('it refuses a target name of 65 characters', () => {
+  const builder = createWringer({ name: 'shop' }).target('t'.repeat(65), {
+    mode: 'attach',
+    access: 'read-write',
+    host: local(),
+  });
+
+  expect(() => builder.build()).toThrowWithMessage(
+    WringerError,
+    /The target name `t{65}` is longer than 64 characters/u,
+  );
+});
+
+test('it accepts a feature name of 64 characters', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .feature({ name: 'a'.repeat(64), summary: 'Pay', paths: ['src/**'] })
+    .build();
+
+  expect(wringer.features.map((feature) => feature.name)).toStrictEqual(['a'.repeat(64)]);
 });

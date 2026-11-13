@@ -152,7 +152,7 @@ before them still parses.
 z.strictObject({
   type: z.literal('scopes-read'), // written right after `run-started`, at the default base
   at,
-  featureFingerprints: z.record(z.string(), fingerprintSchema),
+  featureFingerprints: z.array(z.tuple([z.string(), fingerprintSchema])), // entries keep a feature named __proto__
 }),
 z.strictObject({
   type: z.literal('revision-read'), // written by `doctor` on an attach target with `revision`
@@ -194,7 +194,7 @@ export const verdictSchema = z.strictObject({
   at: z.iso.datetime(),
   target: verdictTargetSchema,
   pin: pinSchema,
-  evidence: z.array(evidenceSchema), // from the envelope module, unchanged
+  evidence: z.array(evidenceSchema.extend({ url: z.string().optional() })), // `url` is the link the repo's upload hook gave
 });
 ```
 
@@ -323,6 +323,8 @@ const gateDataSchema = existingGateDataSchema.extend({ unknownClaims: z.array(na
   ignore glob does not count as cover.
 - A path is unmapped when it matches no feature's `paths`, no shared glob and no ignore glob.
 - `build` refuses a feature name or a target name longer than 64 characters.
+- `done` refuses a feature the registry does not list, as a usage error, because it has no
+  fingerprint to record.
 - On a launch target, `done` compares the feature's fingerprint at the default base with the run's
   `scopes-read` value, and refuses with the hint `up --restart` when they differ or the run has no
   `scopes-read`.
