@@ -61,6 +61,9 @@ own file.
   tests. Any path an ignore glob matches counts as no change, even when a feature's `paths` match it
   too. The gate skips it and the fingerprint leaves it out, so a README edit keeps each verdict
   fresh. Feature `paths` and ignore globs both match with `Bun.Glob`.
+- Secret scrubbing: `.secret(...envNames)` names the environment variables that hold the repo's
+  secrets. Core replaces every known secret with `[redacted:<name>]` in evidence, the envelope and
+  the run log, and checks each file again before `report` uploads it.
 - The envelope's zod schema, and the JSON Schema built from it.
 - A closed set of error codes, each mapped to one exit code.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.

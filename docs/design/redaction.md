@@ -67,8 +67,9 @@ interface SecretSet {
   // scrubbed keys collide, the later one gets a `#2`, `#3` suffix, so no value is lost.
   readonly scrubValue: (value: unknown) => unknown;
 
-  // The name of the first secret with any spelling in the text, or null.
-  readonly findSecret: (text: string) => string | null;
+  // The name of the first secret with any spelling in the text, or null. With `origin`, only a
+  // secret of that origin counts.
+  readonly findSecret: (text: string, origin?: Secret['origin']) => string | null;
 }
 
 interface Secret {
@@ -92,7 +93,7 @@ interface DriverDefinition<Options, TargetConfig> {
 
 // core. Matches GITHUB_TOKEN, SHOP_DB_PASSWORD, STRIPE_API_KEY and SESSION_SECRET; misses
 // SSH_AUTH_SOCK and SESSION_TIMEOUT.
-export const secretKeyPattern = /token|secret|passw|api-?key|credential|private-?key/iu;
+export const secretKeyPattern = /token|secret|passw|api[-_]?key|credential|private[-_]?key/iu;
 ```
 
 Each process fills its set from these sources, in this order:
@@ -102,9 +103,9 @@ Each process fills its set from these sources, in this order:
 | each env name passed to `.secret()` with a value in the process env            | `declared`  | the env name      | yes      | yes        |
 | each process env value whose key matches `secretKeyPattern`                    | `collected` | the env name      | yes      | yes        |
 | each launch `env` value whose key matches `secretKeyPattern`                   | `collected` | the env name      | no       | yes        |
-| each `{ name, value }` that a driver's `secrets` returns for the target config | `declared`  | the driver's name | yes      | no         |
+| each `{ name, value }` that a driver's `secrets` returns for the target config | `declared`  | the name it gives | yes      | no         |
 | the password of each URL in a resolved driver config                           | `collected` | `<driver>.url`    | yes      | no         |
-| each value a driver adds at runtime through `session.secrets.add`              | `collected` | the driver's name | yes      | no         |
+| each value a driver adds at runtime through `session.secrets.add`              | `collected` | the name it gives | yes      | no         |
 | each entry of the run's secrets file                                           | `collected` | as stored         | yes      | yes        |
 
 Each secret matches in these spellings:
@@ -173,7 +174,7 @@ the publish command of [the PR report design](pr-report.md). The guard owns the 
 the uploader owns the transport.
 
 ```ts
-const candidate = await readUploadCandidate(evidence, { root, stateDir });
+const candidate = await readUploadCandidate(evidence, { root, stateDir, files });
 const refusal = pickUploadRefusal(candidate, { targetUploads, secrets });
 // → null, or { reason: 'hash-mismatch', path: '.wringer/runs/r_7c1/features/place-order/…-page.png' }
 ```
@@ -263,8 +264,9 @@ path that matches nothing changes nothing.
   read. A run whose file is gone was scrubbed when each command wrote, so its log stays clean.
 - The secrets file never enters evidence, a report or an upload, and `down` removes it with the run.
 - A collected value of 4 to 7 characters matches only where no letter or digit sits on either side.
-- Core refuses, with a `usage` error, an endpoint that holds URL credentials or any spelling of a
-  declared secret, at `launch-ready` and at attach. So a `launch-ready` event keeps its endpoints
+- Core refuses an endpoint that holds URL credentials or any spelling of a declared secret, at
+  `launch-ready` and at attach. The supervisor ends the run with a `usage` message as the crash
+  reason, so `up` and `attach` answer `environment`. A `launch-ready` event keeps its endpoints
   unscrubbed, for later commands to read back.
 - An env value that is all digits, or a URL with no password, is never collected.
 - A collected value under 4 characters is never scrubbed by value, so a copy outside its redacted
