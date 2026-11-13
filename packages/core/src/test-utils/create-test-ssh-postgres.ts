@@ -1,7 +1,6 @@
 import { chmod, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
-import invariant from 'tiny-invariant';
+import { readRemainingMs, setupBudgetMs, waitUntilReady } from './wait-until-ready.ts';
 
 export interface TestSSHPostgres {
   readonly url: string;
@@ -21,44 +20,64 @@ CMD ["sh", "-c", "mkdir -p /srv/shop/.ssh && cp /run/key.pub /srv/shop/.ssh/auth
 `;
 
 // `directory` holds the key pair and an ssh wrapper that passes the key and the port, so the
-// caller's ssh host needs only `binary` and `destination`.
-export async function createTestSSHPostgres(directory: string): Promise<TestSSHPostgres> {
+// caller's ssh host needs only `binary` and `destination`. `signal` aborts when the test ends, so
+// no probe outlives the cleanup that removes `directory`.
+export async function createTestSSHPostgres(
+  directory: string,
+  signal: AbortSignal,
+): Promise<TestSSHPostgres> {
+  const deadlineAtMs = Date.now() + setupBudgetMs;
+
   const built = Bun.spawnSync(['docker', 'build', '--quiet', '--tag', image, '-'], {
     stdin: new TextEncoder().encode(dockerfile),
+    timeout: readRemainingMs(deadlineAtMs, 'docker build'),
   });
 
   if (built.exitCode !== 0) {
-    throw new Error(`docker build failed: ${built.stderr.toString()}`);
+    const reason =
+      built.exitedDueToTimeout === true
+        ? 'ran past the setup budget'
+        : `failed: ${built.stderr.toString()}`;
+
+    throw new Error(`docker build ${reason}`);
   }
 
   const key = join(directory, 'key');
 
   Bun.spawnSync(['ssh-keygen', '-q', '-t', 'ed25519', '-N', '', '-f', key]);
 
-  const started = Bun.spawnSync([
-    'docker',
-    'run',
-    '--detach',
-    '--rm',
+  const started = Bun.spawnSync(
+    [
+      'docker',
+      'run',
+      '--detach',
+      '--rm',
 
-    // A process an ssh session leaves behind is reparented to PID 1. Postgres as PID 1 reads its
-    // exit as a crashed backend and restarts, cutting every connection, so tini reaps it instead.
-    '--init',
-    '--env',
-    'POSTGRES_USER=shop',
-    '--env',
-    'POSTGRES_PASSWORD=shop',
-    '--volume',
-    `${key}.pub:/run/key.pub:ro`,
-    '--publish',
-    '127.0.0.1::5432',
-    '--publish',
-    '127.0.0.1::22',
-    image,
-  ]);
+      // A process an ssh session leaves behind is reparented to PID 1. Postgres as PID 1 reads its
+      // exit as a crashed backend and restarts, cutting every connection, so tini reaps it instead.
+      '--init',
+      '--env',
+      'POSTGRES_USER=shop',
+      '--env',
+      'POSTGRES_PASSWORD=shop',
+      '--volume',
+      `${key}.pub:/run/key.pub:ro`,
+      '--publish',
+      '127.0.0.1::5432',
+      '--publish',
+      '127.0.0.1::22',
+      image,
+    ],
+    { timeout: readRemainingMs(deadlineAtMs, 'docker run') },
+  );
 
   if (started.exitCode !== 0) {
-    throw new Error(`docker run failed: ${started.stderr.toString()}`);
+    const reason =
+      started.exitedDueToTimeout === true
+        ? 'ran past the setup budget'
+        : `failed: ${started.stderr.toString()}`;
+
+    throw new Error(`docker run ${reason}`);
   }
 
   const id = started.stdout.toString().trim();
@@ -67,6 +86,10 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
     // A forced removal keeps the image's anonymous data volume unless it names `--volumes`.
     Bun.spawnSync(['docker', 'rm', '--force', '--volumes', id]);
   };
+
+  // The caller holds `remove` only once this returns, and bun can exit right after a test that
+  // times out, so a test that ends during setup removes the container in its own cleanup.
+  signal.addEventListener('abort', remove, { once: true });
 
   try {
     const readPort = (port: string): string =>
@@ -86,20 +109,19 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
 
     await chmod(sshBinary, 0o755);
 
-    await waitFor(
-      () => {
-        const ready = Bun.spawnSync([
-          sshBinary,
-          '-o',
-          'BatchMode=yes',
-          'shop@127.0.0.1',
-          'pg_isready -h 127.0.0.1',
-        ]);
+    await waitUntilReady(
+      async (probeSignal) => {
+        const ready = Bun.spawn(
+          [sshBinary, '-o', 'BatchMode=yes', 'shop@127.0.0.1', 'pg_isready -h 127.0.0.1'],
+          { signal: probeSignal, stdout: 'ignore', stderr: 'ignore' },
+        );
 
-        invariant(ready.exitCode === 0, 'Postgres is not ready over ssh yet.');
+        return (await ready.exited) === 0;
       },
-      { timeoutMs: 10_000 },
+      { label: 'Postgres over ssh', deadlineAtMs, signal },
     );
+
+    signal.removeEventListener('abort', remove);
 
     return {
       url: `postgres://shop:shop@127.0.0.1:${readPort('5432/tcp')}/shop`,
@@ -109,6 +131,8 @@ export async function createTestSSHPostgres(directory: string): Promise<TestSSHP
       remove,
     };
   } catch (error) {
+    signal.removeEventListener('abort', remove);
+
     remove();
     throw error;
   }

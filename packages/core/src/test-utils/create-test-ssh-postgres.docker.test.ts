@@ -17,7 +17,13 @@ async function setupTest() {
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
-  const postgres = await createTestSSHPostgres(directory);
+  const setup = new AbortController();
+
+  stack.defer(() => {
+    setup.abort();
+  });
+
+  const postgres = await createTestSSHPostgres(directory, setup.signal);
 
   stack.defer(() => {
     postgres.remove();

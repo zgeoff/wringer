@@ -13,7 +13,13 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const postgres = await createTestPostgres();
+  const setup = new AbortController();
+
+  stack.defer(() => {
+    setup.abort();
+  });
+
+  const postgres = await createTestPostgres(setup.signal);
 
   stack.defer(() => {
     postgres.remove();
