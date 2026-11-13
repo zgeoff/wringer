@@ -169,6 +169,45 @@ export function createShopWringer(): Wringer {
       },
     })
     .command({
+      path: ['echo-runless'],
+      summary: 'Keep and return the text it is given, without a run',
+      args: textSchema,
+      data: textSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: async (args, ctx) => {
+        await ctx.evidence.writeFile('note', 'echo.txt', args.text);
+
+        return { text: args.text };
+      },
+    })
+    .command({
+      path: ['echo-runless-flood'],
+      summary: 'Return more data than the cap with the text it is given inside, without a run',
+      args: textSchema,
+      data: textSchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      run: (args) => Promise.resolve({ text: `${'x'.repeat(40 * 1024)}${args.text}` }),
+    })
+    .command({
+      path: ['echo-late'],
+      summary: 'Fail after the timeout with the text it is given in the message, without a run',
+      args: textSchema,
+      data: emptySchema,
+      effect: 'read',
+      needsRun: false,
+      needsDoctor: false,
+      timeoutMs: 50,
+      run: async (args) => {
+        await Bun.sleep(300);
+
+        throw new Error(`The cleanup lost ${args.text}.`);
+      },
+    })
+    .command({
       path: ['restock'],
       summary: 'Restock the shelves, with no declared effect',
       args: emptySchema,
@@ -333,6 +372,16 @@ export function createShopWringer(): Wringer {
         input: textSchema,
         data: textSchema,
         run: (input) => Promise.resolve({ text: `${'x'.repeat(40 * 1024)}${input.text}` }),
+      }),
+    )
+    .action(
+      shop.defineAction({
+        name: 'echo-crash',
+        summary: 'Throw a plain error with the text it is given in the message',
+        effect: 'read',
+        input: textSchema,
+        data: emptySchema,
+        run: (input) => Promise.reject(new TypeError(`cannot read ${input.text}`)),
       }),
     )
     .action(

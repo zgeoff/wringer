@@ -78,7 +78,7 @@ interface Secret {
   readonly origin: 'declared' | 'collected';
 }
 
-export const minimumSecretLength = 8;
+const minimumSecretLength = 8;
 export const minimumTokenLength = 4; // a collected value this long or longer, up to 7, is a token
 
 // …existing fields of DriverSession. Core stamps `origin: 'collected'` on each add.
@@ -114,7 +114,7 @@ Each secret matches in these spellings:
 | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | the value                                                                              | raw text, log lines, YAML snapshots                            |
 | the value inside a JSON string, with its escapes                                       | every JSON file and the envelope                               |
-| `encodeURIComponent(value)`, and with `+` for spaces                                   | query strings and form bodies                                  |
+| `encodeURIComponent(value)`, with `+` for spaces, and as `URLSearchParams` encodes it  | query strings and form bodies                                  |
 | base64 and base64url of the value, cut to its first `floor(length / 3) * 4` characters | a token passed on encoded, with or without more bytes after it |
 | base64 of `user:password`, for a URL's password                                        | Basic auth, which Bun's fetch sends for URL creds              |
 

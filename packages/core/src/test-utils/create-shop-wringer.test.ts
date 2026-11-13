@@ -41,6 +41,7 @@ test('it registers the shop actions under `action`', () => {
     'action echo',
     'action echo-fail',
     'action echo-flood',
+    'action echo-crash',
     'action learn',
     'action crash',
     'action hoard',

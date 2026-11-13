@@ -184,13 +184,13 @@ function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<s
 // before the hook gets the first file. A refused file stays local, with no link, except a file with
 // a known secret in it: the scrubber missed it, so the command fails.
 async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report> {
+  await readSecretsOfVerdicts(ctx, report);
+
   const upload = ctx.wringer.hooks.upload;
 
   if (upload === undefined) {
     return report;
   }
-
-  await readSecretsOfVerdicts(ctx, report);
 
   const verdicts = report.features.flatMap((feature) =>
     feature.verdict === null || feature.status !== 'verified' ? [] : [feature.verdict],

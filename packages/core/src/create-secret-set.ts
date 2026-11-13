@@ -103,6 +103,7 @@ function listSpellings(value: string): string[] {
     JSON.stringify(value).slice(1, -1),
     encodeURIComponent(value),
     encodeURIComponent(value).replaceAll('%20', '+'),
+    new URLSearchParams({ field: value }).toString().slice('field='.length),
     bytes.toString('base64').slice(0, prefixLength),
     bytes.toString('base64url').slice(0, prefixLength),
   ];
@@ -212,8 +213,12 @@ function scrubAny(
     return value.map((item: unknown) => scrubAny(item, scrubText, path));
   }
 
-  if (!isPlainObject(value)) {
-    return value;
+  // The scrub reads an object as `JSON.stringify` does, so a `URL` or a class instance reaches the
+  // output through the set too.
+  if ('toJSON' in value && typeof value.toJSON === 'function') {
+    const json: unknown = Reflect.apply(value.toJSON, value, []);
+
+    return scrubAny(json, scrubText, path);
   }
 
   const copy: Record<string, unknown> = {};
@@ -223,12 +228,6 @@ function scrubAny(
   }
 
   return copy;
-}
-
-function isPlainObject(value: object): value is Record<string, unknown> {
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
 }
 
 // Two scrubbed keys that collide get a `#2`, `#3` suffix, so no value is lost.

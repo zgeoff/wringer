@@ -1035,3 +1035,53 @@ test('it answers a declared secret of 7 characters with a usage error that never
     leaked: JSON.stringify(result.envelope).includes('abcdefg'),
   }).toStrictEqual({ code: 'usage', exitCode: 2, leaked: false });
 });
+
+test('it keeps a declared secret out of the payloads of a command that runs without a run', async () => {
+  const ctx = await setupTest();
+  const kept = await ctx.run('local', ['echo-runless'], { text: 'planted-shop-token' });
+  const flooded = await ctx.run('local', ['echo-runless-flood'], { text: 'planted-shop-token' });
+  const sinks = await ctx.readSinks();
+
+  expect({
+    data: kept.envelope.data,
+    truncated: flooded.envelope.truncated,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('[redacted:SHOP_API_TOKEN]'),
+  }).toStrictEqual({
+    data: { text: '[redacted:SHOP_API_TOKEN]' },
+    truncated: true,
+    leaked: false,
+    kept: true,
+  });
+});
+
+test('it keeps a declared secret out of the late-failure log', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['echo-late'], { text: 'planted-shop-token' });
+
+  await result.late;
+
+  const sinks = await ctx.readSinks();
+
+  expect({
+    code: result.envelope.error?.code,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('The cleanup lost [redacted:SHOP_API_TOKEN].'),
+  }).toStrictEqual({ code: 'timeout', leaked: false, kept: true });
+});
+
+test('it keeps a declared secret out of the stack that an internal error writes to the run log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'echo-crash'], { text: 'planted-shop-token' });
+  const sinks = await ctx.readSinks();
+
+  expect({
+    code: result.envelope.error?.code,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('cannot read [redacted:SHOP_API_TOKEN]'),
+  }).toStrictEqual({ code: 'internal', leaked: false, kept: true });
+});

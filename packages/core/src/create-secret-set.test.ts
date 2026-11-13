@@ -17,6 +17,11 @@ test.each([
   },
   { spelling: 'a URL component', build: (value: string) => encodeURIComponent(value) },
   {
+    spelling: 'a form-encoded value',
+    build: (value: string) =>
+      new URLSearchParams({ field: value }).toString().slice('field='.length),
+  },
+  {
     spelling: 'a base64 prefix',
     build: (value: string) =>
       Buffer.from(value)
@@ -31,7 +36,7 @@ test.each([
         .slice(0, Math.floor(Buffer.byteLength(value) / 3) * 4),
   },
 ])('#scrubText replaces $spelling', (row) => {
-  const ctx = setupTest('planted shop+token "quoted" 100%');
+  const ctx = setupTest('planted shop+token "quoted" 100% !\'()~');
   const text = `before ${row.build(ctx.value)} after`;
 
   expect(ctx.secrets.scrubText(text)).toBe('before [redacted:SHOP_API_TOKEN] after');
@@ -187,4 +192,35 @@ test.each([
   { key: 'SESSION_TIMEOUT', expected: false },
 ])('#secretKeyPattern gives $expected for $key', (row) => {
   expect(secretKeyPattern.test(row.key)).toBe(row.expected);
+});
+
+test('#scrubValue reads a URL and an error with fields as JSON does', () => {
+  const ctx = setupTest();
+
+  class ShelfError extends Error {
+    override name = 'ShelfError';
+
+    readonly said = `paid with ${ctx.value}`;
+  }
+
+  const scrubbed = ctx.secrets.scrubValue({
+    link: new URL(`https://shop.example/?key=${ctx.value}`),
+    failure: new ShelfError('out of stock'),
+  });
+
+  expect(scrubbed).toStrictEqual({
+    link: 'https://shop.example/?key=[redacted:SHOP_API_TOKEN]',
+    failure: { name: 'ShelfError', said: 'paid with [redacted:SHOP_API_TOKEN]' },
+  });
+});
+
+test('#scrubValue leaves a bigint and a circular object for the serializer to refuse', () => {
+  const ctx = setupTest();
+  const circular: Record<string, unknown> = { count: 3n };
+
+  circular['self'] = circular;
+
+  const scrubbed = ctx.secrets.scrubValue(circular);
+
+  expect(scrubbed).toStrictEqual({ count: 3n, self: circular });
 });
