@@ -1,9 +1,10 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { dispatch, reportSchema } from '@wringer/core';
 import { createFileHostStandIn } from '@wringer/core/test-utils/create-file-host-stand-in.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
+import { updateEnv } from '@zgeoff/testing/helpers';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
 import { createWringerRegistry } from './create-wringer-registry.ts';
@@ -13,38 +14,7 @@ async function setupTest() {
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
 
-  // The uploader reads the process environment when it is used, so a test sets the variables and
-  // gets them restored.
-  const restores: (() => void)[] = [];
-
-  const setEnv = (values: Readonly<Record<string, string | undefined>>) => {
-    for (const [key, value] of Object.entries(values)) {
-      const before = process.env[key];
-
-      restores.push(() => {
-        if (before === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = before;
-        }
-      });
-
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  };
-
-  onTestFinished(() => {
-    for (const restore of restores) {
-      restore();
-    }
-  });
-
   return {
-    setEnv,
     registry,
     session: shop.session,
     root: shop.repo.root,
@@ -203,7 +173,8 @@ test('it links a verdict on local to the file host, with the token and the regis
 
   const ctx = await setupTest();
 
-  ctx.setEnv({ VERIFY_UPLOAD_URL: host.url, VERIFY_UPLOAD_TOKEN: token });
+  updateEnv('VERIFY_UPLOAD_URL', host.url);
+  updateEnv('VERIFY_UPLOAD_TOKEN', token);
 
   await ctx.writeFiles(['packages/http/src/send-request.ts']);
 
@@ -242,7 +213,8 @@ test('it links a verdict on local to the file host, with the token and the regis
 test('it needs neither upload variable for a command that uploads nothing', async () => {
   const ctx = await setupTest();
 
-  ctx.setEnv({ VERIFY_UPLOAD_URL: undefined, VERIFY_UPLOAD_TOKEN: undefined });
+  updateEnv('VERIFY_UPLOAD_URL', undefined);
+  updateEnv('VERIFY_UPLOAD_TOKEN', undefined);
 
   const result = await dispatch(
     ctx.registry,
