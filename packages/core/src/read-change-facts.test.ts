@@ -1576,6 +1576,41 @@ test('it leaves a path only an ignore glob matches out of every fingerprint and 
   });
 });
 
+test('it reads the changed paths and every fingerprint from one diff after the ignored paths are restored', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedShop();
+
+  await writeFile(join(ctx.repo, 'README.md'), '# shop, edited\n');
+  await writeFile(join(ctx.repo, 'src', 'cart', 'add.ts'), 'export const add = 2;\n');
+
+  const diffs: string[][] = [];
+
+  await readChangeFacts(
+    {
+      runGit,
+      runGitBytes: (request) => {
+        if (request.args.includes('diff') && !request.args.includes('--name-only')) {
+          diffs.push([...request.args]);
+        }
+
+        return runGitBytes(request);
+      },
+      removeDirectory,
+    },
+    {
+      cwd: ctx.repo,
+      base: 'main',
+      exclude: ['.wringer'],
+      ignore: ['**/*.md'],
+      scopes: ctx.scopes,
+      deployed: null,
+    },
+  );
+
+  expect(diffs).toHaveLength(1);
+});
+
 test('it lists a path hidden only by info/exclude as changed', async () => {
   const ctx = await setupTest();
 

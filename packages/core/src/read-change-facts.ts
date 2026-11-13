@@ -5,6 +5,7 @@ import { buildPromisedObjectReads } from './build-promised-object-reads.ts';
 import { buildSkipWorktreeMarks } from './build-skip-worktree-marks.ts';
 import { buildSubmoduleAdds } from './build-submodule-adds.ts';
 import { isGlobMatch } from './is-glob-match.ts';
+import { parseDiffOutput } from './parse-diff-output.ts';
 import { emptyFingerprint, parsePatchID } from './parse-patch-id.ts';
 import { parseRawEntries } from './parse-raw-entries.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
@@ -106,49 +107,32 @@ export async function readChangeFacts(
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
-    const [raw, diff] = await Promise.all([
-      host.runGitBytes({
-        cwd: root,
-        args: [
-          'diff',
-          '--cached',
-          '--raw',
-          '-z',
-          '--no-abbrev',
-          '--no-renames',
-          '--no-relative',
-          '--ignore-submodules=none',
-          mergeBase,
-          '--',
-          ':(top)',
-          ...exclusions,
-        ],
-        env,
-      }),
-      host.runGitBytes({
-        cwd: root,
-        args: [
-          'diff',
-          '--cached',
-          '--binary',
-          '--no-color',
-          '--no-ext-diff',
-          '--no-textconv',
-          '--no-relative',
-          ...pinnedDiffOptions,
-          mergeBase,
-          '--',
-          ':(top)',
-          ...exclusions,
-        ],
-        env,
-      }),
-    ]);
+    const output = await host.runGitBytes({
+      cwd: root,
+      args: [
+        'diff',
+        '--cached',
+        '--raw',
+        '--binary',
+        '-z',
+        '--no-color',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--no-relative',
+        ...pinnedDiffOptions,
+        mergeBase,
+        '--',
+        ':(top)',
+        ...exclusions,
+      ],
+      env,
+    });
 
-    const entries = parseRawEntries(raw);
-    const chunks = splitDiffByPath(diff, entries);
+    const parsed = parseDiffOutput(output);
+    const entries = parsed.entries;
+    const chunks = splitDiffByPath(parsed.patch, entries);
 
-    const fingerprint = await readPatchID(host, { root, env, patch: diff });
+    const fingerprint = await readPatchID(host, { root, env, patch: parsed.patch });
 
     const featureFingerprints = await readFeatureFingerprints(host, {
       root,

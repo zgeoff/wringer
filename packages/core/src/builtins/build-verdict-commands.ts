@@ -162,6 +162,8 @@ async function readReport(ctx: BuiltinContext, givenBase: string | undefined): P
     fingerprint: facts.fingerprint,
     features: ctx.wringer.features,
     changedPaths: facts.changedPaths,
+    shared: ctx.wringer.shared,
+    ignore: ctx.wringer.ignore,
     verdicts,
   });
 }
@@ -227,6 +229,8 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     fingerprint: facts.fingerprint,
     features: ctx.wringer.features,
     changedPaths: facts.changedPaths,
+    shared: ctx.wringer.shared,
+    ignore: ctx.wringer.ignore,
     verdicts,
   });
 

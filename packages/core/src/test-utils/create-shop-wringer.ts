@@ -317,6 +317,7 @@ export function createShopWringer(): Wringer {
     )
     .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
     .feature({ name: 'search', summary: 'Find a product', paths: ['src/search/**'] })
+    .shared('package.json')
     .ignore('**/*.md')
     .build();
 }
