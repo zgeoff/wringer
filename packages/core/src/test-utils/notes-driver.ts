@@ -12,7 +12,11 @@ export const notes = defineDriver({
   options: z.strictObject({ prefix: z.string().default('') }),
   targetConfig: z.strictObject({
     readOnly: grantsSchema.optional(),
+    apiToken: z.string().optional(),
+    url: z.string().optional(),
   }),
+  secrets: (config) =>
+    config.apiToken === undefined ? [] : [{ name: 'notes.apiToken', value: config.apiToken }],
   services: {
     store: {
       start: () => {
@@ -29,6 +33,9 @@ export const notes = defineDriver({
     },
   },
   client: (session, fence) => ({
+    learn: (value: string): void => {
+      session.secrets.add({ name: 'notes.session', value });
+    },
     list: fence({
       effect: () => 'read',
       describe: () => 'notes list',

@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { callSupervisor } from './call-supervisor.ts';
 import { dispatch } from './dispatch.ts';
@@ -15,8 +15,13 @@ import { writeNewFile } from './write-new-file.ts';
 async function setupTest() {
   const wringer = createShopWringer();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({
+    parent: import.meta.dir,
+    wringer,
+    env: { SHOP_API_TOKEN: 'planted-shop-token' },
+  });
 
+  const stateDir = join(shop.repo.root, wringer.stateDir);
   const gate = Promise.withResolvers<undefined>();
   const guardsDone = Promise.withResolvers<undefined>();
 
@@ -30,6 +35,39 @@ async function setupTest() {
   const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate.promise };
 
   return {
+    // Every file wringer keeps for an upload or a report: the run's features folders and logs, the
+    // payloads and the late failures. The app's own log and the secrets file stay out.
+    readSinks: async (): Promise<string> => {
+      const names = await readdir(stateDir, { recursive: true });
+
+      const sinks = names.filter(
+        (name) =>
+          /(?:^|\/)features\//u.test(name) ||
+          name.endsWith('/log.ndjson') ||
+          name.startsWith('payloads/') ||
+          name === 'late-failures.ndjson',
+      );
+
+      const texts = await Promise.all(
+        sinks.map(async (name) => {
+          const info = await stat(join(stateDir, name));
+
+          return info.isFile() ? readFile(join(stateDir, name), 'utf8') : '';
+        }),
+      );
+
+      return texts.join('\n');
+    },
+    readSecretsFile: (runID: string) =>
+      readFile(join(stateDir, 'runs', runID, 'secrets.ndjson'), 'utf8'),
+    statSecretsFile: (runID: string) => stat(join(stateDir, 'runs', runID, 'secrets.ndjson')),
+    root: shop.repo.root,
+    runWithEnv: (
+      env: Readonly<Record<string, string>>,
+      target: string,
+      path: readonly string[],
+      args: unknown = {},
+    ) => dispatch(wringer, path, args, { ...shop.session, env, target }),
     evidenceWrites,
     supervisorCalls,
     runRecordingCalls: (path: readonly string[]) =>
@@ -92,7 +130,6 @@ async function setupTest() {
           repoHost: { ...shop.session.repoHost, writeNewFile: evidenceWrites },
         },
       ),
-    root: shop.repo.root,
     lines: shop.lines,
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
@@ -412,7 +449,12 @@ test('it keeps the evidence of a drive that failed in its envelope', async () =>
   const result = await ctx.run('local', ['action', 'crash']);
 
   expect(result.envelope.evidence).toStrictEqual([
-    { kind: 'note', path: expect.stringMatching(/cart\.txt$/u), sha256: expect.any(String) },
+    {
+      kind: 'note',
+      path: expect.stringMatching(/cart\.txt$/u),
+      sha256: expect.any(String),
+      scrub: 'text',
+    },
   ]);
 });
 
@@ -795,4 +837,287 @@ test('it gives the package hint when a read-only target sets none', async () => 
   expect(result.envelope.error?.hint).toBe(
     'This target is read-only. Stop and report the write you needed.',
   );
+});
+
+test('it keeps a declared secret out of an action result', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'echo'], {
+    text: 'the key is planted-shop-token',
+  });
+
+  expect(result.envelope.data).toStrictEqual({ text: 'the key is [redacted:SHOP_API_TOKEN]' });
+});
+
+test('it keeps a declared secret out of a stream event', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'echo'], { text: 'the key is planted-shop-token' });
+
+  expect(ctx.lines.filter((line) => line.includes('"echoed"'))).toStrictEqual([
+    '{"wringer":1,"event":"echoed","data":{"text":"the key is [redacted:SHOP_API_TOKEN]"}}',
+  ]);
+});
+
+test('it keeps a declared secret out of the error an action throws', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'echo-fail'], { text: 'planted-shop-token' });
+
+  expect({ error: result.envelope.error, data: result.envelope.data }).toStrictEqual({
+    error: {
+      code: 'check-failed',
+      message: 'The shelf said [redacted:SHOP_API_TOKEN].',
+      hint: 'Try again after [redacted:SHOP_API_TOKEN] changes.',
+    },
+    data: { said: '[redacted:SHOP_API_TOKEN]' },
+  });
+});
+
+test('it writes an over-cap payload file without the declared secret', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'echo-flood'], { text: 'planted-shop-token' });
+  const payload = await readFile(join(ctx.root, result.envelope.truncatedPath ?? ''), 'utf8');
+
+  expect({
+    truncated: result.envelope.truncated,
+    held: payload.includes('planted-shop-token'),
+  }).toStrictEqual({
+    truncated: true,
+    held: false,
+  });
+});
+
+test('it keeps a declared secret out of the run log, the features folder and the payloads', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'echo'], { text: 'planted-shop-token' });
+  await ctx.run('local', ['action', 'echo-fail'], { text: 'planted-shop-token' });
+  await ctx.run('local', ['action', 'echo-flood'], { text: 'planted-shop-token' });
+
+  const sinks = await ctx.readSinks();
+
+  expect({
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('[redacted:SHOP_API_TOKEN]'),
+  }).toStrictEqual({ leaked: false, kept: true });
+});
+
+test('it keeps a driver config secret and a URL password out of an action result', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('secured', ['up']);
+  await ctx.run('secured', ['doctor']);
+
+  const basic = Buffer.from('shopper:driver-url-pass').toString('base64');
+
+  const result = await ctx.run('secured', ['action', 'echo'], {
+    text: `driver-config-token driver-url-pass Basic ${basic}`,
+  });
+
+  expect(result.envelope.data).toStrictEqual({
+    text: `[redacted:notes.apiToken] [redacted:notes.url] Basic [redacted:notes.url]${basic.slice(Math.floor(23 / 3) * 4)}`,
+  });
+});
+
+test('it keeps the driver config secrets of a target in the secrets file for the run', async () => {
+  const ctx = await setupTest();
+  const up = await ctx.run('secured', ['up']);
+
+  const runID = up.envelope.instance ?? '';
+
+  await ctx.run('secured', ['doctor']);
+  await ctx.run('secured', ['action', 'echo'], { text: 'hello' });
+
+  const kept = await ctx.readSecretsFile(runID);
+
+  expect([...new Set(kept.split('\n').filter((line) => line !== ''))].toSorted()).toStrictEqual([
+    '{"name":"notes.apiToken","value":"driver-config-token"}',
+    '{"name":"notes.url","value":"driver-url-pass"}',
+    '{"name":"notes.url","value":"shopper:driver-url-pass"}',
+  ]);
+});
+
+test('it keeps the driver config secrets out of every sink of a run', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('secured', ['up']);
+  await ctx.run('secured', ['doctor']);
+
+  await ctx.run('secured', ['action', 'echo'], {
+    text: 'driver-config-token driver-url-pass shopper:driver-url-pass',
+  });
+
+  const sinks = await ctx.readSinks();
+
+  expect({
+    token: sinks.includes('driver-config-token'),
+    password: sinks.includes('driver-url-pass'),
+  }).toStrictEqual({ token: false, password: false });
+});
+
+test('it scrubs a value a driver collects at runtime in a later command', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'learn'], { text: 'planted-session-value' });
+
+  const later = await ctx.run('local', ['action', 'echo'], {
+    text: 'session planted-session-value ok',
+  });
+
+  expect(later.envelope.data).toStrictEqual({ text: 'session [redacted:notes.session] ok' });
+});
+
+test('it keeps a collected value in a file of mode 0600 until down removes it', async () => {
+  const ctx = await setupTest();
+  const up = await ctx.run('local', ['up']);
+
+  const runID = up.envelope.instance ?? '';
+
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'learn'], { text: 'planted-session-value' });
+
+  const info = await ctx.statSecretsFile(runID);
+  const before = await ctx.readSecretsFile(runID);
+
+  await ctx.run('local', ['down']);
+
+  const after = await ctx
+    .statSecretsFile(runID)
+    .catch((error: unknown) =>
+      error instanceof Error && 'code' in error ? error.code : 'unknown',
+    );
+
+  expect({ mode: info.mode & 0o777, before, after }).toStrictEqual({
+    mode: 0o600,
+    before: '{"name":"notes.session","value":"planted-session-value"}\n',
+    after: 'ENOENT',
+  });
+});
+
+test('it never lets a collected value reach a later sink', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'learn'], { text: 'planted-session-value' });
+  await ctx.run('local', ['action', 'echo'], { text: 'planted-session-value' });
+
+  const sinks = await ctx.readSinks();
+
+  expect(sinks.includes('planted-session-value')).toBe(false);
+});
+
+test.each([
+  { text: 'session 482913 ready', expected: 'session [redacted:notes.session] ready' },
+  { text: 'order 9482913 placed', expected: 'order 9482913 placed' },
+])('it scrubs a collected 6-digit value only as a whole token in $text', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['action', 'learn'], { text: '482913' });
+
+  const result = await ctx.run('local', ['action', 'echo'], { text: row.text });
+
+  expect(result.envelope.data).toStrictEqual({ text: row.expected });
+});
+
+test('it collects GITHUB_TOKEN from the environment and leaves SSH_AUTH_SOCK and SESSION_TIMEOUT', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.runWithEnv(
+    {
+      GITHUB_TOKEN: 'planted-github-token',
+      SSH_AUTH_SOCK: '/run/planted-agent-socket',
+      SESSION_TIMEOUT: '3600',
+    },
+    'local',
+    ['action', 'echo'],
+    { text: 'planted-github-token /run/planted-agent-socket 3600' },
+  );
+
+  expect(result.envelope.data).toStrictEqual({
+    text: '[redacted:GITHUB_TOKEN] /run/planted-agent-socket 3600',
+  });
+});
+
+test('it answers a declared secret of 7 characters with a usage error that never names the value', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runWithEnv({ SHOP_API_TOKEN: 'abcdefg' }, 'local', ['features']);
+
+  expect({
+    code: result.envelope.error?.code,
+    exitCode: result.exitCode,
+    leaked: JSON.stringify(result.envelope).includes('abcdefg'),
+  }).toStrictEqual({ code: 'usage', exitCode: 2, leaked: false });
+});
+
+test('it keeps a declared secret out of the payloads of a command that runs without a run', async () => {
+  const ctx = await setupTest();
+  const kept = await ctx.run('local', ['echo-runless'], { text: 'planted-shop-token' });
+  const flooded = await ctx.run('local', ['echo-runless-flood'], { text: 'planted-shop-token' });
+  const sinks = await ctx.readSinks();
+
+  expect({
+    data: kept.envelope.data,
+    truncated: flooded.envelope.truncated,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('[redacted:SHOP_API_TOKEN]'),
+  }).toStrictEqual({
+    data: { text: '[redacted:SHOP_API_TOKEN]' },
+    truncated: true,
+    leaked: false,
+    kept: true,
+  });
+});
+
+test('it keeps a declared secret out of the late-failure log', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('local', ['echo-late'], { text: 'planted-shop-token' });
+
+  await result.late;
+
+  const sinks = await ctx.readSinks();
+
+  expect({
+    code: result.envelope.error?.code,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('The cleanup lost [redacted:SHOP_API_TOKEN].'),
+  }).toStrictEqual({ code: 'timeout', leaked: false, kept: true });
+});
+
+test('it keeps a declared secret out of the stack that an internal error writes to the run log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['up']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['action', 'echo-crash'], { text: 'planted-shop-token' });
+  const sinks = await ctx.readSinks();
+
+  expect({
+    code: result.envelope.error?.code,
+    leaked: sinks.includes('planted-shop-token'),
+    kept: sinks.includes('cannot read [redacted:SHOP_API_TOKEN]'),
+  }).toStrictEqual({ code: 'internal', leaked: false, kept: true });
 });

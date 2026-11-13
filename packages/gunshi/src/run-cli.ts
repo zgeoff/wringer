@@ -16,6 +16,7 @@ import type { OutputMode } from './pick-output-mode.ts';
 import { renderEnvelope } from './render-envelope.ts';
 import { renderHumanEvent } from './render-human-event.ts';
 import { resolveInvocation } from './resolve-invocation.ts';
+import { scrubParsedInvocation } from './scrub-parsed-invocation.ts';
 
 interface RepoPorts {
   readonly state: StatePort;
@@ -29,6 +30,9 @@ export interface CLIPorts {
   readonly cwd: string;
   readonly isTTY: boolean;
   readonly isAgent: boolean;
+
+  // The process environment, whose secret-looking values every command scrubs from what it writes.
+  readonly env: Readonly<Record<string, string | undefined>>;
   readonly writeStdout: (text: string) => void;
   readonly readRepoRoot: (cwd: string) => Promise<string | WringerError>;
   readonly openRepo: (root: string) => RepoPorts;
@@ -49,8 +53,9 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
   const tokens = parseArgs([...ports.argv]);
   const mode = pickOutputMode({ tokens, isTTY: ports.isTTY, isAgent: ports.isAgent });
 
-  const parsed = await resolveInvocation(wringer, ports.argv);
+  const resolved = await resolveInvocation(wringer, ports.argv);
 
+  const parsed = scrubParsedInvocation(resolved, wringer, ports.env);
   const outcome = pickCLIOutcome(parsed, mode);
 
   if (outcome.kind === 'dispatch') {
@@ -86,6 +91,7 @@ async function dispatchInvocation(
     repoHost: repo.repoHost,
     pullRequests: repo.pullRequests,
     supervisor: repo.supervisor,
+    env: ports.env,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
     timeoutMs: invocation.globals.timeoutMs,

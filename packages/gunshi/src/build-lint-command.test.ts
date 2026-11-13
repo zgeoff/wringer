@@ -30,6 +30,7 @@ async function setupTest(
     cwd: repo.root,
     isTTY: false,
     isAgent: false,
+    env: {},
     writeStdout: (text: string) => {
       stdout.push(text);
     },

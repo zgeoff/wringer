@@ -31,6 +31,9 @@ export interface RunPaths {
   readonly children: string;
   readonly features: string;
 
+  // The collected secrets of the run, one JSON object per line, outside `features`.
+  readonly secrets: string;
+
   // The lock every writer of the run's log and manifest holds.
   readonly lock: string;
 }
@@ -49,5 +52,6 @@ export function buildRunPaths(stateDir: string, runID: RunID): RunPaths {
     streams: join(directory, 'streams'),
     children: join(directory, 'children'),
     features: join(directory, 'features'),
+    secrets: join(directory, 'secrets.ndjson'),
   };
 }

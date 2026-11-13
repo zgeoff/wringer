@@ -10,6 +10,8 @@ import type { StatePaths } from './build-state-paths.ts';
 import type { StateFileSystem } from './create-node-state-file-system.ts';
 import { getLockValue } from './get-lock-value.ts';
 import { parseRunLog } from './parse-run-log.ts';
+import { parseSecretsFile } from './parse-secrets-file.ts';
+import type { StoredSecret } from './parse-secrets-file.ts';
 import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-events.ts';
 import type { LateFailureEvent, RunEvent, RunID } from './run-events.ts';
 import { WringerError } from './wringer-error.ts';
@@ -46,6 +48,12 @@ export interface StatePort {
   readonly listRuns: () => Promise<readonly RunID[]>;
   readonly writeManifest: (runID: RunID) => Promise<void>;
   readonly readCursors: (runID: RunID) => Promise<Record<string, number>>;
+
+  // The run's secrets file, `secrets.ndjson`, created with mode 0600. An append under the run's
+  // lock skips a secret the file already holds.
+  readonly appendSecret: (runID: RunID, secret: StoredSecret) => Promise<void>;
+  readonly readSecrets: (runID: RunID) => Promise<readonly StoredSecret[]>;
+  readonly removeSecrets: (runID: RunID) => Promise<void>;
 }
 
 export interface FileStateOptions {
@@ -188,6 +196,33 @@ export function createFileState(options: FileStateOptions): StatePort {
       );
 
       return Object.fromEntries(sizes);
+    },
+
+    appendSecret: (runID, secret) => {
+      const runPaths = buildRunPaths(options.stateDir, runID);
+
+      return withLock(basename(runPaths.lock), async () => {
+        const text = await fs.readText(runPaths.secrets);
+
+        const known = parseSecretsFile(text ?? '');
+
+        if (known.some((item) => item.name === secret.name && item.value === secret.value)) {
+          return;
+        }
+
+        await fs.createDirectory(runPaths.directory);
+        await fs.appendPrivateText(runPaths.secrets, `${JSON.stringify(secret)}\n`);
+      });
+    },
+    readSecrets: async (runID) => {
+      const text = await fs.readText(buildRunPaths(options.stateDir, runID).secrets);
+
+      return parseSecretsFile(text ?? '');
+    },
+    removeSecrets: (runID) => {
+      const runPaths = buildRunPaths(options.stateDir, runID);
+
+      return withLock(basename(runPaths.lock), () => fs.removeFile(runPaths.secrets));
     },
   };
 }

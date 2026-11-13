@@ -6,20 +6,21 @@ import type { RunView } from './build-run-view.ts';
 import { buildRunPaths } from './build-state-paths.ts';
 import { capData } from './cap-data.ts';
 import type { StatePort } from './create-file-state.ts';
+import { createScrubbingState } from './create-scrubbing-state.ts';
+import { createSecretSet } from './create-secret-set.ts';
+import type { SecretSet } from './create-secret-set.ts';
 import { envelopeVersion } from './envelope-version.ts';
 import type { Envelope, Evidence } from './envelope.ts';
 import type { ExitCode } from './error-codes.ts';
-import { findOwnValue } from './find-own-value.ts';
-import { getTarget } from './get-target.ts';
 import type { Access } from './host.ts';
 import { keepCancelledCall } from './keep-cancelled-call.ts';
 import { defaultRefusalHint } from './make-fence.ts';
+import { makeSecretCollector } from './make-secret-collector.ts';
 import { openDrive, unassignedFeature } from './open-drive.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 import { pickAccessRefusal } from './pick-access-refusal.ts';
 import { pickCommandNeeds } from './pick-command-needs.ts';
 import { pickCommandPlan } from './pick-command-plan.ts';
-import { pickContextTarget } from './pick-context-target.ts';
 import type { DriveKind } from './pick-drive-kind.ts';
 import { pickEnvelopeContext } from './pick-envelope-context.ts';
 import { pickEnvelopePayload } from './pick-envelope-payload.ts';
@@ -28,9 +29,13 @@ import { pickEnvelopeTarget } from './pick-envelope-target.ts';
 import { pickLogRefusal } from './pick-log-refusal.ts';
 import { raceDeadline } from './race-deadline.ts';
 import { readChangeFacts } from './read-change-facts.ts';
+import { readCommandContext } from './read-command-context.ts';
+import type { CommandContext } from './read-command-context.ts';
 import { readDefaultBase } from './read-default-base.ts';
 import { readHeadSHA } from './read-head-sha.ts';
+import { readSecretWriteFailure } from './read-secret-write-failure.ts';
 import type { RunID } from './run-events.ts';
+import { scrubEnvelope, scrubFailure } from './scrub-envelope.ts';
 import { settleDispatchAnswer } from './settle-dispatch-answer.ts';
 import { settleEnvelope } from './settle-envelope.ts';
 import { toWringerError } from './to-wringer-error.ts';
@@ -43,7 +48,6 @@ import type {
   Emit,
   RegisteredCommand,
   Session,
-  TargetDefinition,
   Wringer,
 } from './types.ts';
 import { waitForCancelledCalls } from './wait-for-cancelled-calls.ts';
@@ -78,6 +82,9 @@ interface DriveTrace {
   // Each service call to the run's supervisor that was still running at the deadline.
   readonly calls: Promise<unknown>[];
 
+  // Each write of a collected secret to the run's secrets file, settled with its failure or null.
+  readonly secretWrites: Promise<WringerError | null>[];
+
   // Set once the command's outcome is settled, so the work's later events never follow the answer.
   answered: boolean;
 }
@@ -93,10 +100,11 @@ export async function dispatch(
   const startedMs = performance.now();
   const now = session.now ?? (() => new Date());
   const stateDir = join(session.root, wringer.stateDir);
-  const state = session.state;
+  const secrets = createSecretSet();
+  const state = createScrubbingState(session.state, secrets);
 
-  const read = await readContext(wringer, path, state, session).catch((error: unknown) =>
-    toWringerError(error),
+  const read = await readCommandContext(wringer, path, { state, session, secrets }).catch(
+    (error: unknown) => toWringerError(error),
   );
 
   const before = read instanceof WringerError ? null : read;
@@ -111,6 +119,7 @@ export async function dispatch(
     boundRun: null,
     late: [],
     calls: [],
+    secretWrites: [],
     answered: false,
   };
 
@@ -133,6 +142,7 @@ export async function dispatch(
       wringer,
       state,
       session,
+      secrets,
       stateDir,
       command,
       rawArgs,
@@ -167,18 +177,28 @@ export async function dispatch(
 
   trace.answered = true;
 
-  const after = await readContext(wringer, path, state, session).catch(() => before);
+  const after = await readCommandContext(wringer, path, { state, session, secrets }).catch(
+    () => before,
+  );
+
   const bound = await readBoundRun(state, trace.boundRun);
 
   const settled = pickEnvelopeContext(before, after, trace.ranOnRun);
   const run = pickEnvelopeRun(before, settled, bound);
   const feature = settled?.feature ?? null;
 
-  const payload = pickEnvelopePayload({
+  const picked = pickEnvelopePayload({
     data: outcome?.data,
     commandFailure: failure,
     cursors: run === undefined ? {} : await readEnvelopeCursors(state, run.runID),
   });
+
+  // The data is scrubbed before the cap measures it, so the cap sees the text that would be kept.
+  const payload = {
+    ...picked,
+    data: secrets.scrubValue(picked.data),
+    failure: scrubFailure(picked.failure, secrets),
+  };
 
   const capped = await capData(payload.data, {
     root: session.root,
@@ -188,6 +208,7 @@ export async function dispatch(
         : join(buildRunPaths(stateDir, run.runID).features, feature ?? unassignedFeature),
     now,
     files: session.repoHost,
+    secrets,
   });
 
   const input = settleEnvelope({
@@ -202,7 +223,7 @@ export async function dispatch(
     capped,
   });
 
-  const envelope = buildEnvelope(input);
+  const envelope = scrubEnvelope(buildEnvelope(input), secrets);
 
   const commandLate =
     pending === null
@@ -227,63 +248,16 @@ export async function dispatch(
           refuse: pickLogRefusal(envelope, before?.run),
         });
 
-  return { ...settleDispatchAnswer(input, logFailure), late };
-}
+  const answer = settleDispatchAnswer(input, logFailure);
 
-interface CommandContext {
-  readonly targetName: string;
-  readonly target: TargetDefinition;
-  readonly run: RunView | undefined;
-  readonly feature: string | null;
-  readonly cursors: Readonly<Record<string, number>>;
-}
-
-async function readContext(
-  wringer: Wringer,
-  path: readonly string[],
-  state: StatePort,
-  session: Session,
-): Promise<CommandContext> {
-  // A feature names a folder of the run, so only a feature of the map may reach a path; `use` checks
-  // the feature it saves, and this checks the one a command passes.
-  if (
-    session.feature !== undefined &&
-    !wringer.features.some((feature) => feature.name === session.feature)
-  ) {
-    throw new WringerError('usage', {
-      message: `The feature map has no feature named ${session.feature}.`,
-      hint: 'Run `features` to list them.',
-    });
-  }
-
-  const pointers = await state.readPointers();
-
-  const targetName = pickContextTarget({
-    targetNames: [...wringer.targets.keys()],
-    sessionTarget: session.target,
-    savedTarget: pointers.target,
-    commandKey: path.join(' '),
-  });
-
-  const target = getTarget(wringer, targetName);
-  const runID = findOwnValue(pointers.currentRun, targetName);
-  const run = runID === undefined ? undefined : await state.readRun(runID);
-
-  return {
-    targetName,
-    target,
-    run,
-    feature: session.feature ?? pointers.feature ?? null,
-
-    // Saved cursors are offsets into one run's streams; another run's streams start over.
-    cursors: runID !== undefined && pointers.cursorsRun === runID ? pointers.cursors : {},
-  };
+  return { ...answer, envelope: scrubEnvelope(answer.envelope, secrets), late };
 }
 
 interface CommandRequest {
   readonly wringer: Wringer;
   readonly state: StatePort;
   readonly session: Session;
+  readonly secrets: SecretSet;
   readonly stateDir: string;
   readonly command: RegisteredCommand;
   readonly rawArgs: unknown;
@@ -351,8 +325,20 @@ async function runCommand(request: CommandRequest): Promise<CommandOutcome> {
   request.trace.drive = plan.drive;
   request.trace.ranOnRun = plan.driveKind === 'run';
 
-  const data = await prepared.run();
+  // A secret a driver collected reaches the run's secrets file before the command ends, on a failure
+  // too, so a write that failed fails the command.
+  const [ran] = await Promise.allSettled([prepared.run()]);
+  const writeFailure = await readSecretWriteFailure(request.trace.secretWrites);
 
+  if (writeFailure !== null) {
+    throw writeFailure;
+  }
+
+  if (ran.status === 'rejected') {
+    throw ran.reason;
+  }
+
+  const data = ran.value;
   const output = info.data.safeParse(data);
 
   if (!output.success) {
@@ -400,8 +386,9 @@ function openCommandDrive(
       feature: request.context.feature,
       signal: request.deadline,
       now: request.now,
-      emit: makeEmit(request.session, request.trace),
+      emit: makeEmit(request),
       files: request.session.repoHost,
+      secrets: request.secrets,
     });
   }
 
@@ -430,8 +417,15 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
     signal: options.deadline?.signal ?? request.deadline,
     deadlineAt: options.deadline?.at ?? request.deadlineAt,
     now: request.now,
-    emit: makeEmit(request.session, request.trace),
+    emit: makeEmit(request),
     files: request.session.repoHost,
+    secrets: request.secrets,
+    collectSecret: makeSecretCollector({
+      secrets: request.secrets,
+      state: request.state,
+      runID: options.run.runID,
+      writes: request.trace.secretWrites,
+    }),
     callSupervisor: (call) => {
       const calling = request.session.supervisor.call(call);
 
@@ -442,13 +436,16 @@ function openRunDrive(request: CommandRequest, options: RunDriveOptions): Drive 
   });
 }
 
-function makeEmit(session: Session, trace: Readonly<DriveTrace>): Emit {
+// Every stream event passes through the set before it reaches stdout.
+function makeEmit(request: CommandRequest): Emit {
   return (event, data) => {
-    if (trace.answered) {
+    if (request.trace.answered) {
       return;
     }
 
-    session.output.writeLine(JSON.stringify({ wringer: envelopeVersion, event, data }));
+    const scrubbed = request.secrets.scrubValue({ wringer: envelopeVersion, event, data });
+
+    request.session.output.writeLine(JSON.stringify(scrubbed));
   };
 }
 
@@ -492,7 +489,7 @@ function prepareCommand(
 
       return {
         effect: prepared.effect,
-        run: () => prepared.run(request.context.feature, makeEmit(request.session, request.trace)),
+        run: () => prepared.run(request.context.feature, makeEmit(request)),
       };
     })
     .exhaustive();
@@ -520,7 +517,8 @@ function buildBuiltinContext(request: CommandRequest, hint: string): BuiltinCont
     deadlineAt: request.deadlineAt,
     now: request.now,
     wait: request.session.wait ?? ((delayMs) => Bun.sleep(delayMs)),
-    emit: makeEmit(request.session, request.trace),
+    secrets: request.secrets,
+    emit: makeEmit(request),
     openDrive: (access, deadline) => {
       const drive = openRunDrive(request, {
         run: getRunningRun(request.context.run),

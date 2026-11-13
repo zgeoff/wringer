@@ -22,6 +22,7 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
   const shop = bindDrivers([http({}), db({}), stream({}), browser({})] as const);
 
   return createWringer({ name: 'shop' })
+    .secret('SHOP_API_TOKEN')
     .use(...shop.drivers)
     .target(
       'local',

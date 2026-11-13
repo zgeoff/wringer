@@ -1,6 +1,9 @@
 import type { z } from 'zod';
+import { collectURLPasswords } from './collect-url-passwords.ts';
+import type { Secret } from './create-secret-set.ts';
 import { prepareArgs } from './prepare-args.ts';
 import type {
+  CollectedSecret,
   Driver,
   DriverCheckDefinition,
   DriverCommand,
@@ -31,6 +34,9 @@ export interface DriverDefinition<
     command: DriverCommandHelper<Options, TargetConfig, Client>,
   ) => readonly DriverCommand<Options, TargetConfig, Client>[];
   readonly checks?: readonly DriverCheckDefinition<Options, TargetConfig, Client>[];
+
+  // The secret values of a parsed target config, such as an API token.
+  readonly secrets?: (config: TargetConfig) => readonly CollectedSecret[];
 }
 
 export type DriverFactory<Name extends string, OptionsInput, ConfigInput, Client> = (
@@ -83,6 +89,10 @@ export function defineDriver<
         return {
           ok: true,
           prepared: {
+            collectSecrets: () => [
+              ...buildDeclaredSecrets(definition.secrets?.(config) ?? []),
+              ...collectURLPasswords(definition.name, config),
+            ],
             open: (parts) => openDriver({ definition, options, config, byPath, parts }),
             startService: (name, parts) => {
               const service = definition.services?.[name];
@@ -102,6 +112,16 @@ export function defineDriver<
       },
     };
   };
+}
+
+function buildDeclaredSecrets(secrets: readonly CollectedSecret[]): Secret[] {
+  const declared: Secret[] = [];
+
+  for (const secret of secrets) {
+    declared.push({ name: secret.name, value: secret.value, origin: 'declared' });
+  }
+
+  return declared;
 }
 
 interface OpenRequest<Options, TargetConfig, Client> {
@@ -131,6 +151,7 @@ function openDriver<Options, TargetConfig, Client>(
     signal: request.parts.signal,
     timeLeftMs: request.parts.timeLeftMs,
     service: request.parts.service,
+    secrets: request.parts.secrets,
   };
 
   const client = request.definition.client(session, request.parts.fence);

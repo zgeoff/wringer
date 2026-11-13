@@ -24,12 +24,17 @@ async function setupTest() {
   const supervised: (readonly string[])[] = [];
   const selfCommand = [process.execPath, join(import.meta.dir, 'test-utils', 'demo-cli.ts')];
 
-  const run = async (argv: readonly string[], cwd = repo.root) => {
+  const run = async (
+    argv: readonly string[],
+    cwd = repo.root,
+    env: Readonly<Record<string, string>> = {},
+  ) => {
     const exitCode = await runCLI(wringer, {
       argv,
       cwd,
       isTTY: false,
       isAgent: false,
+      env,
       writeStdout: (text) => {
         written.push(text);
       },
@@ -401,4 +406,21 @@ test('it answers outside a git worktree with an environment envelope and exit co
     exitCode: 4,
     code: 'environment',
   });
+});
+
+test('it scrubs a secret that a parse failure quotes from the arguments', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.run(
+    ['planted-shop-token', '--header', 'Bearer planted-shop-token'],
+    undefined,
+    {
+      GITHUB_TOKEN: 'planted-shop-token',
+    },
+  );
+
+  expect({
+    leaked: result.stdout.includes('planted-shop-token'),
+    redacted: result.stdout.includes('[redacted:GITHUB_TOKEN]'),
+  }).toStrictEqual({ leaked: false, redacted: true });
 });

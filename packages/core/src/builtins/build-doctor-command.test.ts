@@ -243,7 +243,12 @@ test('it lists the evidence a failed check kept in the doctor envelope', async (
   const result = await ctx.run(['doctor']);
 
   expect(result.envelope.evidence).toStrictEqual([
-    { kind: 'note', path: expect.stringMatching(/cart\.txt$/u), sha256: expect.any(String) },
+    {
+      kind: 'note',
+      path: expect.stringMatching(/cart\.txt$/u),
+      sha256: expect.any(String),
+      scrub: 'text',
+    },
   ]);
 });
 

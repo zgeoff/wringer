@@ -51,6 +51,7 @@ export async function runWringer(
     cwd: process.cwd(),
     isTTY: process.stdout.isTTY,
     isAgent: getAgentProfile().isAgent,
+    env: process.env,
     writeStdout: (text) => {
       process.stdout.write(text);
     },

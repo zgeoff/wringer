@@ -17,6 +17,7 @@ import { runSupervisor } from './run-supervisor.ts';
 import { supervisorServiceName } from './supervisor-protocol.ts';
 import { buildStandInServices } from './test-utils/build-stand-in-services.ts';
 import { createTestFolder } from './test-utils/create-test-folder.ts';
+import type { CollectedSecret } from './types.ts';
 import { WringerError } from './wringer-error.ts';
 
 async function setupTest() {
@@ -129,7 +130,26 @@ async function setupTest() {
     client: () => ({}),
   });
 
+  const fragile = defineDriver({
+    name: 'fragile',
+    options: z.strictObject({}),
+    targetConfig: z.strictObject({}),
+    services: {
+      login: {
+        start: () =>
+          Promise.reject(
+            new Error(
+              'login rejected for planted-launch-token via planted-kept-value as driver-config-token on driver-url-pass',
+            ),
+          ),
+      },
+    },
+    client: () => ({}),
+  });
+
   const wringer = createWringer({ name: 'shop' })
+    .secret('SHOP_API_TOKEN')
+    .use(fragile({}))
     .use(cacheMain({}))
     .use(cache({}))
     .use(leaky({}))
@@ -140,6 +160,31 @@ async function setupTest() {
     .use(brittle({}))
     .use(scribe({}))
     .use(busy({}))
+    .target('secret-box', {
+      mode: 'launch',
+      access: 'read-write',
+      host: local(),
+      launch: () => ({
+        command: ['sh', '-c', `echo '{"port":4301}'; exec sleep 60`],
+        env: { SHOP_SESSION_TOKEN: 'planted-launch-token', SHOP_REGION: 'north-east' },
+        ready: (line) => (line['port'] === 4301 ? { web: 'http://127.0.0.1:4301' } : null),
+      }),
+      drivers: { fragile: () => ({}) },
+    })
+    .target('credentials-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      endpoints: () => ({ web: 'http://shopper:hunter2pass@127.0.0.1:4302' }),
+      drivers: { tidy: () => ({}) },
+    })
+    .target('token-box', {
+      mode: 'attach',
+      access: 'read-write',
+      host: local(),
+      endpoints: () => ({ web: 'http://127.0.0.1:4303/?key=planted-shop-token' }),
+      drivers: { tidy: () => ({}) },
+    })
     .target('busy-box', {
       mode: 'attach',
       access: 'read-write',
@@ -238,7 +283,12 @@ async function setupTest() {
 
   const state = createRepoState(directory, wringer.stateDir);
   const appendEvent = spyOn(state, 'appendEvent');
-  const launchHost = readLaunchHost();
+
+  const launchHost = {
+    ...readLaunchHost(),
+    env: { ...process.env, SHOP_API_TOKEN: 'planted-shop-token' },
+  };
+
   const removeDirectory = spyOn(launchHost, 'removeDirectory');
   const listenSocket = spyOn(launchHost, 'listenSupervisorSocket');
 
@@ -290,6 +340,9 @@ async function setupTest() {
     },
     readRun: (runID: string) => state.readRun(runID),
     readRunEvents: (runID: string) => state.readRunEvents(runID),
+    readSecrets: (runID: string) => state.readSecrets(runID),
+    keepSecret: (runID: string, secret: CollectedSecret) => state.appendSecret(runID, secret),
+    readLog: (runID: string) => readFile(buildRunPaths(state.paths.root, runID).log, 'utf8'),
     runFolder: (runID: string) => buildRunPaths(state.paths.root, runID).directory,
     appendEvent,
     removeDirectory,
@@ -1003,3 +1056,90 @@ test('#runSupervisor answers a stop with an environment error when a service fai
 
   expect(answer).toMatchObject({ status: 'rejected', reason: { code: 'environment' } });
 });
+
+test('#runSupervisor scrubs a launch env secret from the crashed event and keeps it for later commands', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('secret-run');
+  await Promise.allSettled([ctx.runSupervisor('secret-run', undefined, 'secret-box')]);
+
+  const events = await ctx.readRunEvents('secret-run');
+  const secrets = await ctx.readSecrets('secret-run');
+  const log = await ctx.readLog('secret-run');
+
+  expect({
+    crashed: events.find((event) => event.type === 'crashed'),
+    secrets,
+    log: log.includes('planted-launch-token'),
+  }).toStrictEqual({
+    crashed: {
+      type: 'crashed',
+      at: expect.any(String),
+      reason: expect.stringContaining('login rejected for [redacted:SHOP_SESSION_TOKEN]'),
+    },
+    secrets: [{ name: 'SHOP_SESSION_TOKEN', value: 'planted-launch-token' }],
+    log: false,
+  });
+});
+
+test('#runSupervisor scrubs a secret that a command kept in the secrets file before an append', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('kept-run');
+  await ctx.keepSecret('kept-run', { name: 'notes.session', value: 'planted-kept-value' });
+  await Promise.allSettled([ctx.runSupervisor('kept-run', undefined, 'secret-box')]);
+
+  const events = await ctx.readRunEvents('kept-run');
+
+  expect(events.find((event) => event.type === 'crashed')).toStrictEqual({
+    type: 'crashed',
+    at: expect.any(String),
+    reason: expect.stringContaining('via [redacted:notes.session]'),
+  });
+});
+
+test('#runSupervisor scrubs a driver config token and a URL password that a drive kept from the crashed event and the log', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seedRun('config-run');
+  await ctx.keepSecret('config-run', { name: 'notes.apiToken', value: 'driver-config-token' });
+  await ctx.keepSecret('config-run', { name: 'notes.url', value: 'driver-url-pass' });
+  await Promise.allSettled([ctx.runSupervisor('config-run', undefined, 'secret-box')]);
+
+  const events = await ctx.readRunEvents('config-run');
+  const log = await ctx.readLog('config-run');
+
+  expect({
+    crashed: events.find((event) => event.type === 'crashed'),
+    leaked: /driver-config-token|driver-url-pass/u.test(`${JSON.stringify(events)}${log}`),
+  }).toStrictEqual({
+    crashed: {
+      type: 'crashed',
+      at: expect.any(String),
+      reason: expect.stringContaining('as [redacted:notes.apiToken] on [redacted:notes.url]'),
+    },
+    leaked: false,
+  });
+});
+
+test.each(['credentials-box', 'token-box'])(
+  '#runSupervisor refuses an endpoint that holds credentials or a declared secret on %s',
+  async (target) => {
+    const ctx = await setupTest();
+
+    await ctx.seedRun('refused-run');
+    await Promise.allSettled([ctx.runSupervisor('refused-run', undefined, target)]);
+
+    const events = await ctx.readRunEvents('refused-run');
+
+    expect(events.map((event) => event.type)).not.toContain('launch-ready');
+
+    expect(events.find((event) => event.type === 'crashed')).toStrictEqual({
+      type: 'crashed',
+      at: expect.any(String),
+      reason: expect.stringMatching(
+        /^The endpoint web holds (?:URL credentials|the declared secret)/u,
+      ),
+    });
+  },
+);

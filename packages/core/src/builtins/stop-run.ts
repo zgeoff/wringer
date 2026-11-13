@@ -44,6 +44,11 @@ export function stopRun(ctx: BuiltinContext): Promise<StopData> {
       }));
     }
 
+    // The secrets file goes with the run. What the run's commands wrote was scrubbed as they wrote it.
+    if (runID !== undefined && plan.clearPointer) {
+      await ctx.state.removeSecrets(runID);
+    }
+
     return plan.data;
   });
 }

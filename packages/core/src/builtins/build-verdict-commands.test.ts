@@ -47,9 +47,29 @@ async function setupTest() {
     },
   };
 
+  const run = (path: readonly string[], args: unknown = {}) =>
+    dispatch(wringer, path, args, { ...shop.session, target: 'local' });
+
   return {
     root: shop.repo.root,
     git: shop.repo.git,
+
+    // Drives the checkout feature with one action, then records its verdict.
+    verifyCheckout: async (action: string) => {
+      await mkdir(join(shop.repo.root, 'src', 'checkout'), { recursive: true });
+      await writeFile(join(shop.repo.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
+
+      const up = await run(['up']);
+
+      await run(['doctor']);
+      await run(['use'], { feature: 'checkout' });
+      await run(['action', action]);
+      await run(['done']);
+
+      return up.envelope.instance ?? '';
+    },
+    keepSecret: (runID: string, name: string, value: string) =>
+      shop.state.appendSecret(runID, { name, value }),
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
@@ -81,8 +101,8 @@ async function setupTest() {
       );
     },
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
-    runWithUpload: (path: readonly string[]) =>
-      dispatch(uploading, path, {}, { ...shop.session, target: 'local' }),
+    runWithUpload: (path: readonly string[], env: Readonly<Record<string, string>> = {}) =>
+      dispatch(uploading, path, {}, { ...shop.session, env, target: 'local' }),
     parseReportData: (data: unknown) => reportDataSchema.parse(data),
 
     // The body sits in the ignored state folder, as CI keeps it outside the checkout, so writing it
@@ -144,7 +164,12 @@ test('#done records a verdict with the evidence of the drives since the doctor',
     target: { name: 'local', evidence: 'local' },
     pin: { kind: 'local' },
     evidence: [
-      { kind: 'note', path: expect.stringMatching(/receipt\.txt$/u), sha256: expect.any(String) },
+      {
+        kind: 'note',
+        path: expect.stringMatching(/receipt\.txt$/u),
+        sha256: expect.any(String),
+        scrub: 'text',
+      },
     ],
   });
 });
@@ -297,6 +322,7 @@ test('#report uploads the evidence of a verified feature by its absolute path', 
         new RegExp(`^${ctx.root}/\\.wringer/runs/.+-receipt\\.txt$`, 'u'),
       ),
       sha256: expect.any(String),
+      scrub: 'text',
     },
   ]);
 });
@@ -324,6 +350,7 @@ test('#report links each uploaded evidence file to the URL the hook returns', as
       kind: 'note',
       path: expect.stringMatching(/^\.wringer\/runs\/.+-receipt\.txt$/u),
       sha256: expect.any(String),
+      scrub: 'text',
       url: 'https://files.example/receipt',
     },
   ]);
@@ -821,3 +848,75 @@ test('#action runs when a path the repo ignores changed after the doctor passed'
     error: null,
   });
 });
+
+test('#report keeps an opaque file local and never passes it to the upload hook', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout('photo');
+
+  const result = await ctx.runWithUpload(['report']);
+
+  const checkout = ctx
+    .parseReportData(result.envelope.data)
+    .report.features.find((feature) => feature.name === 'checkout');
+
+  expect({
+    uploaded: ctx.uploads.map((file) => file.kind),
+    urls: checkout?.verdict?.evidence.map((item) => [item.kind, item.url]),
+  }).toStrictEqual({
+    uploaded: ['note'],
+    urls: [
+      ['note', 'https://files.example/receipt'],
+      ['screenshot', undefined],
+    ],
+  });
+});
+
+test('#report keeps a file changed after it was recorded local', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout('receipt');
+
+  const [verdict] = await ctx.readVerdicts().then((verdicts) => [...verdicts.values()]);
+
+  await writeFile(join(ctx.root, verdict?.evidence[0]?.path ?? ''), 'swapped after the fact');
+
+  const result = await ctx.runWithUpload(['report']);
+
+  expect({ ok: result.envelope.ok, uploads: ctx.uploads }).toStrictEqual({ ok: true, uploads: [] });
+});
+
+test('#report fails with an internal error before it sends any file when one holds a known secret', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout('photo');
+
+  const result = await ctx.runWithUpload(['report'], { SHOP_API_TOKEN: 'for the cart' });
+
+  expect({
+    code: result.envelope.error?.code,
+    exitCode: result.exitCode,
+    uploads: ctx.uploads,
+  }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
+});
+
+test.each([
+  { name: 'notes.apiToken', value: 'for the cart' },
+  { name: 'notes.url', value: 'paid 12 for' },
+])(
+  '#report refuses an upload that holds the driver config secret $name that a drive kept',
+  async (secret) => {
+    const ctx = await setupTest();
+    const runID = await ctx.verifyCheckout('photo');
+
+    await ctx.keepSecret(runID, secret.name, secret.value);
+
+    const result = await ctx.runWithUpload(['report']);
+
+    expect({
+      code: result.envelope.error?.code,
+      exitCode: result.exitCode,
+      uploads: ctx.uploads,
+    }).toStrictEqual({ code: 'internal', exitCode: 4, uploads: [] });
+  },
+);

@@ -36,6 +36,8 @@ function buildEmptyFileSystem(): StateFileSystem {
     readFileSize: () => Promise.resolve(0),
     createDirectory: () => Promise.resolve(),
     appendText: refuseWrite,
+    appendPrivateText: refuseWrite,
+    removeFile: refuseWrite,
     truncateFile: refuseWrite,
     writeTextAtomic: refuseWrite,
   };

@@ -1,11 +1,14 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
+import { createWringer } from '../create-wringer.ts';
 import { dispatch } from '../dispatch.ts';
 import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
+import { local } from '../local.ts';
 import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
 import { runGit } from '../run-git.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
@@ -33,9 +36,48 @@ async function setupTest() {
 
   await once(broken, 'listening');
 
+  // A registry with one feature whose name a test can make hold the declared secret.
+  const scoped = createWringer({ name: 'scoped' })
+    .secret('SAMPLE_API_TOKEN')
+    .target('local', {
+      mode: 'launch',
+      access: 'read-write',
+      host: local(),
+      launch: () => ({
+        command: ['sh', '-c', `echo '{"event":"listening","port":4003}'; exec sleep 60`],
+        ready: (line) => (line['event'] === 'listening' ? { web: 'http://127.0.0.1:4003' } : null),
+      }),
+    })
+    .feature({
+      name: 'verify-planted-scope-token',
+      summary: 'Check a scope',
+      paths: ['src/scope/**'],
+    })
+    .build();
+
+  const stateDir = join(shop.repo.root, scoped.stateDir);
+
+  // A command that writes nothing leaves no state folder, and the read below still finds it.
+  await mkdir(stateDir, { recursive: true });
+
   return {
     root: shop.repo.root,
     state: shop.state,
+    runScoped: (env: Readonly<Record<string, string>>, path: readonly string[]) =>
+      dispatch(scoped, path, {}, { ...shop.session, env, target: 'local' }),
+
+    // Every file under the state folder, joined.
+    readStateFiles: async (): Promise<string> => {
+      const names = await readdir(stateDir, { recursive: true, withFileTypes: true });
+
+      const texts = await Promise.all(
+        names
+          .filter((entry) => entry.isFile())
+          .map((entry) => readFile(join(entry.parentPath, entry.name), 'utf8')),
+      );
+
+      return texts.join('\n');
+    },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
@@ -449,6 +491,32 @@ test('#up refuses an attach target with a usage error naming attach', async () =
   });
 });
 
+test('#up refuses a registry whose feature name holds a declared secret, logging no copy of it', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runScoped({ SAMPLE_API_TOKEN: 'planted-scope-token' }, ['up']);
+  const files = await ctx.readStateFiles();
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+    instance: result.envelope.instance,
+    leaked: files.includes('planted-scope-token'),
+  }).toStrictEqual({
+    code: 'usage',
+    message: expect.stringContaining('holds the secret SAMPLE_API_TOKEN in its name'),
+    instance: null,
+    leaked: false,
+  });
+});
+
+test('#up logs the feature names unchanged when none holds a secret', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runScoped({ SAMPLE_API_TOKEN: 'unrelated-sample-value' }, ['up']);
+  const view = await ctx.state.readRun(result.envelope.instance ?? '');
+
+  expect([...(view?.scopesRead?.keys() ?? [])]).toStrictEqual(['verify-planted-scope-token']);
+});
+
 test('#down stops the run, ends its log and clears the pointer', async () => {
   const ctx = await setupTest();
   const up = await ctx.run('local', ['up']);
@@ -580,4 +648,19 @@ test('#detach ends the run of an attach target', async () => {
   const view = await ctx.state.readRun(attach.envelope.instance ?? '');
 
   expect(view?.status).toBe('ended');
+});
+
+test('#attach refuses an endpoint that holds URL credentials without printing them', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run('credentialed', ['attach']);
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+    leaked: JSON.stringify(result.envelope).includes('planted-pass-word'),
+  }).toStrictEqual({
+    code: 'environment',
+    message: expect.stringContaining('The endpoint web holds URL credentials.'),
+    leaked: false,
+  });
 });

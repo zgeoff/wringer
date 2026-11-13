@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { buildChangeFactsRequest } from '../build-change-request.ts';
 import type { RunView } from '../build-run-view.ts';
 import { findOwnValue } from '../find-own-value.ts';
+import { pickScopeRefusal } from '../pick-scope-refusal.ts';
 import { readChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
 import { supervisorServiceName } from '../supervisor-protocol.ts';
@@ -33,6 +34,12 @@ export interface StartRunRequest {
 // `up` and `attach` hold the target's lock across check-and-create, so two at once never start two
 // supervisors. A live run is reused, keeping its doctor pass, unless the caller asks for a restart.
 export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise<RunData> {
+  const refusal = pickScopeRefusal(ctx.wringer.features, ctx.secrets);
+
+  if (refusal !== null) {
+    return Promise.reject(refusal);
+  }
+
   return ctx.state.withTargetLock(ctx.targetName, async () => {
     const pointers = await ctx.state.readPointers();
 

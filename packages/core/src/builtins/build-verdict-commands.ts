@@ -5,13 +5,17 @@ import { buildBuiltinCommand } from '../build-commands.ts';
 import { buildReport } from '../build-report.ts';
 import type { Evidence } from '../envelope.ts';
 import { parseReportBlock } from '../parse-report-block.ts';
+import { pickUploadRefusal } from '../pick-upload-refusal.ts';
 import { readChangeFacts } from '../read-change-facts.ts';
 import type { ChangeFacts } from '../read-change-facts.ts';
 import { readDefaultBase } from '../read-default-base.ts';
+import { readRunSecrets } from '../read-run-secrets.ts';
+import { readUploadCandidate } from '../read-upload-candidate.ts';
 import { doneCommand, readVerdicts } from '../read-verdicts.ts';
 import { renderReportMarkdown } from '../render-report-markdown.ts';
 import { reportSchema, verdictSchema } from '../report-schema.ts';
 import type { Report, Verdict } from '../report-schema.ts';
+import { runIDSchema } from '../run-events.ts';
 import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 
@@ -189,19 +193,60 @@ function readBase(ctx: BuiltinContext, givenBase: string | undefined): Promise<s
   return readDefaultBase(ctx.session.repoHost, ctx.session.root);
 }
 
-// The repo's upload hook turns each local evidence file into a link; the local files never leave
-// the worktree otherwise.
+// The repo's upload hook turns each local evidence file into a link. The guard picks every refusal
+// before the hook gets the first file. A refused file stays local, with no link, except a file with
+// a known secret in it: the scrubber missed it, so the command fails.
 async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report> {
+  await readSecretsOfVerdicts(ctx, report);
+
   const upload = ctx.wringer.hooks.upload;
 
   if (upload === undefined) {
     return report;
   }
 
-  const link = async (evidence: Evidence): Promise<Evidence & { readonly url?: string }> => ({
-    ...evidence,
-    url: await upload({ ...evidence, path: join(ctx.session.root, evidence.path) }),
-  });
+  const verdicts = report.features.flatMap((feature) =>
+    feature.verdict === null || feature.status !== 'verified' ? [] : [feature.verdict],
+  );
+
+  const checked = await Promise.all(
+    verdicts.flatMap((verdict) =>
+      verdict.evidence.map(async (evidence) => {
+        const candidate = await readUploadCandidate(evidence, {
+          root: ctx.session.root,
+          stateDir: ctx.stateDir,
+          files: ctx.session.repoHost,
+        });
+
+        // The report cannot tell a verdict's target, so every opaque file stays local here.
+        return {
+          evidence,
+          refusal: pickUploadRefusal(candidate, { targetUploads: false, secrets: ctx.secrets }),
+        };
+      }),
+    ),
+  );
+
+  const found = checked.find((item) => item.refusal?.reason === 'secret-found');
+
+  if (found !== undefined) {
+    throw new WringerError('internal', {
+      message: `The file ${found.evidence.path} holds a known secret, so no file was uploaded.`,
+      hint: 'The scrubber missed it. Remove the run folder, and report the bug.',
+    });
+  }
+
+  const refused = new Set(
+    checked.filter((item) => item.refusal !== null).map((item) => item.evidence),
+  );
+
+  const link = async (evidence: Evidence): Promise<Evidence & { readonly url?: string }> =>
+    refused.has(evidence)
+      ? evidence
+      : {
+          ...evidence,
+          url: await upload({ ...evidence, path: join(ctx.session.root, evidence.path) }),
+        };
 
   const features = await Promise.all(
     report.features.map(async (feature) => {
@@ -216,6 +261,22 @@ async function linkEvidence(ctx: BuiltinContext, report: Report): Promise<Report
   );
 
   return { ...report, features };
+}
+
+// The set holds the registry and process env sources, and the secrets file of each run a verdict
+// names. It builds no driver config.
+async function readSecretsOfVerdicts(ctx: BuiltinContext, report: Report): Promise<void> {
+  const runIDs = new Set(
+    report.features.flatMap((feature) => (feature.verdict === null ? [] : [feature.verdict.run])),
+  );
+
+  for (const run of runIDs) {
+    const parsed = runIDSchema.safeParse(run);
+
+    if (parsed.success) {
+      await readRunSecrets(ctx.state, ctx.secrets, parsed.data);
+    }
+  }
 }
 
 async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData> {
