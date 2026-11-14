@@ -54,6 +54,12 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
       return toRunData(reused, true);
     }
 
+    // The replaced run's secrets file goes with it, as at `down`. What its commands wrote was
+    // scrubbed as they wrote it.
+    if (current !== undefined) {
+      await ctx.state.removeSecrets(current.runID);
+    }
+
     const runID = buildRunID(ctx.now());
 
     ctx.bindRun(runID);
