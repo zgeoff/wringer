@@ -18,7 +18,8 @@ type StartArgs = z.infer<typeof startArgsSchema>;
 export function buildLifecycleCommands(): readonly RegisteredCommand[] {
   const up: BuiltinCommandSpec<StartArgs, RunData> = {
     path: ['up'],
-    summary: 'Start a run of a launch target: its app, browser and stream recorders',
+    summary:
+      "Start a run of a launch target: its app, browser and stream recorders. It changes the target's state, but writes no app data",
     args: startArgsSchema,
     data: runDataSchema,
     effect: 'read',
@@ -68,7 +69,8 @@ export function buildLifecycleCommands(): readonly RegisteredCommand[] {
 
   const down: BuiltinCommandSpec<Record<string, never>, StopData> = {
     path: ['down'],
-    summary: "Stop the launch target's run and its app",
+    summary:
+      "Stop the launch target's run and its app. It changes the target's state, but writes no app data",
     args: z.strictObject({}),
     data: stopDataSchema,
     effect: 'read',

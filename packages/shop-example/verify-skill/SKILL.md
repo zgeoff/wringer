@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change to the shop example in the running app, run the
   journey of a feature, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:418e53445ffe'
+  wringer-template: 'sha256:97fabc9a9389'
   wringer-command: bun verify
 ---
 
@@ -40,8 +40,7 @@ The mistakes that cost the most time:
 
 ## References
 
-Read a feature's file before you run its journey: what the feature does, how a user reaches it, the
-journey of `bun verify` commands, and the end state that shows it works.
+Read a feature's file before you run its journey.
 
 <!-- wringer:features -->
 
@@ -57,8 +56,7 @@ journey of `bun verify` commands, and the end state that shows it works.
 ## Check a change
 
 1. Run `bun verify report`. A feature in `data.report.features` shows `changed: true` when a file
-   under its `paths` differs from the default branch, committed or not. Each changed feature needs a
-   verdict.
+   under its `paths` differs from the default branch, committed or not.
 2. Unless your task names another target, start a run on `local`, with the commands in the
    [Targets](#targets) table. Expect from `up` or `attach`: `ok: true`, and the app's endpoints in
    `data.endpoints`.
@@ -84,13 +82,14 @@ journey of `bun verify` commands, and the end state that shows it works.
    After `done`, an edit to a file under a feature's `paths` makes its verdict `stale`; a commit
    alone leaves each verdict as it was. Repeat steps 4 to 6 for each stale feature.
 9. Run `bun verify publish`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
-   `unchanged`. It writes the report into the description of the branch's open PR.
+   `unchanged`. It writes the report into the description of the branch's open PR. Until you run
+   `publish`, each verdict from `done` stays in `.wringer/`, where the gate never looks.
 10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
 
-Each command prints one JSON envelope as its last line, or text for a person with `--human`. A
-streaming command, such as `doctor`, prints JSON event lines before it. Read these fields:
+Each command prints one JSON envelope as its last line, or text with `--human`. A streaming command,
+such as `doctor`, prints JSON event lines before it. Read these fields:
 
 - `ok`, then `data` on success, or `error.code`, `error.message` and `error.hint` on failure;
 - `evidence`: the files the command kept, under `.wringer/`;
@@ -116,7 +115,8 @@ attach target, an app that runs apart from `bun verify`, with `bun verify attach
 `bun verify detach` leaves it running. Your edits never reach an attach target's app, so check a
 change on a launch target.
 
-Run `bun verify use --target <target>` to point every later command at a target. `--target` on one
+Run `bun verify use --target <target>` to point every later command at a target. `use` saves the
+choice in this worktree's `.wringer/`, so it holds across shells and sessions. `--target` on one
 command points that command alone.
 
 <!-- repo: targets -->
@@ -130,28 +130,28 @@ first line is JSON with the port, such as `{"event":"listening","port":4310}`. A
 | `local` | `bun verify use --target local`, then `bun verify up`                                          | read-write | Starts the shop with an empty database in the run's folder. |
 | `demo`  | `bun verify use --target demo`, then `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach` | read-only  | A shop that `bun verify` did not start.                     |
 
-Run every journey on `local`. Each journey writes, and the read-only `demo` target refuses writes.
+Run every journey on `local`. Each journey writes, and `demo` is read-only.
 
 Run the `order-failure` journey last. It drops the `orders` table, so every later order fails. To
-run another journey after it, run `bun verify up --restart` for a new, empty database, then
-`bun verify doctor`.
+run another journey after it, run `bun verify up --restart` and `bun verify doctor`.
 
 <!-- /repo -->
 
 ## Commands
 
-Run `bun verify --help` for the list, with each command marked `[read]` or `[write]`. Run
-`bun verify <command> --help` for a command's flags. The top-level list shows only the name of a
-group, such as `action`: run `bun verify <group> --help` for its commands.
+Run `bun verify --help` for the list, with each command marked `[read]` or `[write]`. A read-only
+target refuses each `[write]` command that writes app data. `up` and `down` are `[read]`, but start
+and stop the app. Run `bun verify <command> --help` for a command's flags. The top-level list shows
+only the name of a group, such as `action`: run `bun verify <group> --help` for its commands.
 
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
 
 <!-- repo: commands -->
 
-- `bun verify action place-order` places one order through the API, as the page's button does, and
-  returns its `id` in `data.id`.
-- `bun verify orders count` counts the rows of the `orders` table, in `data.orders`.
+- `bun verify action place-order` places one order through the API and returns its `id` in
+  `data.id`.
+- `bun verify orders count` counts the `orders` table's rows, in `data.orders`.
 - `bun verify db query '<sql>'` runs SQL on `local`'s database. Add `--write` for a statement that
   writes.
 - `bun verify browser snapshot` returns the page's accessibility tree.
@@ -168,9 +168,9 @@ group, such as `action`: run `bun verify <group> --help` for its commands.
 The registry, [`create-shop-registry.ts`](../src/create-shop-registry.ts), declares each feature's
 `paths` and the `.ignore` list.
 
-This repo's CI runs `lint` through a test and never runs `gate`. An edit to this skill or a feature
-file is a skill edit. Before you make one, follow the skill steps in
-[AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
+This repo's CI runs `lint` through a test and never runs `gate`. Before you edit this skill or a
+feature file, follow the skill steps in [AGENTS.md](../../../AGENTS.md), and give their proof in the
+PR.
 
 <!-- /repo -->
 
