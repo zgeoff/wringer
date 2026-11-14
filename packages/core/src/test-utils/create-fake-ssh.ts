@@ -51,6 +51,8 @@ export async function createFakeSSH(directory: string): Promise<FakeSSH> {
 
   await chmod(join(slowBin, 'setsid'), 0o755);
 
+  // The "remote" side runs here, so the transport's group file moves from `/tmp` into this folder,
+  // where a stop that fails leaves it.
   const script = `#!/bin/sh
 user="$(id -un)"
 terminal=""
@@ -76,6 +78,7 @@ case "$destination:$1" in
     exit 255 ;;
 esac
 echo "$user@$destination$terminal" >> '${loginsPath}'
+set -- "$(printf '%s' "$1" | sed 's#/tmp/wringer-#${directory}/wringer-#g')"
 PATH='${groupBin}':"$PATH"
 if [ "$destination" = slow-setsid ]; then
   PATH='${slowBin}':"$PATH"
