@@ -38,6 +38,19 @@ test('it runs the command string through a shell and logs the login', async () =
   }).toStrictEqual({ exitCode: 0, stdout: 'a b|c|', logins: 'app_ro@db-host\n' });
 });
 
+test('it moves a group file the command names from /tmp into its own folder', async () => {
+  const ctx = await setupTest();
+
+  const result = Bun.spawnSync([
+    ctx.fake.binary,
+    '--',
+    'app-host',
+    "printf '%s' '/tmp/wringer-0f1e.pgid'",
+  ]);
+
+  expect(result.stdout.toString()).toBe(join(ctx.directory, 'wringer-0f1e.pgid'));
+});
+
 test('it sends stderr down stdout and ends each line in a carriage return under -tt', async () => {
   const ctx = await setupTest();
 
