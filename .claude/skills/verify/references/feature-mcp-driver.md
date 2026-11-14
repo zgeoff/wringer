@@ -1,10 +1,15 @@
 # mcp-driver
 
-The mcp driver calls the tools of the shop's MCP server, which runs as a child process of the run's
-supervisor. `list_orders` reads the orders through the shop's API, and `place_order` places one.
+The mcp driver, `@wringer/mcp`, calls the tools of the shop's MCP server. `bun verify up` starts the
+shop app and the MCP server, so you start nothing yourself. The server has two tools, and neither
+takes arguments:
 
-Before each pass of the journey, run `bun verify up --restart` and `bun verify doctor`. A restart
-gives the shop an empty orders table, so the first `list_orders` returns no orders.
+- `list_orders` lists the shop's orders.
+- `place_order` places one order for a `mug`.
+
+Before each pass of the journey, run `bun verify up --restart` and `bun verify doctor`. Expect:
+`doctor` returns `data.passed: true`. The restart empties the orders table, so the first
+`list_orders` returns no orders and the next order gets the `id` 1.
 
 ## Journey
 
@@ -16,18 +21,20 @@ bun verify mcp call place_order
 bun verify mcp call list_orders
 ```
 
-- `shop` is the only server the `local` target names, so no command passes `--server`.
-- Pass `--args '<json>'` to a tool that takes arguments. The shop's two tools take none.
+Each command names no server. On a target with more than one server, add `--server <name>`.
 
 ## End state
 
-Each field below sits under the envelope's `data`, except `evidence`, which sits at the top of the
-envelope.
+Read each result in the command's JSON envelope, as
+[Read the envelope](../SKILL.md#read-the-envelope) says. Each field below sits under `data`, except
+`evidence`, which sits at the top level. A tool that fails still returns `ok: true`, so check
+`isError` on each call.
 
-- `mcp tools` returns `server` `shop` and two tools. `list_orders` has `inReadTools` true, and
-  `place_order` has `inReadTools` false.
-- The first `mcp call list_orders` returns `isError` false and `structuredContent.orders` as an
-  empty list. Its `evidence` lists one `call-list_orders.json` file.
-- `mcp call place_order` returns `isError` false and `structuredContent.id` 1.
-- The second `mcp call list_orders` returns `structuredContent.orders` with one order, whose `id` is
-  1 and whose `item` is `mug`.
+- `mcp tools` returns `server: "shop"` and exactly two entries in `tools`. `list_orders` has
+  `inReadTools: true` and `place_order` has `inReadTools: false`. `inReadTools` is true when the
+  target's config lists the tool in `readTools`, the tools a read-only target allows.
+- The first `mcp call list_orders` returns `isError: false` and `structuredContent.orders` as an
+  empty list. Its `evidence` holds one file, `call-list_orders.json`.
+- `mcp call place_order` returns `isError: false` and `structuredContent.id` 1.
+- The second `mcp call list_orders` returns `isError: false` and one order in
+  `structuredContent.orders`, with `id` 1 and `item` `mug`.
