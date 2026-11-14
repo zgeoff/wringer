@@ -66,7 +66,9 @@ on the machine where the run lives, so use the driver with a `local()` host.
 Every command except `start` and `list` takes `--session <id>`. It is optional while one session
 runs, and required while more than one runs. Sessions are named `<program>-<n>`, such as `tui-1`.
 
-- Rows and columns count from 0. `col` counts characters of the line.
+- Rows and columns count from 0. `col` counts characters of the line. A `match` counts the screen's
+  rows, and `screen.text` joins the rows a program wrapped into one line, so a secret that wrapped
+  is still redacted. Its line numbers differ from the rows after a wrap.
 - A key is a name such as `enter`, `esc`, `tab`, `up`, `f5`, `ctrl+c` or `alt+x`. The driver turns
   it into the bytes that the program's current modes expect, so `ctrl+c` is `\x03` for a plain
   program and `\x1b[99;5u` after the program turns on the kitty keyboard protocol.

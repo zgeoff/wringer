@@ -8,6 +8,7 @@ import { parseKey } from './parse-key.ts';
 import type { KeyInput, ScreenEngine } from './screen-engine.ts';
 
 interface Screen {
+  // Each line a program wrapped across rows is one line here, so a scrub sees a value whole.
   readonly text: string;
   readonly cursor: { readonly row: number; readonly col: number; readonly visible: boolean };
   readonly cols: number;
@@ -107,7 +108,7 @@ export async function createTerminalSession(
   void markEnded();
 
   const readScreen = (): Screen => ({
-    text: options.engine.text(),
+    text: options.engine.unwrappedText(),
     cursor: options.engine.cursor(),
     cols: options.cols,
     rows: options.rows,
@@ -148,7 +149,7 @@ export async function createTerminalSession(
 
       for (;;) {
         const screen = readScreen();
-        const match = findScreenMatch(screen.text, pattern);
+        const match = findScreenMatch(options.engine.text(), pattern);
 
         if (match !== null || ended || deadline.aborted) {
           return { match, screen };

@@ -132,3 +132,14 @@ test('it ships the library build that its manifest names', async () => {
     tag: 'vt-1.0.1',
   });
 });
+
+test('it joins the rows of a wrapped line in the unwrapped text', async () => {
+  const ctx = await setupTest();
+
+  ctx.feed(`${'a'.repeat(40)}${'b'.repeat(10)}\r\nnext`);
+
+  expect([ctx.engine.text(), ctx.engine.unwrappedText()]).toStrictEqual([
+    `${'a'.repeat(40)}\n${'b'.repeat(10)}\nnext`,
+    `${'a'.repeat(40)}${'b'.repeat(10)}\nnext`,
+  ]);
+});

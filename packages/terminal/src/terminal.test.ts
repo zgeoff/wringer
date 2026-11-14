@@ -171,6 +171,26 @@ test('it keeps a secret typed with --secret-env out of the envelope and the scre
   expect(JSON.stringify(screen.envelope) + evidence).not.toContain('plum-harbour-91');
 });
 
+test('it keeps a secret that wrapped across rows out of the envelope and the screen evidence', async () => {
+  const ctx = await setupTest();
+
+  updateEnv(
+    'SHOP_LOGIN_PIN',
+    'orchid-meadow-orchid-meadow-orchid-meadow-orchid-meadow-orchid-meadow-ZZEND',
+  );
+
+  await ctx.start('local');
+  await ctx.run('local', ['terminal', 'start'], { program: 'echo' });
+  await ctx.run('local', ['terminal', 'wait'], { text: 'ready' });
+  await ctx.run('local', ['terminal', 'type'], { secretEnv: 'SHOP_LOGIN_PIN' });
+  await ctx.run('local', ['terminal', 'wait'], { text: 'ZZEND' });
+
+  const screen = await ctx.run('local', ['terminal', 'screen']);
+  const evidence = await ctx.readEvidence(screen.envelope.evidence[0]?.path ?? '');
+
+  expect(JSON.stringify(screen.envelope) + evidence).not.toMatch(/orchid|meadow|ZZEND/u);
+});
+
 test('it needs --session when more than one session runs', async () => {
   const ctx = await setupTest();
 

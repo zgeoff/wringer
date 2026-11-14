@@ -2,7 +2,7 @@ import type { WasmBridge } from './create-wasm-bridge.ts';
 
 // Prints the terminal's rows as plain text, scrollback included, with the blank rows at the end
 // dropped.
-export function readGhosttyText(bridge: WasmBridge, terminal: number): string {
+export function readGhosttyText(bridge: WasmBridge, terminal: number, unwrap = false): string {
   const formatter = bridge.createHandle(
     (slot) => bridge.call('ghostty_formatter_terminal_new', 0, slot, terminal),
     'create the formatter',
@@ -19,6 +19,19 @@ export function readGhosttyText(bridge: WasmBridge, terminal: number): string {
       'set the formatter',
     );
   });
+
+  if (unwrap) {
+    const unwrapOption = bridge.layout.enumValue('GhosttyFormatterOption', 'UNWRAP');
+
+    bridge.withScratch(1, (pointer) => {
+      new DataView(bridge.memory.buffer).setUint8(pointer, 1);
+
+      bridge.expectSuccess(
+        bridge.call('ghostty_formatter_set', formatter, unwrapOption, pointer),
+        'set the formatter to unwrap',
+      );
+    });
+  }
 
   const outPointer = bridge.call('ghostty_wasm_alloc_opaque');
   const lengthPointer = bridge.call('ghostty_wasm_alloc', bridge.layout.usizeSize);

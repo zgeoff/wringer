@@ -1,6 +1,7 @@
 import { createWasmBridge } from './create-wasm-bridge.ts';
 import type { WasmBridge } from './create-wasm-bridge.ts';
 import { encodeGhosttyKey } from './encode-ghostty-key.ts';
+import { pickUnwrappedText } from './pick-unwrapped-text.ts';
 import { pickVisibleText } from './pick-visible-text.ts';
 import { readGhosttyText } from './read-ghostty-text.ts';
 import type { CursorState, ScreenEngine } from './screen-engine.ts';
@@ -59,6 +60,13 @@ export function createGhosttyEngine(options: GhosttyEngineOptions): ScreenEngine
     text: () =>
       pickVisibleText(
         readGhosttyText(bridge, terminal),
+        readTerminalValue(bridge, terminal, 'TOTAL_ROWS', 4).getUint32(0, true),
+        readTerminalValue(bridge, terminal, 'ROWS', 2).getUint16(0, true),
+      ),
+    unwrappedText: () =>
+      pickUnwrappedText(
+        readGhosttyText(bridge, terminal),
+        readGhosttyText(bridge, terminal, true).split('\n'),
         readTerminalValue(bridge, terminal, 'TOTAL_ROWS', 4).getUint32(0, true),
         readTerminalValue(bridge, terminal, 'ROWS', 2).getUint16(0, true),
       ),

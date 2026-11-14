@@ -31,6 +31,10 @@ export interface ScreenEngine {
   readonly write: (bytes: Uint8Array) => void;
   readonly resize: (size: ScreenSize) => void;
   readonly text: () => string;
+
+  // The screen text with each soft-wrapped line joined, so a value that wrapped across rows reads
+  // whole. A line can be longer than the columns, and its row index no longer matches the cursor's.
+  readonly unwrappedText: () => string;
   readonly cursor: () => CursorState;
   readonly encodeKey: (key: KeyInput) => Uint8Array;
   readonly dispose: () => void;
