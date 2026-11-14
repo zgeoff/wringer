@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1](https://github.com/zgeoff/wringer/compare/@wringer/mcp@0.1.0...@wringer/mcp@0.1.1) (2026-11-14)
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.3.1
+  - peerDependencies
+    - @wringer/core bumped to 0.3.1
+
 ## 0.1.0 (2026-11-14)
 
 ### Features
