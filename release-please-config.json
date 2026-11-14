@@ -37,6 +37,10 @@
     "packages/terminal": {
       "component": "@wringer/terminal",
       "initial-version": "0.1.0"
+    },
+    "packages/mcp": {
+      "component": "@wringer/mcp",
+      "initial-version": "0.1.0"
     }
   }
 }

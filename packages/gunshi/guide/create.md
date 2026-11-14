@@ -35,6 +35,7 @@ The mistakes that cost the most:
    | `@wringer/db`       | SQL on the app's SQLite or Postgres database |
    | `@wringer/stream`   | the app's logs, recorded for the whole run   |
    | `@wringer/terminal` | a text program, through its screen           |
+   | `@wringer/mcp`      | the tools of an MCP server                   |
 
    Each driver adds its own commands and its own doctor check. Its README in `node_modules/` gives
    its config for a target.
