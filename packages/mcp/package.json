@@ -1,6 +1,6 @@
 {
   "name": "@wringer/mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The MCP driver for wringer: calls the tools of an MCP server that a target names, over stdio or Streamable HTTP",
   "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/mcp#readme",
   "bugs": "https://github.com/zgeoff/wringer/issues",
