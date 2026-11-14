@@ -164,7 +164,7 @@ test('it fails registry for a report from the shop registry and skips the gate',
     'view',
     '142',
     '--json',
-    'number,baseRefName,headRefName,body',
+    'number,baseRefName,headRefName,body,author',
   ]);
 });
 
@@ -212,6 +212,104 @@ test('it passes a release pull request with no report block and runs no gate', a
   });
 
   expect(ctx.calls.some((call) => call[0] === 'bun')).toBe(false);
+});
+
+test('it passes a renovate pull request from the renovate bot with no report block and runs no gate', async () => {
+  const ctx = await setupTest({
+    gh: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        number: 141,
+        baseRefName: 'main',
+        headRefName: 'renovate/left-pad-2.x',
+        body: 'update left-pad to v2',
+        author: { login: 'app/zgeoff-renovate', is_bot: true },
+      }),
+      stderr: '',
+    },
+  });
+
+  const result = await ctx.runCheck({ PR_NUMBER: '141' });
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    error: null,
+    check: {
+      ok: true,
+      pr: 141,
+      checks: [
+        { name: 'pull-request', ok: true, detail: '#141 into main' },
+        {
+          name: 'report-block',
+          ok: true,
+          detail: 'skipped: a renovate pull request carries no verify report',
+        },
+        {
+          name: 'registry',
+          ok: true,
+          detail: 'skipped: a renovate pull request carries no verify report',
+        },
+        {
+          name: 'gate',
+          ok: true,
+          detail: 'skipped: a renovate pull request carries no verify report',
+        },
+      ],
+    },
+  });
+
+  expect(ctx.calls.some((call) => call[0] === 'bun')).toBe(false);
+});
+
+test.each([
+  {
+    who: 'a person',
+    headRefName: 'renovate/left-pad-2.x',
+    author: { login: 'some-person', is_bot: false },
+  },
+  {
+    who: 'a person whose login is the bot slug',
+    headRefName: 'renovate/left-pad-2.x',
+    author: { login: 'app/zgeoff-renovate', is_bot: false },
+  },
+  {
+    who: 'another bot',
+    headRefName: 'renovate/left-pad-2.x',
+    author: { login: 'app/other-bot', is_bot: true },
+  },
+  {
+    who: 'the renovate bot',
+    headRefName: 'update-left-pad',
+    author: { login: 'app/zgeoff-renovate', is_bot: true },
+  },
+  { who: 'an unknown author', headRefName: 'renovate/left-pad-2.x', author: null },
+])('it gates a pull request from $who on $headRefName', async (row) => {
+  const ctx = await setupTest({
+    gh: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        number: 143,
+        baseRefName: 'main',
+        headRefName: row.headRefName,
+        body: '',
+        author: row.author,
+      }),
+      stderr: '',
+    },
+  });
+
+  const result = await ctx.runCheck({ PR_NUMBER: '143' });
+
+  expect(result.check?.checks).toStrictEqual([
+    { name: 'pull-request', ok: true, detail: '#143 into main' },
+    {
+      name: 'report-block',
+      ok: false,
+      detail: 'the description holds no wringer report block',
+    },
+    { name: 'registry', ok: false, detail: 'skipped: an earlier check failed' },
+    { name: 'gate', ok: false, detail: 'skipped: an earlier check failed' },
+  ]);
 });
 
 test('it prints the failing features of a gate that fails', async () => {
