@@ -34,7 +34,7 @@ Read each result in the command's JSON envelope, as
   `inReadTools: true` and `place_order` has `inReadTools: false`. `inReadTools` is true when the
   target's config lists the tool in `readTools`, the tools a read-only target allows.
 - The first `mcp call list_orders` returns `isError: false` and `structuredContent.orders` as an
-  empty list. Its `evidence` holds one file, `call-list_orders.json`.
+  empty list. Its `evidence` holds one file, whose name ends in `call-list_orders.json`.
 - `mcp call place_order` returns `isError: false` and `structuredContent.id` 1.
 - The second `mcp call list_orders` returns `isError: false` and one order in
   `structuredContent.orders`, with `id` 1 and `item` `mug`.
