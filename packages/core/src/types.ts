@@ -1,16 +1,16 @@
 import type { z } from 'zod';
-import type { RunView } from './build-run-view.ts';
-import type { RunPaths } from './build-state-paths.ts';
-import type { SupervisorCall } from './call-supervisor.ts';
-import type { StatePort } from './create-file-state.ts';
-import type { Secret, SecretSet } from './create-secret-set.ts';
-import type { Evidence } from './envelope.ts';
-import type { EvidenceUploader } from './evidence-uploader.ts';
-import type { Access, Host } from './host.ts';
-import type { LaunchLine } from './launch-line-schema.ts';
-import type { ChangeFactsHost } from './read-change-facts.ts';
-import type { Endpoints, RunID } from './run-events.ts';
-import type { ProcessResult } from './run-process.ts';
+import type { ChangeFactsHost } from './change-facts/read-change-facts.ts';
+import type { Evidence } from './envelope/envelope.ts';
+import type { EvidenceUploader } from './evidence/evidence-uploader.ts';
+import type { Access, Host } from './host/host.ts';
+import type { ProcessResult } from './host/run-process.ts';
+import type { LaunchLine } from './launch/launch-line-schema.ts';
+import type { Secret, SecretSet } from './secrets/create-secret-set.ts';
+import type { RunView } from './state/build-run-view.ts';
+import type { RunPaths } from './state/build-state-paths.ts';
+import type { StatePort } from './state/create-file-state.ts';
+import type { Endpoints, RunID } from './state/run-event.ts';
+import type { SupervisorCall } from './supervisor/call-supervisor.ts';
 
 export type Effect = 'read' | 'write';
 

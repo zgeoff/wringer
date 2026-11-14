@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createWringer, local } from '@wringer/core';
-import { readTemplateHash } from './read-template-hash.ts';
+import { readTemplateHash } from './lint-command/read-template-hash.ts';
 import { resolveLintFailures } from './resolve-lint-failures.ts';
 import { buildLintFixture } from './test-utils/build-lint-fixture.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';

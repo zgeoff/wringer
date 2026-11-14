@@ -1,27 +1,27 @@
 import { isAbsolute, join } from 'node:path';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
-import { buildChangeFactsRequest } from '../build-change-request.ts';
-import { buildBuiltinCommand } from '../build-commands.ts';
-import { buildReport } from '../build-report.ts';
-import { readChangeFacts } from '../read-change-facts.ts';
-import type { ChangeFacts } from '../read-change-facts.ts';
-import { readDefaultBase } from '../read-default-base.ts';
-import { readReportDocument } from '../read-report-document.ts';
-import { doneCommand } from '../read-verdicts.ts';
-import { renderReport } from '../render-report.ts';
-import { parseReportComment } from '../report-comment.ts';
-import type { CommentRead } from '../report-comment.ts';
-import { noCuts } from '../report-plan.ts';
+import { buildChangeFactsRequest } from '../change-facts/build-change-request.ts';
+import { readChangeFacts } from '../change-facts/read-change-facts.ts';
+import type { ChangeFacts } from '../change-facts/read-change-facts.ts';
+import { readDefaultBase } from '../change-facts/read-default-base.ts';
+import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
+import { parseReportComment } from '../report-document/parse-report-comment.ts';
+import type { CommentRead } from '../report-document/parse-report-comment.ts';
+import { readReportDocument } from '../report-document/read-report-document.ts';
+import { noCuts } from '../report-plan/report-plan.ts';
+import { renderReport } from '../report/render-report.ts';
+import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
+import { buildReport } from '../verdict/build-report.ts';
+import { doneCommand } from '../verdict/read-verdicts.ts';
 import {
   featureStatusSchema,
   maxBaseLength,
   maxNameLength,
   reportSchema,
   verdictSchema,
-} from '../report-schema.ts';
-import type { Claim, Pin, Report, Verdict } from '../report-schema.ts';
-import type { BuiltinCommandSpec, BuiltinContext, RegisteredCommand } from '../types.ts';
+} from '../verdict/report-schema.ts';
+import type { Claim, Pin, Report, Verdict } from '../verdict/report-schema.ts';
 import { WringerError } from '../wringer-error.ts';
 import { buildDeployedPin } from './build-deployed-pin.ts';
 import { buildPublishCommand } from './build-publish-command.ts';

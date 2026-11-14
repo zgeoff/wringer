@@ -1,5 +1,5 @@
-import type { Pointers } from '../create-file-state.ts';
-import type { RunID } from '../run-events.ts';
+import type { Pointers } from '../state/create-file-state.ts';
+import type { RunID } from '../state/run-event.ts';
 
 export interface UseChange {
   readonly target: string | undefined;

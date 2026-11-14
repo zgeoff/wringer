@@ -1,4 +1,4 @@
-import { killProcessGroup } from '../../../core/src/kill-process-group.ts';
+import { killProcessGroup } from '../../../core/src/host/kill-process-group.ts';
 import { parseCLIOutput } from './parse-cli-output.ts';
 import type { CLIOutput } from './parse-cli-output.ts';
 

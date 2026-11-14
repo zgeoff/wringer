@@ -1,4 +1,4 @@
-import type { Envelope } from '../envelope.ts';
+import type { Envelope } from '../envelope/envelope.ts';
 
 // A passing drive's envelope on the local target, for tests of code that reads logged envelopes.
 export function buildMockEnvelope(overrides: Partial<Envelope> = {}): Envelope {

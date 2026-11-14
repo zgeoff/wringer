@@ -1,10 +1,10 @@
 import { join, relative } from 'node:path';
 import { z } from 'zod';
-import { buildBuiltinCommand } from '../build-commands.ts';
-import { buildRunPaths } from '../build-state-paths.ts';
+import { unassignedFeature } from '../dispatch/open-drive.ts';
 import { findOwnValue } from '../find-own-value.ts';
-import { unassignedFeature } from '../open-drive.ts';
-import { buildFeatureFile, renderFeatureTable } from '../render-feature-table.ts';
+import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
+import { buildFeatureFile, renderFeatureTable } from '../report/render-feature-table.ts';
+import { buildRunPaths } from '../state/build-state-paths.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { buildUsePointers } from './build-use-pointers.ts';

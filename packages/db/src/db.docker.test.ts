@@ -7,6 +7,7 @@ import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { createDbWringer } from './test-utils/create-db-wringer.ts';
 import { createDockerSqlite3 } from './test-utils/create-docker-sqlite3.ts';
+import { seedNotes } from './test-utils/seed-notes.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'db-docker');
@@ -24,14 +25,10 @@ async function setupTest() {
   return {
     directory,
     file,
-    seedNotes: (texts: readonly string[]) => {
-      using database = new Database(file);
-
-      database.run('create table notes (id integer primary key, text text not null)');
-
-      for (const text of texts) {
-        database.run('insert into notes (text) values (?)', [text]);
-      }
+    seed: {
+      notes: (texts: readonly string[]) => {
+        seedNotes(file, texts);
+      },
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
@@ -41,7 +38,7 @@ async function setupTest() {
 test('it names the columns of a read through the real sqlite3 client that returns no rows', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes(['pay']);
+  ctx.seed.notes(['pay']);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
@@ -56,7 +53,7 @@ test('it names the columns of a read through the real sqlite3 client that return
 test('it names the columns of a pragma read through the real sqlite3 client that returns no rows', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
@@ -73,7 +70,7 @@ test('it names the columns of a pragma read through the real sqlite3 client that
 test('it reads a table named like the view that names the columns, through the real sqlite3 client', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   using database = new Database(ctx.file);
 
@@ -94,7 +91,7 @@ test('it reads a table named like the view that names the columns, through the r
 test('it fails a declared write that the real sqlite3 client refuses as read-only with an environment error', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes(['pay']);
+  ctx.seed.notes(['pay']);
 
   await ctx.run('bench', ['attach']);
   await ctx.run('bench', ['doctor']);
@@ -118,7 +115,7 @@ test('it fails a shell command sent to the real sqlite3 client without running i
 
   const flag = join(ctx.directory, 'flag');
 
-  ctx.seedNotes(['pay']);
+  ctx.seed.notes(['pay']);
 
   await ctx.run('bench', ['attach']);
   await ctx.run('bench', ['doctor']);

@@ -1,7 +1,7 @@
-import { buildReport } from '../build-report.ts';
-import { readVerdicts } from '../read-verdicts.ts';
-import type { Report } from '../report-schema.ts';
 import type { BuiltinContext } from '../types.ts';
+import { buildReport } from '../verdict/build-report.ts';
+import { readVerdicts } from '../verdict/read-verdicts.ts';
+import type { Report } from '../verdict/report-schema.ts';
 import { readCurrentFacts } from './read-current-facts.ts';
 
 // Merges every verdict of the worktree with the change facts against a base.

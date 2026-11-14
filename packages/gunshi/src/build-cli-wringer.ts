@@ -1,7 +1,7 @@
 import { WringerError } from '@wringer/core';
 import type { RegisteredCommand, Wringer } from '@wringer/core';
-import { buildGuideCommand } from './build-guide-command.ts';
-import { buildLintCommand } from './build-lint-command.ts';
+import { buildGuideCommand } from './guide-command/build-guide-command.ts';
+import { buildLintCommand } from './lint-command/build-lint-command.ts';
 
 // The registry with the `lint` and `guide` built-ins added. `lint` parses journey lines with
 // gunshi, so this package adds them rather than core. `registryFile` is the registry's own file,

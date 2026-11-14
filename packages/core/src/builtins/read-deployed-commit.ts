@@ -1,5 +1,5 @@
-import type { RunView } from '../build-run-view.ts';
-import { readRevision, revisionTimeoutMs } from '../read-revision.ts';
+import { readRevision, revisionTimeoutMs } from '../dispatch/read-revision.ts';
+import type { RunView } from '../state/build-run-view.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext, RevisionFunction } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';

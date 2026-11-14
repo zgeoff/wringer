@@ -2,18 +2,18 @@ import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession, Fence } from '@wringer/core';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
-import { createSQLClients } from './create-sql-clients.ts';
 import { dbResultSchema } from './db-result-schema.ts';
 import type { DbResult } from './db-result-schema.ts';
-import { parseExecResult } from './parse-exec-result.ts';
+import { parseExecResult } from './exec-client/parse-exec-result.ts';
 import { pickDatabaseFailure } from './pick-database-failure.ts';
 import type { DatabaseFailure } from './pick-database-failure.ts';
 import { dbConfigSchema, pickQueryEffect } from './pick-query-effect.ts';
 import type { DbConfig } from './pick-query-effect.ts';
 import { pickQueryPlan } from './pick-query-plan.ts';
 import type { QueryPlan } from './pick-query-plan.ts';
-import { runSQLQuery } from './run-sql-query.ts';
-import type { SQLClients } from './run-sql-query.ts';
+import { createSQLClients } from './sql-client/create-sql-clients.ts';
+import { runSQLQuery } from './sql-client/run-sql-query.ts';
+import type { SQLClients } from './sql-client/run-sql-query.ts';
 
 export const dbQuerySchema = z.strictObject({
   sql: z.string().min(1),

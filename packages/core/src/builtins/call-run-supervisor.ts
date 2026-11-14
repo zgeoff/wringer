@@ -1,5 +1,5 @@
-import type { RunView } from '../build-run-view.ts';
-import { supervisorServiceName } from '../supervisor-protocol.ts';
+import type { RunView } from '../state/build-run-view.ts';
+import { supervisorServiceName } from '../supervisor/supervisor-request.ts';
 import type { SupervisorPort } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 

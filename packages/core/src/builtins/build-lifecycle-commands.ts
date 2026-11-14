@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { buildBuiltinCommand } from '../build-commands.ts';
+import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
 import type { BuiltinCommandSpec, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import { runDataSchema, startRun } from './start-run.ts';

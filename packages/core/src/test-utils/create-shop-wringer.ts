@@ -1,10 +1,10 @@
 import { z } from 'zod';
-import { bindDrivers } from '../bind-drivers.ts';
-import { createWringer } from '../create-wringer.ts';
-import { local } from '../local.ts';
+import { local } from '../host/local.ts';
+import { bindDrivers } from '../registry/bind-drivers.ts';
+import { createWringer } from '../registry/create-wringer.ts';
 import type { GatePolicy, Wringer } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
-import { notes } from './notes-driver.ts';
+import { notes } from './notes.ts';
 
 const emptySchema = z.strictObject({});
 const countSchema = z.strictObject({ count: z.number() });

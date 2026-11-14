@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { probeProcess } from '../packages/core/src/probe-process.ts';
-import { readPIDNamespace } from '../packages/core/src/read-pid-namespace.ts';
+import { probeProcess } from '../packages/core/src/host/probe-process.ts';
+import { readPIDNamespace } from '../packages/core/src/host/read-pid-namespace.ts';
 import type { FileSystem } from './ci/file-system.ts';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 

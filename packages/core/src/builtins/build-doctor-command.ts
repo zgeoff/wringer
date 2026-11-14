@@ -1,13 +1,13 @@
 import { z } from 'zod';
-import { buildBuiltinCommand } from '../build-commands.ts';
-import { pickRevisionRefusal } from '../pick-revision-refusal.ts';
-import { readRevision, revisionTimeoutMs } from '../read-revision.ts';
-import { checkResultSchema } from '../run-events.ts';
-import type { CheckResult } from '../run-events.ts';
+import { readRevision, revisionTimeoutMs } from '../dispatch/read-revision.ts';
+import { writeLateFailure } from '../dispatch/write-late-failure.ts';
+import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
+import { pickRevisionRefusal } from '../secrets/pick-revision-refusal.ts';
+import { checkResultSchema } from '../state/run-event.ts';
+import type { CheckResult } from '../state/run-event.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext, Drive, RegisteredCommand } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
-import { writeLateFailure } from '../write-late-failure.ts';
 import { pickDoctorOutcome } from './pick-doctor-outcome.ts';
 
 const doctorDataSchema = z.strictObject({

@@ -93,7 +93,7 @@ test('#features --markdown lists the shop features, the ignore list and the feat
         'scripts/**',
         '*',
         'packages/{browser,core,db,gunshi,http,mcp,stream,terminal}/**',
-        'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/shop-mcp.ts,src/shop-tui.ts,src/verify-wringer.ts}',
+        'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/shop-clients/**,src/verify-wringer.ts}',
       ],
       markdown: [
         '| Feature | Summary | File |',

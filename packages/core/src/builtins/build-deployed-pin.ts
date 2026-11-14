@@ -1,7 +1,7 @@
-import { collectFeatureScopes } from '../collect-feature-scopes.ts';
-import { isGlobMatch } from '../is-glob-match.ts';
-import type { Pin } from '../report-schema.ts';
+import { collectFeatureScopes } from '../change-facts/collect-feature-scopes.ts';
+import { isGlobMatch } from '../change-facts/is-glob-match.ts';
 import type { Wringer } from '../types.ts';
+import type { Pin } from '../verdict/report-schema.ts';
 import { WringerError } from '../wringer-error.ts';
 
 export interface DeployedPinRequest {

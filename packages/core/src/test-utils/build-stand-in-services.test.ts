@@ -1,6 +1,6 @@
 import { expect, mock, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { buildRunHandle } from '../build-run-handle.ts';
+import { buildRunHandle } from '../dispatch/build-run-handle.ts';
 import { buildStandInServices } from './build-stand-in-services.ts';
 import { createTestFolder } from './create-test-folder.ts';
 

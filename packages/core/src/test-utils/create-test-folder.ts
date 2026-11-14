@@ -1,6 +1,6 @@
 import { mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
-import { readPIDNamespace } from '../read-pid-namespace.ts';
+import { readPIDNamespace } from '../host/read-pid-namespace.ts';
 
 // The PID namespace and the process ID in the name let the sweep before the next run tell a folder
 // that a killed run left from one that a run still uses, in this namespace or another.

@@ -2,12 +2,13 @@ import { expect, jest, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { createWringer } from '../create-wringer.ts';
-import { dispatch } from '../dispatch.ts';
-import { local } from '../local.ts';
-import { readVerdicts } from '../read-verdicts.ts';
+import { dispatch } from '../dispatch/dispatch.ts';
+import { local } from '../host/local.ts';
+import { createWringer } from '../registry/create-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
+import { seedDoctorWithoutRevision } from '../test-utils/seed-doctor-without-revision.ts';
 import type { TargetDefinition } from '../types.ts';
+import { readVerdicts } from '../verdict/read-verdicts.ts';
 
 async function setupTest() {
   const emptySchema = z.strictObject({});
@@ -97,18 +98,7 @@ async function setupTest() {
 
       return shop.state.readRunEvents(String(runID));
     },
-
-    // A doctor that passed with no revision read: the run view clears the value a doctor-passed
-    // event follows.
-    seedDoctorWithoutRevision: async () => {
-      const [runID] = await shop.state.listRuns();
-
-      await shop.state.appendEvent(String(runID), {
-        type: 'doctor-passed',
-        at: new Date().toISOString(),
-        results: [],
-      });
-    },
+    seed: { doctorWithoutRevision: () => seedDoctorWithoutRevision(shop.state) },
 
     // Attaches, passes the doctor, and drives checkout once.
     driveCheckout: async () => {
@@ -410,7 +400,7 @@ test('#done refuses a run whose doctor wrote no revision', async () => {
   await ctx.deployWithSearchEdits();
   await ctx.run(['attach']);
   await ctx.run(['doctor']);
-  await ctx.seedDoctorWithoutRevision();
+  await ctx.seed.doctorWithoutRevision();
   await ctx.run(['use'], { feature: 'checkout' });
   await ctx.run(['action', 'ping']);
 

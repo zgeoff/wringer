@@ -75,13 +75,13 @@ the CLI with `bun`.
 CLI, prints the absolute path of the installed template folder. It holds a working example for an
 invented app, Larder:
 
-| File                 | Copy to                             | Holds                                                             |
-| -------------------- | ----------------------------------- | ----------------------------------------------------------------- |
-| `verify.ts`          | `scripts/verify/verify.ts`          | the entry point that calls `runVerify`                            |
-| `verify-registry.ts` | `scripts/verify/verify-registry.ts` | targets, a driver, an action, a command, a check, a feature       |
-| `verify/`            | `.claude/skills/verify/`            | the repo's `verify` skill, and its feature files in `references/` |
+| File                        | Copy to                                    | Holds                                                             |
+| --------------------------- | ------------------------------------------ | ----------------------------------------------------------------- |
+| `verify.ts`                 | `scripts/verify/verify.ts`                 | the entry point that calls `runVerify`                            |
+| `create-verify-registry.ts` | `scripts/verify/create-verify-registry.ts` | targets, a driver, an action, a command, a check, a feature       |
+| `verify/`                   | `.claude/skills/verify/`                   | the repo's `verify` skill, and its feature files in `references/` |
 
-Skip `verify-registry.test.ts` in the template: it tests the template inside wringer.
+Skip `create-verify-registry.test.ts` in the template: it tests the template inside wringer.
 
 These locations are defaults. When you change one, change each place that refers to it:
 

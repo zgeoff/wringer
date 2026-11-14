@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RunView } from '../build-run-view.ts';
-import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
-import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
+import type { RunView } from '../state/build-run-view.ts';
+import { listenSupervisorSocket } from '../supervisor/listen-supervisor-socket.ts';
+import { makeProcessSupervisorPort } from '../supervisor/make-process-supervisor-port.ts';
 import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { WringerError } from '../wringer-error.ts';

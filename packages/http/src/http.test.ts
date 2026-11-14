@@ -9,7 +9,7 @@ import { buildBrokenBody } from './test-utils/build-broken-body.ts';
 import { buildStalledBody } from './test-utils/build-stalled-body.ts';
 import { createHttpWringer } from './test-utils/create-http-wringer.ts';
 import { createLoopbackApp } from './test-utils/create-loopback-app.ts';
-import { server } from './test-utils/mocks/node.ts';
+import { server } from './test-utils/mocks/server.ts';
 import { SHOP_API_URL, shopRequests } from './test-utils/shop-handlers.ts';
 
 async function setupTest() {

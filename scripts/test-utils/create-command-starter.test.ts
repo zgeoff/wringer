@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { readPIDNamespace } from '../../packages/core/src/read-pid-namespace.ts';
+import { readPIDNamespace } from '../../packages/core/src/host/read-pid-namespace.ts';
 import type { CommandResult } from '../ci/run-command.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { createCommandStarter } from './create-command-starter.ts';

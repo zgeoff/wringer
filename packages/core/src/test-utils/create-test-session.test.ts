@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { dispatch } from '../dispatch.ts';
+import { dispatch } from '../dispatch/dispatch.ts';
 import { createShopWringer } from './create-shop-wringer.ts';
 import { createTestSession } from './create-test-session.ts';
 

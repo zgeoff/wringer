@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm, stat } from 'node:fs/promises';
 import { basename, dirname } from 'node:path';
-import { readPIDNamespace } from '../read-pid-namespace.ts';
+import { readPIDNamespace } from '../host/read-pid-namespace.ts';
 import { createTestFolder } from './create-test-folder.ts';
 
 test('it creates a folder in the parent, named after the PID namespace and the test process', async () => {

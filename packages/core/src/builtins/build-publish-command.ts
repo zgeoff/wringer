@@ -1,32 +1,32 @@
 import { z } from 'zod';
-import { buildBuiltinCommand } from '../build-commands.ts';
-import { buildFileKey, buildLinkedDocument } from '../build-linked-document.ts';
-import { buildLocalDocument } from '../build-local-document.ts';
-import { buildRefusedDocument } from '../build-refused-document.ts';
-import { collectShownEntries } from '../collect-shown-files.ts';
-import { collectUploadItems } from '../collect-upload-items.ts';
-import type { EvidenceUploader } from '../evidence-uploader.ts';
-import { pickPullRequest } from '../pick-pull-request.ts';
-import type { UploadRefusal } from '../pick-upload-refusal.ts';
-import { planReport } from '../plan-report.ts';
-import { readReportDocument } from '../read-report-document.ts';
-import { readRunSecrets } from '../read-run-secrets.ts';
-import { renderReport } from '../render-report.ts';
-import type { ReportDocument } from '../report-document.ts';
-import { reportCutsSchema } from '../report-plan.ts';
-import type { ReportPlan } from '../report-plan.ts';
-import { maxBaseLength } from '../report-schema.ts';
-import { maxDescriptionChars, resolveSpanBudget } from '../resolve-span-budget.ts';
-import { runIDSchema } from '../run-events.ts';
+import { collectUploadItems } from '../evidence/collect-upload-items.ts';
+import type { EvidenceUploader } from '../evidence/evidence-uploader.ts';
+import type { UploadRefusal } from '../evidence/pick-upload-refusal.ts';
+import { uploadEvidence } from '../evidence/upload-evidence.ts';
+import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
+import { pickPullRequest } from '../repo-host/pick-pull-request.ts';
+import { buildFileKey, buildLinkedDocument } from '../report-document/build-linked-document.ts';
+import { buildLocalDocument } from '../report-document/build-local-document.ts';
+import { buildRefusedDocument } from '../report-document/build-refused-document.ts';
+import { readReportDocument } from '../report-document/read-report-document.ts';
+import type { ReportDocument } from '../report-document/report-document.ts';
+import { maxDescriptionChars, resolveSpanBudget } from '../report-document/resolve-span-budget.ts';
+import { writeReportSpan } from '../report-document/write-report-span.ts';
+import { collectShownEntries } from '../report-plan/collect-shown-files.ts';
+import { planReport } from '../report-plan/plan-report.ts';
+import { reportCutsSchema } from '../report-plan/report-plan.ts';
+import type { ReportPlan } from '../report-plan/report-plan.ts';
+import { renderReport } from '../report/render-report.ts';
+import { readRunSecrets } from '../secrets/read-run-secrets.ts';
+import { runIDSchema } from '../state/run-event.ts';
 import type {
   BuiltinCommandSpec,
   BuiltinContext,
   PullRequestView,
   RegisteredCommand,
 } from '../types.ts';
-import { uploadEvidence } from '../upload-evidence.ts';
+import { maxBaseLength } from '../verdict/report-schema.ts';
 import { WringerError } from '../wringer-error.ts';
-import { writeReportSpan } from '../write-report-span.ts';
 import { readCurrentReport } from './read-current-report.ts';
 
 const publishArgsSchema = z.strictObject({

@@ -1,15 +1,18 @@
 import { buildFeatureFile, isGlobMatch, renderFeatureTable } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { z } from 'zod';
-import { checkFeatureFile } from './check-feature-file.ts';
-import { collectDeadGlobs } from './collect-dead-globs.ts';
-import { collectJourneyCommands } from './collect-journey-commands.ts';
-import type { JourneyCommand, MarkdownFile } from './collect-journey-commands.ts';
-import { collectUnclaimedFiles } from './collect-unclaimed-files.ts';
-import { parseFeatureTableSpan, toComparableTable } from './parse-feature-table-span.ts';
-import { parseSkillMetadata } from './parse-skill-metadata.ts';
-import type { SkillMetadata } from './parse-skill-metadata.ts';
-import { resolveJourneyProblem } from './resolve-journey-problem.ts';
+import { checkFeatureFile } from './lint-command/check-feature-file.ts';
+import { collectDeadGlobs } from './lint-command/collect-dead-globs.ts';
+import { collectJourneyCommands } from './lint-command/collect-journey-commands.ts';
+import type { JourneyCommand, MarkdownFile } from './lint-command/collect-journey-commands.ts';
+import { collectUnclaimedFiles } from './lint-command/collect-unclaimed-files.ts';
+import {
+  parseFeatureTableSpan,
+  toComparableTable,
+} from './lint-command/parse-feature-table-span.ts';
+import { parseSkillMetadata } from './lint-command/parse-skill-metadata.ts';
+import type { SkillMetadata } from './lint-command/parse-skill-metadata.ts';
+import { resolveJourneyProblem } from './lint-command/resolve-journey-problem.ts';
 
 export const lintFailureSchema = z.strictObject({
   // `where` names the feature, the glob group or the file that the check found at fault.
