@@ -2,10 +2,10 @@
 
 ## [0.3.1](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.0...@wringer/gunshi@0.3.1) (2026-11-14)
 
-
 ### Features
 
-* **mcp:** add the mcp driver ([#149](https://github.com/zgeoff/wringer/issues/149)) ([e418422](https://github.com/zgeoff/wringer/commit/e4184224493371581c33e1fea55a08ddf058f0de))
+- **mcp:** add the mcp driver ([#149](https://github.com/zgeoff/wringer/issues/149))
+  ([e418422](https://github.com/zgeoff/wringer/commit/e4184224493371581c33e1fea55a08ddf058f0de))
 
 ## [0.3.0](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.2.0...@wringer/gunshi@0.3.0) (2026-11-14)
 
