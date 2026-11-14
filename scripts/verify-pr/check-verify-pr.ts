@@ -69,18 +69,19 @@ export async function checkVerifyPR(options: VerifyPROptions): Promise<VerifyPRR
   }
 
   const pr = lookup.pullRequest;
+  const skipReason = findSkipReason(pr);
 
-  if (isReleasePR(pr)) {
-    const released = new Map<CheckName, CheckResult>(
+  if (skipReason !== null) {
+    const skippedChecks = new Map<CheckName, CheckResult>(
       checkNames.map((name) => [
         name,
         name === 'pull-request'
           ? { ok: true, detail: `#${pr.number} into ${pr.baseRefName}` }
-          : { ok: true, detail: releaseSkip },
+          : { ok: true, detail: skipReason },
       ]),
     );
 
-    return { exitCode: 0, check: buildCheck(pr.number, released), error: null };
+    return { exitCode: 0, check: buildCheck(pr.number, skippedChecks), error: null };
   }
 
   const base = await readBaseRef(options, pr.baseRefName);
@@ -124,14 +125,18 @@ export async function checkVerifyPR(options: VerifyPROptions): Promise<VerifyPRR
   return { exitCode: check.ok ? 0 : 1, check, error: null };
 }
 
+interface PullRequestAuthor {
+  readonly login: string;
+  readonly isBot: boolean;
+}
+
 interface PullRequest {
   readonly number: number;
   readonly baseRefName: string;
   readonly headRefName: string;
   readonly body: string;
+  readonly author: PullRequestAuthor | null;
 }
-
-const releaseSkip = 'skipped: a release pull request carries no verify report';
 
 type PullRequestLookup =
   | { readonly kind: 'found'; readonly pullRequest: PullRequest }
@@ -148,7 +153,7 @@ async function readPullRequest(options: VerifyPROptions): Promise<PullRequestLoo
     'view',
     ...selector,
     '--json',
-    'number,baseRefName,headRefName,body',
+    'number,baseRefName,headRefName,body,author',
   ]);
 
   if (result === null) {
@@ -203,7 +208,22 @@ function parsePullRequest(text: string): PullRequest | null {
     baseRefName: fields['baseRefName'],
     headRefName: typeof fields['headRefName'] === 'string' ? fields['headRefName'] : '',
     body: typeof fields['body'] === 'string' ? fields['body'] : '',
+    author: parseAuthor(fields['author']),
   };
+}
+
+function parseAuthor(value: unknown): PullRequestAuthor | null {
+  if (typeof value !== 'object' || value === null) {
+    return null;
+  }
+
+  const fields = Object.fromEntries(Object.entries(value));
+
+  if (typeof fields['login'] !== 'string' || typeof fields['is_bot'] !== 'boolean') {
+    return null;
+  }
+
+  return { login: fields['login'], isBot: fields['is_bot'] };
 }
 
 function buildCheck(pr: number | null, results: ReadonlyMap<CheckName, CheckResult>): PRCheck {
@@ -216,10 +236,26 @@ function buildCheck(pr: number | null, results: ReadonlyMap<CheckName, CheckResu
   return { ok: checks.every((check) => check.ok), pr, checks };
 }
 
-// release-please opens its pull request from a `release-please--` branch. It changes only versions
-// and changelogs, and nobody runs a journey on it, so it never holds a report.
-function isReleasePR(pr: PullRequest): boolean {
-  return pr.headRefName.startsWith('release-please--');
+// gh names a GitHub App's account `app/<slug>`, where the REST API names the same account
+// `zgeoff-renovate[bot]`.
+const renovateLogin = 'app/zgeoff-renovate';
+
+// release-please's and Renovate's bots change only versions, and nobody runs a journey on their
+// pull requests, so those never hold a report. A person's `renovate/` branch still meets the gate.
+function findSkipReason(pr: PullRequest): string | null {
+  if (pr.headRefName.startsWith('release-please--')) {
+    return 'skipped: a release pull request carries no verify report';
+  }
+
+  if (
+    pr.headRefName.startsWith('renovate/') &&
+    pr.author?.isBot === true &&
+    pr.author.login === renovateLogin
+  ) {
+    return 'skipped: a renovate pull request carries no verify report';
+  }
+
+  return null;
 }
 
 async function readBaseRef(options: VerifyPROptions, baseBranch: string): Promise<string | null> {
