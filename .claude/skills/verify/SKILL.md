@@ -5,7 +5,7 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:418e53445ffe'
+  wringer-template: 'sha256:97fabc9a9389'
   wringer-command: bun verify
 ---
 
@@ -58,7 +58,8 @@ Read a feature's file before you run its journey.
    under its `paths` or under a `.shared` glob differs from the default branch.
 2. Run `bun verify use --target local`, `bun verify up` and `bun verify doctor`. Expect: `doctor`
    returns `data.passed: true`. Run every journey on `local`: each one writes, and the read-only
-   `demo` target refuses writes.
+   `demo` target refuses writes. `use` saves the target in this worktree's `.wringer/` folder, so it
+   holds in a new shell or session.
 3. Run the journey from the feature's file. Expect: each command exits 0, unless the file says one
    fails.
 4. Compare the app with the feature's end state:
@@ -74,7 +75,8 @@ Read a feature's file before you run its journey.
    `done` makes its verdict `stale`, so repeat them for it.
 7. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature.
 8. Run `bun verify publish`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
-   `unchanged`. It writes the report into the description of the branch's open PR.
+   `unchanged`. It writes the report into the description of the branch's open PR. The CI verify
+   gate reads only that description, so it never sees a verdict you did not publish.
 9. Run `bun verify down`.
 
 ## Read the envelope
