@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll } from 'bun:test';
 import { removeEnvOverrides } from '@zgeoff/testing/helpers';
-import { server } from './mocks/node.ts';
+import { server } from './mocks/server.ts';
 import { shopRequests } from './shop-handlers.ts';
 
 beforeAll(() => {

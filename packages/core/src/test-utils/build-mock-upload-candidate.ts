@@ -1,4 +1,4 @@
-import type { UploadCandidate } from '../pick-upload-refusal.ts';
+import type { UploadCandidate } from '../evidence/pick-upload-refusal.ts';
 
 // A clean text file in a run's features folder, whose recorded hash matches the bytes on disk.
 export function buildMockUploadCandidate(

@@ -4,12 +4,12 @@ import { chromium } from 'playwright-core';
 import { z } from 'zod';
 import { buildAppURL } from './build-app-url.ts';
 import { callPage } from './call-page.ts';
+import { makeChromiumLauncher } from './chromium-launch/make-chromium-launcher.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
-import { makeChromiumLauncher } from './make-chromium-launcher.ts';
 import { pageStateSchema, snapshotSchema } from './page-service-contract.ts';
 import type { ElementTarget, PageArgs } from './page-service-contract.ts';
+import { startBrowserPage } from './page-session/start-browser-page.ts';
 import { pickBrowserEffect } from './pick-browser-effect.ts';
-import { startBrowserPage } from './start-browser-page.ts';
 
 export type PageState = z.infer<typeof pageStateSchema>;
 

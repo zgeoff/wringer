@@ -1,6 +1,6 @@
-import { buildChangeFactsRequest } from '../build-change-request.ts';
-import { readChangeFacts } from '../read-change-facts.ts';
-import type { ChangeFacts } from '../read-change-facts.ts';
+import { buildChangeFactsRequest } from '../change-facts/build-change-request.ts';
+import { readChangeFacts } from '../change-facts/read-change-facts.ts';
+import type { ChangeFacts } from '../change-facts/read-change-facts.ts';
 import type { BuiltinContext } from '../types.ts';
 
 // The change facts of the worktree against a base: its fingerprint, and each feature's.

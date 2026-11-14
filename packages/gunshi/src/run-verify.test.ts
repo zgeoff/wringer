@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
-import { readTemplateHash } from './read-template-hash.ts';
+import { readTemplateHash } from './lint-command/read-template-hash.ts';
 import { createCLIRunner } from './test-utils/create-cli-runner.ts';
 import { createCoverWringer } from './test-utils/create-cover-wringer.ts';
 import { writeLintSkill } from './test-utils/write-lint-skill.ts';

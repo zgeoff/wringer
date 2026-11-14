@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildRunPaths } from '../build-state-paths.ts';
-import { dispatch } from '../dispatch.ts';
+import { dispatch } from '../dispatch/dispatch.ts';
+import { buildRunPaths } from '../state/build-state-paths.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 

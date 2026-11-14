@@ -1,6 +1,6 @@
 import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { runGit } from '../run-git.ts';
+import { runGit } from '../change-facts/run-git.ts';
 import { createTestFolder } from './create-test-folder.ts';
 
 export interface TestRepo {

@@ -2,8 +2,8 @@ import { open, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
 import { appendWholeText } from '../append-whole-text.ts';
-import { readFileFrom } from '../read-file-from.ts';
-import { startStreamRecorder } from '../start-stream-recorder.ts';
+import { readFileFrom } from '../file-source/read-file-from.ts';
+import { startStreamRecorder } from '../recorder/start-stream-recorder.ts';
 import { waitOrAbort } from '../wait-or-abort.ts';
 
 export interface StreamSeederOptions {

@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { buildEnvelopeJSONSchema } from '../src/build-envelope-json-schema.ts';
+import { buildEnvelopeJSONSchema } from '../src/envelope/build-envelope-json-schema.ts';
 
 await Bun.write(
   join(import.meta.dir, '..', 'envelope.schema.json'),

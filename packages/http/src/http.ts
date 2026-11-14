@@ -1,10 +1,13 @@
 import { WringerError, defineDriver, findOwnValue } from '@wringer/core';
 import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
-import { buildRedactedExchange, buildRedactedRequest } from './build-redacted-exchange.ts';
-import { buildRedaction } from './build-redaction.ts';
 import { buildRequestPlan } from './build-request-plan.ts';
 import { pickHttpEffect } from './pick-http-effect.ts';
+import {
+  buildRedactedExchange,
+  buildRedactedRequest,
+} from './redaction/build-redacted-exchange.ts';
+import { buildRedaction } from './redaction/build-redaction.ts';
 import { showPath } from './show-path.ts';
 
 const methodSchema = z.enum(['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']);

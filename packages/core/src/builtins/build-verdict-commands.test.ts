@@ -2,17 +2,17 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import type { StatePort } from '../create-file-state.ts';
-import { dispatch } from '../dispatch.ts';
-import type { UploadFile } from '../evidence-uploader.ts';
-import { readVerdicts } from '../read-verdicts.ts';
-import { parseReportComment } from '../report-comment.ts';
-import { reportSchema } from '../report-schema.ts';
-import type { ReportComment } from '../report-schema.ts';
-import { runIDSchema } from '../run-events.ts';
-import type { RunEvent, RunID } from '../run-events.ts';
+import { dispatch } from '../dispatch/dispatch.ts';
+import type { UploadFile } from '../evidence/evidence-uploader.ts';
+import { parseReportComment } from '../report-document/parse-report-comment.ts';
+import type { StatePort } from '../state/create-file-state.ts';
+import { runIDSchema } from '../state/run-event.ts';
+import type { RunEvent, RunID } from '../state/run-event.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
+import { readVerdicts } from '../verdict/read-verdicts.ts';
+import { reportSchema } from '../verdict/report-schema.ts';
+import type { ReportComment } from '../verdict/report-schema.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();

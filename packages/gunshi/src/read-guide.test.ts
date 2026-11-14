@@ -38,7 +38,7 @@ test('it names the absolute folder of the template in the template topic', async
   }).toStrictEqual({
     absolute: true,
     named: true,
-    files: expect.arrayContaining(['verify.ts', 'verify-registry.ts', 'verify']),
+    files: expect.arrayContaining(['verify.ts', 'create-verify-registry.ts', 'verify']),
   });
 });
 

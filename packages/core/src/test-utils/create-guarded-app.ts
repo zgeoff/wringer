@@ -2,8 +2,8 @@ import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
+import { killProcessGroup } from '../host/kill-process-group.ts';
 import { isErrorCode } from '../is-error-code.ts';
-import { killProcessGroup } from '../kill-process-group.ts';
 
 export interface GuardedApp {
   readonly appPID: number;
@@ -21,7 +21,7 @@ export interface GuardedApp {
 // supervisor does, and prints the app's process ID.
 export async function createGuardedApp(): Promise<GuardedApp> {
   const script = [
-    "import { readLaunchHost } from './src/read-launch-host.ts';",
+    "import { readLaunchHost } from './src/launch/read-launch-host.ts';",
     'const host = readLaunchHost();',
     "const app = host.spawnApp([...host.guard, 'sleep', '300'], { cwd: host.cwd, env: host.env });",
     'console.log(app.pid);',

@@ -1,4 +1,4 @@
-import type { RunView } from '../build-run-view.ts';
+import type { RunView } from '../state/build-run-view.ts';
 
 // A running launch run whose doctor passed, for tests of code that reads a run view.
 export function buildMockRunView(overrides: Partial<RunView> = {}): RunView {

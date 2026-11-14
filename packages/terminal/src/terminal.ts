@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { callSessions } from './call-sessions.ts';
 import { readGhosttyModule } from './read-ghostty-module.ts';
 import { screenSchema, sessionInfoSchema } from './session-service-contract.ts';
-import { startTerminalSessions } from './start-terminal-sessions.ts';
+import { startTerminalSessions } from './terminal-sessions/start-terminal-sessions.ts';
 
 const optionsSchema = z.strictObject({
   cols: z.number().int().min(10).max(500).default(120),

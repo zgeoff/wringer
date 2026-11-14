@@ -1,6 +1,6 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { killProcessGroup } from '../kill-process-group.ts';
+import { killProcessGroup } from '../host/kill-process-group.ts';
 
 export interface LockHolder {
   // False when the process exited before it took the lock.

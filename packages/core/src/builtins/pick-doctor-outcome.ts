@@ -1,4 +1,4 @@
-import type { CheckResult, RunEvent } from '../run-events.ts';
+import type { CheckResult, RunEvent } from '../state/run-event.ts';
 import { WringerError } from '../wringer-error.ts';
 
 interface DoctorData {

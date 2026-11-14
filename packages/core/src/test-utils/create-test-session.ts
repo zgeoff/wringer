@@ -1,11 +1,11 @@
 import { onTestFinished } from 'bun:test';
-import { callSupervisor } from '../call-supervisor.ts';
-import type { StatePort } from '../create-file-state.ts';
-import { createNodeRepoHost } from '../create-node-repo-host.ts';
-import { createRepoState } from '../create-repo-state.ts';
-import { readLaunchHost } from '../read-launch-host.ts';
-import { runSupervisor } from '../run-supervisor.ts';
-import { supervisorServiceName } from '../supervisor-protocol.ts';
+import { readLaunchHost } from '../launch/read-launch-host.ts';
+import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
+import type { StatePort } from '../state/create-file-state.ts';
+import { createRepoState } from '../state/create-repo-state.ts';
+import { callSupervisor } from '../supervisor/call-supervisor.ts';
+import { runSupervisor } from '../supervisor/run-supervisor.ts';
+import { supervisorServiceName } from '../supervisor/supervisor-request.ts';
 import type { Session, Wringer } from '../types.ts';
 import { createFakePullRequestHost } from './create-fake-pull-request-host.ts';
 import { createTestRepo } from './create-test-repo.ts';

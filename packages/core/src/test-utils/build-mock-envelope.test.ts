@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { envelopeSchema } from '../envelope.ts';
+import { envelopeSchema } from '../envelope/envelope.ts';
 import { buildMockEnvelope } from './build-mock-envelope.ts';
 
 test('it builds a passing envelope that parses against the envelope schema', () => {

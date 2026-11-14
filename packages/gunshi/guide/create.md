@@ -4,8 +4,8 @@ Write the verify CLI, its registry and the repo's verify skill
 
 Add the verify CLI, its
 [registry](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md#registry) and the
-repo's `verify` skill. `verify-registry.ts` in the template shows one target, driver, action, repo
-command, doctor check and feature, on the builder that `createWringer` returns.
+repo's `verify` skill. `create-verify-registry.ts` in the template shows one target, driver, action,
+repo command, doctor check and feature, on the builder that `createWringer` returns.
 
 The mistakes that cost the most:
 
@@ -41,10 +41,10 @@ The mistakes that cost the most:
    its config for a target.
 
 2. Add `.wringer/` to `.gitignore`. The CLI keeps each run's state and evidence there.
-3. Copy `verify.ts` and `verify-registry.ts` from the template (`bun verify guide template` names
-   its folder) into `scripts/verify/`. Add `"verify": "bun scripts/verify/verify.ts"` to the
+3. Copy `verify.ts` and `create-verify-registry.ts` from the template (`bun verify guide template`
+   names its folder) into `scripts/verify/`. Add `"verify": "bun scripts/verify/verify.ts"` to the
    `scripts` of `package.json`. Expect: `bun verify --help` lists the template's commands.
-4. In `verify-registry.ts`, write the `local` target with `mode: 'launch'` and
+4. In `create-verify-registry.ts`, write the `local` target with `mode: 'launch'` and
    `access: 'read-write'`. Its `launch` function returns:
    - `command`: the command a developer runs to start the app;
    - `env`: the app's environment. Point the app's state at `ctx.runDirectory` here, such as a

@@ -1,9 +1,9 @@
 import type { Effect } from '@wringer/core';
-import { buildExecQuery } from './build-exec-query.ts';
-import type { ExecQuery } from './build-exec-query.ts';
-import { isUndeclaredWrite } from './is-undeclared-write.ts';
+import { buildExecQuery } from './exec-client/build-exec-query.ts';
+import type { ExecQuery } from './exec-client/build-exec-query.ts';
 import { pickQueryEffect } from './pick-query-effect.ts';
 import type { DbConfig } from './pick-query-effect.ts';
+import { isUndeclaredWrite } from './sql-parsing/is-undeclared-write.ts';
 
 export interface PlannedQuery {
   readonly sql: string;

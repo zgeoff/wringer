@@ -1,5 +1,5 @@
-import type { StatementTimeoutStep } from '../pick-statement-timeout-step.ts';
-import { pickStatementTimeoutStep } from '../pick-statement-timeout-step.ts';
+import type { StatementTimeoutStep } from '../sql-client/pick-statement-timeout-step.ts';
+import { pickStatementTimeoutStep } from '../sql-client/pick-statement-timeout-step.ts';
 
 // Each round trip takes the given time off the time left, as the driver's clock shows it.
 export function collectStatementTimeoutSteps(

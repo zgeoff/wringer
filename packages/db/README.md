@@ -89,10 +89,10 @@ A query returns `{ columns, rows, rowCount }`.
 - On Postgres, a read that holds the word `copy` or `lo_export` counts as a write, inside a string
   or a quoted name too, but never inside a comment: a read-only transaction still lets both write
   server files. A `DO` block, which runs SQL from a string, and a `U&"…"` name count as writes.
-- On Postgres, a read calls only [the listed functions](src/find-unlisted-postgres-call.ts), such as
-  `count`. Any other call counts as a write: a read-only transaction still runs `set_config`,
-  `pg_sleep` or `pg_terminate_backend`. So do a schema other than `pg_catalog` before a function
-  name, and a column list after a name, such as `with totals(day, amount)`.
+- On Postgres, a read calls only [listed functions](src/sql-parsing/find-unlisted-postgres-call.ts),
+  such as `count`. Any other call counts as a write: a read-only transaction still runs
+  `set_config`, `pg_sleep` or `pg_terminate_backend`. So do a schema other than `pg_catalog` before
+  a function name, and a column list after a name, such as `with totals(day, amount)`.
 - The driver catches only these statements, so give a read-only target a role with no file rights.
 - A statement that writes without asking fails with a usage error. A read-only target refuses each
   write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.

@@ -7,6 +7,7 @@ import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { createDbWringer } from './test-utils/create-db-wringer.ts';
 import { createFakeSqlite3 } from './test-utils/create-fake-sqlite3.ts';
+import { seedNotes } from './test-utils/seed-notes.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'db');
@@ -24,14 +25,10 @@ async function setupTest() {
   return {
     directory,
     file,
-    seedNotes: (texts: readonly string[]) => {
-      using database = new Database(file);
-
-      database.run('create table notes (id integer primary key, text text not null)');
-
-      for (const text of texts) {
-        database.run('insert into notes (text) values (?)', [text]);
-      }
+    seed: {
+      notes: (texts: readonly string[]) => {
+        seedNotes(file, texts);
+      },
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
       dispatch(wringer, path, args, { ...shop.session, target }),
@@ -43,7 +40,7 @@ async function setupTest() {
 test('it reads rows with their column names', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes(['pay', 'ship']);
+  ctx.seed.notes(['pay', 'ship']);
 
   await ctx.run('local', ['attach']);
   await ctx.run('local', ['doctor']);
@@ -63,7 +60,7 @@ test('it reads rows with their column names', async () => {
 test('it keeps the column names of a read that returns no rows', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('local', ['attach']);
   await ctx.run('local', ['doctor']);
@@ -80,7 +77,7 @@ test('it refuses a read that copies the database to another file on a read-only 
 
   const copy = join(ctx.directory, 'copy.db');
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('prod', ['attach']);
   await ctx.run('prod', ['doctor']);
@@ -98,7 +95,7 @@ test('it refuses a read that copies the database to another file on a read-only 
 test('it answers a database file that went away with an environment error', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('local', ['attach']);
   await ctx.run('local', ['doctor']);
@@ -116,7 +113,7 @@ test('it answers a database file that went away with an environment error', asyn
 test('it runs a write that asks to write on a target that may write', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('local', ['attach']);
   await ctx.run('local', ['doctor']);
@@ -135,7 +132,7 @@ test('it runs a write that asks to write on a target that may write', async () =
 test('it refuses a write that did not ask to write, with a usage error', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('local', ['attach']);
   await ctx.run('local', ['doctor']);
@@ -170,7 +167,7 @@ test.each([
 ])('it refuses $name on a read-only target with exit code 3 and the hint', async (row) => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('prod', ['attach']);
   await ctx.run('prod', ['doctor']);
@@ -190,7 +187,7 @@ test.each([
 test('it refuses a write inside an action that declared a read, at the client call', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('prod', ['attach']);
   await ctx.run('prod', ['doctor']);
@@ -206,7 +203,7 @@ test('it refuses a write inside an action that declared a read, at the client ca
 test('it runs the write a read-only target grants', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes(['pay']);
+  ctx.seed.notes(['pay']);
 
   await ctx.run('prod', ['attach']);
   await ctx.run('prod', ['doctor']);
@@ -228,7 +225,7 @@ test('it runs the write a read-only target grants', async () => {
 test('it reads rows through the database client on the target host', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes(['pay']);
+  ctx.seed.notes(['pay']);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
@@ -255,7 +252,7 @@ test.each([
 ])('it names the columns of a pragma read of $name through the database client', async (row) => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
@@ -274,7 +271,7 @@ test.each(['table', 'view'])(
   async (kind) => {
     const ctx = await setupTest();
 
-    ctx.seedNotes([]);
+    ctx.seed.notes([]);
 
     using database = new Database(ctx.file);
 
@@ -296,7 +293,7 @@ test.each(['table', 'view'])(
 test('it answers a read through the database client that runs past the deadline with exit code 5', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);
@@ -314,7 +311,7 @@ test('it answers a read through the database client that runs past the deadline 
 test('it refuses an undeclared write through the database client with exit code 3', async () => {
   const ctx = await setupTest();
 
-  ctx.seedNotes([]);
+  ctx.seed.notes([]);
 
   await ctx.run('box', ['attach']);
   await ctx.run('box', ['doctor']);

@@ -1,6 +1,6 @@
 import { buildFeatureFile, renderFeatureTable } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
-import type { MarkdownFile } from '../collect-journey-commands.ts';
+import type { MarkdownFile } from '../lint-command/collect-journey-commands.ts';
 
 export interface LintFixture {
   readonly files: readonly string[];

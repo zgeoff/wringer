@@ -1,9 +1,9 @@
-import { createWasmBridge } from './create-wasm-bridge.ts';
-import type { WasmBridge } from './create-wasm-bridge.ts';
-import { encodeGhosttyKey } from './encode-ghostty-key.ts';
-import { pickUnwrappedText } from './pick-unwrapped-text.ts';
-import { pickVisibleText } from './pick-visible-text.ts';
-import { readGhosttyText } from './read-ghostty-text.ts';
+import { createWasmBridge } from './ghostty-engine/create-wasm-bridge.ts';
+import type { WasmBridge } from './ghostty-engine/create-wasm-bridge.ts';
+import { encodeGhosttyKey } from './ghostty-engine/encode-ghostty-key.ts';
+import { pickUnwrappedText } from './ghostty-engine/pick-unwrapped-text.ts';
+import { pickVisibleText } from './ghostty-engine/pick-visible-text.ts';
+import { readGhosttyText } from './ghostty-engine/read-ghostty-text.ts';
 import type { CursorState, ScreenEngine } from './screen-engine.ts';
 
 export interface GhosttyEngineOptions {

@@ -5,12 +5,12 @@ import { createServer } from 'node:net';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { createWringer } from '../create-wringer.ts';
-import { dispatch } from '../dispatch.ts';
-import { listenSupervisorSocket } from '../listen-supervisor-socket.ts';
-import { local } from '../local.ts';
-import { makeProcessSupervisorPort } from '../make-process-supervisor-port.ts';
-import { runGit } from '../run-git.ts';
+import { runGit } from '../change-facts/run-git.ts';
+import { dispatch } from '../dispatch/dispatch.ts';
+import { local } from '../host/local.ts';
+import { createWringer } from '../registry/create-wringer.ts';
+import { listenSupervisorSocket } from '../supervisor/listen-supervisor-socket.ts';
+import { makeProcessSupervisorPort } from '../supervisor/make-process-supervisor-port.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 

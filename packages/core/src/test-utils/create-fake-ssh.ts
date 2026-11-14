@@ -1,7 +1,7 @@
 import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
-import { killProcessGroup } from '../kill-process-group.ts';
+import { killProcessGroup } from '../host/kill-process-group.ts';
 
 export interface FakeSSH {
   readonly binary: string;

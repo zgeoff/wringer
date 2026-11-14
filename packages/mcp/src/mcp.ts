@@ -2,12 +2,16 @@ import { WringerError, defineDriver } from '@wringer/core';
 import type { DriverSession, Fence } from '@wringer/core';
 import { z } from 'zod';
 import { callClients } from './call-clients.ts';
-import { contentSchema, structuredContentSchema, toolInfoSchema } from './mcp-service-contract.ts';
+import {
+  contentSchema,
+  structuredContentSchema,
+  toolInfoSchema,
+} from './clients-service-contract.ts';
+import { startMCPClients } from './mcp-clients/start-mcp-clients.ts';
 import { mcpTargetConfigSchema } from './mcp-target-config.ts';
 import type { MCPTargetConfig } from './mcp-target-config.ts';
 import { pickMCPEffect } from './pick-mcp-effect.ts';
 import { pickServerName } from './pick-server-name.ts';
-import { startMCPClients } from './start-mcp-clients.ts';
 
 const optionsSchema = z.strictObject({});
 const serverFlag = z.string().min(1).optional();

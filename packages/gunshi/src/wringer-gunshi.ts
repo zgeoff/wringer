@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
-import { buildGuidePorts } from './build-guide-ports.ts';
-import { buildGuideWringer } from './build-guide-wringer.ts';
+import { buildGuidePorts } from './guide-command/build-guide-ports.ts';
+import { buildGuideWringer } from './guide-command/build-guide-wringer.ts';
 import { runWringer } from './run-verify.ts';
 
 const [, script] = process.argv;

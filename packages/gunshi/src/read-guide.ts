@@ -1,9 +1,9 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { parseGuideTopic } from './parse-guide-topic.ts';
-import type { GuideTopic } from './parse-guide-topic.ts';
-import type { Guide } from './pick-guide-data.ts';
+import { parseGuideTopic } from './guide-command/parse-guide-topic.ts';
+import type { GuideTopic } from './guide-command/parse-guide-topic.ts';
+import type { Guide } from './guide-command/pick-guide-data.ts';
 
 const packageSchema = z.looseObject({ version: z.string().min(1) });
 

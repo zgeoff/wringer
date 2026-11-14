@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { killProcessGroup } from '../kill-process-group.ts';
-import { probeProcess } from '../probe-process.ts';
+import { killProcessGroup } from '../host/kill-process-group.ts';
+import { probeProcess } from '../host/probe-process.ts';
 import { createFakeSSH } from './create-fake-ssh.ts';
 import { createTestFolder } from './create-test-folder.ts';
 

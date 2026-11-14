@@ -7,15 +7,15 @@ import { z } from 'zod';
 import { appendWholeText } from './append-whole-text.ts';
 import { streamRecordSchema } from './build-stream-slice.ts';
 import type { StreamSlice } from './build-stream-slice.ts';
-import { readFileFrom } from './read-file-from.ts';
+import { readFileFrom } from './file-source/read-file-from.ts';
 import { readStreamSlice } from './read-stream-slice.ts';
 import type { StreamSliceRequest } from './read-stream-slice.ts';
 import {
   sourceStatusSchema,
   startStreamRecorder,
   streamSourceSchema,
-} from './start-stream-recorder.ts';
-import type { StreamSource } from './start-stream-recorder.ts';
+} from './recorder/start-stream-recorder.ts';
+import type { StreamSource } from './recorder/start-stream-recorder.ts';
 import { waitOrAbort } from './wait-or-abort.ts';
 
 const streamNameSchema = z.string().regex(/^[a-z0-9][a-z0-9-]*$/u);

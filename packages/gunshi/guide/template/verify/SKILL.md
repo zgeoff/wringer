@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change in the running app, run the journey of a feature,
   or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:5ad8a6ead397'
+  wringer-template: 'sha256:418e53445ffe'
   wringer-command: bun verify
 ---
 
@@ -145,8 +145,8 @@ group, such as `action`: run `bun verify <group> --help` for its commands.
 
 <!-- repo: registry -->
 
-The registry, `scripts/verify/verify-registry.ts`, declares the targets, actions, commands, doctor
-checks and features, with each feature's `paths`.
+The registry, `scripts/verify/create-verify-registry.ts`, declares the targets, actions, commands,
+doctor checks and features, with each feature's `paths`.
 
 <!-- /repo -->
 

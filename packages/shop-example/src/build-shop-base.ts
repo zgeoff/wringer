@@ -65,7 +65,7 @@ export function buildShopBase(name: string, options: ShopBaseOptions = {}) {
             servers: {
               shop: {
                 transport: 'stdio',
-                command: ['bun', join(import.meta.dir, 'shop-mcp.ts')],
+                command: ['bun', join(import.meta.dir, 'shop-clients', 'shop-mcp.ts')],
                 env: { SHOP_URL: ctx.endpoints['web'] ?? '' },
                 readTools: ['list_orders'],
               },
@@ -74,7 +74,7 @@ export function buildShopBase(name: string, options: ShopBaseOptions = {}) {
           terminal: (ctx) => ({
             programs: {
               tui: {
-                command: ['bun', join(import.meta.dir, 'shop-tui.ts')],
+                command: ['bun', join(import.meta.dir, 'shop-clients', 'shop-tui.ts')],
                 env: { SHOP_URL: ctx.endpoints['web'] ?? '' },
               },
             },

@@ -8,15 +8,15 @@ import type {
   WringerError,
 } from '@wringer/core';
 import { parseArgs } from 'gunshi';
-import type { Invocation } from './build-gunshi-commands.ts';
-import { pickCLIOutcome } from './pick-cli-outcome.ts';
-import { pickDispatchPlan } from './pick-dispatch-plan.ts';
-import { pickOutputMode } from './pick-output-mode.ts';
-import type { OutputMode } from './pick-output-mode.ts';
-import { renderEnvelope } from './render-envelope.ts';
-import { renderHumanEvent } from './render-human-event.ts';
-import { resolveInvocation } from './resolve-invocation.ts';
-import { scrubParsedInvocation } from './scrub-parsed-invocation.ts';
+import type { Invocation } from './gunshi-commands/build-gunshi-commands.ts';
+import { pickCLIOutcome } from './invocation/pick-cli-outcome.ts';
+import { pickDispatchPlan } from './invocation/pick-dispatch-plan.ts';
+import { resolveInvocation } from './invocation/resolve-invocation.ts';
+import { scrubParsedInvocation } from './invocation/scrub-parsed-invocation.ts';
+import { pickOutputMode } from './output/pick-output-mode.ts';
+import type { OutputMode } from './output/pick-output-mode.ts';
+import { renderEnvelope } from './output/render-envelope.ts';
+import { renderHumanEvent } from './output/render-human-event.ts';
 
 interface RepoPorts {
   readonly state: StatePort;

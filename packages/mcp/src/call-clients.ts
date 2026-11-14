@@ -1,7 +1,7 @@
 import type { ServiceCaller } from '@wringer/core';
 import type { z } from 'zod';
-import { clientsServiceContract } from './mcp-service-contract.ts';
-import type { ClientsArgs, ClientsMethod, ClientsResult } from './mcp-service-contract.ts';
+import { clientsServiceContract } from './clients-service-contract.ts';
+import type { ClientsArgs, ClientsMethod, ClientsResult } from './clients-service-contract.ts';
 
 // Indexing this mapped type by a method keeps that method's result type, which indexing the
 // contract's own type loses to a union of every result.

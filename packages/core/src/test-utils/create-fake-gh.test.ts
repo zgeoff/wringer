@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { runProcess } from '../run-process.ts';
+import { runProcess } from '../host/run-process.ts';
 import { createFakeGH } from './create-fake-gh.ts';
 import { createTestFolder } from './create-test-folder.ts';
 

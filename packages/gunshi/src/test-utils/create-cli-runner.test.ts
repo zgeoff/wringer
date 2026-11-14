@@ -5,7 +5,7 @@ import { buildEnvelope } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
-import { probeProcess } from '../../../core/src/probe-process.ts';
+import { probeProcess } from '../../../core/src/host/probe-process.ts';
 import { createCleanupRegistry } from './create-cleanup-registry.ts';
 import { createCLIRunner } from './create-cli-runner.ts';
 import { readPIDFile } from './read-pid-file.ts';

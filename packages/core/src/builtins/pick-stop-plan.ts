@@ -1,4 +1,4 @@
-import type { RunView } from '../build-run-view.ts';
+import type { RunView } from '../state/build-run-view.ts';
 import type { SupervisorReach } from './call-run-supervisor.ts';
 import type { StopData } from './stop-data-schema.ts';
 
