@@ -164,8 +164,54 @@ test('it fails registry for a report from the shop registry and skips the gate',
     'view',
     '142',
     '--json',
-    'number,baseRefName,body',
+    'number,baseRefName,headRefName,body',
   ]);
+});
+
+test('it passes a release pull request with no report block and runs no gate', async () => {
+  const ctx = await setupTest({
+    gh: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        number: 140,
+        baseRefName: 'main',
+        headRefName: 'release-please--branches--main',
+        body: 'a changelog',
+      }),
+      stderr: '',
+    },
+  });
+
+  const result = await ctx.runCheck({ PR_NUMBER: '140' });
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    error: null,
+    check: {
+      ok: true,
+      pr: 140,
+      checks: [
+        { name: 'pull-request', ok: true, detail: '#140 into main' },
+        {
+          name: 'report-block',
+          ok: true,
+          detail: 'skipped: a release pull request carries no verify report',
+        },
+        {
+          name: 'registry',
+          ok: true,
+          detail: 'skipped: a release pull request carries no verify report',
+        },
+        {
+          name: 'gate',
+          ok: true,
+          detail: 'skipped: a release pull request carries no verify report',
+        },
+      ],
+    },
+  });
+
+  expect(ctx.calls.some((call) => call[0] === 'bun')).toBe(false);
 });
 
 test('it prints the failing features of a gate that fails', async () => {
