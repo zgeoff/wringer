@@ -7,6 +7,7 @@ export function buildRepoCheck<Input, Data, Ds extends AnyDrivers>(
 ): RunnableRepoCheck {
   return {
     name: check.name,
+    targets: check.targets,
     timeoutMs: check.timeoutMs,
     run: async (ctx) => {
       const typed = toTypedDriveContext<Ds>(ctx, driverNames);

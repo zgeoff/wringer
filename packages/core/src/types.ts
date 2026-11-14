@@ -310,6 +310,9 @@ export interface ActionDefinition<Input, Data, Ds extends AnyDrivers = AnyDriver
 
 export interface CheckDefinition<Input, Data, Ds extends AnyDrivers = AnyDrivers> {
   readonly name: string;
+
+  // The targets the check runs on. On any other, the doctor reports it as skipped.
+  readonly targets?: readonly string[] | undefined;
   readonly input: z.ZodType<Input>;
   readonly data: z.ZodType<Data>;
   readonly timeoutMs: number;
@@ -457,6 +460,7 @@ export type RegisteredCommand =
 
 export interface RunnableRepoCheck {
   readonly name: string;
+  readonly targets: readonly string[] | undefined;
   readonly timeoutMs: number;
   readonly run: (ctx: DriveContext) => Promise<void>;
 }

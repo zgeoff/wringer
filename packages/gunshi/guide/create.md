@@ -62,8 +62,9 @@ The mistakes that cost the most:
    the app, such as seeding a record. The CLI runs it as `bun verify action <name>`.
 8. Write a repo command with `.command` for a read that a journey checks, such as a count.
 9. Write a doctor check with `.check` for each thing that must hold before a journey means anything,
-   such as an API that answers. Then run `bun verify up`, then `bun verify doctor`. Expect:
-   `data.passed: true`. Run `bun verify down`.
+   such as an API that answers. When a check holds only on some targets, list them in its `targets`;
+   the doctor reports it as `skipped` on the rest. Then run `bun verify up`, then
+   `bun verify doctor`. Expect: `data.passed: true`. Run `bun verify down`.
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs
     of the files that change its behaviour.

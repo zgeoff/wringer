@@ -16,7 +16,7 @@ export type Endpoints = z.infer<typeof endpointsSchema>;
 
 export const checkResultSchema = z.strictObject({
   name: z.string(),
-  status: z.enum(['passed', 'failed']),
+  status: z.enum(['passed', 'failed', 'skipped']),
   durationMs: z.number().int().nonnegative(),
   code: z.string().nullable(),
   message: z.string().nullable(),

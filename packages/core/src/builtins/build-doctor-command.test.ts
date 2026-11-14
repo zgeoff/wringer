@@ -126,6 +126,16 @@ async function setupTest() {
         throw new WringerError('check-failed', { message: 'The shelf count came back short.' });
       },
     })
+    .check({
+      name: 'drawer-count',
+      targets: ['till-box'],
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 1000,
+      run: () => {
+        throw new WringerError('check-failed', { message: 'The drawer came up short.' });
+      },
+    })
     .build();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
@@ -287,7 +297,26 @@ test('it starts no check once the doctor ran past its own deadline', async () =>
     ['note', 'timeout'],
     ['scribble', 'timeout'],
     ['shelf', 'timeout'],
+    ['drawer-count', null],
   ]);
+});
+
+test('it reports a repo check as skipped, without running it, on a target outside its targets', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['attach']);
+
+  const result = await ctx.run(['doctor']);
+
+  const data = z.object({ results: z.array(z.unknown()) }).parse(result.envelope.data);
+
+  expect(data.results).toContainEqual({
+    name: 'drawer-count',
+    status: 'skipped',
+    durationMs: 0,
+    code: null,
+    message: 'drawer-count runs only on till-box.',
+  });
 });
 
 test('it refuses a write from a check on a read-write target, which stays unchanged', async () => {

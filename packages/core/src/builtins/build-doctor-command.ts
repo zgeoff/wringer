@@ -67,6 +67,7 @@ export function buildDoctorCommand(): RegisteredCommand {
 
 interface PlannedCheck {
   readonly name: string;
+  readonly targets: readonly string[] | undefined;
   readonly timeoutMs: number;
   readonly run: (drive: Drive) => Promise<void>;
 }
@@ -80,6 +81,7 @@ function collectChecks(
   const driverChecks = [...drive.drivers].flatMap(([driverName, opened]) =>
     opened.checks.map((check) => ({
       name: `${driverName}.${check.name}`,
+      targets: undefined,
       timeoutMs: check.timeoutMs,
       run: (checkDrive: Drive) => runDriverCheck(ctx, checkDrive, driverName, check.name),
     })),
@@ -87,6 +89,7 @@ function collectChecks(
 
   const repoChecks = ctx.wringer.checks.map((check) => ({
     name: check.name,
+    targets: check.targets,
     timeoutMs: check.timeoutMs,
     run: (checkDrive: Drive) => check.run(checkDrive.ctx),
   }));
@@ -129,6 +132,7 @@ function collectRevisionChecks(
   return [
     {
       name: 'revision',
+      targets: undefined,
       timeoutMs: revisionTimeoutMs,
       run: async (checkDrive) => {
         const value = await readRevision(revision, checkDrive.ctx);
@@ -146,6 +150,16 @@ function collectRevisionChecks(
 }
 
 async function runCheck(ctx: BuiltinContext, check: PlannedCheck): Promise<CheckResult> {
+  if (check.targets !== undefined && !check.targets.includes(ctx.targetName)) {
+    return {
+      name: check.name,
+      status: 'skipped',
+      durationMs: 0,
+      code: null,
+      message: `${check.name} runs only on ${check.targets.join(', ')}.`,
+    };
+  }
+
   const started = performance.now();
   const deadline = AbortSignal.any([ctx.signal, AbortSignal.timeout(check.timeoutMs)]);
   const deadlineAt = Math.min(ctx.deadlineAt, ctx.now().getTime() + check.timeoutMs);

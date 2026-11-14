@@ -314,6 +314,22 @@ test('it prints text for a person with --human', async () => {
   expect(result.stdout).toStartWith('use passed\n{\n  "target": null,\n  "feature": "greeting",');
 });
 
+test('it prints a doctor check outside its targets as skipped for a person with --human', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['attach', '--target', 'prod']);
+
+  onTestFinished(() => ctx.run(['detach', '--target', 'prod']));
+
+  const result = await ctx.run(['doctor', '--target', 'prod', '--human']);
+
+  expect(result.stdout.split('\n')).toIncludeAllMembers([
+    'check: {"name":"stock","status":"skipped","durationMs":0,"code":null,"message":"stock runs only on local."}',
+    'doctor passed',
+    '      "status": "skipped",',
+  ]);
+});
+
 test('it prints the error and its hint for a person with --human', async () => {
   const ctx = await setupTest();
   const result = await ctx.run(['action', 'greet', '--name', 'Ines', '--human']);
