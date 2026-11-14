@@ -1,4 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/server';
+import { z } from 'zod';
 import { createFixtureServer } from './create-fixture-server.ts';
 
 export interface FixtureHTTPServerOptions {
@@ -11,6 +12,16 @@ export interface FixtureHTTPServerOptions {
         readonly clientID: string;
         readonly clientSecret: string;
       };
+
+  // Answers every request with a 500 whose body quotes the Authorization header it saw.
+  readonly failEchoingAuthorization?: boolean;
+
+  // Expires every token, and answers 401, when the first tool call arrives: a token that lapses
+  // between the connection and the call.
+  readonly expireTokensOnFirstToolCall?: boolean;
+
+  // Never answers a DELETE, as a hung server does.
+  readonly holdDelete?: boolean;
 }
 
 interface FixtureRequest {
@@ -39,14 +50,15 @@ export async function createFixtureHTTPServer(
   const validTokens = new Set<string>();
 
   let lastTokenAuthorization = '';
-  let lastMCPAuthorization = '';
+  const mcpAuthorizations: string[] = [];
   let issued = 0;
+  let toolCalled = false;
 
   const mcpServer = createFixtureServer({
     reveal: () =>
       JSON.stringify({
         tokenAuthorization: lastTokenAuthorization,
-        mcpAuthorization: lastMCPAuthorization,
+        mcpAuthorizations,
       }),
   });
 
@@ -56,7 +68,7 @@ export async function createFixtureHTTPServer(
 
   await mcpServer.connect(transport);
 
-  const handleRequest = (request: Request): Response | Promise<Response> => {
+  const handleRequest = async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
 
     const origin = url.origin;
@@ -96,9 +108,29 @@ export async function createFixtureHTTPServer(
       return Response.json({ access_token: token, token_type: 'Bearer', expires_in: 3600 });
     }
 
-    lastMCPAuthorization = request.headers.get('authorization') ?? '';
+    const authorization = request.headers.get('authorization') ?? '';
 
-    if (!isAuthorized(options, validTokens, lastMCPAuthorization)) {
+    mcpAuthorizations.push(authorization);
+
+    if (options.failEchoingAuthorization === true) {
+      return new Response(`server error for ${authorization}`, { status: 500 });
+    }
+
+    if (request.method === 'DELETE' && options.holdDelete === true) {
+      return Promise.withResolvers<Response>().promise;
+    }
+
+    if (options.expireTokensOnFirstToolCall === true && !toolCalled && request.method === 'POST') {
+      const body: unknown = await request.clone().json();
+
+      if (z.object({ method: z.literal('tools/call') }).safeParse(body).success) {
+        toolCalled = true;
+
+        validTokens.clear();
+      }
+    }
+
+    if (!isAuthorized(options, validTokens, authorization)) {
       return new Response('unauthorized', {
         status: 401,
         headers: {

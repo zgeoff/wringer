@@ -574,6 +574,99 @@ test('it keeps the client secret, the Basic header and the access token out of t
   }).toStrictEqual({ leaked: [], redacted: true });
 });
 
+test('it keeps a token that a refresh replaced out of the envelope and the evidence', async () => {
+  const ctx = setupTest();
+  const clientSecret = 'plum-harbour-secret-91';
+
+  updateEnv('FIXTURE_MCP_SECRET', clientSecret);
+
+  const server = await ctx.startHTTPServer({
+    auth: { kind: 'client-credentials', clientID: 'service:ro', clientSecret },
+    expireTokensOnFirstToolCall: true,
+  });
+
+  const session = await ctx.startSession({
+    shop: {
+      transport: 'http',
+      url: `${server.url}/mcp`,
+      auth: {
+        clientCredentials: {
+          clientID: 'service:ro',
+          secretEnv: 'FIXTURE_MCP_SECRET',
+          issuer: server.url,
+        },
+      },
+      readTools: [],
+    },
+  });
+
+  await session.start('local');
+
+  const result = await session.run('local', ['mcp', 'call'], { tool: 'reveal' });
+  const evidence = await session.readEvidence(result.envelope.evidence[0]?.path ?? '');
+
+  const shown = JSON.stringify(result.envelope) + evidence;
+
+  expect({
+    leaked: ['fixture-access-token-1', 'fixture-access-token-2'].filter((token) =>
+      shown.includes(token),
+    ),
+    redacted: shown.includes('[redacted:'),
+  }).toStrictEqual({ leaked: [], redacted: true });
+});
+
+test('it keeps the bearer value out of the error when the connection fails', async () => {
+  const ctx = setupTest();
+
+  updateEnv('FIXTURE_MCP_TOKEN', 'harbour-bearer-value-77');
+
+  const server = await ctx.startHTTPServer({
+    auth: { kind: 'none' },
+    failEchoingAuthorization: true,
+  });
+
+  const session = await ctx.startSession({
+    shop: {
+      transport: 'http',
+      url: `${server.url}/mcp`,
+      auth: { bearerEnv: 'FIXTURE_MCP_TOKEN' },
+      readTools: [],
+    },
+  });
+
+  await session.start('local');
+
+  const result = await session.run('local', ['mcp', 'call'], {
+    tool: 'echo',
+    args: '{"text":"hi"}',
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    leaked: JSON.stringify(result.envelope).includes('harbour-bearer-value-77'),
+  }).toStrictEqual({ exitCode: 4, leaked: false });
+});
+
+test('it detaches while the server never answers the session DELETE', async () => {
+  const ctx = setupTest();
+
+  const server = await ctx.startHTTPServer({ auth: { kind: 'none' }, holdDelete: true });
+
+  const session = await ctx.startSession({
+    shop: { transport: 'http', url: `${server.url}/mcp`, readTools: [] },
+  });
+
+  await session.start('local');
+  await session.run('local', ['mcp', 'call'], { tool: 'echo', args: '{"text":"hi there"}' });
+
+  const detached = await session.run('local', ['detach']);
+
+  expect({
+    exitCode: detached.exitCode,
+    deletes: server.requests.filter((request) => request.method === 'DELETE').length,
+  }).toStrictEqual({ exitCode: 0, deletes: 1 });
+});
+
 test('it ends each HTTP session with a DELETE on detach', async () => {
   const ctx = setupTest();
 

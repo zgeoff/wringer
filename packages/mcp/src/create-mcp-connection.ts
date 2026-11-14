@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   Client,
   ClientCredentialsProvider,
@@ -19,18 +20,19 @@ export interface MCPConnectionRequest {
   // A relative stdio `cwd` starts here.
   readonly root: string;
   readonly signal: AbortSignal;
+
+  // Called with each secret the moment it is known, before the first request that could echo it.
+  readonly noteSecret: (secret: CollectedSecret) => void;
 }
 
 export interface MCPConnection {
   readonly client: Client;
 
-  // Every secret this connection has met so far: the client secret, the header that carries it, the
-  // bearer value and each access token the server issued.
-  readonly readSecrets: () => readonly CollectedSecret[];
-
   // Ends an HTTP session with a DELETE, then closes the client and, for stdio, the child.
   readonly close: () => Promise<void>;
 }
+
+const SESSION_END_TIMEOUT_MS = 1000;
 
 // Connects one client to the server the target names. A missing variable fails as a usage error,
 // before anything is sent.
@@ -49,10 +51,10 @@ export async function createMCPConnection(request: MCPConnectionRequest): Promis
 
     await client.connect(transport, { signal: request.signal });
 
-    return { client, readSecrets: () => [], close: () => client.close() };
+    return { client, close: () => client.close() };
   }
 
-  const auth = readAuth(request.name, request.server.auth, request.env);
+  const auth = readAuth(request.name, request.server.auth, request.env, request.noteSecret);
 
   const url = new URL(request.server.url);
 
@@ -63,10 +65,20 @@ export async function createMCPConnection(request: MCPConnectionRequest): Promis
 
   const connection: MCPConnection = {
     client,
-    readSecrets: auth.readSecrets,
     close: async () => {
-      await transport.terminateSession().catch(() => null);
-      await client.close();
+      const abandon = new AbortController();
+
+      try {
+        // A server that never answers the DELETE must not keep the client open.
+        await Promise.race([
+          transport.terminateSession().catch(() => null),
+          sleep(SESSION_END_TIMEOUT_MS, null, { signal: abandon.signal }).catch(() => null),
+        ]);
+      } finally {
+        abandon.abort();
+
+        await client.close();
+      }
     },
   };
 
@@ -83,25 +95,24 @@ export async function createMCPConnection(request: MCPConnectionRequest): Promis
 
 interface AuthSetup {
   readonly provider: AuthProvider | OAuthClientProvider | undefined;
-  readonly readSecrets: () => readonly CollectedSecret[];
 }
 
 function readAuth(
   name: string,
   auth: MCPAuthConfig | undefined,
   env: Readonly<Record<string, string | undefined>>,
+  noteSecret: (secret: CollectedSecret) => void,
 ): AuthSetup {
   if (auth === undefined) {
-    return { provider: undefined, readSecrets: () => [] };
+    return { provider: undefined };
   }
 
   if ('bearerEnv' in auth) {
     const bearer = readEnvValue(name, auth.bearerEnv, env);
 
-    return {
-      provider: { token: () => Promise.resolve(bearer) },
-      readSecrets: () => [{ name: auth.bearerEnv, value: bearer }],
-    };
+    noteSecret({ name: auth.bearerEnv, value: bearer });
+
+    return { provider: { token: () => Promise.resolve(bearer) } };
   }
 
   const credentials = auth.clientCredentials;
@@ -121,27 +132,22 @@ function readAuth(
         new ClientCredentialsProvider(options)
       : new ClientCredentialsProvider({ ...options, expectedIssuer: credentials.issuer });
 
-  const tokens = new Set<string>();
+  noteSecret({ name: credentials.secretEnv, value: clientSecret });
 
-  return {
-    provider,
-    readSecrets: () => {
-      const token = provider.tokens()?.access_token;
+  noteSecret({
+    name: `${credentials.secretEnv}-basic-authorization`,
+    value: buildBasicAuthorization(credentials.clientID, clientSecret),
+  });
 
-      if (token !== undefined) {
-        tokens.add(token);
-      }
+  // Each token is noted as the SDK saves it, so one that a refresh replaces is already known.
+  const saveTokens = provider.saveTokens.bind(provider);
 
-      return [
-        { name: credentials.secretEnv, value: clientSecret },
-        {
-          name: `${credentials.secretEnv}-basic-authorization`,
-          value: buildBasicAuthorization(credentials.clientID, clientSecret),
-        },
-        ...[...tokens].map((value) => ({ name: `${name}-access-token`, value })),
-      ];
-    },
+  provider.saveTokens = (tokens) => {
+    noteSecret({ name: `${name}-access-token`, value: tokens.access_token });
+    saveTokens(tokens);
   };
+
+  return { provider };
 }
 
 function readEnvValue(

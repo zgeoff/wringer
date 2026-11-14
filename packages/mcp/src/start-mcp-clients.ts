@@ -25,13 +25,9 @@ export function startMCPClients(options: MCPClientsOptions): ServiceInstance {
 
   const met = new Map<string, CollectedSecret>();
 
-  const noteSecrets = (connection: MCPConnection): CollectedSecret[] => {
-    for (const secret of connection.readSecrets()) {
-      met.set(`${secret.name}\0${secret.value}`, secret);
-      secrets.add({ ...secret, origin: 'collected' });
-    }
-
-    return [...met.values()];
+  const noteSecret = (secret: CollectedSecret): void => {
+    met.set(`${secret.name}\0${secret.value}`, secret);
+    secrets.add({ ...secret, origin: 'collected' });
   };
 
   const readServer = (name: string): MCPServerConfig => {
@@ -62,6 +58,7 @@ export function startMCPClients(options: MCPClientsOptions): ServiceInstance {
       env: options.env,
       root: options.root,
       signal,
+      noteSecret,
     });
 
     connections.set(name, connecting);
@@ -96,10 +93,6 @@ export function startMCPClients(options: MCPClientsOptions): ServiceInstance {
       }
 
       throw toWringerError(name, error, signal.aborted, secrets.scrubText);
-    } finally {
-      if (connection !== undefined) {
-        noteSecrets(connection);
-      }
     }
   };
 
@@ -119,7 +112,7 @@ export function startMCPClients(options: MCPClientsOptions): ServiceInstance {
               readOnlyHint: tool.annotations?.readOnlyHint ?? null,
               inReadTools: readTools.includes(tool.name),
             })),
-            secrets: noteSecrets(connection),
+            secrets: [...met.values()],
           };
         }),
       call: (args, signal) =>
@@ -135,7 +128,7 @@ export function startMCPClients(options: MCPClientsOptions): ServiceInstance {
             isError: answer.isError ?? false,
             content: answer.content,
             structuredContent: structuredContentSchema.parse(answer.structuredContent ?? null),
-            secrets: noteSecrets(connection),
+            secrets: [...met.values()],
           };
         }),
     }),
