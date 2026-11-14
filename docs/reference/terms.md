@@ -57,7 +57,9 @@ services.
 ## Doctor
 
 The checks that a run passes before the CLI lets any command touch the app. `bun verify doctor` runs
-them. Until they pass, the CLI refuses such a command with `doctor-required`.
+them. Until they pass, the CLI refuses such a command with `doctor-required`. A repo check that
+lists `targets` runs only on those targets. On any other target, the doctor reports it as `skipped`,
+and a skipped check never fails the doctor.
 
 ## Verdict
 

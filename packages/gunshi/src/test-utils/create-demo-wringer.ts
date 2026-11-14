@@ -36,8 +36,8 @@ export interface DemoOptions {
 }
 
 // A repo's verify CLI for the adapter's tests: targets `local` and read-only `prod`, an action with
-// every flag type, commands with positionals, union arguments or signed numbers, a positional named
-// after a global flag, a command that never finishes, and a doctor check that passes.
+// every flag type, commands with positionals, union or signed arguments, a positional named after a
+// global flag, a command that never ends, a passing doctor check, and one only `local` runs.
 export function createDemoWringer(options: DemoOptions = {}): Wringer {
   return createWringer({ name: 'demo' })
     .target('local', {
@@ -135,6 +135,14 @@ export function createDemoWringer(options: DemoOptions = {}): Wringer {
     })
     .check({
       name: 'shelf',
+      input: z.strictObject({}),
+      data: z.strictObject({}),
+      timeoutMs: 1000,
+      run: () => Promise.resolve({}),
+    })
+    .check({
+      name: 'stock',
+      targets: ['local'],
       input: z.strictObject({}),
       data: z.strictObject({}),
       timeoutMs: 1000,

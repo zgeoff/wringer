@@ -25,6 +25,40 @@ test('it plans a passed event and passed data when every check passed', () => {
   });
 });
 
+test('it plans a passed event, keeping each skipped check, when no check failed', () => {
+  const outcome = pickDoctorOutcome(
+    [
+      { name: 'http.health', status: 'passed', durationMs: 4, code: null, message: null },
+      {
+        name: 'stock',
+        status: 'skipped',
+        durationMs: 0,
+        code: null,
+        message: 'stock runs only on local.',
+      },
+    ],
+    '2026-11-05T08:00:00.000Z',
+  );
+
+  expect({ type: outcome.event.type, data: outcome.data, failure: outcome.failure }).toStrictEqual({
+    type: 'doctor-passed',
+    data: {
+      passed: true,
+      results: [
+        { name: 'http.health', status: 'passed', durationMs: 4, code: null, message: null },
+        {
+          name: 'stock',
+          status: 'skipped',
+          durationMs: 0,
+          code: null,
+          message: 'stock runs only on local.',
+        },
+      ],
+    },
+    failure: null,
+  });
+});
+
 test('it plans a failed event and a check-failed error that names each failed check', () => {
   const outcome = pickDoctorOutcome(
     [

@@ -15,9 +15,9 @@ export interface DoctorOutcome {
 }
 
 export function pickDoctorOutcome(results: readonly CheckResult[], at: string): DoctorOutcome {
-  const passed = results.every((result) => result.status === 'passed');
-  const data = { passed, results: [...results] };
   const failed = results.filter((result) => result.status === 'failed');
+  const passed = failed.length === 0;
+  const data = { passed, results: [...results] };
 
   return {
     event: { type: passed ? 'doctor-passed' : 'doctor-failed', at, results: data.results },

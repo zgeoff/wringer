@@ -99,7 +99,7 @@ test('it drives an action with each flag type on an attached target', async () =
   });
 });
 
-test("it streams the doctor's check event before its envelope, each in the published schema", async () => {
+test("it streams the doctor's check events before its envelope, each in the published schema", async () => {
   const ctx = await setupTest();
 
   await ctx.run('attach', '--target', 'prod');
@@ -110,7 +110,7 @@ test("it streams the doctor's check event before its envelope, each in the publi
     events: result.events,
     last: result.envelope.command,
     errors: result.errors,
-  }).toStrictEqual({ events: ['check'], last: 'doctor', errors: [] });
+  }).toStrictEqual({ events: ['check', 'check'], last: 'doctor', errors: [] });
 });
 
 test('it lints the cover of the registry file in its `registry` option', async () => {
