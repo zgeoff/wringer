@@ -2,16 +2,18 @@ import { expect, test } from 'bun:test';
 import { parseKey } from './parse-key.ts';
 
 test.each([
-  ['ctrl+c', 'c', ['ctrl']],
-  ['alt+x', 'x', ['alt']],
-  ['shift+tab', 'tab', ['shift']],
-  ['ctrl+alt+delete', 'delete', ['ctrl', 'alt']],
-  ['esc', 'escape', []],
-  ['Return', 'enter', []],
-  ['f5', 'f5', []],
-  ['A', 'a', ['shift']],
-  ['ctrl+;', ';', ['ctrl']],
-])('#parseKey reads %s as a key event', (spec, key, held) => {
+  ['ctrl+c', 'c', ['ctrl'], undefined],
+  ['alt+x', 'x', ['alt'], undefined],
+  ['shift+tab', 'tab', ['shift'], undefined],
+  ['ctrl+alt+delete', 'delete', ['ctrl', 'alt'], undefined],
+  ['esc', 'escape', [], undefined],
+  ['Return', 'enter', [], undefined],
+  ['f5', 'f5', [], undefined],
+  ['A', 'a', ['shift'], 'A'],
+  ['r', 'r', [], 'r'],
+  ['space', 'space', [], ' '],
+  ['ctrl+;', ';', ['ctrl'], undefined],
+])('#parseKey reads %s as a key event', (spec, key, held, text) => {
   expect(parseKey(spec)).toStrictEqual({
     key,
     mods: {
@@ -20,6 +22,7 @@ test.each([
       alt: held.includes('alt'),
       super: false,
     },
+    ...(text === undefined ? {} : { text }),
   });
 });
 

@@ -33,7 +33,7 @@ flowchart LR
 // shop-example module. Both registries start from one base, so a target, action, command or
 // doctor check is defined once.
 export function buildShopBase(name: string): WringerBuilder<ShopDrivers>;
-// → the `local` and `demo` targets, the four drivers, `action place-order`,
+// → the `local` and `demo` targets, the five drivers, `action place-order`,
 //   `orders count` and the `orders-api` check; no features, no ignore list
 
 export function createShopRegistry(options?: ShopRegistryOptions): Wringer;
@@ -47,15 +47,16 @@ The root `verify` script runs `createWringerRegistry` with the skill folder `.cl
 A `verify:shop` script runs `createShopRegistry` with the skill folder
 `packages/shop-example/verify-skill`.
 
-| Feature          | Paths                                                                                 |
-| ---------------- | ------------------------------------------------------------------------------------- |
-| `browser-driver` | `packages/browser/package.json`, `packages/browser/src/**`                            |
-| `http-driver`    | `packages/http/package.json`, `packages/http/src/**`                                  |
-| `db-driver`      | `packages/db/package.json`, `packages/db/src/**`                                      |
-| `stream-driver`  | `packages/stream/package.json`, `packages/stream/src/**`                              |
-| `core`           | `packages/core/{package.json,envelope.schema.json}`, `packages/core/{src,scripts}/**` |
-| `cli`            | `packages/gunshi/package.json`, `packages/gunshi/src/**`                              |
-| `guide`          | `packages/gunshi/guide/**`                                                            |
+| Feature           | Paths                                                                                 |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| `browser-driver`  | `packages/browser/package.json`, `packages/browser/src/**`                            |
+| `http-driver`     | `packages/http/package.json`, `packages/http/src/**`                                  |
+| `db-driver`       | `packages/db/package.json`, `packages/db/src/**`                                      |
+| `stream-driver`   | `packages/stream/package.json`, `packages/stream/src/**`                              |
+| `terminal-driver` | `packages/terminal/package.json`, `packages/terminal/{ghostty,scripts,src}/**`        |
+| `core`            | `packages/core/{package.json,envelope.schema.json}`, `packages/core/{src,scripts}/**` |
+| `cli`             | `packages/gunshi/package.json`, `packages/gunshi/src/**`                              |
+| `guide`           | `packages/gunshi/guide/**`                                                            |
 
 `cli` lists `features`, and `guide` lists `guide`, in their `commands`, so each journey's own
 commands are its drives, as [verdict-scope.md](./verdict-scope.md) defines.

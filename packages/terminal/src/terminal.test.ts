@@ -81,6 +81,19 @@ test('it fails a wait that finds no match with check-failed and the last screen'
   });
 });
 
+test('it sends a plain letter key as that letter', async () => {
+  const ctx = await setupTest();
+
+  await ctx.start('local');
+  await ctx.run('local', ['terminal', 'start'], { program: 'echo' });
+  await ctx.run('local', ['terminal', 'wait'], { text: 'ready' });
+  await ctx.run('local', ['terminal', 'press'], { keys: ['r'] });
+
+  const result = await ctx.run('local', ['terminal', 'wait'], { text: 'keys: 72' });
+
+  expect(result.exitCode).toBe(0);
+});
+
 test('it sends ctrl+c as the control byte to a plain program', async () => {
   const ctx = await setupTest();
 

@@ -130,6 +130,7 @@
         "@wringer/gunshi": "workspace:*",
         "@wringer/http": "workspace:*",
         "@wringer/stream": "workspace:*",
+        "@wringer/terminal": "workspace:*",
         "zod": "catalog:",
       },
       "devDependencies": {

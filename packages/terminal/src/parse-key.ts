@@ -48,5 +48,29 @@ export function parseKey(spec: string): KeyInput | null {
     return null;
   }
 
-  return { key, mods: { ...mods, shift: mods.shift || isCapital } };
+  const held = { ...mods, shift: mods.shift || isCapital };
+  const text = pickKeyText(key, held);
+
+  return text === undefined ? { key, mods: held } : { key, mods: held, text };
+}
+
+// A key that no ctrl, alt or super modifies types its character, so the encoder needs that text.
+function pickKeyText(key: string, mods: KeyMods): string | undefined {
+  if (mods.ctrl || mods.alt || mods.super) {
+    return undefined;
+  }
+
+  if (key === 'space') {
+    return ' ';
+  }
+
+  if (key.length !== 1) {
+    return undefined;
+  }
+
+  if (mods.shift) {
+    return /^[a-z]$/u.test(key) ? key.toUpperCase() : undefined;
+  }
+
+  return key;
 }

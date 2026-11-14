@@ -4,6 +4,7 @@ import { WringerError, bindDrivers, createWringer, local } from '@wringer/core';
 import { db } from '@wringer/db';
 import { http } from '@wringer/http';
 import { stream } from '@wringer/stream';
+import { terminal } from '@wringer/terminal';
 import { z } from 'zod';
 import { ordersSchema, placedOrderSchema } from './shop-contract.ts';
 
@@ -21,9 +22,9 @@ const orderCountSchema = z.strictObject({ orders: z.number().int().nonnegative()
 
 // What every registry over the shop app shares, defined once: the shop's API token, a launch target
 // for the shop app with its database in the run folder, a read-only attach target for a shop started
-// apart, all four drivers, the action, command and doctor check, and no features.
+// apart, all five drivers, the action, command and doctor check, and no features.
 export function buildShopBase(name: string, options: ShopBaseOptions = {}) {
-  const shop = bindDrivers([http({}), db({}), stream({}), browser({})] as const);
+  const shop = bindDrivers([http({}), db({}), stream({}), browser({}), terminal({})] as const);
 
   return createWringer({ name })
     .secret('SHOP_API_TOKEN')
@@ -52,6 +53,14 @@ export function buildShopBase(name: string, options: ShopBaseOptions = {}) {
           }),
           stream: () => ({}),
           browser: () => ({}),
+          terminal: (ctx) => ({
+            programs: {
+              tui: {
+                command: ['bun', join(import.meta.dir, 'shop-tui.ts')],
+                env: { SHOP_URL: ctx.endpoints['web'] ?? '' },
+              },
+            },
+          }),
         },
       }),
     )

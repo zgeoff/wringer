@@ -33,6 +33,7 @@
         "e2e/**/*.test.ts",
         "src/shop-app.ts",
         "src/shop-page.ts",
+        "src/shop-tui.ts",
         "src/verify-wringer.ts",
         "src/verify-shop.ts"
       ]

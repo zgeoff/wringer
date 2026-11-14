@@ -92,8 +92,8 @@ test('#features --markdown lists the shop features, the ignore list and the feat
         '.lefthook/**',
         'scripts/**',
         '*',
-        'packages/{browser,core,db,gunshi,http,stream}/**',
-        'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/verify-wringer.ts}',
+        'packages/{browser,core,db,gunshi,http,stream,terminal}/**',
+        'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/shop-tui.ts,src/verify-wringer.ts}',
       ],
       markdown: [
         '| Feature | Summary | File |',

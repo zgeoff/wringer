@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { createShopRegistry } from './create-shop-registry.ts';
 
-test('it builds the local and demo targets with the four drivers, and the shop features', () => {
+test('it builds the local and demo targets with the five drivers, and the shop features', () => {
   const registry = createShopRegistry();
 
   expect({
@@ -17,7 +17,7 @@ test('it builds the local and demo targets with the four drivers, and the shop f
       ['local', 'launch', 'read-write'],
       ['demo', 'attach', 'read-only'],
     ],
-    drivers: ['http', 'db', 'stream', 'browser'],
+    drivers: ['http', 'db', 'stream', 'browser', 'terminal'],
     features: ['place-order', 'order-failure', 'list-orders', 'order-log'],
   });
 });
