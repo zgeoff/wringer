@@ -374,15 +374,15 @@ test('#up removes the secrets file of a crashed run it replaces', async () => {
     fingerprint: 'empty',
   });
 
+  await ctx.state.appendSecret('crashed-run', {
+    name: 'notes.session',
+    value: 'planted-crashed-value',
+  });
+
   await ctx.state.appendEvent('crashed-run', {
     type: 'crashed',
     at: '2026-11-04T10:00:01.000Z',
     reason: 'the app exited',
-  });
-
-  await ctx.state.appendSecret('crashed-run', {
-    name: 'notes.session',
-    value: 'planted-crashed-value',
   });
 
   await ctx.state.writePointers((current) => ({
@@ -529,6 +529,50 @@ test('#up starts no run when its deadline passes while it reads the fingerprint'
   const pointers = await ctx.state.readPointers();
 
   expect(pointers.currentRun['local']).toBeUndefined();
+});
+
+test('#up keeps the secrets file of the run it would replace when its deadline passes while it reads the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  const gate = Promise.withResolvers<undefined>();
+
+  onTestFinished(() => {
+    gate.resolve(undefined);
+  });
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendSecret('crashed-run', {
+    name: 'notes.session',
+    value: 'planted-crashed-value',
+  });
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'crashed',
+    at: '2026-11-04T10:00:01.000Z',
+    reason: 'the app exited',
+  });
+
+  await ctx.state.writePointers((current) => ({
+    ...current,
+    currentRun: { local: 'crashed-run' },
+  }));
+
+  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
+
+  gate.resolve(undefined);
+
+  await ctx.waitForTargetLock('local');
+
+  const secrets = await ctx.state.readSecrets('crashed-run');
+
+  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-crashed-value' }]);
 });
 
 test('#up marks the new run crashed when its supervisor cannot start', async () => {

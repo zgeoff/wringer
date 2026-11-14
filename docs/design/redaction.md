@@ -266,7 +266,8 @@ rebuilds the response `body` string as compact JSON from the redacted `json`. Wh
   read. A run whose file is gone was scrubbed when each command wrote, so its log stays clean.
 - The secrets file never enters evidence, a report or an upload. Core removes it once the run's
   target no longer points at the run: at `down` and `detach`, and when `up` or `attach` replaces the
-  run, as `--restart` does.
+  run, as `--restart` does. An append to a run that has ended or crashed writes nothing, so a
+  command still running on the run never writes the file again.
 - A collected value of 4 to 7 characters matches only where no letter or digit sits on either side.
 - Core refuses an endpoint that holds URL credentials or any spelling of a declared secret, at
   `launch-ready` and at attach. The supervisor ends the run with a `usage` message as the crash

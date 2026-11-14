@@ -428,6 +428,33 @@ test('it reads no secrets for a run with no file, and after the file is removed'
   expect({ before, after }).toStrictEqual({ before: [], after: [] });
 });
 
+test.each([
+  { status: 'ended', last: { type: 'run-ended', at: '2026-11-04T10:00:01.000Z' } },
+  {
+    status: 'crashed',
+    last: { type: 'crashed', at: '2026-11-04T10:00:01.000Z', reason: 'the app exited' },
+  },
+])('it writes no secret for a run that has $status', async (row) => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendEvent(runID, {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent(runID, runEventSchema.parse(row.last));
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([]);
+});
+
 test('it skips a torn line of the secrets file', async () => {
   const ctx = await setupTest();
 
