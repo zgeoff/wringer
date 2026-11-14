@@ -17,7 +17,7 @@ test('it builds the local and demo targets with the five drivers, and the shop f
       ['local', 'launch', 'read-write'],
       ['demo', 'attach', 'read-only'],
     ],
-    drivers: ['http', 'db', 'stream', 'browser', 'terminal'],
+    drivers: ['http', 'db', 'stream', 'browser', 'terminal', 'mcp'],
     features: ['place-order', 'order-failure', 'list-orders', 'order-log'],
   });
 });

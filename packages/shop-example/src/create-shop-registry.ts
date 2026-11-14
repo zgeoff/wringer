@@ -49,8 +49,8 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
       '.lefthook/**',
       'scripts/**',
       '*',
-      'packages/{browser,core,db,gunshi,http,stream,terminal}/**',
-      'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/shop-tui.ts,src/verify-wringer.ts}',
+      'packages/{browser,core,db,gunshi,http,mcp,stream,terminal}/**',
+      'packages/shop-example/{tsconfig.json,e2e/**,src/create-wringer-registry.ts,src/shop-mcp.ts,src/shop-tui.ts,src/verify-wringer.ts}',
     )
     .build();
 }

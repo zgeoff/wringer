@@ -1,0 +1,49 @@
+{
+  "name": "@wringer/mcp",
+  "version": "0.0.0",
+  "description": "The MCP driver for wringer: calls the tools of an MCP server that a target names, over stdio or Streamable HTTP",
+  "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/mcp#readme",
+  "bugs": "https://github.com/zgeoff/wringer/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgeoff/wringer.git",
+    "directory": "packages/mcp"
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "dist",
+    "!src/test-utils"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsrs -p tsconfig.build.json",
+    "typecheck": "tsrs --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "catalog:"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/server": "catalog:",
+    "@wringer/core": "workspace:*",
+    "@zgeoff/testing": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@wringer/core": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "engines": {
+    "bun": ">=1.4"
+  }
+}

@@ -25,6 +25,8 @@
     },
     // the driver's tests start this fixture program in a pseudo-terminal, so no module imports it
     "packages/terminal": { "entry": ["src/**/*.test.ts", "src/test-utils/echo-tui.ts"] },
+    // the driver's tests start this fixture server as a child process, so no module imports it
+    "packages/mcp": { "entry": ["src/**/*.test.ts", "src/test-utils/fixture-stdio-server.ts"] },
     // the journey test launches the example app as a process, the app's page loads its script from
     // HTML, and the root `verify` and `verify:shop` scripts run the example's CLIs, so no module imports any of them
     "packages/shop-example": {
@@ -32,6 +34,7 @@
         "src/**/*.test.ts",
         "e2e/**/*.test.ts",
         "src/shop-app.ts",
+        "src/shop-mcp.ts",
         "src/shop-page.ts",
         "src/shop-tui.ts",
         "src/verify-wringer.ts",
