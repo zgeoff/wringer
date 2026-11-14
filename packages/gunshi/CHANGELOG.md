@@ -2,20 +2,20 @@
 
 ## [0.3.2](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.1...@wringer/gunshi@0.3.2) (2026-11-14)
 
-
 ### Features
 
-* **core:** let a doctor check skip the targets outside its list ([#159](https://github.com/zgeoff/wringer/issues/159)) ([bffdd95](https://github.com/zgeoff/wringer/commit/bffdd957a82bcd3c9ef41ed9a93a277a1de5bebc))
-
+- **core:** let a doctor check skip the targets outside its list
+  ([#159](https://github.com/zgeoff/wringer/issues/159))
+  ([bffdd95](https://github.com/zgeoff/wringer/commit/bffdd957a82bcd3c9ef41ed9a93a277a1de5bebc))
 
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.3.1
-    * @wringer/http bumped to 0.1.4
-  * peerDependencies
-    * @wringer/core bumped to 0.3.1
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.3.1
+    - @wringer/http bumped to 0.1.4
+  - peerDependencies
+    - @wringer/core bumped to 0.3.1
 
 ## [0.3.1](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.0...@wringer/gunshi@0.3.1) (2026-11-14)
 
