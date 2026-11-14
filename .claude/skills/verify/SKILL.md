@@ -45,6 +45,7 @@ Read a feature's file before you run its journey.
 | db-driver       | Query the app database and read the rows                             | [references/feature-db-driver.md](references/feature-db-driver.md)             |
 | stream-driver   | Read the app's log lines                                             | [references/feature-stream-driver.md](references/feature-stream-driver.md)     |
 | terminal-driver | Drive the shop's terminal screen in a pseudo-terminal                | [references/feature-terminal-driver.md](references/feature-terminal-driver.md) |
+| mcp-driver      | Call the shop's MCP tools to list and place orders                   | [references/feature-mcp-driver.md](references/feature-mcp-driver.md)           |
 | core            | Run the app, keep each run and its evidence, and report each verdict | [references/feature-core.md](references/feature-core.md)                       |
 | cli             | Parse the command line and print each envelope                       | [references/feature-cli.md](references/feature-cli.md)                         |
 | guide           | Print the guide for adding a verify CLI, or one of its topics        | [references/feature-guide.md](references/feature-guide.md)                     |

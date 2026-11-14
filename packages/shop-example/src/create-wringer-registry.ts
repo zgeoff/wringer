@@ -44,6 +44,11 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
         ],
       },
       {
+        name: 'mcp-driver',
+        summary: "Call the shop's MCP tools to list and place orders",
+        paths: ['packages/mcp/package.json', 'packages/mcp/src/**'],
+      },
+      {
         name: 'core',
         summary: 'Run the app, keep each run and its evidence, and report each verdict',
         paths: [

@@ -113,9 +113,12 @@ function readAuth(
     ...(credentials.scope === undefined ? {} : { scope: credentials.scope }),
   };
 
+  // A target that sets no `issuer` gets the SDK's deprecated overload, which sends the credentials to
+  // whichever authorization server the MCP server names.
   const provider =
     credentials.issuer === undefined
-      ? new ClientCredentialsProvider(options)
+      ? // eslint-disable-next-line typescript/no-deprecated
+        new ClientCredentialsProvider(options)
       : new ClientCredentialsProvider({ ...options, expectedIssuer: credentials.issuer });
 
   const tokens = new Set<string>();

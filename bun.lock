@@ -136,6 +136,7 @@
     "packages/shop-example": {
       "name": "@wringer/shop-example",
       "dependencies": {
+        "@modelcontextprotocol/server": "catalog:",
         "@orpc/client": "catalog:",
         "@orpc/contract": "catalog:",
         "@orpc/openapi": "catalog:",
@@ -146,6 +147,7 @@
         "@wringer/db": "workspace:*",
         "@wringer/gunshi": "workspace:*",
         "@wringer/http": "workspace:*",
+        "@wringer/mcp": "workspace:*",
         "@wringer/stream": "workspace:*",
         "@wringer/terminal": "workspace:*",
         "zod": "catalog:",

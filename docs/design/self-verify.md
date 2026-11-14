@@ -54,6 +54,7 @@ A `verify:shop` script runs `createShopRegistry` with the skill folder
 | `db-driver`       | `packages/db/package.json`, `packages/db/src/**`                                      |
 | `stream-driver`   | `packages/stream/package.json`, `packages/stream/src/**`                              |
 | `terminal-driver` | `packages/terminal/package.json`, `packages/terminal/{ghostty,scripts,src}/**`        |
+| `mcp-driver`      | `packages/mcp/package.json`, `packages/mcp/src/**`                                    |
 | `core`            | `packages/core/{package.json,envelope.schema.json}`, `packages/core/{src,scripts}/**` |
 | `cli`             | `packages/gunshi/package.json`, `packages/gunshi/src/**`                              |
 | `guide`           | `packages/gunshi/guide/**`                                                            |
