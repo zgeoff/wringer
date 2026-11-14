@@ -143,3 +143,13 @@ test('it joins the rows of a wrapped line in the unwrapped text', async () => {
     `${'a'.repeat(40)}${'b'.repeat(10)}\nnext`,
   ]);
 });
+
+test('it keeps a space at the wrap boundary in the unwrapped text', async () => {
+  const ctx = await setupTest();
+
+  const line = `${'a'.repeat(38)}  ${'b'.repeat(6)}`;
+
+  ctx.feed(`${line}\r\nnext`);
+
+  expect(ctx.engine.unwrappedText()).toBe(`${line}\nnext`);
+});

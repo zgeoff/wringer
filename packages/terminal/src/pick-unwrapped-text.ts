@@ -14,14 +14,29 @@ export function pickUnwrappedText(
 
   for (const logical of logicalLines) {
     const first = next;
-    let length = 0;
+    const lineRows: string[] = [];
+    let rest = logical;
 
+    // The formatter trims the spaces that end a row, so a space at a wrap boundary is missing from
+    // the row. The logical line still holds it: the spaces between two rows' text, less the ones
+    // that begin the next row, ended this row.
     do {
-      length += physicalRows[next]?.length ?? logical.length;
-      next += 1;
-    } while (length < logical.length && next < physicalRows.length);
+      const row = physicalRows[next] ?? rest;
+      const nextRow = physicalRows[next + 1];
 
-    const visible = physicalRows.slice(Math.max(first, top), next);
+      rest = rest.slice(row.length);
+      next += 1;
+
+      const between = rest.length - rest.trimStart().length;
+      const leading = nextRow === undefined ? 0 : nextRow.length - nextRow.trimStart().length;
+      const trailing = rest.trim() === '' ? '' : ' '.repeat(Math.max(0, between - leading));
+
+      rest = rest.slice(trailing.length);
+
+      lineRows.push(row + trailing);
+    } while (rest.trim() !== '' && next < physicalRows.length);
+
+    const visible = lineRows.slice(Math.max(first, top) - first);
 
     if (visible.length > 0) {
       lines.push(visible.join(''));
