@@ -33,6 +33,10 @@
     "packages/browser": {
       "component": "@wringer/browser",
       "initial-version": "0.1.0"
+    },
+    "packages/terminal": {
+      "component": "@wringer/terminal",
+      "initial-version": "0.1.0"
     }
   }
 }

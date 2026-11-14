@@ -155,6 +155,19 @@
         "zod": "^4.0.0",
       },
     },
+    "packages/terminal": {
+      "name": "@wringer/terminal",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@wringer/core": "workspace:*",
+        "@zgeoff/testing": "catalog:",
+        "zod": "catalog:",
+      },
+      "peerDependencies": {
+        "@wringer/core": "workspace:*",
+        "zod": "^4.0.0",
+      },
+    },
   },
   "catalog": {
     "@mswjs/interceptors": "0.45.10",
@@ -567,6 +580,8 @@
     "@wringer/shop-example": ["@wringer/shop-example@workspace:packages/shop-example"],
 
     "@wringer/stream": ["@wringer/stream@workspace:packages/stream"],
+
+    "@wringer/terminal": ["@wringer/terminal@workspace:packages/terminal"],
 
     "@zgeoff/agent-hooks": ["@zgeoff/agent-hooks@0.2.11", "", { "bin": { "agent-hooks": "dist/cli.js" } }, "sha512-tm3pN/VHCL++ryz7l9ICupy1c/LNTUe3OlOTFMwAb52T7Mb+dse9qqNG8Ms0bbHp8Rz5PB6uyV2ALoYE/41aSQ=="],
 

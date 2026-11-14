@@ -1,0 +1,7 @@
+{
+  "tag": "vt-1.0.1",
+  "commit": "108cacb17ed8990840cd14abfce43d8ed8503ca1",
+  "zig": "0.17.0",
+  "optimize": "ReleaseSmall",
+  "sha256": "f937d06dfccf1793ab1c82e17d2f40e1ec154aac3d9b0f2f397453072dbec5f2"
+}

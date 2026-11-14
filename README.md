@@ -43,6 +43,7 @@ evidence.
   from a cursor.
 - [`@wringer/browser`](./packages/browser/README.md): a page of the target's app in a headless
   browser.
+- [`@wringer/terminal`](./packages/terminal/README.md): a text program, read from its screen.
 
 ## Add wringer to your repo
 
@@ -87,8 +88,8 @@ or the release workflows also gets a dry run of the npm publish of each package.
 
 - `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
   it holds an example shop app and the verify CLI for it. The browser tests drive the app through
-  that CLI's registry with the `@wringer/http`, `db`, `stream` and `browser` packages, and
-  `bun verify` runs the CLI.
+  that CLI's registry with the `@wringer/http`, `db`, `stream`, `browser` and `terminal` packages,
+  and `bun verify` runs the CLI.
 - `packages/gunshi/guide/`: the guide that adds a verify CLI to a repo, with the template files it
   copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the terms, the design docs and the runbooks.
