@@ -30,7 +30,7 @@ cp "$work_dir/ghostty/zig-out/bin/ghostty-vt.wasm" "$package_dir/ghostty/ghostty
 
 sha256="$(sha256sum "$package_dir/ghostty/ghostty-vt.wasm" | cut -d' ' -f1)"
 
-cat > "$package_dir/ghostty/ghostty-vt.json" <<JSON
+cat > "$package_dir/ghostty/ghostty-vt.json" << JSON
 {
   "tag": "$tag",
   "commit": "$commit",
