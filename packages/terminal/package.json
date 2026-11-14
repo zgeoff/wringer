@@ -1,0 +1,47 @@
+{
+  "name": "@wringer/terminal",
+  "version": "0.0.0",
+  "description": "The terminal driver for wringer: drives a text program of a target's app in a pseudo-terminal and reads its screen",
+  "homepage": "https://github.com/zgeoff/wringer/tree/main/packages/terminal#readme",
+  "bugs": "https://github.com/zgeoff/wringer/issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zgeoff/wringer.git",
+    "directory": "packages/terminal"
+  },
+  "files": [
+    "src",
+    "!src/**/*.test.ts",
+    "dist",
+    "!src/test-utils",
+    "ghostty"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsrs -p tsconfig.build.json",
+    "build:ghostty": "bash scripts/build-ghostty-vt.sh",
+    "typecheck": "tsrs --noEmit"
+  },
+  "devDependencies": {
+    "@wringer/core": "workspace:*",
+    "@zgeoff/testing": "catalog:",
+    "zod": "catalog:"
+  },
+  "peerDependencies": {
+    "@wringer/core": "workspace:*",
+    "zod": "^4.0.0"
+  },
+  "engines": {
+    "bun": ">=1.4"
+  }
+}

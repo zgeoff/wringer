@@ -28,12 +28,13 @@ The mistakes that cost the most:
 1. Install each driver the app needs, at an exact version, such as
    `bun add --dev --exact @wringer/http`. Expect: each one in `devDependencies`.
 
-   | Driver             | Drives                                       |
-   | ------------------ | -------------------------------------------- |
-   | `@wringer/browser` | a page, through its accessibility tree       |
-   | `@wringer/http`    | the app's HTTP API                           |
-   | `@wringer/db`      | SQL on the app's SQLite or Postgres database |
-   | `@wringer/stream`  | the app's logs, recorded for the whole run   |
+   | Driver              | Drives                                       |
+   | ------------------- | -------------------------------------------- |
+   | `@wringer/browser`  | a page, through its accessibility tree       |
+   | `@wringer/http`     | the app's HTTP API                           |
+   | `@wringer/db`       | SQL on the app's SQLite or Postgres database |
+   | `@wringer/stream`   | the app's logs, recorded for the whole run   |
+   | `@wringer/terminal` | a text program, through its screen           |
 
    Each driver adds its own commands and its own doctor check. Its README in `node_modules/` gives
    its config for a target.

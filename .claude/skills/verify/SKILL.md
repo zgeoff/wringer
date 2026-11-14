@@ -38,15 +38,16 @@ Read a feature's file before you run its journey.
 
 <!-- wringer:features -->
 
-| Feature        | Summary                                                              | File                                                                         |
-| -------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| browser-driver | Drive the shop page in a real browser                                | [references/feature-browser-driver.md](references/feature-browser-driver.md) |
-| http-driver    | Send HTTP requests to the app and read the answers                   | [references/feature-http-driver.md](references/feature-http-driver.md)       |
-| db-driver      | Query the app database and read the rows                             | [references/feature-db-driver.md](references/feature-db-driver.md)           |
-| stream-driver  | Read the app's log lines                                             | [references/feature-stream-driver.md](references/feature-stream-driver.md)   |
-| core           | Run the app, keep each run and its evidence, and report each verdict | [references/feature-core.md](references/feature-core.md)                     |
-| cli            | Parse the command line and print each envelope                       | [references/feature-cli.md](references/feature-cli.md)                       |
-| guide          | Print the guide for adding a verify CLI, or one of its topics        | [references/feature-guide.md](references/feature-guide.md)                   |
+| Feature         | Summary                                                              | File                                                                           |
+| --------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| browser-driver  | Drive the shop page in a real browser                                | [references/feature-browser-driver.md](references/feature-browser-driver.md)   |
+| http-driver     | Send HTTP requests to the app and read the answers                   | [references/feature-http-driver.md](references/feature-http-driver.md)         |
+| db-driver       | Query the app database and read the rows                             | [references/feature-db-driver.md](references/feature-db-driver.md)             |
+| stream-driver   | Read the app's log lines                                             | [references/feature-stream-driver.md](references/feature-stream-driver.md)     |
+| terminal-driver | Drive the shop's terminal screen in a pseudo-terminal                | [references/feature-terminal-driver.md](references/feature-terminal-driver.md) |
+| core            | Run the app, keep each run and its evidence, and report each verdict | [references/feature-core.md](references/feature-core.md)                       |
+| cli             | Parse the command line and print each envelope                       | [references/feature-cli.md](references/feature-cli.md)                         |
+| guide           | Print the guide for adding a verify CLI, or one of its topics        | [references/feature-guide.md](references/feature-guide.md)                     |
 
 <!-- /wringer:features -->
 

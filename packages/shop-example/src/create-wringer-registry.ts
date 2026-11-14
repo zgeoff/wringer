@@ -34,6 +34,16 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
         paths: ['packages/stream/package.json', 'packages/stream/src/**'],
       },
       {
+        name: 'terminal-driver',
+        summary: "Drive the shop's terminal screen in a pseudo-terminal",
+        paths: [
+          'packages/terminal/package.json',
+          'packages/terminal/ghostty/**',
+          'packages/terminal/scripts/**',
+          'packages/terminal/src/**',
+        ],
+      },
+      {
         name: 'core',
         summary: 'Run the app, keep each run and its evidence, and report each verdict',
         paths: [
