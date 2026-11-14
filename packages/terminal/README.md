@@ -72,8 +72,7 @@ runs, and required while more than one runs. Sessions are named `<program>-<n>`,
 - A key is a name such as `enter`, `esc`, `tab`, `up`, `f5`, `ctrl+c` or `alt+x`. The driver turns
   it into the bytes that the program's current modes expect, so `ctrl+c` is `\x03` for a plain
   program and `\x1b[99;5u` after the program turns on the kitty keyboard protocol. `press` refuses
-  shift with a digit or a symbol, such as `shift+1`, because that character depends on the keyboard
-  layout. Send `!` with `type --text '!'`.
+  `shift+1` and other shifted symbols, which depend on the layout: use `type --text '!'`.
 - `wait` checks the screen after each chunk of output. It fails with `check-failed` when nothing
   matches within `--timeout-ms` (10 s by default), and keeps the last screen as evidence.
 - `screen` and a failed `wait` write `screen.txt` as evidence. The raw bytes of each session go to
