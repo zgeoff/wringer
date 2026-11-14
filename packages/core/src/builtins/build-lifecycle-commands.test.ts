@@ -307,6 +307,96 @@ test('#up marks a run whose supervisor is gone as crashed, then starts a new run
   expect(old?.status).toBe('crashed');
 });
 
+test('#up keeps the secrets file of the run it reuses', async () => {
+  const ctx = await setupTest();
+  const first = await ctx.run('local', ['up']);
+
+  const runID = first.envelope.instance ?? '';
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+  await ctx.run('local', ['up']);
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
+});
+
+test('#up --restart removes the secrets file of the run it ends', async () => {
+  const ctx = await setupTest();
+  const first = await ctx.run('local', ['up']);
+
+  const runID = first.envelope.instance ?? '';
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+  await ctx.run('local', ['up'], { restart: true });
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([]);
+});
+
+test('#up removes the secrets file of a run whose supervisor is gone', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendEvent('gone-run', {
+    type: 'supervisor-ready',
+    at: '2026-11-04T10:00:01.000Z',
+    pid: 1,
+    socket: '/nonexistent/wringer.sock',
+  });
+
+  await ctx.state.appendEvent('gone-run', { type: 'run-ready', at: '2026-11-04T10:00:02.000Z' });
+  await ctx.state.appendSecret('gone-run', { name: 'notes.session', value: 'planted-gone-value' });
+  await ctx.state.writePointers((current) => ({ ...current, currentRun: { local: 'gone-run' } }));
+  await ctx.run('local', ['up']);
+
+  const secrets = await ctx.state.readSecrets('gone-run');
+
+  expect(secrets).toStrictEqual([]);
+});
+
+test('#up removes the secrets file of a crashed run it replaces', async () => {
+  const ctx = await setupTest();
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendSecret('crashed-run', {
+    name: 'notes.session',
+    value: 'planted-crashed-value',
+  });
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'crashed',
+    at: '2026-11-04T10:00:01.000Z',
+    reason: 'the app exited',
+  });
+
+  await ctx.state.writePointers((current) => ({
+    ...current,
+    currentRun: { local: 'crashed-run' },
+  }));
+
+  await ctx.run('local', ['up']);
+
+  const secrets = await ctx.state.readSecrets('crashed-run');
+
+  expect(secrets).toStrictEqual([]);
+});
+
 test('#up fails with an environment error when the app exits before it is ready', async () => {
   const ctx = await setupTest();
   const result = await ctx.run('broken', ['up']);
@@ -439,6 +529,50 @@ test('#up starts no run when its deadline passes while it reads the fingerprint'
   const pointers = await ctx.state.readPointers();
 
   expect(pointers.currentRun['local']).toBeUndefined();
+});
+
+test('#up keeps the secrets file of the run it would replace when its deadline passes while it reads the fingerprint', async () => {
+  const ctx = await setupTest();
+
+  const gate = Promise.withResolvers<undefined>();
+
+  onTestFinished(() => {
+    gate.resolve(undefined);
+  });
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'run-started',
+    at: '2026-11-04T10:00:00.000Z',
+    target: 'local',
+    mode: 'launch',
+    fingerprint: 'empty',
+  });
+
+  await ctx.state.appendSecret('crashed-run', {
+    name: 'notes.session',
+    value: 'planted-crashed-value',
+  });
+
+  await ctx.state.appendEvent('crashed-run', {
+    type: 'crashed',
+    at: '2026-11-04T10:00:01.000Z',
+    reason: 'the app exited',
+  });
+
+  await ctx.state.writePointers((current) => ({
+    ...current,
+    currentRun: { local: 'crashed-run' },
+  }));
+
+  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
+
+  gate.resolve(undefined);
+
+  await ctx.waitForTargetLock('local');
+
+  const secrets = await ctx.state.readSecrets('crashed-run');
+
+  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-crashed-value' }]);
 });
 
 test('#up marks the new run crashed when its supervisor cannot start', async () => {

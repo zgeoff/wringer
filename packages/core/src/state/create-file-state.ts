@@ -56,7 +56,8 @@ export interface StatePort {
   readonly readCursors: (runID: RunID) => Promise<Record<string, number>>;
 
   // The run's secrets file, `secrets.ndjson`, created with mode 0600. An append under the run's
-  // lock skips a secret the file already holds.
+  // lock skips a secret the file already holds, and writes nothing for a run that has ended or
+  // crashed.
   readonly appendSecret: (runID: RunID, secret: StoredSecret) => Promise<void>;
   readonly readSecrets: (runID: RunID) => Promise<readonly StoredSecret[]>;
   readonly removeSecrets: (runID: RunID) => Promise<void>;
@@ -219,6 +220,14 @@ export function createFileState(options: FileStateOptions): StatePort {
       const runPaths = buildRunPaths(options.stateDir, runID);
 
       return withLock(basename(runPaths.lock), async () => {
+        const view = await readRun(runID);
+
+        // An ended run's file is removed once its target moves on, and a command still in flight
+        // on the run must not write it again.
+        if (view?.status === 'ended' || view?.status === 'crashed') {
+          return;
+        }
+
         const text = await fs.readText(runPaths.secrets);
 
         const known = parseSecretsFile(text ?? '');
