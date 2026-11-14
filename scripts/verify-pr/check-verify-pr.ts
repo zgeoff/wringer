@@ -70,6 +70,19 @@ export async function checkVerifyPR(options: VerifyPROptions): Promise<VerifyPRR
 
   const pr = lookup.pullRequest;
 
+  if (isReleasePR(pr)) {
+    const released = new Map<CheckName, CheckResult>(
+      checkNames.map((name) => [
+        name,
+        name === 'pull-request'
+          ? { ok: true, detail: `#${pr.number} into ${pr.baseRefName}` }
+          : { ok: true, detail: releaseSkip },
+      ]),
+    );
+
+    return { exitCode: 0, check: buildCheck(pr.number, released), error: null };
+  }
+
   const base = await readBaseRef(options, pr.baseRefName);
 
   if (base === null) {
@@ -114,8 +127,11 @@ export async function checkVerifyPR(options: VerifyPROptions): Promise<VerifyPRR
 interface PullRequest {
   readonly number: number;
   readonly baseRefName: string;
+  readonly headRefName: string;
   readonly body: string;
 }
+
+const releaseSkip = 'skipped: a release pull request carries no verify report';
 
 type PullRequestLookup =
   | { readonly kind: 'found'; readonly pullRequest: PullRequest }
@@ -132,7 +148,7 @@ async function readPullRequest(options: VerifyPROptions): Promise<PullRequestLoo
     'view',
     ...selector,
     '--json',
-    'number,baseRefName,body',
+    'number,baseRefName,headRefName,body',
   ]);
 
   if (result === null) {
@@ -185,6 +201,7 @@ function parsePullRequest(text: string): PullRequest | null {
   return {
     number: fields['number'],
     baseRefName: fields['baseRefName'],
+    headRefName: typeof fields['headRefName'] === 'string' ? fields['headRefName'] : '',
     body: typeof fields['body'] === 'string' ? fields['body'] : '',
   };
 }
@@ -197,6 +214,12 @@ function buildCheck(pr: number | null, results: ReadonlyMap<CheckName, CheckResu
   });
 
   return { ok: checks.every((check) => check.ok), pr, checks };
+}
+
+// release-please opens its pull request from a `release-please--` branch. It changes only versions
+// and changelogs, and nobody runs a journey on it, so it never holds a report.
+function isReleasePR(pr: PullRequest): boolean {
+  return pr.headRefName.startsWith('release-please--');
 }
 
 async function readBaseRef(options: VerifyPROptions, baseBranch: string): Promise<string | null> {
