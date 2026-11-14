@@ -207,7 +207,7 @@ function getKey(name: string): KeyInput {
   if (key === null) {
     throw new WringerError('usage', {
       message: `The driver does not know the key ${name}.`,
-      hint: 'Name a key such as enter, esc, tab, up, f5, ctrl+c or alt+x.',
+      hint: 'Name a key such as enter, esc, tab, up, f5, ctrl+c or alt+x. Type a shifted symbol, such as !, with type --text.',
     });
   }
 

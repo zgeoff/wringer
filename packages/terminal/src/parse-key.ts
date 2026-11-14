@@ -49,9 +49,20 @@ export function parseKey(spec: string): KeyInput | null {
   }
 
   const held = { ...mods, shift: mods.shift || isCapital };
+
+  if (isShiftedSymbol(key, held)) {
+    return null;
+  }
+
   const text = pickKeyText(key, held);
 
   return text === undefined ? { key, mods: held } : { key, mods: held, text };
+}
+
+// The character that shift gives a digit or a symbol key depends on the keyboard layout, so the
+// driver can't name the text the encoder needs. Without that text, the encoder sends no bytes.
+function isShiftedSymbol(key: string, mods: KeyMods): boolean {
+  return mods.shift && !mods.ctrl && !mods.alt && !mods.super && /^[^a-z]$/u.test(key);
 }
 
 // A key that no ctrl, alt or super modifies types its character, so the encoder needs that text.
@@ -68,9 +79,5 @@ function pickKeyText(key: string, mods: KeyMods): string | undefined {
     return undefined;
   }
 
-  if (mods.shift) {
-    return /^[a-z]$/u.test(key) ? key.toUpperCase() : undefined;
-  }
-
-  return key;
+  return mods.shift ? key.toUpperCase() : key;
 }

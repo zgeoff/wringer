@@ -13,6 +13,7 @@ test.each([
   ['r', 'r', [], 'r'],
   ['space', 'space', [], ' '],
   ['ctrl+;', ';', ['ctrl'], undefined],
+  ['ctrl+shift+1', '1', ['ctrl', 'shift'], undefined],
 ])('#parseKey reads %s as a key event', (spec, key, held, text) => {
   expect(parseKey(spec)).toStrictEqual({
     key,
@@ -26,6 +27,9 @@ test.each([
   });
 });
 
-test.each(['hyper+c', 'ctrl+', 'f99', 'nonsense', ''])('#parseKey returns null for %p', (spec) => {
-  expect(parseKey(spec)).toBeNull();
-});
+test.each(['hyper+c', 'ctrl+', 'f99', 'nonsense', '', 'shift+1', 'shift+-', 'shift+;'])(
+  '#parseKey returns null for %p',
+  (spec) => {
+    expect(parseKey(spec)).toBeNull();
+  },
+);
