@@ -6,5 +6,5 @@
   "packages/http": "0.1.4",
   "packages/stream": "0.1.4",
   "packages/terminal": "0.1.1",
-  "packages/mcp": "0.1.1"
+  "packages/mcp": "0.1.2"
 }
