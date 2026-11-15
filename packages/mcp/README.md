@@ -53,15 +53,15 @@ export const registry = createWringer({ name: 'shop' })
 
 The target names each server, so an agent never passes a URL or a command line.
 
-| Key                             | Meaning                                                                                            |
-| ------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `transport`                     | `http` for Streamable HTTP, or `stdio` for a child process.                                        |
-| `url`                           | The MCP endpoint of an `http` server.                                                              |
-| `auth.clientCredentials`        | OAuth client_credentials with client_secret_basic. `secretEnv` names the variable with the secret. |
-| `auth.clientCredentials.issuer` | The authorization server the credentials are for. They go to no other. Set it.                     |
-| `auth.bearerEnv`                | The variable that holds a bearer token. Leave `auth` out for a server with no sign-in.             |
-| `command`, `env`, `cwd`         | A `stdio` server's argv, its added environment and its working folder.                             |
-| `readTools`                     | The only tools a read-only target may call.                                                        |
+| Key                             | Meaning                                                                                                                                                                                        |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transport`                     | `http` for Streamable HTTP, or `stdio` for a child process.                                                                                                                                    |
+| `url`                           | The MCP endpoint of an `http` server.                                                                                                                                                          |
+| `auth.clientCredentials`        | OAuth client_credentials with client_secret_basic. `secretEnv` names the variable with the secret. The token request asks for `scope` alone, or, without it, for every scope the server lists. |
+| `auth.clientCredentials.issuer` | The authorization server the credentials are for. They go to no other. Set it.                                                                                                                 |
+| `auth.bearerEnv`                | The variable that holds a bearer token. Leave `auth` out for a server with no sign-in.                                                                                                         |
+| `command`, `env`, `cwd`         | A `stdio` server's argv, its added environment and its working folder.                                                                                                                         |
+| `readTools`                     | The only tools a read-only target may call.                                                                                                                                                    |
 
 A `stdio` child gets a minimal environment plus `env`, not the supervisor's. Its `cwd` starts at the
 folder where the run's supervisor runs. The driver reads `secretEnv` and `bearerEnv` from the

@@ -132,6 +132,16 @@ function readAuth(
         new ClientCredentialsProvider(options)
       : new ClientCredentialsProvider({ ...options, expectedIssuer: credentials.issuer });
 
+  // The SDK asks for the challenge's scope, then every scope the resource metadata lists, before the
+  // client's own, so a client that holds fewer scopes than the server lists is refused.
+  const scope = credentials.scope;
+
+  if (scope !== undefined) {
+    const prepareTokenRequest = provider.prepareTokenRequest.bind(provider);
+
+    provider.prepareTokenRequest = () => prepareTokenRequest(scope);
+  }
+
   noteSecret({ name: credentials.secretEnv, value: clientSecret });
 
   noteSecret({

@@ -11,6 +11,13 @@ export interface FixtureHTTPServerOptions {
         readonly kind: 'client-credentials';
         readonly clientID: string;
         readonly clientSecret: string;
+
+        // The resource metadata lists `advertised`, and `/token` refuses with `invalid_scope` any
+        // scope outside `held`, as an authorization server does for an ungranted scope.
+        readonly scopes?: {
+          readonly advertised: readonly string[];
+          readonly held: readonly string[];
+        };
       };
 
   // Answers every request with a 500 whose body quotes the Authorization header it saw.
@@ -35,6 +42,9 @@ export interface FixtureHTTPServer {
   // Every request, in order, with the token requests of the auth server included.
   readonly requests: readonly FixtureRequest[];
 
+  // The `scope` of each token request, in order, or null for one that named none.
+  readonly tokenScopes: readonly (string | null)[];
+
   // Makes every token issued so far fail with a 401, as an expired one does.
   readonly expireTokens: () => void;
   readonly stop: () => Promise<void>;
@@ -46,6 +56,7 @@ export async function createFixtureHTTPServer(
   options: FixtureHTTPServerOptions,
 ): Promise<FixtureHTTPServer> {
   const requests: FixtureRequest[] = [];
+  const tokenScopes: (string | null)[] = [];
 
   const validTokens = new Set<string>();
 
@@ -72,11 +83,16 @@ export async function createFixtureHTTPServer(
     const url = new URL(request.url);
 
     const origin = url.origin;
+    const scopes = options.auth.kind === 'client-credentials' ? options.auth.scopes : undefined;
 
     requests.push({ method: request.method, path: url.pathname });
 
     if (url.pathname.startsWith('/.well-known/oauth-protected-resource')) {
-      return Response.json({ resource: `${origin}/mcp`, authorization_servers: [origin] });
+      return Response.json({
+        resource: `${origin}/mcp`,
+        authorization_servers: [origin],
+        ...(scopes === undefined ? {} : { scopes_supported: scopes.advertised }),
+      });
     }
 
     if (url.pathname.startsWith('/.well-known/')) {
@@ -97,6 +113,26 @@ export async function createFixtureHTTPServer(
 
       if (lastTokenAuthorization !== expected) {
         return Response.json({ error: 'invalid_client' }, { status: 401 });
+      }
+
+      const body = await request.text();
+
+      const scope = new URLSearchParams(body).get('scope');
+
+      tokenScopes.push(scope);
+
+      const asksUnheld =
+        scopes !== undefined &&
+        (scope ?? '').split(' ').some((name) => name !== '' && !scopes.held.includes(name));
+
+      if (asksUnheld) {
+        return Response.json(
+          {
+            error: 'invalid_scope',
+            error_description: 'the client does not hold a requested scope',
+          },
+          { status: 400 },
+        );
       }
 
       issued += 1;
@@ -147,6 +183,7 @@ export async function createFixtureHTTPServer(
   return {
     url: `http://127.0.0.1:${String(http.port)}`,
     requests,
+    tokenScopes,
     expireTokens: () => {
       validTokens.clear();
     },
