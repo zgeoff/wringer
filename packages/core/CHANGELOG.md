@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.1](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.0...@wringer/core@0.3.1) (2026-11-14)
+
+### Features
+
+- **core:** let a doctor check skip the targets outside its list
+  ([#159](https://github.com/zgeoff/wringer/issues/159))
+  ([bffdd95](https://github.com/zgeoff/wringer/commit/bffdd957a82bcd3c9ef41ed9a93a277a1de5bebc))
+
+### Bug Fixes
+
+- **core:** remove the replaced run's secrets file on up
+  ([#157](https://github.com/zgeoff/wringer/issues/157))
+  ([3e7cbd5](https://github.com/zgeoff/wringer/commit/3e7cbd52f6cb8994e983a90b867a3890a0f127a9))
+
 ## [0.3.0](https://github.com/zgeoff/wringer/compare/@wringer/core@0.2.0...@wringer/core@0.3.0) (2026-11-14)
 
 ### ⚠ BREAKING CHANGES
