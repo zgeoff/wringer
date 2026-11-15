@@ -239,23 +239,33 @@ function buildCheck(pr: number | null, results: ReadonlyMap<CheckName, CheckResu
 // gh names a GitHub App's account `app/<slug>`, where the REST API names the same account
 // `zgeoff-renovate[bot]`.
 const renovateLogin = 'app/zgeoff-renovate';
+const syncLogin = 'app/zgeoff-sync-bot';
 
-// release-please's and Renovate's bots change only versions, and nobody runs a journey on their
-// pull requests, so those never hold a report. A person's `renovate/` branch still meets the gate.
+// release-please's, Renovate's and repo-sync's bots change only versions and shared files, and
+// nobody runs a journey on their pull requests, so those never hold a report. A person's
+// `renovate/` or `repo-sync/` branch still meets the gate.
 function findSkipReason(pr: PullRequest): string | null {
   if (pr.headRefName.startsWith('release-please--')) {
     return 'skipped: a release pull request carries no verify report';
   }
 
-  if (
-    pr.headRefName.startsWith('renovate/') &&
-    pr.author?.isBot === true &&
-    pr.author.login === renovateLogin
-  ) {
+  if (isBotBranch(pr, 'renovate/', renovateLogin)) {
     return 'skipped: a renovate pull request carries no verify report';
   }
 
+  if (isBotBranch(pr, 'repo-sync/', syncLogin)) {
+    return 'skipped: a repo-sync pull request carries no verify report';
+  }
+
   return null;
+}
+
+function isBotBranch(pr: PullRequest, branchPrefix: string, login: string): boolean {
+  return (
+    pr.headRefName.startsWith(branchPrefix) &&
+    pr.author?.isBot === true &&
+    pr.author.login === login
+  );
 }
 
 async function readBaseRef(options: VerifyPROptions, baseBranch: string): Promise<string | null> {

@@ -261,7 +261,74 @@ test('it passes a renovate pull request from the renovate bot with no report blo
   expect(ctx.calls.some((call) => call[0] === 'bun')).toBe(false);
 });
 
+test('it passes a repo-sync pull request from the sync bot with no report block and runs no gate', async () => {
+  const ctx = await setupTest({
+    gh: {
+      exitCode: 0,
+      stdout: JSON.stringify({
+        number: 144,
+        baseRefName: 'main',
+        headRefName: 'repo-sync/zgeoff-tools',
+        body: 'update 2 shared entries',
+        author: { login: 'app/zgeoff-sync-bot', is_bot: true },
+      }),
+      stderr: '',
+    },
+  });
+
+  const result = await ctx.runCheck({ PR_NUMBER: '144' });
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    error: null,
+    check: {
+      ok: true,
+      pr: 144,
+      checks: [
+        { name: 'pull-request', ok: true, detail: '#144 into main' },
+        {
+          name: 'report-block',
+          ok: true,
+          detail: 'skipped: a repo-sync pull request carries no verify report',
+        },
+        {
+          name: 'registry',
+          ok: true,
+          detail: 'skipped: a repo-sync pull request carries no verify report',
+        },
+        {
+          name: 'gate',
+          ok: true,
+          detail: 'skipped: a repo-sync pull request carries no verify report',
+        },
+      ],
+    },
+  });
+
+  expect(ctx.calls.some((call) => call[0] === 'bun')).toBe(false);
+});
+
 test.each([
+  {
+    who: 'a person',
+    headRefName: 'repo-sync/zgeoff-tools',
+    author: { login: 'some-person', is_bot: false },
+  },
+  {
+    who: 'the renovate bot',
+    headRefName: 'repo-sync/zgeoff-tools',
+    author: { login: 'app/zgeoff-renovate', is_bot: true },
+  },
+  {
+    who: 'the sync bot',
+    headRefName: 'renovate/left-pad-2.x',
+    author: { login: 'app/zgeoff-sync-bot', is_bot: true },
+  },
+  {
+    who: 'a person whose login is the sync bot slug',
+    headRefName: 'repo-sync/zgeoff-tools',
+    author: { login: 'app/zgeoff-sync-bot', is_bot: false },
+  },
   {
     who: 'a person',
     headRefName: 'renovate/left-pad-2.x',
