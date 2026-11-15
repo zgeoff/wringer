@@ -76,6 +76,7 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
       '*.md',
       'docs/**',
       '.claude/**',
+      '.codex/**',
       '.github/**',
       '.lefthook/**',
       'scripts/**',

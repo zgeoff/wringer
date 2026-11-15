@@ -89,6 +89,7 @@ test('#features --markdown lists the shop features, the ignore list and the feat
         'docs/**',
         '.github/**',
         '.claude/**',
+        '.codex/**',
         '.lefthook/**',
         'scripts/**',
         '*',
