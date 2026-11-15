@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.2](https://github.com/zgeoff/wringer/compare/@wringer/mcp@0.1.1...@wringer/mcp@0.1.2) (2026-11-15)
+
+
+### Bug Fixes
+
+* **mcp:** ask the token endpoint for only the target's scope ([#164](https://github.com/zgeoff/wringer/issues/164)) ([51661ae](https://github.com/zgeoff/wringer/commit/51661ae26ea9bc2b23df58d0fa130fae1f7db674))
+
 ## [0.1.1](https://github.com/zgeoff/wringer/compare/@wringer/mcp@0.1.0...@wringer/mcp@0.1.1) (2026-11-14)
 
 ### Dependencies
