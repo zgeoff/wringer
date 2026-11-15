@@ -32,7 +32,7 @@ test('it passes lint over the shop verify skill and its feature map', async () =
 
   expect(result).toStrictEqual({
     exitCode: 0,
-    data: { skill: 'packages/shop-example/verify-skill/SKILL.md', commands: 17, failures: [] },
+    data: { skill: 'packages/shop-example/verify-shop/SKILL.md', commands: 17, failures: [] },
     stderr: '',
   });
 });
