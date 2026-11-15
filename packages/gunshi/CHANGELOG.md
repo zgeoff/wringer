@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.2...@wringer/gunshi@0.3.3) (2026-11-15)
+
+
+### Bug Fixes
+
+* **gunshi:** define the verify skill's terms and its no-pr case ([#162](https://github.com/zgeoff/wringer/issues/162)) ([b196d35](https://github.com/zgeoff/wringer/commit/b196d350cfb901a33e7990f7abb991aec24e2e61))
+
 ## [0.3.2](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.1...@wringer/gunshi@0.3.2) (2026-11-14)
 
 ### Features
