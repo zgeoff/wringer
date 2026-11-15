@@ -17,7 +17,7 @@ async function setupTest() {
 
   onTestFinished(() => rm(root, { recursive: true, force: true }));
 
-  const stopped: number[] = [];
+  const stopped: string[] = [];
 
   return {
     root,
@@ -28,8 +28,8 @@ async function setupTest() {
         owner: { namespace: '4026531836', pid: 4100 },
         fileSystem: nodeFileSystem,
         readProcesses,
-        stopProcess: (pid) => {
-          stopped.push(pid);
+        stopProcess: (pid, signal) => {
+          stopped.push(`${pid} ${signal}`);
         },
         exitWaitMs: 300,
       }),
@@ -50,7 +50,7 @@ test.each([
     leftover: false,
   },
   {
-    args: 'bun cli.ts __wringer-supervisor run-1 prod /elsewhere/.test-n4026531836-p4100-repo-a1b2c3',
+    args: 'bun /repo/cli.ts __wringer-supervisor run-1 prod /elsewhere/.test-n4026531836-p4100-repo-a1b2c3',
     leftover: false,
   },
   { args: 'bun cli.ts __wringer-supervisor run-1 prod /repo', leftover: false },
@@ -92,18 +92,32 @@ test('it stops a process that still names a test folder of the owner, and remove
 
   await mkdir(folder, { recursive: true });
 
-  const leftovers = await ctx.runCheck(() => [
-    { pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` },
-  ]);
+  const leftovers = await ctx.runCheck(() =>
+    ctx.stopped.length === 0
+      ? [{ pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` }]
+      : [],
+  );
 
   expect({ leftovers, stopped: ctx.stopped, folderExists: existsSync(folder) }).toStrictEqual({
     leftovers: {
       processes: [{ pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` }],
       folders: [folder],
     },
-    stopped: [5200],
+    stopped: ['5200 SIGTERM'],
     folderExists: false,
   });
+});
+
+test('it kills a leftover process that still runs after the stop', async () => {
+  const ctx = await setupTest();
+
+  const folder = join(ctx.root, 'src/.test-n4026531836-p4100-repo-a1b2c3');
+
+  await ctx.runCheck(() => [
+    { pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` },
+  ]);
+
+  expect(ctx.stopped).toStrictEqual(['5200 SIGTERM', '5200 SIGKILL']);
 });
 
 test('it reports no leftover for a process that exits within the wait', async () => {

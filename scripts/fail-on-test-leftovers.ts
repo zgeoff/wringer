@@ -1,6 +1,7 @@
 import { afterAll } from 'bun:test';
 import { join } from 'node:path';
 import { readPIDNamespace } from '../packages/core/src/host/read-pid-namespace.ts';
+import { removeTestFolder } from '../packages/core/src/test-utils/remove-test-folder.ts';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 import { readProcesses, runTestLeftoversCheck, stopProcess } from './run-test-leftovers-check.ts';
 
@@ -9,7 +10,7 @@ afterAll(async () => {
   const leftovers = await runTestLeftoversCheck({
     root: join(import.meta.dir, '..'),
     owner: { namespace: readPIDNamespace(), pid: process.pid },
-    fileSystem: nodeFileSystem,
+    fileSystem: { ...nodeFileSystem, removePath: removeTestFolder },
     readProcesses,
     stopProcess,
     exitWaitMs: 1500,

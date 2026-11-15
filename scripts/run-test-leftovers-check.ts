@@ -17,7 +17,7 @@ export interface TestLeftoversCheckRequest {
 
   readonly fileSystem: Pick<FileSystem, 'readFolderNames' | 'removePath'>;
   readonly readProcesses: () => readonly ProcessLine[];
-  readonly stopProcess: (pid: number) => void;
+  readonly stopProcess: (pid: number, signal: NodeJS.Signals) => void;
 
   // How long a leftover process gets to exit on its own, as a stopped supervisor does just after
   // it answers the stop.
@@ -38,12 +38,15 @@ export async function runTestLeftoversCheck(
   const processes = await readLeftoverProcesses(request);
 
   for (const line of processes) {
-    request.stopProcess(line.pid);
+    request.stopProcess(line.pid, 'SIGTERM');
   }
 
-  // A stopped supervisor still writes its last events, which would bring a removed folder back.
-  if (processes.length > 0) {
-    await readLeftoverProcesses(request);
+  // A stopped supervisor still writes its last events, which would bring a removed folder back, so
+  // the folders go only once each process has exited or been killed.
+  const unstopped = processes.length > 0 ? await readLeftoverProcesses(request) : [];
+
+  for (const line of unstopped) {
+    request.stopProcess(line.pid, 'SIGKILL');
   }
 
   const testFolders = await readTestFolders(request.fileSystem, request.root);
@@ -76,19 +79,23 @@ export interface LeftoverScope {
   readonly owner: TestFolderOwner;
 }
 
-const testFolderNamePattern = /\.test-n[^\s\/]+/gv;
-
-// A process is a leftover when it names a test folder of the owner under the root.
+// A process is a leftover when one of its arguments is a path under the root that goes through a
+// test folder of the owner. `ps` joins the arguments with spaces, so a path with a space goes unseen.
 export function pickLeftoverProcesses(
   processes: readonly ProcessLine[],
   scope: LeftoverScope,
 ): readonly ProcessLine[] {
-  return processes.filter(
-    (line) =>
-      line.args.includes(`${scope.root}${sep}`) &&
-      [...line.args.matchAll(testFolderNamePattern)].some((match) =>
-        isOwnedBy(match[0], scope.owner),
-      ),
+  const prefix = `${scope.root}${sep}`;
+
+  return processes.filter((line) =>
+    line.args.split(/\s+/v).some(
+      (word) =>
+        word.startsWith(prefix) &&
+        word
+          .slice(prefix.length)
+          .split(sep)
+          .some((segment) => isOwnedBy(segment, scope.owner)),
+    ),
   );
 }
 
@@ -126,9 +133,9 @@ export function readProcesses(): readonly ProcessLine[] {
   return parseProcessLines(result.stdout.toString());
 }
 
-export function stopProcess(pid: number): void {
+export function stopProcess(pid: number, signal: NodeJS.Signals): void {
   try {
-    process.kill(pid, 'SIGTERM');
+    process.kill(pid, signal);
   } catch (error) {
     if (!isErrorCode(error, 'ESRCH')) {
       throw error;
