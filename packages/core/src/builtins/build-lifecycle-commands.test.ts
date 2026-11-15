@@ -443,10 +443,6 @@ test('#up gives up on readiness when its clock passes the ready timeout', async 
 
   let nowMs = Date.parse('2026-03-01T09:00:00.000Z');
 
-  onTestFinished(async () => {
-    await ctx.run('slow', ['down']);
-  });
-
   const result = await ctx.runWithClock('slow', ['up'], () => {
     nowMs += 60_000;
 
@@ -458,10 +454,6 @@ test('#up gives up on readiness when its clock passes the ready timeout', async 
 
 test('#up waits between its readiness reads on the session timer', async () => {
   const ctx = await setupTest();
-
-  onTestFinished(async () => {
-    await ctx.run('slow', ['down']);
-  });
 
   const waits: number[] = [];
 
@@ -476,10 +468,6 @@ test('#up waits between its readiness reads on the session timer', async () => {
 
 test('#up logs a failed stop of the run it abandoned at its deadline to the run', async () => {
   const ctx = await setupTest();
-
-  onTestFinished(async () => {
-    await ctx.run('slow', ['down']);
-  });
 
   const answered = Promise.withResolvers<void>();
 

@@ -35,7 +35,7 @@ export interface TestFolder {
 
 const skippedFolderNames = new Set(['.git', '.worktrees', 'node_modules', 'dist']);
 
-async function readTestFolders(
+export async function readTestFolders(
   fileSystem: Pick<FileSystem, 'readFolderNames'>,
   directory: string,
 ): Promise<readonly TestFolder[]> {
@@ -65,14 +65,14 @@ function collectTestFolderPIDs(folders: readonly TestFolder[], namespace: string
   });
 }
 
-interface TestFolderOwner {
+export interface TestFolderOwner {
   readonly namespace: string;
   readonly pid: number;
 }
 
 const testFolderPattern = /^\.test-n(?<namespace>\d+|host)-p(?<pid>\d+)-/v;
 
-function parseTestFolderOwner(name: string): TestFolderOwner | null {
+export function parseTestFolderOwner(name: string): TestFolderOwner | null {
   const groups = testFolderPattern.exec(name)?.groups;
 
   if (groups === undefined) {

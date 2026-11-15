@@ -1,7 +1,8 @@
-import { rm, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runGit } from '../change-facts/run-git.ts';
 import { createTestFolder } from './create-test-folder.ts';
+import { removeTestFolder } from './remove-test-folder.ts';
 
 export interface TestRepo {
   readonly root: string;
@@ -20,8 +21,8 @@ export async function createTestRepo(parent: string): Promise<TestRepo> {
     return result.stdout;
   };
 
-  // Late work from a timed-out command can add files while the removal walks the tree.
-  const remove = () => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  // Late work from a timed-out command can add or remove files while the removal walks the tree.
+  const remove = () => removeTestFolder(root);
 
   // The caller gets `remove` only once this returns, so a failed step removes the folder here.
   try {

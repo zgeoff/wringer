@@ -17,8 +17,6 @@ import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 async function setupTest() {
   const repo = await createTestRepo(import.meta.dir);
 
-  onTestFinished(() => repo.remove());
-
   const wringer = createDemoWringer();
   const written: string[] = [];
   const supervised: (readonly string[])[] = [];
@@ -54,6 +52,13 @@ async function setupTest() {
 
     return { exitCode, stdout: written.splice(0).join('') };
   };
+
+  // `attach` starts a real supervisor process, which `detach` must stop before the folder goes.
+  onTestFinished(async () => {
+    await run(['detach', '--target', 'prod']);
+
+    await repo.remove();
+  });
 
   return {
     root: repo.root,
@@ -318,8 +323,6 @@ test('it prints a doctor check outside its targets as skipped for a person with 
   const ctx = await setupTest();
 
   await ctx.run(['attach', '--target', 'prod']);
-
-  onTestFinished(() => ctx.run(['detach', '--target', 'prod']));
 
   const result = await ctx.run(['doctor', '--target', 'prod', '--human']);
 
