@@ -53,6 +53,10 @@ test.each([
     args: 'bun /repo/cli.ts __wringer-supervisor run-1 prod /elsewhere/.test-n4026531836-p4100-repo-a1b2c3',
     leftover: false,
   },
+  {
+    args: 'bun cli.ts __wringer-supervisor run-1 prod /work/repo/.test-n4026531836-p4100-repo-a1b2c3',
+    leftover: false,
+  },
   { args: 'bun cli.ts __wringer-supervisor run-1 prod /repo', leftover: false },
 ])('#pickLeftoverProcesses reads $args as a leftover: $leftover', (row) => {
   const picked = pickLeftoverProcesses([{ pid: 5200, args: row.args }], {
@@ -61,6 +65,20 @@ test.each([
   });
 
   expect(picked.length > 0).toBe(row.leftover);
+});
+
+test('#pickLeftoverProcesses finds a test folder under a root whose path holds a space', () => {
+  const picked = pickLeftoverProcesses(
+    [
+      {
+        pid: 5200,
+        args: 'bun cli.ts __wringer-supervisor run-1 prod /my repo/src/.test-n4026531836-p4100-repo-a1b2c3',
+      },
+    ],
+    { root: '/my repo', owner: { namespace: '4026531836', pid: 4100 } },
+  );
+
+  expect(picked.map((line) => line.pid)).toStrictEqual([5200]);
 });
 
 test.each([

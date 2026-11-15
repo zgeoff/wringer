@@ -80,7 +80,8 @@ export interface LeftoverScope {
 }
 
 // A process is a leftover when one of its arguments is a path under the root that goes through a
-// test folder of the owner. `ps` joins the arguments with spaces, so a path with a space goes unseen.
+// test folder of the owner. `ps` joins the arguments with spaces, so the path after the root ends at
+// the first space, and the root itself may hold one.
 export function pickLeftoverProcesses(
   processes: readonly ProcessLine[],
   scope: LeftoverScope,
@@ -88,15 +89,23 @@ export function pickLeftoverProcesses(
   const prefix = `${scope.root}${sep}`;
 
   return processes.filter((line) =>
-    line.args.split(/\s+/v).some(
-      (word) =>
-        word.startsWith(prefix) &&
-        word
-          .slice(prefix.length)
-          .split(sep)
-          .some((segment) => isOwnedBy(segment, scope.owner)),
+    collectPathsUnder(line.args, prefix).some((path) =>
+      path.split(sep).some((segment) => isOwnedBy(segment, scope.owner)),
     ),
   );
+}
+
+// The part after `prefix` of each argument that starts with it.
+function collectPathsUnder(args: string, prefix: string): readonly string[] {
+  const paths: string[] = [];
+
+  for (let index = args.indexOf(prefix); index !== -1; index = args.indexOf(prefix, index + 1)) {
+    if (index === 0 || /\s/v.test(args.charAt(index - 1))) {
+      paths.push(args.slice(index + prefix.length).split(/\s/v)[0] ?? '');
+    }
+  }
+
+  return paths;
 }
 
 export function pickLeftoverFolders(
