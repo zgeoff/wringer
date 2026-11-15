@@ -45,7 +45,7 @@ export function createWringerRegistry(options?: ShopRegistryOptions): Wringer;
 
 The root `verify` script runs `createWringerRegistry` with the skill folder `.claude/skills/verify`.
 A `verify:shop` script runs `createShopRegistry` with the skill folder
-`packages/shop-example/verify-skill`.
+`packages/shop-example/verify-shop`.
 
 | Feature           | Paths                                                                                 |
 | ----------------- | ------------------------------------------------------------------------------------- |
@@ -270,7 +270,7 @@ jobs:
   hash, so no release forgets to ask repos to upgrade.
 - **The wringer registry lives in the shop example package.** It needs the shop's targets, action
   and check, and the package is private and shared by every journey.
-- **The shop's verify skill moves to `packages/shop-example/verify-skill/`.** It stays the worked
+- **The shop's verify skill moves to `packages/shop-example/verify-shop/`.** It stays the worked
   example of the template and the fixture of the shop lint test, and agents in this repo load only
   the wringer skill.
 - **One script is both the acceptance check and the CI gate step.** The check that proves the job
@@ -325,7 +325,7 @@ list in [The wringer registry](#the-wringer-registry); `bun run verify:shop` run
 **Depends on:** `.shared()` from [VS]. Until it lands, each feature lists the shared paths in its
 own `paths`.
 
-`verify:shop` lints the shop's skill in `packages/shop-example/verify-skill/`, and the root `verify`
+`verify:shop` lints the shop's skill in `packages/shop-example/verify-shop/`, and the root `verify`
 lints `.claude/skills/verify`, which work item 8 writes. The shop registry's `guide` feature moves
 to the wringer registry, whose `guide` feature owns `packages/gunshi/guide/**`.
 
@@ -361,7 +361,7 @@ and token from the environment.
 
 **Outcome:** `lint` reports each failure in [Lint](#lint), the template and the shop example's skill
 take the short SKILL.md and per-feature shape, and the shop's skill moves to
-`packages/shop-example/verify-skill/`.
+`packages/shop-example/verify-shop/`.
 
 **Depends on:** 4. The `shared` part of the dead-glob check depends on `.shared()` from [VS].
 
