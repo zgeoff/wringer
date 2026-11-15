@@ -261,6 +261,49 @@ test('it signs in with client_credentials, then fetches one new token after a 40
   });
 });
 
+test('it asks for only the target scope when the server lists scopes the client does not hold', async () => {
+  const ctx = setupTest();
+
+  updateEnv('FIXTURE_MCP_SECRET', 'plum-harbour-secret-91');
+
+  const server = await ctx.startHTTPServer({
+    auth: {
+      kind: 'client-credentials',
+      clientID: 'service:ro',
+      clientSecret: 'plum-harbour-secret-91',
+      scopes: { advertised: ['read', 'exec', 'manage'], held: ['read'] },
+    },
+  });
+
+  const session = await ctx.startSession({
+    shop: {
+      transport: 'http',
+      url: `${server.url}/mcp`,
+      auth: {
+        clientCredentials: {
+          clientID: 'service:ro',
+          secretEnv: 'FIXTURE_MCP_SECRET',
+          scope: 'read',
+          issuer: server.url,
+        },
+      },
+      readTools: [],
+    },
+  });
+
+  await session.start('local');
+
+  const result = await session.run('local', ['mcp', 'call'], {
+    tool: 'echo',
+    args: '{"text":"hi there"}',
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    tokenScopes: server.tokenScopes,
+  }).toStrictEqual({ exitCode: 0, tokenScopes: ['read'] });
+});
+
 test('it signs in with a bearer token from the environment', async () => {
   const ctx = setupTest();
 
