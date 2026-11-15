@@ -152,8 +152,8 @@ only the name of a group, such as `action`: run `bun verify <group> --help` for 
 - `bun verify action place-order` places an order, with its `id` in `data.id`.
 - `bun verify orders count` counts the orders, in `data.orders`.
 - `bun verify db query '<sql>'` runs SQL on `local`'s database; add `--write` to write.
-- `bun verify stream read app` returns the log lines since `use`. It keeps no evidence, so quote the
-  line you checked in your reply.
+- `bun verify stream read app` returns the log lines since any `use` last ran. It keeps no evidence:
+  quote the line in your reply.
 
 <!-- /repo -->
 
