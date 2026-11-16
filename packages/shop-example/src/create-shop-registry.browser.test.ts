@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { dispatch, reportSchema } from '@wringer/core';
+import { reportSchema } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
@@ -21,9 +21,14 @@ async function setupTest() {
     write,
 
     run: (path: readonly string[], args: unknown = {}) =>
-      dispatch(registry, path, args, { ...shop.session, target: 'local' }),
+      shop.dispatch(registry, path, args, { ...shop.session, target: 'local' }),
     readStatuses: async () => {
-      const result = await dispatch(registry, ['report'], {}, { ...shop.session, target: 'local' });
+      const result = await shop.dispatch(
+        registry,
+        ['report'],
+        {},
+        { ...shop.session, target: 'local' },
+      );
 
       const data = reportDataSchema.parse(result.envelope.data);
 

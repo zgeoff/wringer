@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { dispatch, reportSchema } from '@wringer/core';
+import { reportSchema } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { updateEnv } from '@zgeoff/testing/helpers';
 import { z } from 'zod';
@@ -16,6 +16,7 @@ async function setupTest() {
   return {
     registry,
     session: shop.session,
+    dispatch: shop.dispatch,
     root: shop.repo.root,
     writeFiles: async (paths: readonly string[]) => {
       for (const path of paths) {
@@ -34,7 +35,12 @@ async function setupTest() {
       return listing.split('\0').filter((path) => path !== '');
     },
     readReport: async () => {
-      const result = await dispatch(registry, ['report'], {}, { ...shop.session, target: 'local' });
+      const result = await shop.dispatch(
+        registry,
+        ['report'],
+        {},
+        { ...shop.session, target: 'local' },
+      );
 
       return z.strictObject({ report: reportSchema }).loose().parse(result.envelope.data).report;
     },
@@ -174,7 +180,12 @@ test('it needs neither upload variable for a command that never uploads', async 
   updateEnv('VERIFY_UPLOAD_URL', undefined);
   updateEnv('VERIFY_UPLOAD_TOKEN', undefined);
 
-  const result = await dispatch(ctx.registry, ['report'], {}, { ...ctx.session, target: 'local' });
+  const result = await ctx.dispatch(
+    ctx.registry,
+    ['report'],
+    {},
+    { ...ctx.session, target: 'local' },
+  );
 
   expect(result.envelope.ok).toBeTrue();
 });

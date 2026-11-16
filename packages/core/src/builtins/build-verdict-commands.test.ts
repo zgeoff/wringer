@@ -2,7 +2,6 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { dispatch } from '../dispatch/dispatch.ts';
 import type { UploadFile } from '../evidence/evidence-uploader.ts';
 import { parseReportComment } from '../report-document/parse-report-comment.ts';
 import type { StatePort } from '../state/create-file-state.ts';
@@ -17,6 +16,12 @@ import type { ReportComment } from '../verdict/report-schema.ts';
 async function setupTest() {
   const wringer = createShopWringer();
   const refusing = createShopWringer({ gate: { unpinned: 'refuse' } });
+  const release = Promise.withResolvers<undefined>();
+
+  // Before the session, so a paused `done` ends before the session's cleanup waits for it.
+  onTestFinished(() => {
+    release.resolve(undefined);
+  });
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
@@ -53,7 +58,6 @@ async function setupTest() {
   // `done` pauses where it hands its envelope to the state, before the state takes the run lock,
   // until the test releases it.
   const writing = Promise.withResolvers<undefined>();
-  const release = Promise.withResolvers<undefined>();
 
   const pausedState: StatePort = {
     ...shop.state,
@@ -72,12 +76,12 @@ async function setupTest() {
 
     uploads,
     run: (path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target: 'local' }),
     runOn: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
 
     runRefusing: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(refusing, path, args, { ...shop.session, target }),
+      shop.dispatch(refusing, path, args, { ...shop.session, target }),
 
     // Changes a checkout file, verifies the feature on the attach target `prod` and returns the
     // report Markdown.
@@ -86,7 +90,7 @@ async function setupTest() {
       await writeFile(join(shop.repo.root, 'src', 'checkout', 'pay.ts'), 'export const pay = 1;\n');
 
       const dispatchOn = (path: readonly string[], args: unknown = {}) =>
-        dispatch(wringer, path, args, { ...shop.session, target: 'prod' });
+        shop.dispatch(wringer, path, args, { ...shop.session, target: 'prod' });
 
       await dispatchOn(['attach']);
       await dispatchOn(['doctor']);
@@ -129,7 +133,12 @@ async function setupTest() {
         },
       };
 
-      return dispatch(wringer, path, {}, { ...shop.session, state: switching, target: 'local' });
+      return shop.dispatch(
+        wringer,
+        path,
+        {},
+        { ...shop.session, state: switching, target: 'local' },
+      );
     },
 
     // Runs the command, and runs `between` once dispatch has read the pointers it records the
@@ -146,10 +155,20 @@ async function setupTest() {
         },
       };
 
-      return dispatch(wringer, path, {}, { ...shop.session, state: switching, target: 'local' });
+      return shop.dispatch(
+        wringer,
+        path,
+        {},
+        { ...shop.session, state: switching, target: 'local' },
+      );
     },
     runPausedDone: () =>
-      dispatch(wringer, ['done'], {}, { ...shop.session, state: pausedState, target: 'local' }),
+      shop.dispatch(
+        wringer,
+        ['done'],
+        {},
+        { ...shop.session, state: pausedState, target: 'local' },
+      ),
     writing: writing.promise,
     releaseDone: () => {
       release.resolve(undefined);
@@ -175,9 +194,9 @@ async function setupTest() {
     },
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     runWithUpload: (path: readonly string[], env: Readonly<Record<string, string>> = {}) =>
-      dispatch(uploading, path, {}, { ...shop.session, env, target: 'local' }),
+      shop.dispatch(uploading, path, {}, { ...shop.session, env, target: 'local' }),
     runOnUploadingTarget: (path: readonly string[], args: unknown = {}) =>
-      dispatch(uploadingTarget, path, args, { ...shop.session, target: 'local' }),
+      shop.dispatch(uploadingTarget, path, args, { ...shop.session, target: 'local' }),
     parseReportData: (data: unknown) => reportDataSchema.parse(data),
 
     // The body sits in the ignored state folder, as CI keeps it outside the checkout, so writing it
@@ -762,12 +781,6 @@ test('#done refuses and records no verdict when a doctor fails while it waits fo
 
   const runID = runIDSchema.parse(up.envelope.instance);
   const done = ctx.runPausedDone();
-
-  onTestFinished(async () => {
-    ctx.releaseDone();
-
-    await Promise.allSettled([done]);
-  });
 
   await ctx.writing;
 

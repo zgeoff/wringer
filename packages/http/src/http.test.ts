@@ -1,7 +1,6 @@
 import { expect, mock, test } from 'bun:test';
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { HttpResponse, delay, http } from 'msw';
 import type { HttpTransport } from './http.ts';
@@ -86,23 +85,32 @@ async function setupTest() {
       return evidence;
     },
     runRedacting: (path: readonly string[], args: unknown = {}) =>
-      dispatch(redactingWringer, path, args, { ...redactingShop.session, target: 'local' }),
+      redactingShop.dispatch(redactingWringer, path, args, {
+        ...redactingShop.session,
+        target: 'local',
+      }),
     runFailing: (path: readonly string[], args: unknown = {}) =>
-      dispatch(failingWringer, path, args, { ...failingShop.session, target: 'local' }),
+      failingShop.dispatch(failingWringer, path, args, { ...failingShop.session, target: 'local' }),
     root: shop.repo.root,
     transport,
     stopApp: () => app.stop(),
     runWithTransport: (path: readonly string[], args: unknown = {}) =>
-      dispatch(transportWringer, path, args, { ...transportShop.session, target: 'local' }),
+      transportShop.dispatch(transportWringer, path, args, {
+        ...transportShop.session,
+        target: 'local',
+      }),
     runOnLoopback: (path: readonly string[], args: unknown = {}) =>
-      dispatch(loopbackWringer, path, args, { ...loopbackShop.session, target: 'local' }),
+      loopbackShop.dispatch(loopbackWringer, path, args, {
+        ...loopbackShop.session,
+        target: 'local',
+      }),
     readEvidence: async (path: string) => {
       const evidence: unknown = await Bun.file(join(shop.repo.root, path)).json();
 
       return evidence;
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
   };
 }
 

@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
 import type { DispatchResult } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { parsePublishedEnvelope } from '@wringer/core/test-utils/parse-published-envelope.ts';
@@ -23,7 +22,10 @@ async function setupTest() {
     root: shop.repo.root,
     results,
     run: async (path: readonly string[], args: unknown = {}) => {
-      const result = await dispatch(registry, path, args, { ...shop.session, target: 'local' });
+      const result = await shop.dispatch(registry, path, args, {
+        ...shop.session,
+        target: 'local',
+      });
 
       results.push(result);
 

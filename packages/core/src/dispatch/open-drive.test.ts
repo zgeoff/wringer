@@ -5,7 +5,6 @@ import { bindDrivers } from '../registry/bind-drivers.ts';
 import { createWringer } from '../registry/create-wringer.ts';
 import { defineDriver } from '../registry/define-driver.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
-import { dispatch } from './dispatch.ts';
 
 async function setupTest() {
   let nowMs = Date.parse('2026-11-05T09:00:00.000Z');
@@ -66,7 +65,7 @@ async function setupTest() {
 
   return {
     run: (path: readonly string[], timeoutMs?: number) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},

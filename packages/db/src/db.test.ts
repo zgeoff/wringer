@@ -2,7 +2,6 @@ import { Database } from 'bun:sqlite';
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { createDbWringer } from './test-utils/create-db-wringer.ts';
@@ -31,9 +30,9 @@ async function setupTest() {
       },
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (timeoutMs: number, target: string, path: readonly string[], args: unknown) =>
-      dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
   };
 }
 

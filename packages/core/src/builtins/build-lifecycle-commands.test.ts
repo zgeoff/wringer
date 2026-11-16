@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { runGit } from '../change-facts/run-git.ts';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { local } from '../host/local.ts';
 import { createWringer } from '../registry/create-wringer.ts';
 import { listenSupervisorSocket } from '../supervisor/listen-supervisor-socket.ts';
@@ -16,6 +15,12 @@ import { createTestSession } from '../test-utils/create-test-session.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
+  const fingerprintGate = Promise.withResolvers<undefined>();
+
+  // Before the session, so gated work ends before the session's cleanup waits for it.
+  onTestFinished(() => {
+    fingerprintGate.resolve(undefined);
+  });
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
@@ -64,7 +69,7 @@ async function setupTest() {
     root: shop.repo.root,
     state: shop.state,
     runScoped: (env: Readonly<Record<string, string>>, path: readonly string[]) =>
-      dispatch(scoped, path, {}, { ...shop.session, env, target: 'local' }),
+      shop.dispatch(scoped, path, {}, { ...shop.session, env, target: 'local' }),
 
     // Every file under the state folder, joined.
     readStateFiles: async (): Promise<string> => {
@@ -79,16 +84,18 @@ async function setupTest() {
       return texts.join('\n');
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
-      dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
 
-    // The fingerprint read's first git call, `merge-base`, waits for `gate`, so the deadline passes
-    // mid-read. The envelope's SHA read never waits.
-    runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) => {
-      const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate };
+    // The fingerprint read's first git call, `merge-base`, waits for the gate, so the deadline
+    // passes mid-read. The envelope's SHA read never waits.
+    runWithGatedFingerprint: (target: string, timeoutMs: number) => {
+      const gitGates: Readonly<Record<string, Promise<unknown>>> = {
+        'merge-base': fingerprintGate.promise,
+      };
 
-      return dispatch(
+      return shop.dispatch(
         wringer,
         ['up'],
         {},
@@ -107,14 +114,17 @@ async function setupTest() {
         },
       );
     },
+    openFingerprintGate: () => {
+      fingerprintGate.resolve(undefined);
+    },
     runWithClock: (target: string, path: readonly string[], now: () => Date) =>
-      dispatch(wringer, path, {}, { ...shop.session, target, now }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target, now }),
     runWithTimer: (
       target: string,
       path: readonly string[],
       timeoutMs: number,
       wait: (delayMs: number) => Promise<void>,
-    ) => dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs, wait }),
+    ) => shop.dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs, wait }),
 
     // The supervisor's own stop goes to the socket that closes mid-call, while every other call
     // and the start reach the run's supervisor.
@@ -124,7 +134,7 @@ async function setupTest() {
       timeoutMs: number,
       wait: (delayMs: number) => Promise<void>,
     ) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -151,7 +161,7 @@ async function setupTest() {
     // The supervisor's command is a shell script, which exits at once as a supervisor that fails
     // before its run is ready does.
     runWithExitingSupervisor: (target: string, script: string) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         ['up'],
         {},
@@ -167,7 +177,7 @@ async function setupTest() {
       ),
 
     runWithMissingSupervisor: (target: string, path: readonly string[]) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -502,15 +512,9 @@ test('#up logs a failed stop of the run it abandoned at its deadline to the run'
 test('#up starts no run when its deadline passes while it reads the fingerprint', async () => {
   const ctx = await setupTest();
 
-  const gate = Promise.withResolvers<undefined>();
+  await ctx.runWithGatedFingerprint('local', 100);
 
-  onTestFinished(() => {
-    gate.resolve(undefined);
-  });
-
-  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
-
-  gate.resolve(undefined);
+  ctx.openFingerprintGate();
 
   await ctx.waitForTargetLock('local');
 
@@ -521,12 +525,6 @@ test('#up starts no run when its deadline passes while it reads the fingerprint'
 
 test('#up keeps the secrets file of the run it would replace when its deadline passes while it reads the fingerprint', async () => {
   const ctx = await setupTest();
-
-  const gate = Promise.withResolvers<undefined>();
-
-  onTestFinished(() => {
-    gate.resolve(undefined);
-  });
 
   await ctx.state.appendEvent('crashed-run', {
     type: 'run-started',
@@ -552,9 +550,9 @@ test('#up keeps the secrets file of the run it would replace when its deadline p
     currentRun: { local: 'crashed-run' },
   }));
 
-  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
+  await ctx.runWithGatedFingerprint('local', 100);
 
-  gate.resolve(undefined);
+  ctx.openFingerprintGate();
 
   await ctx.waitForTargetLock('local');
 

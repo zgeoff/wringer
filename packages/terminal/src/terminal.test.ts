@@ -1,6 +1,5 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { dispatch } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { updateEnv } from '@zgeoff/testing/helpers';
 import { createTerminalWringer } from './test-utils/create-terminal-wringer.ts';
@@ -11,7 +10,7 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   const run = (target: string, path: readonly string[], args: unknown = {}) =>
-    dispatch(wringer, path, args, { ...shop.session, target });
+    shop.dispatch(wringer, path, args, { ...shop.session, target });
 
   return {
     run,
