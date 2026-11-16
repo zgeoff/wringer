@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change in the running app, run the journey of a feature,
   or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:bc652053a9dc'
+  wringer-template: 'sha256:082bea8cba0d'
   wringer-command: bun verify
 ---
 
@@ -36,10 +36,14 @@ The mistakes that cost the most time:
 - [Targets](#targets): check a change on a launch target, a target whose app `bun verify up` starts
   from your worktree.
 - [Commands](#commands): read `--help` before you guess a flag.
-- [Edit the skill and the registry](#edit-the-skill-and-the-registry): fix a broken journey in the
-  same PR, map each changed file in the registry, and run `lint`.
+- [Edit the skill and the registry](#edit-the-skill-and-the-registry): map each new file in the
+  registry, read the reference before you edit the skill, and run `lint`.
 
 ## References
+
+- [Exit codes](references/exit-codes.md): when a command fails, what to do for its exit code and
+  `error.code`.
+- [Edit the skill](references/edit-the-skill.md): before you edit this skill or a feature file.
 
 Read a feature's file before you run its journey.
 
@@ -65,7 +69,7 @@ Read a feature's file before you run its journey.
 4. Run the journey from the feature's file in [References](#references). Its first line,
    `use --feature`, records each later command under that feature, and leaves the target as it is.
    Expect: each command exits 0. When one fails, do what its row in
-   [Read the envelope](#read-the-envelope) says.
+   [Exit codes](references/exit-codes.md) says.
 5. Compare the app with the feature's end state:
    - When it matches, and no command failed with `read-only`, go on to step 6.
    - When your change broke the feature, fix the app's code. Then run `bun verify up --restart`,
@@ -100,18 +104,8 @@ such as `doctor`, prints JSON event lines before the envelope. Read these fields
 - `evidence`: the files the command kept, under `.wringer/`;
 - `truncatedPath`: the file that holds `data` when it was too large to print.
 
-| Exit | `error.code`         | Do                                                                                                  |
-| ---- | -------------------- | --------------------------------------------------------------------------------------------------- |
-| 0    | none                 | Go on.                                                                                              |
-| 1    | `check-failed`       | Read the evidence. When `done` failed, run the journey again. Else compare the app, as step 5 says. |
-| 2    | `usage`              | Fix the command; `--help` shows its flags.                                                          |
-| 3    | `read-only`          | Leave the write undone, skip `done` for the feature, and list the write in your reply.              |
-| 3    | `doctor-required`    | Run the commands in `error.hint`, then run the feature's journey again.                             |
-| 3    | `not-running`        | Start the run, as step 2 says.                                                                      |
-| 3    | `target-not-allowed` | Follow `error.hint`.                                                                                |
-| 4    | `environment`        | Read `error.message` and `error.hint`, fix the problem, such as a missing browser, and retry.       |
-| 4    | `internal`           | Report the command and `error.message`: the CLI has a bug.                                          |
-| 5    | `timeout`            | Retry once with twice the timeout; the default is `--timeout-ms=120000`. Report a second timeout.   |
+When a command fails, find its exit code and `error.code` in [Exit codes](references/exit-codes.md),
+and do what that row says.
 
 ## Targets
 
@@ -161,24 +155,14 @@ doctor checks and features, with each feature's `paths`. CI runs `bun verify lin
 
 <!-- /repo -->
 
-- When a feature's journey stops working because the feature changed, fix the journey in the same
-  PR. You may edit any line of a feature file.
-- A feature file needs `## Journey`, whose first `bash` line is `bun verify use --feature <name>`,
-  and `## End state`.
-- In this SKILL.md, edit only these parts. An upgrade of the template replaces every other line.
-  - the frontmatter's `name` and `description`, and the `#` title;
-  - the lines inside each `<!-- repo: <name> -->` block;
-  - the table between the `wringer:features` markers: replace it with the output of
-    `bun verify features --markdown`.
-- Leave `metadata.wringer-template` as it is. When `lint` fails with check `template`, run
-  `bun verify guide maintain`, and follow its steps to upgrade the template.
-- Make each changed file match a feature's `paths`, a shared glob or a glob in the ignore list. The
-  registry sets the shared globs with `.shared()` and the ignore list with `.ignore()`. The gate
-  fails on a changed file that matches none of them. Add a file the running app never reads, such as
-  a test, to the ignore list. `bun verify features` lists each feature's `paths`, the shared globs
-  in `data.shared` and the ignore list in `data.ignore`.
-- After you change this skill, a feature file or the registry, run `bun verify lint`, and fix each
-  failure it reports.
+In the registry, map each file your change adds: add a glob that matches it to a feature's `paths`,
+to `.shared()` or to `.ignore()`. The gate fails on a changed file that no glob matches. Add a file
+that the running app never reads, such as a test, to `.ignore()`. `bun verify features` lists the
+globs.
+
+Before you edit this skill or a feature file, read [Edit the skill](references/edit-the-skill.md).
+After you change this skill, a feature file or the registry, run `bun verify lint`, and fix each
+failure it reports.
 
 **Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
 could not verify, with the command that failed and its `error.code`, or the end state you expected
