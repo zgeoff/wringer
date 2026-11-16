@@ -14,6 +14,12 @@ import { WringerError } from '../wringer-error.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
+  const gate = Promise.withResolvers<undefined>();
+
+  // Before the session, so gated work ends before the session's cleanup waits for it.
+  onTestFinished(() => {
+    gate.resolve(undefined);
+  });
 
   const shop = await createTestSession({
     parent: import.meta.dir,
@@ -22,13 +28,7 @@ async function setupTest() {
   });
 
   const stateDir = join(shop.repo.root, wringer.stateDir);
-  const gate = Promise.withResolvers<undefined>();
   const guardsDone = Promise.withResolvers<undefined>();
-
-  onTestFinished(() => {
-    gate.resolve(undefined);
-  });
-
   const evidenceWrites = mock(writeNewFile);
   const supervisorCalls = mock(callSupervisor);
   const order: string[] = [];

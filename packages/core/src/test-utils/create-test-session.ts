@@ -1,5 +1,6 @@
 import { onTestFinished } from 'bun:test';
 import { dispatch } from '../dispatch/dispatch.ts';
+import type { DispatchResult } from '../dispatch/dispatch.ts';
 import { readLaunchHost } from '../launch/read-launch-host.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import type { StatePort } from '../state/create-file-state.ts';
@@ -69,10 +70,12 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     repo,
     state,
     lines,
-    dispatch: async (...args) => {
-      const result = await dispatch(...args);
 
-      lateWork.push(result.late);
+    // Kept from the call on, so a test that ends before its command answers still waits for it.
+    dispatch: (...args) => {
+      const result = dispatch(...args);
+
+      lateWork.push(waitForLateWork(result));
 
       return result;
     },
@@ -113,4 +116,10 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
       },
     },
   };
+}
+
+async function waitForLateWork(dispatching: Promise<DispatchResult>): Promise<void> {
+  const result = await dispatching;
+
+  await result.late;
 }

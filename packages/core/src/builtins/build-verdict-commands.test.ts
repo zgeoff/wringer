@@ -16,6 +16,12 @@ import type { ReportComment } from '../verdict/report-schema.ts';
 async function setupTest() {
   const wringer = createShopWringer();
   const refusing = createShopWringer({ gate: { unpinned: 'refuse' } });
+  const release = Promise.withResolvers<undefined>();
+
+  // Before the session, so a paused `done` ends before the session's cleanup waits for it.
+  onTestFinished(() => {
+    release.resolve(undefined);
+  });
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
@@ -52,7 +58,6 @@ async function setupTest() {
   // `done` pauses where it hands its envelope to the state, before the state takes the run lock,
   // until the test releases it.
   const writing = Promise.withResolvers<undefined>();
-  const release = Promise.withResolvers<undefined>();
 
   const pausedState: StatePort = {
     ...shop.state,
@@ -776,12 +781,6 @@ test('#done refuses and records no verdict when a doctor fails while it waits fo
 
   const runID = runIDSchema.parse(up.envelope.instance);
   const done = ctx.runPausedDone();
-
-  onTestFinished(async () => {
-    ctx.releaseDone();
-
-    await Promise.allSettled([done]);
-  });
 
   await ctx.writing;
 

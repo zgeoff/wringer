@@ -15,6 +15,12 @@ import { createTestSession } from '../test-utils/create-test-session.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
+  const fingerprintGate = Promise.withResolvers<undefined>();
+
+  // Before the session, so gated work ends before the session's cleanup waits for it.
+  onTestFinished(() => {
+    fingerprintGate.resolve(undefined);
+  });
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
@@ -82,10 +88,12 @@ async function setupTest() {
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
       shop.dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
 
-    // The fingerprint read's first git call, `merge-base`, waits for `gate`, so the deadline passes
-    // mid-read. The envelope's SHA read never waits.
-    runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) => {
-      const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate };
+    // The fingerprint read's first git call, `merge-base`, waits for the gate, so the deadline
+    // passes mid-read. The envelope's SHA read never waits.
+    runWithGatedFingerprint: (target: string, timeoutMs: number) => {
+      const gitGates: Readonly<Record<string, Promise<unknown>>> = {
+        'merge-base': fingerprintGate.promise,
+      };
 
       return shop.dispatch(
         wringer,
@@ -105,6 +113,9 @@ async function setupTest() {
           },
         },
       );
+    },
+    openFingerprintGate: () => {
+      fingerprintGate.resolve(undefined);
     },
     runWithClock: (target: string, path: readonly string[], now: () => Date) =>
       shop.dispatch(wringer, path, {}, { ...shop.session, target, now }),
@@ -501,15 +512,9 @@ test('#up logs a failed stop of the run it abandoned at its deadline to the run'
 test('#up starts no run when its deadline passes while it reads the fingerprint', async () => {
   const ctx = await setupTest();
 
-  const gate = Promise.withResolvers<undefined>();
+  await ctx.runWithGatedFingerprint('local', 100);
 
-  onTestFinished(() => {
-    gate.resolve(undefined);
-  });
-
-  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
-
-  gate.resolve(undefined);
+  ctx.openFingerprintGate();
 
   await ctx.waitForTargetLock('local');
 
@@ -520,12 +525,6 @@ test('#up starts no run when its deadline passes while it reads the fingerprint'
 
 test('#up keeps the secrets file of the run it would replace when its deadline passes while it reads the fingerprint', async () => {
   const ctx = await setupTest();
-
-  const gate = Promise.withResolvers<undefined>();
-
-  onTestFinished(() => {
-    gate.resolve(undefined);
-  });
 
   await ctx.state.appendEvent('crashed-run', {
     type: 'run-started',
@@ -551,9 +550,9 @@ test('#up keeps the secrets file of the run it would replace when its deadline p
     currentRun: { local: 'crashed-run' },
   }));
 
-  await ctx.runWithGatedFingerprint('local', 100, gate.promise);
+  await ctx.runWithGatedFingerprint('local', 100);
 
-  gate.resolve(undefined);
+  ctx.openFingerprintGate();
 
   await ctx.waitForTargetLock('local');
 
