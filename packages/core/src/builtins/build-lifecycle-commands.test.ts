@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { runGit } from '../change-facts/run-git.ts';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { local } from '../host/local.ts';
 import { createWringer } from '../registry/create-wringer.ts';
 import { listenSupervisorSocket } from '../supervisor/listen-supervisor-socket.ts';
@@ -64,7 +63,7 @@ async function setupTest() {
     root: shop.repo.root,
     state: shop.state,
     runScoped: (env: Readonly<Record<string, string>>, path: readonly string[]) =>
-      dispatch(scoped, path, {}, { ...shop.session, env, target: 'local' }),
+      shop.dispatch(scoped, path, {}, { ...shop.session, env, target: 'local' }),
 
     // Every file under the state folder, joined.
     readStateFiles: async (): Promise<string> => {
@@ -79,16 +78,16 @@ async function setupTest() {
       return texts.join('\n');
     },
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], timeoutMs: number) =>
-      dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs }),
 
     // The fingerprint read's first git call, `merge-base`, waits for `gate`, so the deadline passes
     // mid-read. The envelope's SHA read never waits.
     runWithGatedFingerprint: (target: string, timeoutMs: number, gate: Promise<unknown>) => {
       const gitGates: Readonly<Record<string, Promise<unknown>>> = { 'merge-base': gate };
 
-      return dispatch(
+      return shop.dispatch(
         wringer,
         ['up'],
         {},
@@ -108,13 +107,13 @@ async function setupTest() {
       );
     },
     runWithClock: (target: string, path: readonly string[], now: () => Date) =>
-      dispatch(wringer, path, {}, { ...shop.session, target, now }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target, now }),
     runWithTimer: (
       target: string,
       path: readonly string[],
       timeoutMs: number,
       wait: (delayMs: number) => Promise<void>,
-    ) => dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs, wait }),
+    ) => shop.dispatch(wringer, path, {}, { ...shop.session, target, timeoutMs, wait }),
 
     // The supervisor's own stop goes to the socket that closes mid-call, while every other call
     // and the start reach the run's supervisor.
@@ -124,7 +123,7 @@ async function setupTest() {
       timeoutMs: number,
       wait: (delayMs: number) => Promise<void>,
     ) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -151,7 +150,7 @@ async function setupTest() {
     // The supervisor's command is a shell script, which exits at once as a supervisor that fails
     // before its run is ready does.
     runWithExitingSupervisor: (target: string, script: string) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         ['up'],
         {},
@@ -167,7 +166,7 @@ async function setupTest() {
       ),
 
     runWithMissingSupervisor: (target: string, path: readonly string[]) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},

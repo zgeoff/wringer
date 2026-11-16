@@ -6,7 +6,6 @@ import { setImmediate } from 'node:timers/promises';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { local } from '../host/local.ts';
 import { probeProcess } from '../host/probe-process.ts';
 import { createWringer } from '../registry/create-wringer.ts';
@@ -23,6 +22,12 @@ async function setupTest() {
   const pidPath = join(directory, 'check.pid');
   const scribblePath = join(directory, 'scribble.txt');
   const shelfGate = Promise.withResolvers<void>();
+
+  // Before the session, so a shelf check the test never released ends before the session's
+  // cleanup waits for it.
+  onTestFinished(() => {
+    shelfGate.resolve();
+  });
 
   const clock = defineDriver({
     name: 'clock',
@@ -148,13 +153,13 @@ async function setupTest() {
       shelfGate.resolve();
     },
     runWithin: (path: readonly string[], timeoutMs: number) =>
-      dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target: 'box', timeoutMs }),
     runOnTill: (path: readonly string[]) =>
-      dispatch(wringer, path, {}, { ...shop.session, target: 'till-box' }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target: 'till-box' }),
 
     // Each service call fails once its signal aborts, as a cancel that could not stop its work.
     runTillDoctorWithin: (timeoutMs: number) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         ['doctor'],
         {},
@@ -178,7 +183,7 @@ async function setupTest() {
       return Number(text);
     },
     run: (path: readonly string[]) =>
-      dispatch(wringer, path, {}, { ...shop.session, target: 'box' }),
+      shop.dispatch(wringer, path, {}, { ...shop.session, target: 'box' }),
   };
 }
 

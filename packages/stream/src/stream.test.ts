@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { open, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildRunPaths, dispatch } from '@wringer/core';
+import { buildRunPaths } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
@@ -34,7 +34,7 @@ async function setupTest() {
         (path) => open(path, 'r'),
       ),
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
   };
 }
 

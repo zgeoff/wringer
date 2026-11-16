@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { buildRunPaths } from '../state/build-state-paths.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
@@ -16,11 +15,11 @@ async function setupTest() {
     streamsOf: (runID: string) =>
       buildRunPaths(join(shop.repo.root, wringer.stateDir), runID).streams,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
 
     // The registry as a later version of the repo declares it, with one target removed.
     runWithoutTarget: (removed: string, path: readonly string[], args: unknown) =>
-      dispatch(
+      shop.dispatch(
         { ...wringer, targets: new Map([...wringer.targets].filter(([name]) => name !== removed)) },
         path,
         args,

@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { dispatch } from '@wringer/core';
 import type { Wringer } from '@wringer/core';
 import { createFakePullRequestHost } from '@wringer/core/test-utils/create-fake-pull-request-host.ts';
 import { createFileHostStandIn } from '@wringer/core/test-utils/create-file-host-stand-in.ts';
@@ -28,7 +27,7 @@ async function setupTest() {
   ]);
 
   const run = (wringer: Wringer, path: readonly string[], args: unknown = {}) =>
-    dispatch(wringer, path, args, { ...shop.session, pullRequests, target: 'local' });
+    shop.dispatch(wringer, path, args, { ...shop.session, pullRequests, target: 'local' });
 
   // A failed step leaves no verdict, and `publish` then passes with nothing to upload.
   const runStep = async (wringer: Wringer, path: readonly string[], args: unknown = {}) => {

@@ -2,7 +2,6 @@ import { expect, jest, onTestFinished, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { local } from '../host/local.ts';
 import { createWringer } from '../registry/create-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
@@ -15,6 +14,15 @@ async function setupTest() {
 
   // What the staging app reports as its revision; a test replaces it.
   const app: { revision: () => unknown } = { revision: () => 'unset' };
+
+  // A revision a test holds past its 5 s limit, under fake timers. Registered before the session,
+  // so the timers are real again and the held read has ended when the session's cleanup waits.
+  const heldRevision = Promise.withResolvers<string>();
+
+  onTestFinished(() => {
+    jest.useRealTimers();
+    heldRevision.resolve('unset');
+  });
 
   const staging: TargetDefinition = {
     mode: 'attach',
@@ -55,7 +63,7 @@ async function setupTest() {
   const env = { SAMPLE_API_TOKEN: 'beefcafe0042' };
 
   const run = (path: readonly string[], args: unknown = {}, timeoutMs?: number) =>
-    dispatch(wringer, path, args, { ...shop.session, env, target: 'staging', timeoutMs });
+    shop.dispatch(wringer, path, args, { ...shop.session, env, target: 'staging', timeoutMs });
 
   const commit = async (message: string) => {
     await shop.repo.git('add', '.');
@@ -85,13 +93,14 @@ async function setupTest() {
 
   return {
     app,
+    heldRevision: heldRevision.promise,
     deployWithSearchEdits,
     write,
     commit,
     git: shop.repo.git,
     run,
     runPlain: (path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, env, target: 'plain' }),
+      shop.dispatch(wringer, path, args, { ...shop.session, env, target: 'plain' }),
     readVerdicts: () => readVerdicts(shop.state, shop.session.repoHost, shop.repo.root),
     readEvents: async () => {
       const [runID] = await shop.state.listRuns();
@@ -483,14 +492,10 @@ test('#done refuses when revision takes longer than 5 s', async () => {
   ctx.app.revision = () => {
     called.resolve(undefined);
 
-    return Promise.withResolvers<string>().promise;
+    return ctx.heldRevision;
   };
 
   jest.useFakeTimers();
-
-  onTestFinished(() => {
-    jest.useRealTimers();
-  });
 
   const done = ctx.run(['done']);
 
@@ -656,20 +661,20 @@ test('#doctor fails the revision check when revision takes longer than 5 s', asy
   ctx.app.revision = () => {
     called.resolve(undefined);
 
-    return Promise.withResolvers<string>().promise;
+    return ctx.heldRevision;
   };
 
   jest.useFakeTimers();
-
-  onTestFinished(() => {
-    jest.useRealTimers();
-  });
 
   const doctor = ctx.run(['doctor']);
 
   await called.promise;
 
   jest.advanceTimersByTime(5001);
+
+  // The timed-out check's late work starts after this point and waits on timers, which never fire
+  // while they are fake.
+  jest.useRealTimers();
 
   const result = await doctor;
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { local } from '../host/local.ts';
+import { raceDeadline } from '../race-deadline.ts';
 import { bindDrivers } from '../registry/bind-drivers.ts';
 import { createWringer } from '../registry/create-wringer.ts';
 import type { GatePolicy, Wringer } from '../types.ts';
@@ -287,12 +288,12 @@ export function createShopWringer(options: { readonly gate?: GatePolicy } = {}):
     .action(
       shop.defineAction({
         name: 'hang',
-        summary: 'Never finish',
+        summary: 'Wait out its deadline, then fail with a timeout',
         effect: 'read',
         timeoutMs: 50,
         input: emptySchema,
         data: emptySchema,
-        run: () => Promise.withResolvers<Record<string, never>>().promise,
+        run: (_input, ctx) => raceDeadline(Promise.withResolvers<never>().promise, ctx.signal),
       }),
     )
     .action(

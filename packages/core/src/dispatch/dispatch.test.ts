@@ -11,7 +11,6 @@ import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
 import { parsePublishedEnvelope } from '../test-utils/parse-published-envelope.ts';
 import { WringerError } from '../wringer-error.ts';
-import { dispatch } from './dispatch.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
@@ -68,11 +67,11 @@ async function setupTest() {
       target: string,
       path: readonly string[],
       args: unknown = {},
-    ) => dispatch(wringer, path, args, { ...shop.session, env, target }),
+    ) => shop.dispatch(wringer, path, args, { ...shop.session, env, target }),
     evidenceWrites,
     supervisorCalls,
     runRecordingCalls: (path: readonly string[]) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -92,7 +91,7 @@ async function setupTest() {
       cancelFailure = new WringerError('timeout', { message: 'The page closed.' }),
       earlyFailures: WringerError[] = [],
     ) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -121,7 +120,7 @@ async function setupTest() {
         },
       ),
     runRecordingWrites: (path: readonly string[]) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -134,14 +133,14 @@ async function setupTest() {
     lines: shop.lines,
     state: shop.state,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (timeoutMs: number, path: readonly string[], args: unknown) =>
-      dispatch(wringer, path, args, { ...shop.session, target: 'local', timeoutMs }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target: 'local', timeoutMs }),
 
     // The guards' fingerprint read waits for the gate at its first step, `merge-base`, and its last
     // step, removing the temporary index, settles `guardsDone`. The envelope's SHA read never waits.
     runWithGatedGuards: (timeoutMs: number, path: readonly string[]) =>
-      dispatch(
+      shop.dispatch(
         wringer,
         path,
         {},
@@ -169,9 +168,9 @@ async function setupTest() {
     },
     guardsDone: guardsDone.promise,
     runOnPointers: (path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, shop.session),
+      shop.dispatch(wringer, path, args, shop.session),
     runAsFeature: (feature: string, path: readonly string[], args: unknown) =>
-      dispatch(wringer, path, args, { ...shop.session, target: 'local', feature }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target: 'local', feature }),
   };
 }
 
@@ -1138,7 +1137,7 @@ test('it scrubs the uploader token from a command that runs before any upload, w
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer: uploading });
 
-  const result = await dispatch(
+  const result = await shop.dispatch(
     uploading,
     ['echo-runless'],
     { text: 'the token is planted-upload-token' },

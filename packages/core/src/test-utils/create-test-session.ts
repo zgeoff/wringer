@@ -1,4 +1,5 @@
 import { onTestFinished } from 'bun:test';
+import { dispatch } from '../dispatch/dispatch.ts';
 import { readLaunchHost } from '../launch/read-launch-host.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import type { StatePort } from '../state/create-file-state.ts';
@@ -16,6 +17,9 @@ export interface TestSession {
   readonly session: Session;
   readonly state: StatePort;
   readonly lines: readonly string[];
+
+  // Dispatches as production does, and keeps the command's late work for the cleanup to wait on.
+  readonly dispatch: typeof dispatch;
 }
 
 export interface TestSessionOptions {
@@ -26,18 +30,21 @@ export interface TestSessionOptions {
   readonly env?: Readonly<Record<string, string | undefined>>;
 }
 
-// A test repo and a session whose supervisors run inside the test process, so a test drives the
-// real supervisor and socket without starting the CLI. One cleanup stops every run the test started,
-// then removes the repo, so no supervisor writes into a removed folder.
+// Supervisors run inside the test process, so a test drives the real socket without the CLI. The
+// cleanup waits for each timed-out command's late work, stops each run, then removes the repo, so
+// nothing writes into a removed folder.
 export async function createTestSession(options: TestSessionOptions): Promise<TestSession> {
   const repo = await createTestRepo(options.parent);
 
   const lines: string[] = [];
   const supervisors: Promise<void>[] = [];
   const runIDs: string[] = [];
+  const lateWork: Promise<void>[] = [];
   const state = createRepoState(repo.root, options.wringer.stateDir);
 
   onTestFinished(async () => {
+    await Promise.allSettled(lateWork);
+
     const views = await Promise.all(runIDs.map((runID) => state.readRun(runID)));
 
     await Promise.allSettled(
@@ -62,6 +69,13 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     repo,
     state,
     lines,
+    dispatch: async (...args) => {
+      const result = await dispatch(...args);
+
+      lateWork.push(result.late);
+
+      return result;
+    },
     session: {
       root: repo.root,
       state,

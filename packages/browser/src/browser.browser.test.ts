@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
-import { dispatch, readText } from '@wringer/core';
+import { readText } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
@@ -23,9 +23,9 @@ async function setupTest() {
     pageLoads: server.pageLoads,
     revealRestock: server.revealRestock,
     run: (target: string, path: readonly string[], args: unknown = {}) =>
-      dispatch(wringer, path, args, { ...shop.session, target }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target }),
     runWithin: (target: string, path: readonly string[], args: unknown, timeoutMs: number) =>
-      dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
+      shop.dispatch(wringer, path, args, { ...shop.session, target, timeoutMs }),
   };
 }
 

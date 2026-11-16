@@ -3,7 +3,6 @@ import { writeFileSync } from 'node:fs';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
-import { dispatch } from '../dispatch/dispatch.ts';
 import { createHostUploader } from '../evidence/create-host-uploader.ts';
 import type { EvidenceUploader } from '../evidence/evidence-uploader.ts';
 import { runIDSchema } from '../state/run-event.ts';
@@ -82,7 +81,7 @@ async function setupTest() {
     args: unknown,
     options: { readonly pullRequests?: PullRequestHost; readonly timeoutMs?: number } = {},
   ) =>
-    dispatch(wringer, path, args, {
+    shop.dispatch(wringer, path, args, {
       ...shop.session,
       pullRequests: options.pullRequests ?? pullRequests,
       timeoutMs: options.timeoutMs,
@@ -295,7 +294,7 @@ test('#publish fails when another writer replaces the block after the write', as
 test('#publish runs on the read-only target with no run', async () => {
   const ctx = await setupTest();
 
-  const result = await dispatch(
+  const result = await ctx.shop.dispatch(
     ctx.uploading,
     ['publish'],
     {},
@@ -517,7 +516,7 @@ test('#publish refuses to write a description whose author text holds a known se
   await ctx.verifyCheckout(['photo']);
   await ctx.pullRequests.writeBody(7, 'Adds checkout. The key is planted-shop-token.\n');
 
-  const result = await dispatch(
+  const result = await ctx.shop.dispatch(
     ctx.uploading,
     ['publish'],
     {},
@@ -595,7 +594,7 @@ test('#publish fails before the first upload when a file holds a secret the scru
 
   await ctx.verifyCheckout(['echo'], { text: 'the key is planted-shop-token' });
 
-  const result = await dispatch(
+  const result = await ctx.shop.dispatch(
     ctx.uploading,
     ['publish'],
     {},
