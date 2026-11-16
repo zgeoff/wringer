@@ -2,10 +2,11 @@
 
 ## [0.3.5](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.4...@wringer/gunshi@0.3.5) (2026-11-16)
 
-
 ### Bug Fixes
 
-* **gunshi:** move verify template detail into references ([#177](https://github.com/zgeoff/wringer/issues/177)) ([746e0cd](https://github.com/zgeoff/wringer/commit/746e0cd96131dd9f15f50d5a97f448171d707185))
+- **gunshi:** move verify template detail into references
+  ([#177](https://github.com/zgeoff/wringer/issues/177))
+  ([746e0cd](https://github.com/zgeoff/wringer/commit/746e0cd96131dd9f15f50d5a97f448171d707185))
 
 ## [0.3.4](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.3...@wringer/gunshi@0.3.4) (2026-11-16)
 
