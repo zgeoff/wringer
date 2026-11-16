@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change to the shop example in the running app, run the
   journey of a feature, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:1b1d37bb8676'
+  wringer-template: 'sha256:bc652053a9dc'
   wringer-command: bun verify
 ---
 
@@ -37,7 +37,7 @@ The mistakes that cost the most time:
   from your worktree.
 - [Commands](#commands): read `--help` before you guess a flag.
 - [Edit the skill and the registry](#edit-the-skill-and-the-registry): fix a broken journey in the
-  same PR, map each changed file to a feature, and run `lint`.
+  same PR, map each changed file in the registry, and run `lint`.
 
 ## References
 
@@ -67,7 +67,8 @@ Read a feature's file before you run its journey.
    `doctor` again.
 4. Run the journey from the feature's file in [References](#references). Its first line,
    `use --feature`, records each later command under that feature, and leaves the target as it is.
-   Expect: each command exits 0.
+   Expect: each command exits 0. When one fails, do what its row in
+   [Read the envelope](#read-the-envelope) says.
 5. Compare the app with the feature's end state:
    - When it matches, and no command failed with `read-only`, go on to step 6.
    - When your change broke the feature, fix the app's code. Then run `bun verify up --restart`,
@@ -78,18 +79,19 @@ Read a feature's file before you run its journey.
      `done` for this feature. List it in your reply with the end state you expected and the `data`
      you got.
 6. Finish each edit to a file that matches the feature's `paths` before you run `done`. An edit
-   after `done` makes the verdict `stale`, and a commit alone leaves it as it was. Run
-   `bun verify done` to record a verdict for the feature that `use --feature` set. Expect:
+   after `done` makes the feature's verdict `stale`. A commit alone leaves the verdict as it was.
+   Run `bun verify done` to record a verdict for the feature that `use --feature` set. Expect:
    `ok: true`. It fails with `check-failed` until a journey command succeeds after `doctor`.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
-   in the order of the table in [References](#references). When a note below the [Targets](#targets)
-   table says to run a feature's journey last, run it after every other journey.
-8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature.
-   Repeat steps 4 to 6 for each `stale` feature.
-9. Push the branch. When it has no open PR, open one: without it, `publish` fails and writes
-   nothing. Run `bun verify publish`. To write to a PR other than the branch's own, add
-   `--pr <number>`. Expect: `ok: true`, and `data.action` of `created`, `replaced` or `unchanged`.
-   It writes the report into the PR's description, the only report the gate reads.
+   in the order of the table in [References](#references). When the [Targets](#targets) section says
+   to run a feature's journey last, run it after every other journey.
+8. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature
+   you did not skip in step 5. Repeat steps 4 to 6 for each `stale` feature.
+9. Push the branch, and open a PR for it when none is open. Without an open PR, `publish` fails and
+   writes nothing. Run `bun verify publish`, even when you skipped a feature. To write to a PR other
+   than the branch's own, add `--pr <number>`. Expect: `ok: true`, and `data.action` of `created`,
+   `replaced` or `unchanged`. It writes the report into the PR's description, the only report the
+   gate reads.
 10. End the run: `bun verify down` after `up`, or `bun verify detach` after `attach`.
 
 ## Read the envelope
@@ -101,23 +103,23 @@ such as `doctor`, prints JSON event lines before the envelope. Read these fields
 - `evidence`: the files the command kept, under `.wringer/`;
 - `truncatedPath`: the file that holds `data` when it was too large to print.
 
-| Exit | `error.code`         | Do                                                                                                |
-| ---- | -------------------- | ------------------------------------------------------------------------------------------------- |
-| 0    | none                 | Go on.                                                                                            |
-| 1    | `check-failed`       | Read the evidence. When `done` failed, run the journey again; else go on as step 5 says.          |
-| 2    | `usage`              | Fix the command; `--help` shows its flags.                                                        |
-| 3    | `read-only`          | Leave the write undone, skip `done` for the feature, and list the write in your reply.            |
-| 3    | `doctor-required`    | Run the commands in `error.hint`, then run the feature's journey again.                           |
-| 3    | `not-running`        | Start the run, as step 2 says.                                                                    |
-| 3    | `target-not-allowed` | Follow `error.hint`.                                                                              |
-| 4    | `environment`        | Read `error.message` and `error.hint`, fix the problem, such as a missing browser, and retry.     |
-| 4    | `internal`           | Report the command and `error.message`: the CLI has a bug.                                        |
-| 5    | `timeout`            | Retry once with twice the timeout; the default is `--timeout-ms=120000`. Report a second timeout. |
+| Exit | `error.code`         | Do                                                                                                  |
+| ---- | -------------------- | --------------------------------------------------------------------------------------------------- |
+| 0    | none                 | Go on.                                                                                              |
+| 1    | `check-failed`       | Read the evidence. When `done` failed, run the journey again. Else compare the app, as step 5 says. |
+| 2    | `usage`              | Fix the command; `--help` shows its flags.                                                          |
+| 3    | `read-only`          | Leave the write undone, skip `done` for the feature, and list the write in your reply.              |
+| 3    | `doctor-required`    | Run the commands in `error.hint`, then run the feature's journey again.                             |
+| 3    | `not-running`        | Start the run, as step 2 says.                                                                      |
+| 3    | `target-not-allowed` | Follow `error.hint`.                                                                                |
+| 4    | `environment`        | Read `error.message` and `error.hint`, fix the problem, such as a missing browser, and retry.       |
+| 4    | `internal`           | Report the command and `error.message`: the CLI has a bug.                                          |
+| 5    | `timeout`            | Retry once with twice the timeout; the default is `--timeout-ms=120000`. Report a second timeout.   |
 
 ## Targets
 
 Start a launch target's app with `bun verify up`, and stop it with `bun verify down`. Connect to an
-attach target, an app that runs apart from `bun verify`, with `bun verify attach`.
+attach target, a target whose app runs apart from `bun verify`, with `bun verify attach`.
 `bun verify detach` leaves it running. Your edits never reach an attach target's app, so check a
 change on a launch target.
 
@@ -143,10 +145,10 @@ Run `order-failure` last. It drops the `orders` table, so every later order fail
 ## Commands
 
 Run `bun verify --help` for the list, with each command marked `[read]` or `[write]`. A read-only
-target refuses each `[write]` command but `publish`, which writes only the PR. `up` and `down` are
-`[read]`, but start and stop the app. Run `bun verify <command> --help` for a command's flags. The
-top-level list shows only the name of a group, such as `action`: run `bun verify <group> --help` for
-its commands.
+target refuses each `[write]` command except `publish`, which writes no app data. `up` and `down`
+are `[read]`, but start and stop the app. Run `bun verify <command> --help` for a command's flags.
+The top-level list shows only the name of a group, such as `action`: run `bun verify <group> --help`
+for its commands.
 
 - Write a negative number with `=`, as in `--offset=-5`.
 - Pass an object as JSON text, as in `--filter '{"shelf":"top"}'`.
