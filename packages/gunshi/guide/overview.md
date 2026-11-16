@@ -95,10 +95,10 @@ These locations are defaults. When you change one, change each place that refers
 
 In the `verify` skill's `SKILL.md`, each `<!-- repo: <part> -->` block ends at `<!-- /repo -->` and
 holds what only this repo knows. Rewrite those blocks, the frontmatter's `name` and `description`,
-and the `#` title. Keep every other line. The repo owns each `references/feature-*.md` whole. Keep
-`metadata.wringer-template` as the template has it. `lint` compares that value with the hash of the
-template that the installed `@wringer/gunshi` ships. The `maintain` topic's upgrade copies in the
-new value.
+and the `#` title. Keep every other line. The repo owns each `references/feature-*.md` whole. Leave
+unchanged each other file that the template ships in `references/`. Keep `metadata.wringer-template`
+as the template has it. `lint` compares that value with the hash of the template that the installed
+`@wringer/gunshi` ships. The `maintain` topic's upgrade copies in the new value.
 
 ## Create
 
