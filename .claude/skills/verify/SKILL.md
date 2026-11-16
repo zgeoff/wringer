@@ -5,7 +5,7 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:082bea8cba0d'
+  wringer-template: 'sha256:3a8295eb8ec4'
   wringer-command: bun verify
 ---
 

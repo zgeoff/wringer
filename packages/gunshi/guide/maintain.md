@@ -74,7 +74,8 @@ installed template.
 4. Delete the new skill's `references/feature-add-item.md`, the template's example feature, which
    fails `lint` unless the repo has a feature of that name. From the old skill's `references/`, copy
    each file that the new skill's `references/` lacks, such as each `feature-*.md` file. Keep the
-   template's copy of each file that both folders hold.
+   template's copy of each file that both folders hold. When the old file is the repo's own, not a
+   copy of an older template's file, give it a new name, copy it, and fix each link to it.
 5. In the new `SKILL.md`, replace the feature table between the `wringer:features` markers with the
    output of `bun verify features --markdown`.
 6. Copy the frontmatter's `name`, `description` and `metadata.wringer-command` from the old

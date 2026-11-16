@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change to the shop example in the running app, run the
   journey of a feature, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:082bea8cba0d'
+  wringer-template: 'sha256:3a8295eb8ec4'
   wringer-command: bun verify
 ---
 
@@ -175,9 +175,9 @@ to `.shared()` or to `.ignore()`. The gate fails on a changed file that no glob 
 that the running app never reads, such as a test, to `.ignore()`. `bun verify features` lists the
 globs.
 
-Before you edit this skill or a feature file, read [Edit the skill](references/edit-the-skill.md).
-After you change this skill, a feature file or the registry, run `bun verify lint`, and fix each
-failure it reports.
+When a change to a feature breaks its journey, fix the journey in the same PR. Before you edit this
+skill or a feature file, read [Edit the skill](references/edit-the-skill.md). After you change this
+skill, a feature file or the registry, run `bun verify lint`, and fix each failure it reports.
 
 **Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
 could not verify, with the command that failed and its `error.code`, or the end state you expected
