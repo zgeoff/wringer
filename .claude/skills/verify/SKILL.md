@@ -5,7 +5,7 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:29e4cfe22eaa'
+  wringer-template: 'sha256:1b1d37bb8676'
   wringer-command: bun verify
 ---
 
@@ -17,9 +17,10 @@ the PR link and each feature you could not verify.
 
 The mistakes that cost the most time:
 
-- **Using the app before `doctor` passes.** `doctor` checks the app and each driver. A driver is the
-  package behind a command group, such as `http` or `browser`. Until `doctor` passes after `up`,
-  commands that touch the app fail with exit code 3.
+- **Using the app before `doctor` passes.** `doctor` checks the app and each driver. A driver is a
+  package, such as `@wringer/http`, that adds a group of commands, such as
+  `bun verify http request`. Until `doctor` passes after `up`, commands that touch the app fail with
+  exit code 3.
 - **Editing a package while `up` runs it.** Run `bun verify up --restart` and `bun verify doctor`,
   then the journey again.
 - **Running `done` before you check the end state.** `done` checks only that a journey command

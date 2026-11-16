@@ -1,7 +1,7 @@
 # add-item
 
 A user adds an item to the pantry on the `/pantry` page, by typing a name and pressing Add. The
-journey adds the item through the API that the form calls.
+journey skips the page, and calls the API that the form calls.
 
 ## Journey
 
@@ -15,6 +15,7 @@ bun verify http request --path /api/items
 
 ## End state
 
-- The `data.count` of the second `items count` is one more than the first.
-- The `data.json` of `http request` lists an item named `Oats`. An earlier run may have added one
-  too. Only the count proves this run added it.
+- The second `items count` prints a `data.count` one more than the first.
+- The `http request`, a GET of `/api/items`, prints every item as JSON in `data.json`. The list
+  holds an item named `Oats`. An `Oats` item from an earlier journey can show there too, so only the
+  count proves that this journey added one.
