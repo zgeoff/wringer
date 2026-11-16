@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.3...@wringer/gunshi@0.3.4) (2026-11-16)
+
+
+### Bug Fixes
+
+* **gunshi:** clarify the verify template's terms and step order ([cee25ac](https://github.com/zgeoff/wringer/commit/cee25acb1ab8f90416b376bae3f038ea71fea531))
+
 ## [0.3.3](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.2...@wringer/gunshi@0.3.3) (2026-11-15)
 
 ### Bug Fixes
