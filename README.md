@@ -96,5 +96,5 @@ or the release workflows also gets a dry run of the npm publish of each package.
 - `scripts/`: the scripts the git hooks, CI and the release run.
 - `packages/shop-example/verify-shop/`: the `verify-shop` skill that tells an agent how to drive the
   shop example with `bun run verify:shop`, with a feature file for each shop feature.
-- `.claude/`: the agent skills that [zgeoff/tools](https://github.com/zgeoff/tools) syncs, and the
-  hook that blocks an agent's edit until it loads the skill for that file.
+- `.agents/skills/`: the skills that [zgeoff/tools](https://github.com/zgeoff/tools) syncs, linked
+  from `.claude/skills`. `.claude/hooks/` blocks an agent's edit until it loads the file's skill.

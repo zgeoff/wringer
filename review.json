@@ -30,11 +30,11 @@
     "scripts/run-uncommitted-check.ts",
     "scripts/run-workflows-check.ts",
     "scripts/shell-escape-parsers.ts",
-    ".claude/skills/testing/**",
-    ".claude/skills/code-style/**",
-    ".claude/skills/docs-writing/**",
-    ".claude/skills/skill-writing/**",
-    ".claude/skills/ci-design/**",
+    ".agents/skills/testing/**",
+    ".agents/skills/code-style/**",
+    ".agents/skills/docs-writing/**",
+    ".agents/skills/skill-writing/**",
+    ".agents/skills/ci-design/**",
     ".claude/hooks/start.ts",
     "scripts/dependency-gates/**"
   ]
