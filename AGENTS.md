@@ -5,28 +5,29 @@ This repo is wringer, a verification framework that each repo wraps in its own C
 
 ## Required reading
 
-The rules a task needs are not repeated here. Load the skill for the work before starting it.
+The rules a task needs are not repeated here. Load the skill for the work before starting it. The
+skills are in `.agents/skills/`, and `.claude/skills` links to that folder.
 
 | Skill           | Load before                                                                        |
 | --------------- | ---------------------------------------------------------------------------------- |
 | `docs-writing`  | writing or editing any committed prose: READMEs, this file                         |
 | `code-style`    | writing, reviewing, or renaming any TypeScript — the shared function-verb taxonomy |
 | `testing`       | designing, writing, or reviewing tests                                             |
-| `skill-writing` | writing or editing a skill under `.claude/skills/`                                 |
+| `skill-writing` | writing or editing a skill under `.agents/skills/`                                 |
 | `cold-read`     | checking a skill you wrote or changed, before its PR                               |
 | `deslop`        | editing the prose of a skill you wrote or changed, before its PR                   |
 | `ci-design`     | adding, changing, or reviewing a workflow, a job, or a trigger                     |
 
-To check a change to a package, load the [`verify` skill](.claude/skills/verify/SKILL.md). It runs
+To check a change to a package, load the [`verify` skill](.agents/skills/verify/SKILL.md). It runs
 the package's feature through `bun verify`.
 
 When you write or edit a skill, including a file in its `references/`, such as a feature file of the
 `verify` skill or of the `verify-shop` skill in `packages/shop-example/verify-shop/`:
 
-1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.claude/skills/`. repo-sync
+1. Load the `skill-writing`, `cold-read` and `deslop` skills from `.agents/skills/`. repo-sync
    delivers them there at the `zgeoff/skills` commit that `zgeoff/tools` pins, so install none of
    them yourself.
-2. Do every step in the "Check it" section of `.claude/skills/skill-writing/SKILL.md`. In its last
+2. Do every step in the "Check it" section of `.agents/skills/skill-writing/SKILL.md`. In its last
    step, you fill in the `## Checks` section of the PR template.
 
 ## Operations

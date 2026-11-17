@@ -45,6 +45,7 @@ export function createShopRegistry(options: ShopRegistryOptions = {}): Wringer {
       '**/*.test.ts',
       'docs/**',
       '.github/**',
+      '.agents/**',
       '.claude/**',
       '.codex/**',
       '.lefthook/**',

@@ -75,6 +75,7 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
     .ignore(
       '*.md',
       'docs/**',
+      '.agents/**',
       '.claude/**',
       '.codex/**',
       '.github/**',
