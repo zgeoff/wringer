@@ -1,6 +1,7 @@
 {
   "extends": "github:zgeoff/noslop-config",
   "synced": [
+    ".github/PULL_REQUEST_TEMPLATE.md",
     ".editorconfig",
     ".github/workflows/pr.yml",
     ".lefthook/pre-push-baseline.yml",

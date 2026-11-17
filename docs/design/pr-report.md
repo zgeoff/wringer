@@ -590,8 +590,7 @@ each journey's target from its verdict and ignores `--target`.
   run `bun verify publish`.
 - **Depends on:** the publish command.
 - **Acceptance:**
-  - [ ] The verify-shop skill and the gate hint name `publish`, and the PR carries the
-        skill-writing, cold-read and deslop sections that `AGENTS.md` asks for. Evidence:
-        `bun verify lint` and the skill checks.
+  - [ ] The verify-shop skill and the gate hint name `publish`, and the PR fills in the skill lines
+        of the template's Checks section. Evidence: `bun verify lint` and the skill checks.
   - [ ] The PR template's last Verification line says "Run `bun verify publish` last". Evidence: a
         PR in zgeoff/tools, the repo that owns the template.
