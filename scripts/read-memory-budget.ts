@@ -1,6 +1,4 @@
-import { totalmem } from 'node:os';
 import { join } from 'node:path';
-import { readOptionalText } from './read-optional-text.ts';
 
 export interface MemoryBudgetSources {
   readonly totalMemory: number;
@@ -55,17 +53,4 @@ async function readCgroupCap(
   const value = text?.trim();
 
   return value === undefined || value === 'max' ? undefined : Number(value);
-}
-
-// Bun.file's text reads as many bytes as stat reports, and procfs and cgroupfs report 0 for every
-// file; readFile reads to the end.
-if (import.meta.main) {
-  const budget = await readMemoryBudget({
-    totalMemory: totalmem(),
-    procRoot: '/proc',
-    cgroupRoot: '/sys/fs/cgroup',
-    readText: readOptionalText,
-  });
-
-  process.stdout.write(`${Math.floor(budget / 1024 / 1024)}\n`);
 }

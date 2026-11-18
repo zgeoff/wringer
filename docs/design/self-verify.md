@@ -66,7 +66,7 @@ commands are its drives, as [verdict-scope.md](./verdict-scope.md) defines.
 // createWringerRegistry
 .shared('bun.lock', 'package.json', '.bun-version', 'bunfig.toml', 'packages/shop-example/**')
 .ignore(
-  '*.md', 'docs/**', '.claude/**', '.github/**', '.lefthook/**', 'scripts/**',
+  '*.md', 'docs/**', '.claude/**', '.github/**', 'scripts/**',
   '**/*.test.ts', '**/test-utils/**', '**/e2e/**',
   'packages/*/README.md', 'packages/*/CHANGELOG.md', 'packages/*/LICENSE', 'packages/*/tsconfig*.json',
   // …each root config file that no runtime reads, such as `.oxlintrc.json` and `knip.json`
