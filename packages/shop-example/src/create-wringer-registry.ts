@@ -78,7 +78,7 @@ export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringe
       '.agents/**',
       '.claude/**',
       '.codex/**',
-      '.github/**',
+      '.{github,lefthook}/**',
       'scripts/**',
       '**/*.test.ts',
       '**/test-utils/**',
