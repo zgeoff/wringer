@@ -91,7 +91,6 @@ test('#features --markdown lists the shop features, the ignore list and the feat
         '.agents/**',
         '.claude/**',
         '.codex/**',
-        '.lefthook/**',
         'scripts/**',
         '*',
         'packages/{browser,core,db,gunshi,http,mcp,stream,terminal}/**',

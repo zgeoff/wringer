@@ -44,9 +44,10 @@ When you write or edit a skill, including a file in its `references/`, such as a
 wringer is one Bun workspace, and the README's [Layout](README.md#layout) gives each top-level
 folder's role.
 
-repo-sync delivers the shared skills, the skill-gate hook, the pull-request workflow, the pre-push
-baseline and the scripts it runs from zgeoff/tools, and overwrites a local edit. `review.json` lists
-those paths. Change one of them in zgeoff/tools.
+repo-sync delivers the shared skills, the skill-gate hook and the pull-request workflow from
+zgeoff/tools, and overwrites a local edit. The pre-push baseline comes from `@zgeoff/chex`, and
+`@zgeoff/diet` caps each hook job's memory. `review.json` lists those paths. Change one of them in
+zgeoff/tools.
 
 ## Packages
 

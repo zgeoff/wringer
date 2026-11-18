@@ -4,9 +4,7 @@
   "ignore": [".claude/**"],
   // the shared oxlint config loads the plugin, and the synced start-up stub in .claude/ imports
   // the package, so knip sees neither
-  "ignoreDependencies": ["@stylistic/eslint-plugin", "@zgeoff/agent-hooks"],
-  // repo-sync delivers these scripts from zgeoff/tools and overwrites a local edit, and they export
-  // types that only their own file uses
+  "ignoreDependencies": ["@stylistic/eslint-plugin", "@zgeoff/agent-hooks", "@zgeoff/diet"],
   // the test script names its roots, so knip reads no package's tests from it
   "workspaces": {
     ".": { "entry": ["scripts/**/*.test.ts"] },
@@ -41,9 +39,5 @@
         "src/verify-shop.ts"
       ]
     }
-  },
-  "ignoreIssues": {
-    "scripts/parse-shell-words.ts": ["types"],
-    "scripts/shell-escape-parsers.ts": ["types"]
   }
 }
