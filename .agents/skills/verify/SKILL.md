@@ -86,8 +86,8 @@ Read a feature's file before you run its journey.
    and report it as a blocker. `VERIFY_UPLOAD_URL` is the file host that takes the evidence files.
    `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
    `op read` on its own: it prints the token.
-10. Publish the report. Read the token in a subshell, so it never sits in your shell. A failed
-    `op read` then stops the command before `publish` runs:
+10. Publish the report. Read the token in a subshell, so it never sits in your shell. Because `&&`
+    joins them, a failed `op read` stops the command before `publish` runs:
 
     ```bash
     (VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" && export VERIFY_UPLOAD_TOKEN && bun verify publish)
@@ -149,6 +149,6 @@ When you edit this skill or a feature file, follow the skill steps in
 - Then run `bun verify lint`, and fix each failure. When it fails with check `template`, run
   `bun verify guide maintain`.
 
-**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
-could not verify, with the command that failed and its `error.code`, or the end state you expected
-and the `data` you got.
+**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, or the blocker that
+stopped you before `publish`, and each feature you could not verify, with the command that failed
+and its `error.code`, or the end state you expected and the `data` you got.
