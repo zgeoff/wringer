@@ -1,6 +1,6 @@
 {
   "packages/core": "0.3.1",
-  "packages/browser": "0.1.4",
+  "packages/browser": "0.1.5",
   "packages/db": "0.1.4",
   "packages/gunshi": "0.3.5",
   "packages/http": "0.1.4",
