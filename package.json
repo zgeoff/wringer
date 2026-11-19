@@ -68,7 +68,7 @@
     "@tsconfig/strictest": "2.0.8",
     "@types/bun": "1.4.3",
     "@wringer/core": "workspace:*",
-    "@zgeoff/agent-hooks": "0.2.12",
+    "@zgeoff/agent-hooks": "0.2.14",
     "@zgeoff/bun-test-extended": "0.2.4",
     "@zgeoff/chex": "0.3.6",
     "@zgeoff/commitlint-config": "0.1.0",
