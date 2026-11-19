@@ -1,4 +1,4 @@
-import { WringerError, defineDriver, findOwnValue } from '@wringer/core';
+import { WringerError, defineDriver, evidenceSchema, findOwnValue } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
 import { chromium } from 'playwright-core';
 import { z } from 'zod';
@@ -71,12 +71,6 @@ const typeArgsSchema = z
   .refine((args) => (args.ref === undefined) !== (args.role === undefined), {
     message: 'Pass --ref, or --role with --name.',
   });
-
-const evidenceDataSchema = z.strictObject({
-  kind: z.string(),
-  path: z.string(),
-  sha256: z.string(),
-});
 
 // Drives one page of the target's app in a headless browser that the run's supervisor holds.
 // Going to a page, reading it and taking a screenshot are reads. A click or typing is a write,
@@ -213,7 +207,7 @@ export const browser = defineDriver({
       path: ['browser', 'screenshot'],
       summary: 'Keep a screenshot of the page as evidence',
       args: z.strictObject({}),
-      data: evidenceDataSchema,
+      data: evidenceSchema,
       effect: 'read',
       run: (_args, ctx) => ctx.client.screenshot(),
     }),
