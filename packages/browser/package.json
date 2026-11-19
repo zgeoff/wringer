@@ -29,7 +29,7 @@
   "scripts": {
     "browser:install": "playwright-core install chromium-headless-shell",
     "build": "rm -rf dist && tsrs -p tsconfig.build.json",
-    "typecheck": "tsrs --noEmit"
+    "typecheck": "tsrs --fast --noEmit"
   },
   "dependencies": {
     "playwright-core": "catalog:",

@@ -28,7 +28,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsrs -p tsconfig.build.json",
-    "typecheck": "tsrs --noEmit"
+    "typecheck": "tsrs --fast --noEmit"
   },
   "dependencies": {
     "@modelcontextprotocol/client": "catalog:"

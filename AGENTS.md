@@ -81,12 +81,11 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
   `BUN_CHECK_SCRIPTS` repo variable holds its script list:
   `audit deadcode format:check lint:full typecheck prose test test:browser test:docker`. A change to
   that list changes `bun run check` in the same commit.
-- `bun run typecheck` runs `tsrs` over the root and each package. A package's `build` script emits
-  its declarations with `tsrs`.
-- `lint:full` adds the type-aware rules and fails on an unused disable directive. oxlint runs the
-  type-aware rules through tsrslint (`@maschwenk/tsrslint`), a Rust port of tsgolint, in tsgolint's
-  place, because stock tsgolint runs out of memory under 2 GiB. `lint:full` runs in CI and in
-  `bun run check`, never in a git hook.
+- `bun run typecheck` runs `tsrs --fast` over the root and each package. A package's `build` script
+  emits its declarations with `tsrs`.
+- `lint:full` adds the type-aware rules and fails on an unused disable directive. It runs with
+  `TSRS_FAST=1`, and oxlint runs the type-aware rules through `tsrs-lint`, which `tsrs` ships. It
+  runs in CI and in `bun run check`, never in a git hook.
 - release-please and the `main` workflow release and publish each package.
   [Releasing](docs/runbooks/releasing.md) holds the steps they do not do.
 - lefthook runs oxlint, oxfmt, format-codemod and gitleaks before a commit, and commitlint on the
