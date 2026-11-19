@@ -12,7 +12,7 @@
         "@wringer/core": "workspace:*",
         "@zgeoff/agent-hooks": "0.2.14",
         "@zgeoff/bun-test-extended": "0.2.4",
-        "@zgeoff/chex": "0.3.6",
+        "@zgeoff/chex": "0.3.13",
         "@zgeoff/commitlint-config": "0.1.2",
         "@zgeoff/diet": "0.2.3",
         "@zgeoff/format-codemod": "0.3.6",
@@ -616,7 +616,7 @@
 
     "@zgeoff/bun-test-extended": ["@zgeoff/bun-test-extended@0.2.4", "", { "dependencies": { "jest-extended": "7.0.0", "jest-matcher-utils": "30.5.2" } }, "sha512-pjHhfUFSQVOG97CPobmUJ3v1xbigRe5DOD+7VDoe5IIYvAOMkctmkHznj4EKKnZSpQp0b3/jqvYuzIFrpeaZMw=="],
 
-    "@zgeoff/chex": ["@zgeoff/chex@0.3.6", "", { "dependencies": { "@zgeoff/std": "0.4.3", "oxc-parser": "0.158.0", "ts-pattern": "5.9.2" }, "bin": { "chex": "src/cli.ts" } }, "sha512-rLT7OwIk4WWmRJvdJufAzWTg1yDaGUGBtDBgLEUM43/wZAqMe4t66kC4U7tU6OfvhO4BivCBcvkBBRrpyvqnOw=="],
+    "@zgeoff/chex": ["@zgeoff/chex@0.3.13", "", { "dependencies": { "@zgeoff/std": "0.4.4", "oxc-parser": "0.158.0", "ts-pattern": "5.9.2" }, "bin": { "chex": "src/cli.ts" } }, "sha512-8cKimQAzhylNA/h8ji9wRHUXnt290g/nb6mvMSnx0FBHBc3LOJupfVLVhwWY/9zEC308ftEcU9tVjCewXdwyWg=="],
 
     "@zgeoff/commitlint-config": ["@zgeoff/commitlint-config@0.1.2", "", { "peerDependencies": { "@commitlint/cli": ">=21.0.0" } }, "sha512-D5OJIMD4wBDJ4ad1z8LubHoRQNYDRtwu3LCGZj9m2TLmnpLuuN82/myTx6U7pBSteUGpqH19EJhTIthLCi1Vvg=="],
 
@@ -993,8 +993,6 @@
     "@orpc/server/cookie": ["cookie@1.1.1", "", {}, "sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ=="],
 
     "@types/node/undici-types": ["undici-types@8.9.0", "", {}, "sha512-KTDyRTYX8sWmKXAikPHHSyc63CRPETMctyjKFupcC6OBLXT3xsN0e9aF7m+mIXutFWpUXuedtowG7iLOzp0kQg=="],
-
-    "@zgeoff/chex/@zgeoff/std": ["@zgeoff/std@0.4.3", "", {}, "sha512-wCaqH8+vrkR+6R/grWUUDraryyFY1NW0Gjbhg85bXX38k9Q+N3aHFu+Yc+EjzZ/Sp9n5aJnCvZqbO5F2mUjWAg=="],
 
     "@zgeoff/format-codemod/gunshi": ["gunshi@1.0.0-rc.1", "", {}, "sha512-/nSFKVrJHKg9O4ppBl+lOSLDQWmvJ5fG3ldVsdJX8KMtUV2uYwlx/a8OaOWuvniuV28bZDjsB8p6YFtDxSlMcw=="],
 
