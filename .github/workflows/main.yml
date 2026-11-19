@@ -42,7 +42,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/bun-checks.yml@1362e73442ada37519065d81d0b38612516e682f # main
+    uses: zgeoff/tools/.github/workflows/bun-checks.yml@50f792b9c70173fd9dececbe8605da092733395d # main
     with:
       scripts: ${{ vars.BUN_CHECK_SCRIPTS }}
       # the pull request that landed the commits already scanned them
@@ -72,7 +72,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/release-please.yml@1362e73442ada37519065d81d0b38612516e682f # main
+    uses: zgeoff/tools/.github/workflows/release-please.yml@50f792b9c70173fd9dececbe8605da092733395d # main
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       merge: false
