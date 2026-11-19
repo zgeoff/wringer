@@ -14,6 +14,7 @@ metadata:
 Use `bun verify` to start the shop example app, drive each feature your change touches through the
 real CLI, and record a verdict. Put the report in the PR with step 10 of
 [Check a change](#check-a-change), and hand back the PR link and each feature you could not verify.
+When a blocker stops you before `publish`, hand back the blocker.
 
 The mistakes that cost the most time:
 
