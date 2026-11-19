@@ -12,8 +12,9 @@ metadata:
 # Verify wringer
 
 Use `bun verify` to start the shop example app, drive each feature your change touches through the
-real CLI, and record a verdict. Put the report in the PR with `bun verify publish`, and hand back
-the PR link and each feature you could not verify.
+real CLI, and record a verdict. Put the report in the PR with step 10 of
+[Check a change](#check-a-change), and hand back the PR link and each feature you could not verify.
+When a blocker stops you before `publish`, hand back the blocker.
 
 The mistakes that cost the most time:
 
@@ -29,7 +30,7 @@ The mistakes that cost the most time:
 ## Key rules
 
 - [Check a change](#check-a-change): for each changed feature, run its journey, check the end state,
-  then `done`.
+  then `done`; then push and publish with the upload token read in a subshell.
 - [Read the envelope](#read-the-envelope): branch on `error.code`.
 - [Commands](#commands): `bun verify --help` lists every command.
 - [Edit the skill and the registry](#edit-the-skill-and-the-registry): fix a feature's file in the
@@ -80,12 +81,25 @@ Read a feature's file before you run its journey.
    after `done` makes its verdict `stale`: run `bun verify up --restart` and `bun verify doctor`,
    then repeat steps 3 to 5 for it.
 7. Run `bun verify report --human` to read the report. Expect: `verified` on each changed feature.
-8. When the branch has no open PR, open one: without it, `publish` fails and writes nothing. Run
-   `bun verify publish`, or `bun verify publish --pr <number>` for another PR. Expect: `ok: true`,
-   and `data.action` of `created`, `replaced` or `unchanged`. `publish` writes the report into the
-   PR's description. The CI verify gate reads only that description, so it never sees a verdict you
-   did not publish.
-9. Run `bun verify down`.
+8. Push the branch. When no PR is open for it, open one: without an open PR, `publish` fails and
+   writes nothing.
+9. Check that `VERIFY_UPLOAD_URL` and `VERIFY_UPLOAD_TOKEN_REF` are set. When either is empty, stop
+   and report it as a blocker. `VERIFY_UPLOAD_URL` is the file host that takes the evidence files.
+   `VERIFY_UPLOAD_TOKEN_REF` is the 1Password `op://` reference to the upload token. Never run
+   `op read` on its own: it prints the token.
+10. Publish the report. Read the token in a subshell, so it never sits in your shell. Because `&&`
+    joins them, a failed `op read` stops the command before `publish` runs:
+
+    ```bash
+    (VERIFY_UPLOAD_TOKEN="$(op read "$VERIFY_UPLOAD_TOKEN_REF")" && export VERIFY_UPLOAD_TOKEN && bun verify publish)
+    ```
+
+    To write to a PR other than the branch's own, add `--pr <number>`. When `op read` fails, stop
+    and report it as a blocker. Expect: `ok: true`, and `data.action` of `created`, `replaced` or
+    `unchanged`. `publish` writes the report into the PR's description. The CI verify gate reads
+    only that description, so it never sees a verdict you did not publish.
+
+11. Run `bun verify down`.
 
 ## Read the envelope
 
@@ -136,6 +150,6 @@ When you edit this skill or a feature file, follow the skill steps in
 - Then run `bun verify lint`, and fix each failure. When it fails with check `template`, run
   `bun verify guide maintain`.
 
-**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, and each feature you
-could not verify, with the command that failed and its `error.code`, or the end state you expected
-and the `data` you got.
+**Reply:** the PR link that `bun verify publish` returned in `data.pr.url`, or the blocker that
+stopped you before `publish`, and each feature you could not verify, with the command that failed
+and its `error.code`, or the end state you expected and the `data` you got.
