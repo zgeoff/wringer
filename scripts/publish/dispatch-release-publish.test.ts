@@ -32,7 +32,7 @@ async function setupTest() {
   return { gh, errors, runDispatch };
 }
 
-test('it dispatches the publish at the first tag, with every released path and version', async () => {
+test('it dispatches the publish at the first tag, with every released path', async () => {
   const ctx = await setupTest();
 
   const exitCode = await ctx.runDispatch({
@@ -40,10 +40,8 @@ test('it dispatches the publish at the first tag, with every released path and v
     paths_released: '["packages/std","packages/tsconfig"]',
     'packages/std--sha': 'merge222',
     'packages/std--tag_name': '@zgeoff/std@0.4.0',
-    'packages/std--version': '0.4.0',
     'packages/tsconfig--sha': 'merge222',
     'packages/tsconfig--tag_name': '@zgeoff/tsconfig@1.2.0',
-    'packages/tsconfig--version': '1.2.0',
   });
 
   const calls = await ctx.gh.readCalls();
@@ -51,7 +49,7 @@ test('it dispatches the publish at the first tag, with every released path and v
   expect(exitCode).toBe(0);
 
   expect(calls).toStrictEqual([
-    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std","packages/tsconfig"] -f released_versions={"packages/std":"0.4.0","packages/tsconfig":"1.2.0"}',
+    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std","packages/tsconfig"]',
   ]);
 });
 
@@ -65,7 +63,6 @@ test('it dispatches a release that tagged the commit of the run itself, like any
       paths_released: '["packages/std"]',
       'packages/std--sha': 'old111',
       'packages/std--tag_name': '@zgeoff/std@0.4.0',
-      'packages/std--version': '0.4.0',
     },
     { GITHUB_SHA: 'old111' },
   );
@@ -75,7 +72,7 @@ test('it dispatches a release that tagged the commit of the run itself, like any
   expect(exitCode).toBe(0);
 
   expect(calls).toStrictEqual([
-    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std"] -f released_versions={"packages/std":"0.4.0"}',
+    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std"]',
   ]);
 });
 

@@ -43,8 +43,6 @@ export async function dispatchReleasePublish(
       dispatch.tag,
       '-f',
       `republish_paths=${JSON.stringify(dispatch.paths)}`,
-      '-f',
-      `released_versions=${JSON.stringify(dispatch.versions)}`,
     ],
     { cwd: options.cwd, env: options.env },
   );
@@ -57,7 +55,6 @@ type PublishDispatch =
       readonly kind: 'dispatch';
       readonly tag: string;
       readonly paths: readonly string[];
-      readonly versions: Readonly<Record<string, string>>;
     }
   | { readonly kind: 'invalid'; readonly message: string };
 
@@ -82,15 +79,7 @@ function buildPublishDispatch(releaseOutputsText: string): PublishDispatch {
     return { kind: 'invalid', message: `the release outputs hold no tag for ${firstPath}` };
   }
 
-  const versions = Object.fromEntries(
-    paths.flatMap((path): [string, string][] => {
-      const version = outputs[`${path}--version`];
-
-      return version === undefined ? [] : [[path, version]];
-    }),
-  );
-
-  return { kind: 'dispatch', tag, paths, versions };
+  return { kind: 'dispatch', tag, paths };
 }
 
 if (import.meta.main) {
