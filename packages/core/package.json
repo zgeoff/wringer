@@ -31,7 +31,7 @@
   },
   "scripts": {
     "build": "rm -rf dist && tsrs -p tsconfig.build.json",
-    "typecheck": "tsrs --noEmit",
+    "typecheck": "tsrs --fast --noEmit",
     "schema": "bun scripts/write-envelope-schema.ts"
   },
   "dependencies": {
