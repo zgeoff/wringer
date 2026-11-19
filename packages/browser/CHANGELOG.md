@@ -2,10 +2,11 @@
 
 ## [0.1.5](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.1.4...@wringer/browser@0.1.5) (2026-11-19)
 
-
 ### Bug Fixes
 
-* **browser:** accept screenshot evidence that carries a scrub key ([#209](https://github.com/zgeoff/wringer/issues/209)) ([ea05b71](https://github.com/zgeoff/wringer/commit/ea05b7190b12845a278dddf97956a73d17844f37))
+- **browser:** accept screenshot evidence that carries a scrub key
+  ([#209](https://github.com/zgeoff/wringer/issues/209))
+  ([ea05b71](https://github.com/zgeoff/wringer/commit/ea05b7190b12845a278dddf97956a73d17844f37))
 
 ## [0.1.4](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.1.3...@wringer/browser@0.1.4) (2026-11-14)
 
