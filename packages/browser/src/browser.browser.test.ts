@@ -340,7 +340,19 @@ test('it keeps a screenshot of the page as evidence', async () => {
 
   const header = await Bun.file(join(ctx.root, evidencePath)).slice(0, 4).bytes();
 
-  expect({ kind: result.envelope.evidence[0]?.kind, header: [...header] }).toStrictEqual({
+  expect({
+    error: result.envelope.error,
+    data: result.envelope.data,
+    kind: result.envelope.evidence[0]?.kind,
+    header: [...header],
+  }).toStrictEqual({
+    error: null,
+    data: {
+      kind: 'screenshot',
+      path: evidencePath,
+      sha256: expect.stringMatching(/^[0-9a-f]{64}$/u),
+      scrub: 'opaque',
+    },
     kind: 'screenshot',
     header: [0x89, 0x50, 0x4e, 0x47],
   });
