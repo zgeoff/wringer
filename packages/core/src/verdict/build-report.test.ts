@@ -40,6 +40,7 @@ test('it marks each feature by whether its own fingerprint changed and its verdi
       ['account', 'empty'],
     ]),
     changedPaths: ['src/checkout/pay.ts', 'src/search/rank.ts', 'src/cart/add.ts'],
+    renamedFrom: [],
     shared: [],
     ignore: [],
     policy: { unpinned: 'allow' },
@@ -79,6 +80,7 @@ test('it keeps a verdict verified when the branch changes only another feature',
       ['checkout', other],
     ]),
     changedPaths: ['src/cart/add.ts', 'src/checkout/pay.ts'],
+    renamedFrom: [],
     shared: [],
     ignore: [],
     policy: { unpinned: 'allow' },
@@ -103,6 +105,7 @@ test('it calls a report complete when every changed feature is verified', () => 
     features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
     featureFingerprints: new Map([['checkout', ctx.current]]),
     changedPaths: ['src/checkout/pay.ts'],
+    renamedFrom: [],
     shared: [],
     ignore: [],
     policy: { unpinned: 'allow' },
@@ -121,6 +124,7 @@ test('it lists each changed path that no feature maps as unmapped', () => {
     features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
     featureFingerprints: new Map([['checkout', ctx.current]]),
     changedPaths: ['scripts/seed.ts', 'src/checkout/pay.ts', 'src/tax.ts'],
+    renamedFrom: [],
     shared: [],
     ignore: [],
     policy: { unpinned: 'allow' },
@@ -140,6 +144,7 @@ test('it leaves a changed path that only a shared or an ignore glob matches out 
     features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
     featureFingerprints: new Map([['checkout', 'empty']]),
     changedPaths: ['guide.md', 'package.json', 'src/tax.ts'],
+    renamedFrom: [],
     shared: ['package.json'],
     ignore: ['**/*.md'],
     policy: { unpinned: 'allow' },
@@ -160,6 +165,7 @@ test('it throws internal when the facts hold no fingerprint for a feature', () =
       features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
       featureFingerprints: new Map(),
       changedPaths: [],
+      renamedFrom: [],
       shared: [],
       ignore: [],
       policy: { unpinned: 'allow' },
@@ -182,6 +188,7 @@ test.each([
       features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
       featureFingerprints: new Map([['checkout', ctx.current]]),
       changedPaths: ['src/checkout/pay.ts'],
+      renamedFrom: [],
       shared: [],
       ignore: [],
       policy: { unpinned: policy },
@@ -196,3 +203,25 @@ test.each([
     });
   },
 );
+
+test.each<{ renamedFrom: readonly string[]; unmapped: string[] }>([
+  { renamedFrom: ['old/pay.ts'], unmapped: [] },
+  { renamedFrom: [], unmapped: ['old/pay.ts'] },
+])('it lists the unmapped paths $unmapped when the renamed paths are $renamedFrom', (row) => {
+  const ctx = setupTest();
+
+  const report = buildReport({
+    base: 'main',
+    fingerprint: 'b'.repeat(40),
+    features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
+    featureFingerprints: new Map([['checkout', ctx.current]]),
+    changedPaths: ['old/pay.ts', 'src/checkout/pay.ts'],
+    renamedFrom: row.renamedFrom,
+    shared: [],
+    ignore: [],
+    policy: { unpinned: 'allow' },
+    verdicts: new Map([['checkout', ctx.buildVerdict('checkout', ctx.current)]]),
+  });
+
+  expect(report.unmapped).toStrictEqual(row.unmapped);
+});

@@ -17,6 +17,7 @@ export async function readCurrentReport(ctx: BuiltinContext, base: string): Prom
     features: ctx.wringer.features,
     featureFingerprints: facts.featureFingerprints,
     changedPaths: facts.changedPaths,
+    renamedFrom: facts.renamedFrom,
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
     verdicts,

@@ -10,6 +10,7 @@ import { isGlobMatch } from './is-glob-match.ts';
 import { parseDiffOutput } from './parse-diff-output.ts';
 import { emptyFingerprint, parsePatchID } from './parse-patch-id.ts';
 import { parseRawEntries } from './parse-raw-entries.ts';
+import { parseRenamedFrom } from './parse-renamed-from.ts';
 import { pickMergeBaseFailure } from './pick-merge-base-failure.ts';
 import { pickMergeBaseSteps } from './pick-merge-base-steps.ts';
 import { pickSubmoduleRefusal } from './pick-submodule-refusal.ts';
@@ -45,6 +46,10 @@ export interface ChangeFacts {
   readonly mergeBase: string;
   readonly fingerprint: Fingerprint;
   readonly changedPaths: readonly string[];
+
+  // The old path of each file that moved. `changedPaths` lists it as a deletion, but it is not an
+  // unmapped one, because the new path carries the change.
+  readonly renamedFrom: readonly string[];
   readonly featureFingerprints: ReadonlyMap<string, Fingerprint>;
   readonly deployedPaths: readonly string[] | null;
 }
@@ -128,6 +133,8 @@ export async function readChangeFacts(
       env,
     });
 
+    const renamedFrom = await readRenamedFrom(host, { root, env, mergeBase, exclusions });
+
     const parsed = parseDiffOutput(output);
     const entries = parsed.entries;
     const chunks = splitDiffByPath(parsed.patch, entries);
@@ -150,6 +157,7 @@ export async function readChangeFacts(
       mergeBase,
       fingerprint,
       changedPaths: entries.map((entry) => entry.path.toString('utf8')).toSorted(),
+      renamedFrom,
       featureFingerprints,
       deployedPaths,
     };
@@ -409,6 +417,44 @@ function isInsidePath(path: Buffer, folder: Buffer): boolean {
     path[folder.length] === 0x2f &&
     path.subarray(0, folder.length).equals(folder)
   );
+}
+
+interface RenamedFromRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly mergeBase: string;
+  readonly exclusions: readonly string[];
+}
+
+// A second diff of the same index, with rename detection on at git's default similarity and copy
+// detection off, lists each rename pair. Fingerprints stay on the first diff, where a move is a
+// deletion and an addition.
+async function readRenamedFrom(
+  host: ChangeFactsHost,
+  request: RenamedFromRequest,
+): Promise<readonly string[]> {
+  const output = await host.runGitBytes({
+    cwd: request.root,
+    args: [
+      'diff',
+      '--cached',
+      '--name-status',
+      '-z',
+      '-M',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--no-relative',
+      '--ignore-submodules=none',
+      request.mergeBase,
+      '--',
+      ':(top)',
+      ...request.exclusions,
+    ],
+    env: request.env,
+  });
+
+  return parseRenamedFrom(output).toSorted();
 }
 
 interface PatchRequest {

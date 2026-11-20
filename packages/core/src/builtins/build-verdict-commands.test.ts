@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { UploadFile } from '../evidence/evidence-uploader.ts';
@@ -26,6 +26,7 @@ async function setupTest() {
   const shop = await createTestSession({ parent: import.meta.dir, wringer });
 
   const failureSchema = z.object({ name: z.string(), status: z.string() });
+  const unmappedSchema = z.looseObject({ unmapped: z.array(z.string()) });
   const failingSchema = z.looseObject({ failing: z.array(failureSchema) });
   const reportDataSchema = z.strictObject({ report: reportSchema, markdown: z.string() });
   const uploads: UploadFile[] = [];
@@ -102,7 +103,21 @@ async function setupTest() {
 
       return reportDataSchema.parse(report.envelope.data).markdown;
     },
+
+    // Commits two files under `scripts/`, which no feature maps.
+    commitSeedScripts: async (): Promise<void> => {
+      const seed = 'export const seed = 1;\nexport const reset = 2;\nexport const wipe = 3;\n';
+      const other = 'export const other = 4;\nexport const more = 5;\n';
+
+      await mkdir(join(shop.repo.root, 'scripts'));
+      await writeFile(join(shop.repo.root, 'scripts', 'seed.ts'), seed);
+      await writeFile(join(shop.repo.root, 'scripts', 'other.ts'), other);
+
+      await shop.repo.git('add', '.');
+      await shop.repo.git('commit', '--quiet', '-m', 'add scripts');
+    },
     readFailing: (data: unknown) => failingSchema.parse(data).failing,
+    readUnmapped: (data: unknown) => unmappedSchema.parse(data).unmapped,
 
     // The Markdown with its data comment replaced by the edited comment.
     rewriteComment: (markdown: string, edit: (comment: ReportComment) => unknown): string => {
@@ -1024,6 +1039,77 @@ test('#gate leaves an ignored path out of the unmapped paths when it became a fo
     failing: [],
     unmapped: ['docs/guide.md/app.ts'],
     unknownClaims: [],
+  });
+});
+
+test('#gate passes a file moved from an unmapped path into a feature that is verified', async () => {
+  const ctx = await setupTest();
+
+  await ctx.commitSeedScripts();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await rename(join(ctx.root, 'scripts', 'seed.ts'), join(ctx.root, 'src', 'checkout', 'seed.ts'));
+
+  await ctx.run(['up']);
+  await ctx.run(['doctor']);
+  await ctx.run(['use'], { feature: 'checkout' });
+  await ctx.run(['notes', 'add'], { text: 'seed' });
+  await ctx.run(['done']);
+
+  const report = await ctx.run(['report'], { base: 'HEAD' });
+
+  await ctx.writeBody(ctx.parseReportData(report.envelope.data).markdown);
+
+  const result = await ctx.run(['gate'], { base: 'HEAD', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 0,
+    data: { fingerprint: expect.any(String), failing: [], unmapped: [], unknownClaims: [] },
+  });
+});
+
+test('#gate fails a file moved into a path no feature maps, and names only the new path', async () => {
+  const ctx = await setupTest();
+
+  await ctx.commitSeedScripts();
+
+  await mkdir(join(ctx.root, 'tools'));
+  await rename(join(ctx.root, 'scripts', 'seed.ts'), join(ctx.root, 'tools', 'seed.ts'));
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'HEAD', bodyFile: '.wringer/body.md' });
+
+  expect({ exitCode: result.exitCode, data: result.envelope.data }).toStrictEqual({
+    exitCode: 1,
+    data: {
+      fingerprint: expect.any(String),
+      failing: [],
+      unmapped: ['tools/seed.ts'],
+      unknownClaims: [],
+    },
+  });
+});
+
+test('#gate still fails a deleted file with no rename partner beside a moved one', async () => {
+  const ctx = await setupTest();
+
+  await ctx.commitSeedScripts();
+
+  await mkdir(join(ctx.root, 'src', 'checkout'), { recursive: true });
+  await rename(join(ctx.root, 'scripts', 'seed.ts'), join(ctx.root, 'src', 'checkout', 'seed.ts'));
+  await rm(join(ctx.root, 'scripts', 'other.ts'));
+
+  await ctx.writeBody('No report here.');
+
+  const result = await ctx.run(['gate'], { base: 'HEAD', bodyFile: '.wringer/body.md' });
+
+  expect({
+    exitCode: result.exitCode,
+    unmapped: ctx.readUnmapped(result.envelope.data),
+  }).toStrictEqual({
+    exitCode: 1,
+    unmapped: ['scripts/other.ts'],
   });
 });
 

@@ -9,6 +9,7 @@ export interface ReportInput {
   readonly features: readonly FeatureDefinition[];
   readonly featureFingerprints: ReadonlyMap<string, string>;
   readonly changedPaths: readonly string[];
+  readonly renamedFrom: readonly string[];
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly verdicts: ReadonlyMap<string, Verdict>;
@@ -17,7 +18,7 @@ export interface ReportInput {
 
 // A feature is changed when the diff limited to its scope is not empty, and then needs a verdict
 // at its own fingerprint; an unpinned verdict fails only under a policy that refuses it. An unchanged feature is `unchanged`, whatever its verdict. A changed path
-// that no feature, shared glob or ignore glob maps is unmapped, and leaves the report incomplete.
+// that no feature, shared glob or ignore glob maps is unmapped, unless it is the old path of a rename, and leaves the report incomplete.
 export function buildReport(input: ReportInput): Report {
   const features = input.features.map((feature) => {
     const current = input.featureFingerprints.get(feature.name);
@@ -40,6 +41,7 @@ export function buildReport(input: ReportInput): Report {
 
   const unmapped = input.changedPaths.filter(
     (path) =>
+      !input.renamedFrom.includes(path) &&
       !input.features.some((feature) => isGlobMatch(path, feature.paths)) &&
       !isGlobMatch(path, input.shared) &&
       !isGlobMatch(path, input.ignore),
