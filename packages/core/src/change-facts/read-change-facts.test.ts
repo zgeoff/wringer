@@ -1582,7 +1582,9 @@ test('it reads the changed paths and every fingerprint from one diff after the i
     {
       runGit,
       runGitBytes: (request) => {
-        if (request.args.includes('diff') && !request.args.includes('--name-only')) {
+        const isPatchDiff = request.args.includes('diff') && request.args.includes('--raw');
+
+        if (isPatchDiff && request.args.includes('--binary')) {
           diffs.push([...request.args]);
         }
 
@@ -1729,4 +1731,62 @@ test('it gives no deployed paths without a deployed commit', async () => {
   const facts = await ctx.readFacts(ctx.scopes);
 
   expect(facts.deployedPaths).toBeNull();
+});
+
+test('it lists the old path of each moved file as renamed, and not a plain deletion', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seed.shopRepo();
+
+  await mkdir(join(ctx.repo, 'src', 'old'), { recursive: true });
+
+  await writeFile(
+    join(ctx.repo, 'src', 'old', 'a.ts'),
+    'export const a = 1;\nexport const a2 = 2;\n'.repeat(5),
+  );
+
+  await writeFile(
+    join(ctx.repo, 'src', 'old', 'b.ts'),
+    'export const b = 1;\nexport const b2 = 2;\n'.repeat(5),
+  );
+
+  await writeFile(
+    join(ctx.repo, 'src', 'old', 'c.ts'),
+    'export const c = 1;\nexport const c2 = 2;\n'.repeat(5),
+  );
+
+  await writeFile(
+    join(ctx.repo, 'src', 'gone.ts'),
+    'export const gone = 1;\nexport const g2 = 2;\n'.repeat(5),
+  );
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'add old folder');
+
+  await rename(join(ctx.repo, 'src', 'old'), join(ctx.repo, 'src', 'moved'));
+
+  await writeFile(
+    join(ctx.repo, 'src', 'moved', 'a.ts'),
+    `${'export const a = 1;\nexport const a2 = 2;\n'.repeat(5)}export const extra = 3;\n`,
+  );
+
+  await rm(join(ctx.repo, 'src', 'gone.ts'));
+
+  const facts = await ctx.readFacts(ctx.scopes);
+
+  expect({
+    renamedFrom: facts.renamedFrom,
+    changedPaths: facts.changedPaths,
+  }).toStrictEqual({
+    renamedFrom: ['src/old/a.ts', 'src/old/b.ts', 'src/old/c.ts'],
+    changedPaths: [
+      'src/gone.ts',
+      'src/moved/a.ts',
+      'src/moved/b.ts',
+      'src/moved/c.ts',
+      'src/old/a.ts',
+      'src/old/b.ts',
+      'src/old/c.ts',
+    ],
+  });
 });

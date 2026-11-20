@@ -240,6 +240,7 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
     features: ctx.wringer.features,
     featureFingerprints: facts.featureFingerprints,
     changedPaths: facts.changedPaths,
+    renamedFrom: facts.renamedFrom,
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
     verdicts: new Map(claims.map((claim) => [claim.feature, toVerdict(claim)] as const)),
