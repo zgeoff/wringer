@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.2](https://github.com/zgeoff/wringer/compare/@wringer/terminal@0.1.1...@wringer/terminal@0.1.2) (2026-11-20)
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.3.2
+  - peerDependencies
+    - @wringer/core bumped to 0.3.2
+
 ## [0.1.1](https://github.com/zgeoff/wringer/compare/@wringer/terminal@0.1.0...@wringer/terminal@0.1.1) (2026-11-14)
 
 ### Dependencies
