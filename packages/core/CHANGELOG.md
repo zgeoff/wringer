@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.2...@wringer/core@0.3.3) (2026-11-20)
+
+
+### Bug Fixes
+
+* **core:** read moves before resetting ignored paths ([#218](https://github.com/zgeoff/wringer/issues/218)) ([78e636f](https://github.com/zgeoff/wringer/commit/78e636fbc4110bdf40ec7b96d16b06eb34139c3e))
+
 ## [0.3.2](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.1...@wringer/core@0.3.2) (2026-11-20)
 
 ### Bug Fixes
