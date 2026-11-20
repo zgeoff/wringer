@@ -204,25 +204,24 @@ test.each([
   },
 );
 
-test('it leaves the old path of a rename out of the unmapped paths, and lists it without the rename', () => {
+test.each<{ renamedFrom: readonly string[]; unmapped: string[] }>([
+  { renamedFrom: ['old/pay.ts'], unmapped: [] },
+  { renamedFrom: [], unmapped: ['old/pay.ts'] },
+])('it lists the unmapped paths $unmapped when the renamed paths are $renamedFrom', (row) => {
   const ctx = setupTest();
 
-  const build = (renamedFrom: readonly string[]) =>
-    buildReport({
-      base: 'main',
-      fingerprint: 'b'.repeat(40),
-      features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
-      featureFingerprints: new Map([['checkout', ctx.current]]),
-      changedPaths: ['old/pay.ts', 'src/checkout/pay.ts'],
-      renamedFrom,
-      shared: [],
-      ignore: [],
-      policy: { unpinned: 'allow' },
-      verdicts: new Map([['checkout', ctx.buildVerdict('checkout', ctx.current)]]),
-    });
+  const report = buildReport({
+    base: 'main',
+    fingerprint: 'b'.repeat(40),
+    features: [{ name: 'checkout', summary: 'Pay', paths: ['src/checkout/**'] }],
+    featureFingerprints: new Map([['checkout', ctx.current]]),
+    changedPaths: ['old/pay.ts', 'src/checkout/pay.ts'],
+    renamedFrom: row.renamedFrom,
+    shared: [],
+    ignore: [],
+    policy: { unpinned: 'allow' },
+    verdicts: new Map([['checkout', ctx.buildVerdict('checkout', ctx.current)]]),
+  });
 
-  expect({
-    withRename: build(['old/pay.ts']).unmapped,
-    withoutRename: build([]).unmapped,
-  }).toStrictEqual({ withRename: [], withoutRename: ['old/pay.ts'] });
+  expect(report.unmapped).toStrictEqual(row.unmapped);
 });
