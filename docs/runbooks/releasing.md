@@ -5,9 +5,10 @@ The workflow's release job calls the shared release-please workflow of `zgeoff/t
 sync tag, with its merge input off. release-please opens one release pull request after a releasable
 commit lands on `main`, with a version bump and a changelog for each package the commit changed. The
 run of that pull request's merge tags each release, then dispatches a run of `main` at the tag,
-which publishes each released package with npm provenance once its checks pass. This runbook holds
-only the steps the tooling does not do: the one-time setup, the first publish of each new package,
-merging each release pull request, and the recoveries a failed release needs.
+which publishes each released package with npm provenance once its checks pass, through the shared
+`npm-publish.yml` workflow of `zgeoff/tools`. This runbook holds only the steps the tooling does not
+do: the one-time setup, the first publish of each new package, merging each release pull request,
+and the recoveries a failed release needs.
 
 ## One-time setup
 
@@ -79,7 +80,7 @@ Nothing merges a release pull request on its own, so each release waits for a ma
 2. Check that the pull request passes its checks, then merge it.
 3. Expect a new `main` workflow run. Its release job tags `@wringer/<folder>@<version>` for each
    released package, and its `Dispatch the release publish` job starts a run of `main` at the tag.
-   The log of that run's publish step ends with each package's `npm publish`.
+   The log of that run's publish job ends with each package's `npm publish`.
 4. Check the registry:
 
    ```bash
@@ -122,8 +123,8 @@ scope:
 
 ## Republish a release that failed to publish
 
-A release can tag and then fail in its publish step, such as on an npm outage. The publish step
-skips a version that `npm view` reports, and `npm view` can answer 404 for several minutes after a
+A release can tag and then fail in its publish job, such as on an npm outage. The publish job skips
+a version that `npm view` reports, and `npm view` can answer 404 for several minutes after a
 package's first publish, so wait that long after a publish before you republish. Dispatch the `main`
 workflow at the tag, with the folder of each package to publish:
 
@@ -142,5 +143,5 @@ workflow at the tag, with the folder of each package to publish:
    gh run watch --repo zgeoff/wringer
    ```
 
-   Expect the publish step to publish each package, or to print
+   Expect the publish job to publish each package, or to print
    `skipping @wringer/<folder>@<version>: already published` when npm holds that version.

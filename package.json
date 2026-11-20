@@ -59,7 +59,6 @@
     "check:uncommitted": "chex uncommitted",
     "check:docs": "chex prose length links readmes skill",
     "ci:dispatch-publish": "bun scripts/publish/dispatch-release-publish.ts",
-    "ci:publish-packages": "bun scripts/publish/publish-packages.ts",
     "ci:verify-pr": "bun scripts/verify-pr/check-verify-pr.ts"
   },
   "devDependencies": {
@@ -80,7 +79,6 @@
     "lefthook": "2.2.2",
     "oxfmt": "0.77.0",
     "oxlint": "1.92.0",
-    "ts-pattern": "5.9.2",
     "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "7.0.2"
   },
