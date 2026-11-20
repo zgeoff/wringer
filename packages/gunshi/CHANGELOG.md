@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.6](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.5...@wringer/gunshi@0.3.6) (2026-11-20)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @wringer/core bumped to 0.3.2
+    * @wringer/http bumped to 0.1.5
+  * peerDependencies
+    * @wringer/core bumped to 0.3.2
+
 ## [0.3.5](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.4...@wringer/gunshi@0.3.5) (2026-11-16)
 
 ### Bug Fixes

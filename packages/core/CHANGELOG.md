@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.1...@wringer/core@0.3.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* follow renames in the verify gate unmapped check ([#216](https://github.com/zgeoff/wringer/issues/216)) ([845e9b9](https://github.com/zgeoff/wringer/commit/845e9b962cd96afc4ef8248aa3c1c5184bc92bab))
+
 ## [0.3.1](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.0...@wringer/core@0.3.1) (2026-11-14)
 
 ### Features
