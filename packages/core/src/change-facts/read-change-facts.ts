@@ -106,9 +106,14 @@ export async function readChangeFacts(
     });
 
     await addSubmodules(host, root, env);
-    await restoreIgnoredPaths(host, { root, env, mergeBase, ignore: request.ignore });
 
     const exclusions = request.exclude.map((path) => `:(top,exclude)${path}`);
+
+    // Read the moves before the ignored paths go back to the merge base: a file moved into an
+    // ignored folder would otherwise lose its destination and read as a plain deletion.
+    const renamedFrom = await readRenamedFrom(host, { root, env, mergeBase, exclusions });
+
+    await restoreIgnoredPaths(host, { root, env, mergeBase, ignore: request.ignore });
 
     // The exclusions apply to the diff, not to `add`: `add` refuses an ignored path in a pathspec,
     // and a committed change to an excluded path reaches the index from the repo's own anyway.
@@ -132,8 +137,6 @@ export async function readChangeFacts(
       ],
       env,
     });
-
-    const renamedFrom = await readRenamedFrom(host, { root, env, mergeBase, exclusions });
 
     const parsed = parseDiffOutput(output);
     const entries = parsed.entries;
@@ -327,6 +330,44 @@ async function addSubmodules(
   }
 }
 
+interface RenamedFromRequest {
+  readonly root: string;
+  readonly env: Readonly<Record<string, string>>;
+  readonly mergeBase: string;
+  readonly exclusions: readonly string[];
+}
+
+// A second diff of the same index, with rename detection on at git's default similarity and copy
+// detection off, lists each rename pair. Fingerprints stay on the first diff, where a move is a
+// deletion and an addition.
+async function readRenamedFrom(
+  host: ChangeFactsHost,
+  request: RenamedFromRequest,
+): Promise<readonly string[]> {
+  const output = await host.runGitBytes({
+    cwd: request.root,
+    args: [
+      'diff',
+      '--cached',
+      '--name-status',
+      '-z',
+      '-M',
+      '--no-color',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--no-relative',
+      '--ignore-submodules=none',
+      request.mergeBase,
+      '--',
+      ':(top)',
+      ...request.exclusions,
+    ],
+    env: request.env,
+  });
+
+  return parseRenamedFrom(output).toSorted();
+}
+
 interface IgnoredPathsRequest {
   readonly root: string;
   readonly env: Readonly<Record<string, string>>;
@@ -417,44 +458,6 @@ function isInsidePath(path: Buffer, folder: Buffer): boolean {
     path[folder.length] === 0x2f &&
     path.subarray(0, folder.length).equals(folder)
   );
-}
-
-interface RenamedFromRequest {
-  readonly root: string;
-  readonly env: Readonly<Record<string, string>>;
-  readonly mergeBase: string;
-  readonly exclusions: readonly string[];
-}
-
-// A second diff of the same index, with rename detection on at git's default similarity and copy
-// detection off, lists each rename pair. Fingerprints stay on the first diff, where a move is a
-// deletion and an addition.
-async function readRenamedFrom(
-  host: ChangeFactsHost,
-  request: RenamedFromRequest,
-): Promise<readonly string[]> {
-  const output = await host.runGitBytes({
-    cwd: request.root,
-    args: [
-      'diff',
-      '--cached',
-      '--name-status',
-      '-z',
-      '-M',
-      '--no-color',
-      '--no-ext-diff',
-      '--no-textconv',
-      '--no-relative',
-      '--ignore-submodules=none',
-      request.mergeBase,
-      '--',
-      ':(top)',
-      ...request.exclusions,
-    ],
-    env: request.env,
-  });
-
-  return parseRenamedFrom(output).toSorted();
 }
 
 interface PatchRequest {
