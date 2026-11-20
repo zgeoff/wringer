@@ -2,14 +2,13 @@
 
 ## [0.1.6](https://github.com/zgeoff/wringer/compare/@wringer/stream@0.1.5...@wringer/stream@0.1.6) (2026-11-20)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.3.3
-  * peerDependencies
-    * @wringer/core bumped to 0.3.3
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.3.3
+  - peerDependencies
+    - @wringer/core bumped to 0.3.3
 
 ## [0.1.5](https://github.com/zgeoff/wringer/compare/@wringer/stream@0.1.4...@wringer/stream@0.1.5) (2026-11-20)
 

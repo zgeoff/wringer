@@ -2,14 +2,13 @@
 
 ## [0.1.4](https://github.com/zgeoff/wringer/compare/@wringer/mcp@0.1.3...@wringer/mcp@0.1.4) (2026-11-20)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.3.3
-  * peerDependencies
-    * @wringer/core bumped to 0.3.3
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.3.3
+  - peerDependencies
+    - @wringer/core bumped to 0.3.3
 
 ## [0.1.3](https://github.com/zgeoff/wringer/compare/@wringer/mcp@0.1.2...@wringer/mcp@0.1.3) (2026-11-20)
 
