@@ -1790,3 +1790,32 @@ test('it lists the old path of each moved file as renamed, and not a plain delet
     ],
   });
 });
+
+test('it lists the old path of a file moved into an ignored folder as renamed', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seed.shopRepo();
+
+  await mkdir(join(ctx.repo, 'suite'), { recursive: true });
+
+  await writeFile(
+    join(ctx.repo, 'suite', 'checkout.ts'),
+    'export const checkout = 1;\nexport const total = 2;\n'.repeat(5),
+  );
+
+  await ctx.git('add', '.');
+  await ctx.git('commit', '--quiet', '-m', 'add suite');
+
+  await mkdir(join(ctx.repo, 'app'), { recursive: true });
+  await rename(join(ctx.repo, 'suite'), join(ctx.repo, 'app', 'e2e'));
+
+  const facts = await ctx.readFacts(ctx.scopes, ['app/e2e/**']);
+
+  expect({
+    renamedFrom: facts.renamedFrom,
+    changedPaths: facts.changedPaths,
+  }).toStrictEqual({
+    renamedFrom: ['suite/checkout.ts'],
+    changedPaths: ['suite/checkout.ts'],
+  });
+});
