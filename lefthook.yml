@@ -70,6 +70,6 @@ pre-push:
     - name: test
       files:
         unset $(git rev-parse --local-env-vars); bun
-        node_modules/@zgeoff/chex/src/read-branch-files.ts
+        node_modules/@zgeoff/chex/src/branch/read-branch-files.ts
       glob: '*.{ts,tsx,toml}'
       run: '{clear-git-env} bun x --no-install diet -- bun run test:related {files}'
