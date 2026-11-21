@@ -2,6 +2,7 @@ import { chmod, mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
 import { killProcessGroup } from '../host/kill-process-group.ts';
+import { createSetsid } from './create-setsid.ts';
 
 export interface FakeSSH {
   readonly binary: string;
@@ -24,7 +25,8 @@ export async function createFakeSSH(directory: string): Promise<FakeSSH> {
   const groupBin = join(directory, 'group-setsid-bin');
   const slowBin = join(directory, 'slow-setsid-bin');
   const setsidPIDPath = join(directory, 'setsid.pid');
-  const realSetsid = Bun.which('setsid') ?? 'setsid';
+
+  const realSetsid = await createSetsid(directory);
 
   // Every "remote" setsid records the session it starts from inside it, where its PID is the
   // group's ID even when setsid had to fork.

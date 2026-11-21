@@ -6,6 +6,7 @@ import { waitFor } from '@zgeoff/testing/helpers';
 import invariant from 'tiny-invariant';
 import { killProcessGroup } from '../host/kill-process-group.ts';
 import { probeProcess } from '../host/probe-process.ts';
+import { createSetsid } from '../test-utils/create-setsid.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { WringerError } from '../wringer-error.ts';
 import { readLaunchHost } from './read-launch-host.ts';
@@ -34,8 +35,11 @@ async function setupTest() {
     return launch;
   };
 
+  const setsid = await createSetsid(directory);
+
   return {
     directory,
+    setsid,
     logPath: join(directory, 'app.log'),
     startApp: (request: Omit<LaunchRequest, 'host'>) => startAppOn(readLaunchHost(), request),
     startAppOn,
@@ -147,8 +151,9 @@ test('it fails a stop with an environment error when a process outside the app h
       command: [
         'sh',
         '-c',
-        `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
+        `"$1" sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
         pidPath,
+        ctx.setsid,
       ],
       ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),
     },
@@ -185,8 +190,8 @@ test('it lets the process that launched the app exit after a stop gave up on a p
     '  host: readLaunchHost(),',
     '  plan: {',
     `    command: ['sh', '-c', ${JSON.stringify(
-      `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
-    )}, ${JSON.stringify(pidPath)}],`,
+      `"$1" sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; echo '{"port":4100}'; exec sleep 60`,
+    )}, ${JSON.stringify(pidPath)}, ${JSON.stringify(ctx.setsid)}],`,
     "    ready: (line) => (line['port'] === 4100 ? { web: 'http://127.0.0.1:4100' } : null),",
     '  },',
     `  logPath: ${JSON.stringify(ctx.logPath)},`,
@@ -231,8 +236,9 @@ test('it keeps the startup failure and adds the failed stop when an app that nev
         command: [
           'sh',
           '-c',
-          `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
+          `"$1" sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
           pidPath,
+          ctx.setsid,
         ],
         ready: () => null,
       },
@@ -268,8 +274,9 @@ test('it reports the failed stop of an app that never got ready to its caller', 
         command: [
           'sh',
           '-c',
-          `setsid sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
+          `"$1" sh -c 'echo $$ > "$1"; exec sleep 30' holder "$0" >&2 & while [ ! -s "$0" ]; do sleep 0.01; done; exec sleep 60`,
           pidPath,
+          ctx.setsid,
         ],
         ready: () => null,
       },
