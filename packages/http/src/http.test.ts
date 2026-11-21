@@ -1089,6 +1089,32 @@ test('it checks every endpoint at its own health path, with the session unless h
   });
 });
 
+test('it leaves an endpoint that is not an http URL out of the doctor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('multi', ['attach']);
+
+  const result = await ctx.run('multi', ['doctor']);
+
+  expect(result.envelope.data).toStrictEqual({
+    passed: true,
+    results: [expect.objectContaining({ name: 'http.reachable', status: 'passed' })],
+  });
+});
+
+test('it refuses a request to an endpoint that is not an http URL', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('multi', ['attach']);
+  await ctx.run('multi', ['doctor']);
+
+  const result = await ctx.run('multi', ['http', 'request'], { path: '/', endpoint: 'db' });
+
+  expect(result.envelope.error).toStrictEqual(
+    expect.objectContaining({ code: 'usage', message: 'Target multi has no http endpoint db.' }),
+  );
+});
+
 test('it names a named endpoint in the doctor failure', async () => {
   const ctx = await setupTest();
 
