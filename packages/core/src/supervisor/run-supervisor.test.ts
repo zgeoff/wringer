@@ -13,6 +13,7 @@ import { defineDriver } from '../registry/define-driver.ts';
 import { buildRunPaths } from '../state/build-state-paths.ts';
 import { createRepoState } from '../state/create-repo-state.ts';
 import { buildStandInServices } from '../test-utils/build-stand-in-services.ts';
+import { createSetsid } from '../test-utils/create-setsid.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedRun } from '../test-utils/seed-run.ts';
 import type { CollectedSecret } from '../types.ts';
@@ -23,6 +24,7 @@ import { supervisorServiceName } from './supervisor-request.ts';
 
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-supervisor');
+  const setsid = await createSetsid(directory);
 
   const stopGate = Promise.withResolvers<undefined>();
   const startGate = Promise.withResolvers<undefined>();
@@ -273,8 +275,9 @@ async function setupTest() {
         command: [
           'sh',
           '-c',
-          `setsid sh -c ': > "$1"; exec sleep 3' holder "$0" & while [ ! -e "$0" ]; do sleep 0.01; done; while :; do sleep 0.05; done`,
+          `"$1" sh -c ': > "$1"; exec sleep 3' holder "$0" & while [ ! -e "$0" ]; do sleep 0.01; done; while :; do sleep 0.05; done`,
           join(launch.runDirectory, 'holder-ready'),
+          setsid,
         ],
         ready: () => null,
       }),
