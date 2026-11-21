@@ -2,7 +2,7 @@ import { findOwnValue } from '../find-own-value.ts';
 import { getTarget } from '../registry/get-target.ts';
 import { addEnvSecrets } from '../secrets/add-env-secrets.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
-import { readRunSecrets } from '../secrets/read-run-secrets.ts';
+import { readRequiredRunSecrets, readRunSecrets } from '../secrets/read-run-secrets.ts';
 import type { RunView } from '../state/build-run-view.ts';
 import type { StatePort } from '../state/create-file-state.ts';
 import type { Session, TargetDefinition, Wringer } from '../types.ts';
@@ -75,7 +75,17 @@ export async function readCommandContext(
   }
 
   if (run !== undefined) {
-    await readRunSecrets(sources.state, sources.secrets, run.runID);
+    const isLive = run.status === 'starting' || run.status === 'running';
+
+    // `down` must still work on a run whose file is lost, and the file of an ended run is gone.
+    const needsFile =
+      hasSource && wringer.secrets.length > 0 && isLive && path.join(' ') !== 'down';
+
+    await (needsFile ? readRequiredRunSecrets : readRunSecrets)(
+      sources.state,
+      sources.secrets,
+      run.runID,
+    );
   }
 
   return {

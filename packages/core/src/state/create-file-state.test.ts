@@ -382,6 +382,39 @@ test('it lists the runs that have a log folder', async () => {
   expect(runs).toStrictEqual(['mf3k2a-7q1z']);
 });
 
+test('it tells a missing secrets file from an empty one, and a removed file from both', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  const missing = await ctx.state.readSecretsIfPresent(runID);
+
+  await ctx.state.createSecrets(runID);
+
+  const empty = await ctx.state.readSecretsIfPresent(runID);
+
+  await ctx.state.removeSecrets(runID);
+
+  const removed = await ctx.state.readSecretsIfPresent(runID);
+
+  expect({ missing, empty, removed }).toStrictEqual({ missing: null, empty: [], removed: null });
+});
+
+test('it creates the secrets file with mode 0600 and keeps what it holds', async () => {
+  const ctx = await setupTest();
+
+  const runID = runIDSchema.parse('mf3k2a-7q1z');
+
+  await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
+  await ctx.state.createSecrets(runID);
+
+  const secrets = await ctx.state.readSecrets(runID);
+
+  expect(secrets).toStrictEqual([
+    { name: 'notes.session', value: 'planted-session-value', origin: 'collected' },
+  ]);
+});
+
 test('it keeps a secret in a file of mode 0600 and reads it back', async () => {
   const ctx = await setupTest();
 

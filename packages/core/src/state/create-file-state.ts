@@ -60,6 +60,13 @@ export interface StatePort {
   // crashed.
   readonly appendSecret: (runID: RunID, secret: StoredSecretInput) => Promise<void>;
   readonly readSecrets: (runID: RunID) => Promise<readonly StoredSecret[]>;
+
+  // Null when the run has no secrets file, so a lost file differs from an empty one.
+  readonly readSecretsIfPresent: (runID: RunID) => Promise<readonly StoredSecret[] | null>;
+
+  // Creates the run's secrets file, with mode 0600, when it has none. It writes nothing for a run
+  // that has ended or crashed.
+  readonly createSecrets: (runID: RunID) => Promise<void>;
   readonly removeSecrets: (runID: RunID) => Promise<void>;
 
   // The reuse record of uploaded evidence links, `uploads.json`. Both take its lock; a write reads
@@ -251,6 +258,25 @@ export function createFileState(options: FileStateOptions): StatePort {
       const text = await fs.readText(buildRunPaths(options.stateDir, runID).secrets);
 
       return parseSecretsFile(text ?? '');
+    },
+    readSecretsIfPresent: async (runID) => {
+      const text = await fs.readText(buildRunPaths(options.stateDir, runID).secrets);
+
+      return text === null ? null : parseSecretsFile(text);
+    },
+    createSecrets: (runID) => {
+      const runPaths = buildRunPaths(options.stateDir, runID);
+
+      return withLock(basename(runPaths.lock), async () => {
+        const view = await readRun(runID);
+
+        if (view?.status === 'ended' || view?.status === 'crashed') {
+          return;
+        }
+
+        await fs.createDirectory(runPaths.directory);
+        await fs.appendPrivateText(runPaths.secrets, '');
+      });
     },
     readUploads: () =>
       withLock('uploads.lock', async () => {

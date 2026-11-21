@@ -5,22 +5,28 @@ import type { DeclaredSecretSource, DeclaredSecretValues } from './declared-secr
 
 const valuesSchema = z.record(z.string(), z.string().optional());
 
-// Reads the source once. A source that throws fails with `environment` and names only the error's
-// class, as its text may hold a secret. A result that is not a record of strings fails the same.
+// Reads the source once. A source that throws, or a result with a getter that throws, fails with
+// `environment` and names only the error's class, as its text may hold a secret. Only the
+// command's own deadline gives a timeout.
 export async function readDeclaredSecrets(
   source: DeclaredSecretSource,
   signal: AbortSignal,
 ): Promise<DeclaredSecretValues> {
-  let result: unknown;
+  let parsed: z.ZodSafeParseResult<DeclaredSecretValues>;
 
   try {
-    result = await raceDeadline(
+    const result: unknown = await raceDeadline(
       Promise.resolve().then(() => (typeof source === 'function' ? source(signal) : source)),
       signal,
     );
+
+    parsed = valuesSchema.safeParse(result);
   } catch (error) {
-    if (error instanceof WringerError && error.code === 'timeout') {
-      throw error;
+    if (signal.aborted) {
+      throw new WringerError('timeout', {
+        message: "The command's deadline passed while the `env` source was read.",
+        hint: 'Pass a longer `--timeout-ms`, then run `up` again.',
+      });
     }
 
     throw new WringerError('environment', {
@@ -28,8 +34,6 @@ export async function readDeclaredSecrets(
       hint: 'Fix the source, then run the command again. Its error text is not shown, as it may hold a secret.',
     });
   }
-
-  const parsed = valuesSchema.safeParse(result);
 
   if (!parsed.success) {
     throw new WringerError('environment', {

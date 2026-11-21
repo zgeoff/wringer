@@ -65,6 +65,14 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     ctx.bindRun(runID);
 
     const declared = await readDeclaredValues(ctx);
+
+    // A source value joins the set only now, so a feature name that holds one is refused here.
+    const declaredRefusal = pickScopeRefusal(ctx.wringer.features, ctx.secrets);
+
+    if (declaredRefusal !== null) {
+      throw declaredRefusal;
+    }
+
     const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
 
     const facts = await readChangeFacts(
@@ -103,6 +111,11 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     // scrubbed as they wrote it.
     if (current !== undefined) {
       await ctx.state.removeSecrets(current.runID);
+    }
+
+    // With a source, the file exists even when it holds no value, so a lost file is told apart.
+    if (ctx.session.declaredSecrets !== undefined && ctx.wringer.secrets.length > 0) {
+      await ctx.state.createSecrets(runID);
     }
 
     for (const secret of declared) {

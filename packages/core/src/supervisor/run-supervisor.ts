@@ -15,12 +15,12 @@ import { createScrubbingState } from '../secrets/create-scrubbing-state.ts';
 import { createSecretSet, minimumTokenLength } from '../secrets/create-secret-set.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
 import { pickEndpointRefusal } from '../secrets/pick-endpoint-refusal.ts';
-import { readRunSecrets } from '../secrets/read-run-secrets.ts';
+import { readRequiredRunSecrets, readRunSecrets } from '../secrets/read-run-secrets.ts';
 import type { StatePort } from '../state/create-file-state.ts';
 import type { Endpoints, RunEvent } from '../state/run-event.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { LaunchPlan, ServiceInstance, TargetDefinition, Wringer } from '../types.ts';
-import { WringerError } from '../wringer-error.ts';
+import type { WringerError } from '../wringer-error.ts';
 import { buildShutDownSteps } from './build-shut-down-steps.ts';
 import { pickPendingCleanups } from './pick-pending-cleanups.ts';
 import { pickSupervisorOperation } from './pick-supervisor-operation.ts';
@@ -73,16 +73,7 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   });
 
   if (options.readsDeclaredFromRun === true && options.wringer.secrets.length > 0) {
-    await readRunSecrets(options.state, secrets, options.runID).catch((error: unknown) => {
-      if (error instanceof WringerError) {
-        throw error;
-      }
-
-      throw new WringerError('environment', {
-        message: `The secrets file of run ${options.runID} could not be read.`,
-        hint: 'Run `down`, then `up` again.',
-      });
-    });
+    await readRequiredRunSecrets(options.state, secrets, options.runID);
   }
 
   for (const secret of options.wringer.hooks.upload?.readSecrets?.() ?? []) {
