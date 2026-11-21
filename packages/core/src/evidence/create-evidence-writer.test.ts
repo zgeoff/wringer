@@ -8,6 +8,7 @@ import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedEvidenceFolder } from '../test-utils/seed-evidence-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
+import { pickContentType } from './pick-content-type.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'evidence-writer');
@@ -86,6 +87,16 @@ test.each(['data.json', 'data.yaml', 'data.yml', 'data.txt', 'data.log', 'data.m
       scrub: 'text',
       text: 'token [redacted:SHOP_API_TOKEN]',
     });
+  },
+);
+
+test.each(['snapshot.yaml', 'snapshot.yml'])(
+  'it gives the file %s the text content type',
+  async (name) => {
+    const ctx = await setupTest();
+    const evidence = await ctx.evidence.writer.writeFile('note', name, Buffer.from('key: value'));
+
+    expect(pickContentType(evidence)).toBe('text/plain');
   },
 );
 
