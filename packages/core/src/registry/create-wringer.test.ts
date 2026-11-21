@@ -1,4 +1,5 @@
 import { expect, expectTypeOf, test } from 'bun:test';
+import { match } from 'ts-pattern';
 import { z } from 'zod';
 import { local } from '../host/local.ts';
 import { notes } from '../test-utils/notes.ts';
@@ -261,4 +262,37 @@ test('it accepts a feature name of 64 characters', () => {
     .build();
 
   expect(wringer.features.map((feature) => feature.name)).toStrictEqual(['a'.repeat(64)]);
+});
+
+test.each([
+  { place: 'ignore', glob: '!docs/**' },
+  { place: 'shared', glob: '!verify/**' },
+  { place: 'feature `pay` paths', glob: '!src/legacy/**' },
+])('it refuses a negated glob in $place', (row) => {
+  const base = createWringer({ name: 'shop' }).target('local', {
+    mode: 'attach',
+    access: 'read-write',
+    host: local(),
+  });
+
+  const builder = match(row.place)
+    .with('ignore', () => base.ignore(row.glob))
+    .with('shared', () => base.shared(row.glob))
+    .otherwise(() => base.feature({ name: 'pay', summary: 'Pay', paths: [row.glob] }));
+
+  expect(() => builder.build()).toThrowWithMessage(
+    WringerError,
+    `The ${row.place} glob \`${row.glob}\` starts with \`!\`, which matches every path outside it.`,
+  );
+});
+
+test('it accepts a glob with a `!` that is not its first character', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .ignore('docs/a!b/**')
+    .shared('verify/**')
+    .feature({ name: 'pay', summary: 'Pay', paths: ['src/**'] })
+    .build();
+
+  expect(wringer.ignore).toStrictEqual(['docs/a!b/**']);
 });
