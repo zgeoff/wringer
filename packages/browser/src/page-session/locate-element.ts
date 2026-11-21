@@ -5,8 +5,9 @@ import { z } from 'zod';
 import { isListedOrigin } from '../is-listed-origin.ts';
 import type { ElementTarget } from '../page-service-contract.ts';
 
-// An element that carries origins is a granted write. The wait for it to be shown (or attached) and
-// enabled happens here; the caller then runs its own waits and `refuseUnlistedOrigin` before it acts.
+// An element that carries origins is a granted write. The wait for it to be shown (or attached)
+// happens here. The caller then runs every other wait, the enabled wait included, in a trial or in
+// `waitForEnabledControl`, and `refuseUnlistedOrigin` before it acts.
 export async function locateElement(
   page: Page,
   element: ElementTarget,
@@ -15,10 +16,20 @@ export async function locateElement(
   const locator = await findLocator(page, element);
 
   if (element.origins !== undefined) {
-    await locator.and(page.locator(':not(:disabled)')).waitFor({ state: readyState });
+    await locator.waitFor({ state: readyState });
   }
 
   return locator;
+}
+
+// For a write that has no trial, such as a fill or a key press: the wait for an enabled control
+// runs here, and the origin check follows at once.
+export async function waitForEnabledControl(
+  page: Page,
+  locator: Locator,
+  readyState: 'visible' | 'attached',
+): Promise<void> {
+  await locator.and(page.locator(':not(:disabled)')).waitFor({ state: readyState });
 }
 
 // The tab can navigate while an action waits, so a granted write checks the tab's origin after

@@ -15,6 +15,12 @@ const adminPage = `<!doctype html>
 <h1>Admin</h1>
 <button onclick="fetch('/api/search', { method: 'POST' })">Search</button>`;
 
+// The admin app's page for a disabled Search button that is enabled a moment after it loads.
+const adminEnablingPage = `<!doctype html>
+<title>Admin enabling</title>
+<button id="search" disabled onclick="fetch('/api/search', { method: 'POST' })">Search</button>
+<script>setTimeout(() => { document.getElementById('search').disabled = false; }, 300);</script>`;
+
 const closingPage = `<!doctype html>
 <title>Closing</title>
 <button onclick="window.close()">Close this tab</button>`;
@@ -31,6 +37,9 @@ export function createShopPageServer(): ShopPageServer {
     hostname: '127.0.0.1',
     routes: {
       '/': { GET: () => new Response(adminPage, { headers: { 'content-type': 'text/html' } }) },
+      '/enabling': {
+        GET: () => new Response(adminEnablingPage, { headers: { 'content-type': 'text/html' } }),
+      },
       '/api/search': {
         POST: () => {
           adminPosts.push('/api/search');
@@ -44,6 +53,7 @@ export function createShopPageServer(): ShopPageServer {
   const page = buildShopPage(adminServer.url.href);
   const leavingPage = buildLeavingPage(adminServer.url.href);
   const armingPage = buildArmingPage(adminServer.url.href);
+  const slowArmingPage = buildSlowArmingPage(adminServer.url.href);
   const coveredPage = buildCoveredPage(adminServer.url.href);
   let restockReady = false;
   let pageLoads = 0;
@@ -95,6 +105,9 @@ export function createShopPageServer(): ShopPageServer {
       },
       '/arming': {
         GET: () => new Response(armingPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/slow-arming': {
+        GET: () => new Response(slowArmingPage, { headers: { 'content-type': 'text/html' } }),
       },
       '/covered': {
         GET: () => new Response(coveredPage, { headers: { 'content-type': 'text/html' } }),
@@ -217,6 +230,15 @@ function buildArmingPage(adminURL: string): string {
 <title>Arming</title>
 <button disabled>Search</button>
 <script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
+}
+
+// A page whose only Search button is shown but marked disabled, and which moves to a page of the admin app
+// whose disabled Search button is enabled only after it loads, so the click waits across the move.
+function buildSlowArmingPage(adminURL: string): string {
+  return `<!doctype html>
+<title>Slow arming</title>
+<button aria-disabled="true">Search</button>
+<script>setTimeout(() => { location.href = '${adminURL}enabling'; }, 600);</script>`;
 }
 
 // A page whose Search button is shown and enabled but covered by an overlay that nothing removes,

@@ -1022,6 +1022,21 @@ test('it refuses a granted click that waits for a disabled control while the tab
   }).toStrictEqual({ exitCode: 3, code: 'read-only', adminPosts: [] });
 });
 
+test('it refuses a granted click on a disabled control that is enabled only after the tab leaves the listed origins', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('tour');
+  await ctx.run('tour', ['browser', 'goto'], { path: '/slow-arming' });
+
+  const result = await ctx.run('tour', ['browser', 'click'], { role: 'button', name: 'Search' });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    adminPosts: ctx.adminPosts,
+  }).toStrictEqual({ exitCode: 3, code: 'read-only', adminPosts: [] });
+});
+
 test('it refuses a granted click that waits for a covering overlay while the tab leaves the listed origins', async () => {
   const ctx = await setupTest();
 

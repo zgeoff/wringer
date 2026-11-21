@@ -7,7 +7,7 @@ import { createBrowserPageMachine } from './create-browser-page-machine.ts';
 import type { PageActionResult } from './create-browser-page-machine.ts';
 import { createTabSet } from './create-tab-set.ts';
 import type { TabSet } from './create-tab-set.ts';
-import { locateElement, refuseUnlistedOrigin } from './locate-element.ts';
+import { locateElement, refuseUnlistedOrigin, waitForEnabledControl } from './locate-element.ts';
 import { pickReopenURL } from './pick-reopen-url.ts';
 import { readPageState } from './read-page-state.ts';
 import { runTracked } from './run-tracked.ts';
@@ -136,6 +136,8 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
           if (args.element.origins === undefined) {
             await locator.fill(args.value);
           } else {
+            await waitForEnabledControl(page, locator, 'visible');
+
             refuseUnlistedOrigin(page, args.element.origins);
 
             await locator.fill(args.value, { force: true, timeout: FORCED_ACTION_TIMEOUT_MS });
@@ -169,6 +171,8 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
               return;
             }
+
+            await waitForEnabledControl(page, locator, 'attached');
 
             refuseUnlistedOrigin(page, args.element.origins);
 
