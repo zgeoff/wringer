@@ -7,6 +7,10 @@ import { WringerError } from '../wringer-error.ts';
 import { runSupervisor } from './run-supervisor.ts';
 import { supervisorArgsSchema } from './supervisor-request.ts';
 
+interface SupervisorProcessOptions {
+  readonly readsDeclaredFromRun?: boolean | undefined;
+}
+
 // One cleanup's wait covers the app's longest stop, with a second to spare.
 const stopWaitMs = appStopLimitMs + 1000;
 
@@ -15,6 +19,7 @@ const stopWaitMs = appStopLimitMs + 1000;
 export async function runSupervisorProcess(
   wringer: Wringer,
   argv: readonly string[],
+  options: SupervisorProcessOptions = {},
 ): Promise<void> {
   const parsed = supervisorArgsSchema.safeParse(argv);
 
@@ -47,5 +52,6 @@ export async function runSupervisorProcess(
       process.stderr.write(`${message}\n`);
     },
     signal: signalled.signal,
+    readsDeclaredFromRun: options.readsDeclaredFromRun,
   });
 }

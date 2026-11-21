@@ -6,6 +6,7 @@ import type { Access, Host } from './host/host.ts';
 import type { ProcessResult } from './host/run-process.ts';
 import type { LaunchLine } from './launch/launch-line-schema.ts';
 import type { Secret, SecretSet } from './secrets/create-secret-set.ts';
+import type { DeclaredSecretSource } from './secrets/declared-secret-source.ts';
 import type { RunView } from './state/build-run-view.ts';
 import type { RunPaths } from './state/build-state-paths.ts';
 import type { StatePort } from './state/create-file-state.ts';
@@ -583,6 +584,10 @@ export interface Session {
 
   // The process environment: its secret-looking values join the command's secret set.
   readonly env: Readonly<Record<string, string | undefined>>;
+
+  // When given, a command with a run reads the declared secrets from the run's secrets file, not
+  // from `env`, and `up` reads this source once into that file.
+  readonly declaredSecrets?: DeclaredSecretSource | undefined;
   readonly now?: (() => Date) | undefined;
   readonly wait?: ((delayMs: number) => Promise<void>) | undefined;
 }
