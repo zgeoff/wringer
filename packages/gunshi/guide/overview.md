@@ -16,19 +16,7 @@ word this guide uses: registry, target, driver, action, command, feature, journe
 verdict, fingerprint, evidence, report, gate, shared glob and ignore list.
 
 Then prove that the CLI, the registry and the skill work, and wire the checks that keep them true.
-Hand back the PR that adds them, with the proof in its description. The mistakes that cost the most:
-
-- **Calling the work done before a fresh agent uses the skill.** You know the app; the repo's next
-  agent knows only the `verify` skill. Run a subagent with none of your context to show that the
-  skill works.
-- **Copying commands into the `verify` skill.** The CLI lists its own commands in `--help`, and a
-  copy goes stale. Point at `--help`, and write only what the help can't say.
-- **A `paths` glob that matches no file.** The gate then fails on each file the glob should cover,
-  and lists it as unmapped. A file that another feature's glob covers passes. Run `bun verify lint`
-  to find such a glob.
-- **Writing a repo's own choices outside the `<!-- repo -->` blocks of the `verify` skill.** An
-  upgrade of the template replaces every line outside them. Put each choice, such as where an agent
-  reports a refused write, in a block or in the repo's code.
+Hand back the PR that adds them, with the proof in its description.
 
 ## Key rules
 
@@ -95,10 +83,12 @@ These locations are defaults. When you change one, change each place that refers
 
 In the `verify` skill's `SKILL.md`, each `<!-- repo: <part> -->` block ends at `<!-- /repo -->` and
 holds what only this repo knows. Rewrite those blocks, the frontmatter's `name` and `description`,
-and the `#` title. Keep every other line. The repo owns each `references/feature-*.md` whole. Leave
-unchanged each other file that the template ships in `references/`. Keep `metadata.wringer-template`
-as the template has it. `lint` compares that value with the hash of the template that the installed
-`@wringer/gunshi` ships. The `maintain` topic's upgrade copies in the new value.
+and the `#` title. Keep every other line. An upgrade of the template replaces every line outside the
+blocks, so put each repo choice, such as where an agent reports a refused write, in a block or in
+the repo's code. The repo owns each `references/feature-*.md` whole. Leave unchanged each other file
+that the template ships in `references/`. Keep `metadata.wringer-template` as the template has it.
+`lint` compares that value with the hash of the template that the installed `@wringer/gunshi` ships.
+The `maintain` topic's upgrade copies in the new value.
 
 ## Create
 
