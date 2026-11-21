@@ -8,7 +8,7 @@ import { buildBrokenBody } from './test-utils/build-broken-body.ts';
 import { buildStalledBody } from './test-utils/build-stalled-body.ts';
 import { createHttpWringer } from './test-utils/create-http-wringer.ts';
 import { createLoopbackApp } from './test-utils/create-loopback-app.ts';
-import { server } from './test-utils/mocks/server.ts';
+import { network } from './test-utils/network.ts';
 import { ADMIN_API_URL, SHOP_API_URL, shopRequests } from './test-utils/shop-handlers.ts';
 
 async function setupTest() {
@@ -198,7 +198,7 @@ test('it sends a JSON body with its content type', async () => {
 
   const received = mock<(body: unknown, contentType: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post(`${SHOP_API_URL}/api/orders`, async (resolver) => {
       const body: unknown = await resolver.request.json();
 
@@ -225,7 +225,7 @@ test('it sends a JSON body with the content type the caller set, in any letter c
 
   const received = mock<(contentType: string | null) => void>();
 
-  server.use(
+  network.use(
     http.post(`${SHOP_API_URL}/api/orders`, (resolver) => {
       received(resolver.request.headers.get('content-type'));
 
@@ -416,7 +416,7 @@ test('it refuses a header that is not valid HTTP with a usage error', async () =
 test('it returns a redirect from a granted POST without following it', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.post(
       `${SHOP_API_URL}/api/search`,
       () => new HttpResponse(null, { status: 307, headers: { location: '/api/orders' } }),
@@ -523,7 +523,7 @@ test('it sends each request through the transport the repo passes', async () => 
 test('it answers a response that stalls past the request timeout with a timeout error', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(`${SHOP_API_URL}/api/cart`, async () => {
       await delay('infinite');
 
@@ -549,7 +549,7 @@ test('it answers a response that stalls past the request timeout with a timeout 
 test('it answers a body that stalls after the headers past the request timeout with a timeout error', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(
       `${SHOP_API_URL}/api/cart`,
       () =>
@@ -577,7 +577,7 @@ test('it answers a body that stalls after the headers past the request timeout w
 test('it answers a body that breaks off mid-read with an environment error', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(
       `${SHOP_API_URL}/api/cart`,
       () =>
@@ -737,7 +737,7 @@ test('it writes no evidence file for a request with evidence off, and the action
 test('it keeps two planted set-cookie values out of every sink when the body echoes them', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(`${SHOP_API_URL}/api/login`, () => {
       const headers = new Headers();
 
@@ -768,7 +768,7 @@ test('it keeps two planted set-cookie values out of every sink when the body ech
 test('it keeps the unquoted copy of a quoted request cookie out of every sink when the body echoes it', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(`${SHOP_API_URL}/api/echo-cookie`, (info) =>
       HttpResponse.json({ echoed: info.request.headers.get('cookie')?.replaceAll('"', '') }),
     ),
@@ -797,7 +797,7 @@ test('it keeps the unquoted copy of a quoted request cookie out of every sink wh
 test('it keeps the unquoted copy of a quoted set-cookie out of every sink when the body echoes it', async () => {
   const ctx = await setupTest();
 
-  server.use(
+  network.use(
     http.get(`${SHOP_API_URL}/api/login`, () =>
       HttpResponse.json(
         { echoed: 'planted-quoted-response-cookie' },
@@ -1118,7 +1118,9 @@ test('it refuses a request to an endpoint that is not an http URL', async () => 
 test('it names a named endpoint in the doctor failure', async () => {
   const ctx = await setupTest();
 
-  server.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.json({}, { status: 503 })));
+  network.use(
+    http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.json({}, { status: 503 })),
+  );
 
   await ctx.run('multi', ['attach']);
 
@@ -1141,7 +1143,7 @@ test('it names a named endpoint in the doctor failure', async () => {
 test('it names a named endpoint in the doctor failure when its transport throws', async () => {
   const ctx = await setupTest();
 
-  server.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.error()));
+  network.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.error()));
 
   await ctx.run('multi', ['attach']);
 
