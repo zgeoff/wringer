@@ -78,7 +78,9 @@ fingerprint in any clone, and an edit to another feature's files leaves it as it
 
 The files and data that a run's commands keep as proof, such as a screenshot or a response body. The
 repo sets for each target in the registry whether the CLI keeps the evidence local or uploads it.
-`publish` uploads the evidence that the report links to.
+`publish` uploads the evidence that the report links to. On a public file host, anyone with an
+uploaded file's link can read the file. Set a target to upload only when its data is safe to
+publish, such as test data.
 
 ## Report
 
