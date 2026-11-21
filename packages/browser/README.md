@@ -55,7 +55,8 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 `check`, `uncheck`, `hover` (a read) and `press` take the element flags of `click`. `press` takes a
 [Playwright key](https://playwright.dev/docs/api/class-keyboard#keyboard-press) such as `Control+A`,
 and with no element flag presses it on the focused element. `check` answers with the new `checked`
-state, and a disabled control or a non-checkbox fails with a usage error.
+state, and a disabled control or a non-checkbox fails with a usage error. `goto --endpoint admin`
+opens a path on another endpoint that the config lists in `endpoints`.
 
 The doctor check `browser.launched` fails when the browser has closed. `browser.reachable` sends
 HEAD to each endpoint, and GET after a 404, 405 or 501. It names the endpoint that cannot connect or
@@ -72,6 +73,10 @@ every later command until `up --restart`.
 and keeps it as evidence. A ref acts on the last snapshot's element, so snapshot again after the
 page changes. `screenshot` keeps a PNG. Both need a `goto` first.
 
+`--until-text <text>` and `--until-no-text <text>` make `snapshot` poll every 250 ms until the page
+has the first text and lacks the second (case-sensitive). When `actionTimeoutMs` runs out, or 2 s
+before the command's deadline, it fails with `check-failed` and keeps the last snapshot as evidence.
+
 ## Finding a control by its label
 
 `--label <text>` finds a control through Playwright's `getByLabel`, and `--role` narrows the match.
@@ -85,11 +90,6 @@ tab, and `tab close` closes the active tab and returns to its opener, but never 
 click or key press that opens a tab switches to it, and its result carries `openedTab`. A tab that
 closes itself returns the driver to its opener, and the result carries `closedTab`. A switch forgets
 the last snapshot's refs.
-
-## Endpoints
-
-The browser config takes `endpoints`, a list of other run endpoints the browser may visit.
-`browser goto /users --endpoint admin` opens a path on one, and an unlisted name is a usage error.
 
 ## Read-only targets
 

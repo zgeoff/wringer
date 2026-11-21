@@ -110,6 +110,7 @@ test('it serves the admin app on another origin and records its POSTs', async ()
 test.each([
   { path: '/orders', title: '<title>Orders</title>' },
   { path: '/closing', title: '<title>Closing</title>' },
+  { path: '/changing', title: '<title>Changing</title>' },
 ])('it serves the page at $path', async (row) => {
   const ctx = setupTest();
 
