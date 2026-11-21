@@ -51,6 +51,8 @@ test.each([
   'authorization',
   'proxy-authorization',
   'x-api-key',
+  'cf-access-jwt-assertion',
+  'cf-access-token',
   'x-shop-token',
   'x-user-session',
   'x-db-password',

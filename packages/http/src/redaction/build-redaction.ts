@@ -17,6 +17,7 @@ const defaultHeaders = [
   'cookie',
   'set-cookie',
   'x-api-key',
+  'cf-access-jwt-assertion',
 ] as const;
 
 const defaultQuery = [

@@ -3,6 +3,7 @@ import type { DriverSession } from '@wringer/core';
 import { z } from 'zod';
 import { buildRequestPlan } from './build-request-plan.ts';
 import { pickHttpEffect } from './pick-http-effect.ts';
+import type { HttpGrant } from './pick-http-effect.ts';
 import {
   buildRedactedExchange,
   buildRedactedRequest,
@@ -20,6 +21,12 @@ export const httpRequestSchema = z.strictObject({
 
   // false: no evidence file for this request. Its secrets still join the set.
   evidence: z.boolean().default(true),
+
+  // The endpoint to send to: the target's own, or one named in its `endpoints`.
+  endpoint: z.string().min(1).optional(),
+
+  // false: the transport leaves the session off this request.
+  auth: z.boolean().default(true),
 });
 
 export type HttpRequest = z.input<typeof httpRequestSchema>;
@@ -37,7 +44,18 @@ export interface HttpClient {
   readonly request: (request: HttpRequest) => Promise<HttpResponse>;
 }
 
-export type HttpTransport = (url: URL, init: RequestInit) => Promise<Response>;
+// What the driver tells a transport about a request: the endpoint it goes to, and whether it goes
+// with the session.
+export interface HttpTransportRoute {
+  readonly endpoint: string;
+  readonly auth: boolean;
+}
+
+export type HttpTransport = (
+  url: URL,
+  init: RequestInit,
+  route: HttpTransportRoute,
+) => Promise<Response>;
 
 const bodyPathSchema = z.string().regex(/^\$(?:\.[^.[\]]+|\[\*\])*$/u);
 const nameListSchema = z.array(z.string().min(1)).default([]);
@@ -58,15 +76,34 @@ const optionsSchema = z.strictObject({
   // Sends each request. A repo passes its own, such as one that goes through a proxy.
   transport: z
     .custom<HttpTransport>((value) => typeof value === 'function')
-    .default(() => (url: URL, init: RequestInit) => fetch(url, init)),
+    .default(() => runFetch),
 });
 
-const grantSchema = z.strictObject({ method: methodSchema, path: z.string().startsWith('/') });
+const grantSchema = z.strictObject({
+  method: methodSchema,
+  path: z.string().startsWith('/'),
+
+  // The endpoint the grant covers; none means the target's own endpoint.
+  endpoint: z.string().min(1).optional(),
+});
+
+const namedEndpointSchema = z.strictObject({
+  healthPath: z.string().startsWith('/').default('/'),
+
+  // false: the doctor requests the health path without the session.
+  healthAuth: z.boolean().default(true),
+});
 
 const targetConfigSchema = z.strictObject({
   endpoint: z.string().min(1).default('web'),
+
+  // Applies to the endpoint above only.
   baseURL: z.url().optional(),
   healthPath: z.string().startsWith('/').default('/'),
+  healthAuth: z.boolean().default(true),
+
+  // More endpoints the driver may call, each at its address in the target's endpoints.
+  endpoints: z.record(z.string().min(1), namedEndpointSchema).default({}),
   readOnly: z.strictObject({ allow: z.array(grantSchema) }).optional(),
 });
 
@@ -76,6 +113,10 @@ const requestArgsSchema = z.strictObject({
   method: methodSchema.default('GET'),
   path: z.string().startsWith('/'),
   header: headerArgsSchema,
+  endpoint: z.string().min(1).optional(),
+
+  // `--no-auth` sends the request without the session.
+  auth: z.boolean().default(true),
 
   // The CLI's global `--json` picks the output, so the command takes its JSON body as `--body`.
   body: z.unknown().optional(),
@@ -91,7 +132,11 @@ export const http = defineDriver({
   client: (session, fence): HttpClient => ({
     request: fence({
       effect: (request: HttpRequest) =>
-        pickHttpEffect(request.method ?? 'GET', request.path, session.config.readOnly?.allow ?? []),
+        pickHttpEffect(
+          request.method ?? 'GET',
+          request.path,
+          grantsFor(session.config, request.endpoint ?? session.config.endpoint),
+        ),
       describe: (request) => {
         const shown = showPath(request.path, buildRedaction(session.options.redact));
 
@@ -111,7 +156,7 @@ export const http = defineDriver({
       args: requestArgsSchema,
       data: httpResponseSchema,
       decideEffect: (args, config) =>
-        pickHttpEffect(args.method, args.path, config.readOnly?.allow ?? []),
+        pickHttpEffect(args.method, args.path, grantsFor(config, args.endpoint ?? config.endpoint)),
       run: async (args, ctx) => {
         const headers = Object.fromEntries(args.header.map((header) => splitHeader(header)));
 
@@ -120,6 +165,8 @@ export const http = defineDriver({
           path: args.path,
           headers,
           json: args.body,
+          endpoint: args.endpoint,
+          auth: args.auth,
         });
 
         const exchange = await sendRequest(ctx.session, request);
@@ -133,21 +180,45 @@ export const http = defineDriver({
       name: 'reachable',
       timeoutMs: 10_000,
       run: async (ctx) => {
-        const response = await ctx.client.request({ path: ctx.session.config.healthPath });
+        const config = ctx.session.config;
 
-        if (response.status >= 500) {
-          throw new WringerError('check-failed', {
-            message: `GET ${ctx.session.config.healthPath} answered ${response.status}.`,
-          });
+        for (const endpoint of listEndpointNames(ctx.session)) {
+          const probe = pickHealth(config, endpoint);
+          const where = endpoint === config.endpoint ? '' : ` on endpoint ${endpoint}`;
+
+          const response = await requestHealth(
+            ctx.client,
+            endpoint,
+            probe,
+            endpoint === config.endpoint,
+          );
+
+          if (response.status >= 500) {
+            throw new WringerError('check-failed', {
+              message: `GET ${probe.healthPath}${where} answered ${response.status}.`,
+            });
+          }
         }
       },
     },
   ],
 });
 
-type HttpOptions = z.infer<typeof optionsSchema>;
+// The driver tells its own transport from a repo's by this function.
+function runFetch(url: URL, init: RequestInit): Promise<Response> {
+  return fetch(url, init);
+}
 
 type HttpConfig = z.infer<typeof targetConfigSchema>;
+
+// The grants that cover one endpoint. A grant with no endpoint covers the target's own.
+function grantsFor(config: HttpConfig, endpoint: string): readonly HttpGrant[] {
+  return (config.readOnly?.allow ?? []).filter(
+    (grant) => (grant.endpoint ?? config.endpoint) === endpoint,
+  );
+}
+
+type HttpOptions = z.infer<typeof optionsSchema>;
 
 type ParsedRequest = z.infer<typeof httpRequestSchema>;
 
@@ -164,11 +235,25 @@ async function sendRequest(
   request: ParsedRequest,
 ): Promise<SentRequest> {
   const redaction = buildRedaction(session.options.redact);
+  const endpoint = request.endpoint ?? session.config.endpoint;
+  const names = listEndpointNames(session);
+
+  if (!names.includes(endpoint)) {
+    throw new WringerError('usage', {
+      message: `Target ${session.target} has no http endpoint ${endpoint}.`,
+      hint: `Name one of: ${names.join(', ')}.`,
+    });
+  }
+
+  refuseUnreceivedAuth(session, request);
+
+  const isDefault = endpoint === session.config.endpoint;
 
   const plan = buildRequestPlan({
     target: session.target,
-    endpoint: session.config.endpoint,
-    baseURL: session.config.baseURL ?? findOwnValue(session.endpoints, session.config.endpoint),
+    endpoint,
+    baseURL:
+      (isDefault ? session.config.baseURL : undefined) ?? findOwnValue(session.endpoints, endpoint),
     method: request.method,
     path: request.path,
     shownPath: showPath(request.path, redaction),
@@ -198,7 +283,7 @@ async function sendRequest(
   const fetched = await sendFetch(
     session.options.transport,
     plan,
-    redactedRequest.request.url,
+    { shownURL: redactedRequest.request.url, route: { endpoint, auth: request.auth } },
     signal,
   );
 
@@ -217,11 +302,54 @@ async function sendRequest(
     await session.evidence.writeFile(
       'http',
       `${request.method.toLowerCase()}.json`,
-      JSON.stringify({ request: exchange.request, response: exchange.response }, null, 2),
+      JSON.stringify(
+        {
+          endpoint,
+          auth: request.auth,
+          request: exchange.request,
+          response: exchange.response,
+        },
+        null,
+        2,
+      ),
     );
   }
 
   return { real, redacted: exchange.response };
+}
+
+// The default endpoint, then each endpoint the driver's config or the target names.
+function listEndpointNames(session: DriverSession<HttpOptions, HttpConfig>): string[] {
+  return [
+    ...new Set([
+      session.config.endpoint,
+      ...Object.keys(session.config.endpoints),
+      ...Object.keys(session.endpoints),
+    ]),
+  ];
+}
+
+// A transport that declares fewer than three parameters cannot receive the auth choice.
+function refuseUnreceivedAuth(
+  session: DriverSession<HttpOptions, HttpConfig>,
+  request: ParsedRequest,
+): void {
+  const config = session.config;
+  const transport = session.options.transport;
+
+  const leavesSessionOff =
+    !request.auth ||
+    !config.healthAuth ||
+    Object.values(config.endpoints).some((named) => !named.healthAuth);
+
+  if (!leavesSessionOff || transport === runFetch || transport.length >= 3) {
+    return;
+  }
+
+  throw new WringerError('usage', {
+    message: 'A request without the session needs a transport that takes the route.',
+    hint: 'Declare the third parameter of the transport, `(url, init, route)`, and leave the session off when `route.auth` is false.',
+  });
 }
 
 function addSecrets(
@@ -240,16 +368,23 @@ interface FetchedResponse {
   readonly body: string;
 }
 
+interface SentRoute {
+  readonly shownURL: string;
+  readonly route: HttpTransportRoute;
+}
+
 // The body read shares the request's deadline and error mapping: a server can send its headers,
 // then stall or drop the connection mid-body.
 async function sendFetch(
   transport: HttpTransport,
   plan: SendPlan,
-  shownURL: string,
+  sent: SentRoute,
   signal: AbortSignal,
 ): Promise<FetchedResponse> {
+  const shownURL = sent.shownURL;
+
   try {
-    const response = await transport(plan.url, { ...plan.init, signal });
+    const response = await transport(plan.url, { ...plan.init, signal }, sent.route);
     const body = await readBodyText(response, signal);
 
     return { response, body };
@@ -333,4 +468,47 @@ function splitHeader(header: string): readonly [string, string] {
   const index = header.indexOf(':');
 
   return [header.slice(0, index).trim(), header.slice(index + 1).trim()];
+}
+
+interface HealthProbe {
+  readonly healthPath: string;
+  readonly healthAuth: boolean;
+}
+
+// An endpoint with no entry in the config's `endpoints` is probed at the defaults.
+function pickHealth(config: HttpConfig, endpoint: string): HealthProbe {
+  if (endpoint === config.endpoint) {
+    return config;
+  }
+
+  return findOwnValue(config.endpoints, endpoint) ?? { healthPath: '/', healthAuth: true };
+}
+
+// A failure that escapes the request names the endpoint, as a bad status does.
+async function requestHealth(
+  client: HttpClient,
+  endpoint: string,
+  probe: HealthProbe,
+  isDefault: boolean,
+): Promise<HttpResponse> {
+  try {
+    return await client.request({
+      path: probe.healthPath,
+      endpoint,
+      auth: probe.healthAuth,
+    });
+  } catch (error) {
+    if (isDefault || !(error instanceof WringerError)) {
+      throw error;
+    }
+
+    const message = `${error.message} (endpoint ${endpoint})`;
+
+    const details =
+      error.hint === undefined
+        ? { message, data: error.data }
+        : { message, hint: error.hint, data: error.data };
+
+    throw new WringerError(error.code, details);
+  }
 }

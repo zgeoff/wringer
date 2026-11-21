@@ -27,10 +27,10 @@ export interface TableCuts {
 // sizes alone.
 export function measureJourneyTable(rows: readonly RowSize[], cuts: TableCuts): number {
   const shown = pickJourneyRows(rows.length, cuts.collapsed);
+  const isDropped = cuts.droppedData.size > 0;
 
-  const hasData = shown.indexes.some(
-    (index) => (rows[index]?.dataChars ?? null) !== null && !cuts.droppedData.has(index),
-  );
+  const hasData =
+    isDropped || shown.indexes.some((index) => (rows[index]?.dataChars ?? null) !== null);
 
   const rowChars = shown.indexes.map((index) => {
     const row = rows[index];
@@ -39,7 +39,7 @@ export function measureJourneyTable(rows: readonly RowSize[], cuts: TableCuts): 
       return 0;
     }
 
-    const dataChars = cuts.droppedData.has(index) ? 0 : (row.dataChars ?? 0);
+    const dataChars = isDropped ? '—'.length : (row.dataChars ?? 0);
     const base = hasData ? row.withColumn + dataChars : row.plain;
 
     return cuts.shortCells.has(index) ? base - row.shortSaving : base;

@@ -52,9 +52,9 @@ request fails with a usage error before the driver sends it.
 The driver redacts each exchange before it leaves: in the evidence file, in the `http request`
 command's data and in every error message. An action or a check still gets the real response.
 
-- Headers: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, and any
-  header whose name holds `token`, `secret`, `apikey`, `session` or `passw`. Each cookie keeps its
-  name and loses its value.
+- Headers: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`,
+  `cf-access-jwt-assertion`, and any header whose name holds `token`, `secret`, `apikey`, `session`
+  or `passw`. Each cookie keeps its name and loses its value.
 - Query parameters: `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`,
   `password`, `sig` and `code`.
 - JSON body paths, in the request and the response, that the repo names.
@@ -75,14 +75,25 @@ whose URL holds a username or a password: send credentials as a header.
 
 ## Target config
 
-| Field        | Default | Meaning                                                     |
-| ------------ | ------- | ----------------------------------------------------------- |
-| `endpoint`   | `web`   | The run endpoint whose URL the paths join.                  |
-| `baseURL`    | none    | A URL to use in place of the endpoint.                      |
-| `healthPath` | `/`     | The path the doctor checks; a 5xx answer fails the check.   |
-| `readOnly`   | none    | `allow`: the method and path globs a read-only target runs. |
+| Field        | Default | Meaning                                                        |
+| ------------ | ------- | -------------------------------------------------------------- |
+| `endpoint`   | `web`   | The run endpoint whose URL the paths join.                     |
+| `baseURL`    | none    | A URL to use in place of the endpoint.                         |
+| `healthPath` | `/`     | The path the doctor checks; a 5xx answer fails the check.      |
+| `healthAuth` | `true`  | Whether the doctor sends the session to the endpoint.          |
+| `endpoints`  | none    | Named endpoints, each with its own `healthPath`, `healthAuth`. |
+| `readOnly`   | none    | `allow`: the method and path globs a read-only target runs.    |
 
 GET, HEAD and OPTIONS are reads. A read-only target refuses any other method with exit code 3 and
 the target's hint, unless `readOnly.allow` lists that method and path. The driver never follows a
 redirect: it returns the 3xx response, so a granted request never reaches a path the target did not
 grant.
+
+## Endpoints and requests without the session
+
+`http request --endpoint <name>` picks a named endpoint, and `--no-auth` sends the request without
+the session. A transport that declares three parameters, `(url, init, route)`, learns each request's
+`route.endpoint` and `route.auth`. The driver refuses a transport of fewer parameters for a request
+that leaves the session off, and counts parameters with `Function.length`, so rest parameters and a
+default on the third parameter count short. [HTTP endpoints](../../docs/reference/http-endpoints.md)
+holds the details.

@@ -2,9 +2,11 @@ import type { ReportDocument } from '../report-document/report-document.ts';
 import { reportMarkers } from '../report-document/report-markers.ts';
 import type { ReportPlan } from '../report-plan/report-plan.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
+import { hasLinkedFile } from './has-linked-file.ts';
 import { renderDataComment } from './render-data-comment.ts';
-import { renderSection } from './render-section.ts';
-import { renderSummaryTable } from './render-summary-table.ts';
+import { renderDataNote } from './render-data-note.ts';
+import { renderFeatureLine } from './render-feature-line.ts';
+import { renderUnchangedLine } from './render-unchanged-line.ts';
 import { renderUnmappedLine } from './render-unmapped-line.ts';
 
 // The whole span, from its opening marker to its closing one. Pure: the same document, plan and
@@ -15,23 +17,21 @@ export function renderReport(
   plan: ReportPlan,
   secrets: SecretSet,
 ): string {
+  const changed = document.report.features.filter((feature) => feature.status !== 'unchanged');
+  const unchanged = document.report.features.filter((feature) => feature.status === 'unchanged');
+
   const parts = [
     reportMarkers.open,
-    renderSummaryTable(document, secrets),
+    ...(plan.cuts.droppedData > 0 ? [renderDataNote(hasLinkedFile(document, plan, secrets))] : []),
+    ...changed.map((feature) =>
+      renderFeatureLine(feature, document.journeys.get(feature.name), {
+        linkHosts: document.linkHosts,
+        secrets,
+        cuts: plan.features.get(feature.name),
+      }),
+    ),
+    ...renderUnchangedLine(unchanged, secrets),
     ...renderUnmappedLine(document.report.unmapped, secrets),
-    ...document.report.features.flatMap((feature) => {
-      const journey = document.journeys.get(feature.name);
-
-      return journey === undefined
-        ? []
-        : [
-            renderSection(feature, journey, {
-              linkHosts: document.linkHosts,
-              secrets,
-              cuts: plan.features.get(feature.name),
-            }),
-          ];
-    }),
     renderDataComment(document, secrets),
   ];
 
