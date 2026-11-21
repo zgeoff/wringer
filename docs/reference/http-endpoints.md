@@ -8,10 +8,12 @@ session, to show that the app refuses it.
 
 The target's `endpoint` field names its default endpoint, `web` unless you set it. The `endpoints`
 field sets the health check of a named endpoint. Each named endpoint takes its address from the
-target's own `endpoints` map, and an endpoint that only that map names is also one the driver may
-call, with the default health path and the session, when its address is an `http` or `https` URL.
-The driver leaves out any other entry in that map, such as a database file, which no request can
-reach.
+target's own `endpoints` map.
+
+An entry of the target's map that the driver config doesn't name is a named endpoint too, with the
+default health path and the session. The one exception is an entry whose address is not an `http` or
+`https` URL, such as a database file: the doctor doesn't probe it, and `http request` refuses it as
+an unknown endpoint.
 
 ```ts
 drivers: {
