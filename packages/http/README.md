@@ -52,9 +52,9 @@ request fails with a usage error before the driver sends it.
 The driver redacts each exchange before it leaves: in the evidence file, in the `http request`
 command's data and in every error message. An action or a check still gets the real response.
 
-- Headers: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, and any
-  header whose name holds `token`, `secret`, `apikey`, `session` or `passw`. Each cookie keeps its
-  name and loses its value.
+- Headers: `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`,
+  `cf-access-jwt-assertion`, and any header whose name holds `token`, `secret`, `apikey`, `session`
+  or `passw`. Each cookie keeps its name and loses its value.
 - Query parameters: `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`,
   `password`, `sig` and `code`.
 - JSON body paths, in the request and the response, that the repo names.

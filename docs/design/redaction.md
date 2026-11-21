@@ -238,10 +238,10 @@ function buildRedactedExchange(exchange: HttpExchange, redaction: Redaction): Re
 //     secrets: [{ name: 'http.header.authorization', value: 'Bearer 3f9a…' }, …] }
 ```
 
-| Default list | Names                                                                                                |
-| ------------ | ---------------------------------------------------------------------------------------------------- |
-| headers      | `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`                          |
-| query        | `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`, `password`, `sig`, `code` |
+| Default list | Names                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| headers      | `authorization`, `proxy-authorization`, `cookie`, `set-cookie`, `x-api-key`, `cf-access-jwt-assertion` |
+| query        | `token`, `access_token`, `id_token`, `api_key`, `apikey`, `key`, `secret`, `password`, `sig`, `code`   |
 
 A body path is `$` followed by `.name` or `[*]` steps, and its placeholder name is `http.body`. A
 path that matches nothing changes nothing. When a body path matches the response JSON, the driver
