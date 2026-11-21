@@ -600,6 +600,27 @@ test.each([
   },
 );
 
+test('#up puts the end of the supervisor log in the error when the supervisor exits early', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.runWithExitingSupervisor(
+    'local',
+    'echo "cannot open postgres://app:hunter2@db/x"; exit 1',
+  );
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+    hint: result.envelope.error?.hint,
+  }).toStrictEqual({
+    code: 'environment',
+    message: expect.stringContaining(
+      'the supervisor exited with code 1 before the run was ready; the end of its log:\ncannot open postgres://[redacted]@db/x',
+    ),
+    hint: expect.stringContaining('supervisor.log'),
+  });
+});
+
 test('#up refuses an attach target with a usage error naming attach', async () => {
   const ctx = await setupTest();
   const result = await ctx.run('prod', ['up']);
