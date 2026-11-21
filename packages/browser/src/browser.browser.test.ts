@@ -18,7 +18,11 @@ async function setupTest(shopURL?: string) {
     actionTimeoutMs: 1500,
   });
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({
+    parent: import.meta.dir,
+    wringer,
+    env: { SHOP_TOKEN: 'planted-shop-token' },
+  });
 
   return {
     root: shop.repo.root,
@@ -1085,4 +1089,95 @@ test('it ticks and unticks a checkbox that a box lies over, by its label', async
     expect.objectContaining({ checked: true }),
     expect.objectContaining({ checked: false }),
   ]);
+});
+
+test.each([
+  { flag: 'until-text', args: { untilText: 'Saved' } },
+  { flag: 'until-no-text', args: { untilNoText: 'Saving' } },
+  { flag: 'both flags', args: { untilText: 'Saved', untilNoText: 'Saving' } },
+])('it waits with $flag for a page that changes after a moment', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['browser', 'goto'], { path: '/changing' });
+
+  const result = await ctx.run('local', ['browser', 'snapshot'], row.args);
+
+  const evidencePath = result.envelope.evidence[0]?.path ?? '';
+
+  expect({
+    error: result.envelope.error,
+    snapshot: snapshotSchema.parse(result.envelope.data).snapshot,
+    evidence: await readText(join(ctx.root, evidencePath)),
+  }).toStrictEqual({
+    error: null,
+    snapshot: expect.stringContaining('Saved'),
+    evidence: expect.stringContaining('Saved'),
+  });
+});
+
+test('it keeps the last snapshot as evidence when the text never shows', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['browser', 'goto'], { path: '/changing' });
+
+  const result = await ctx.run('local', ['browser', 'snapshot'], { untilText: 'Shipped' });
+
+  const evidencePath = result.envelope.evidence[0]?.path ?? '';
+
+  expect({
+    error: result.envelope.error,
+    evidence: await readText(join(ctx.root, evidencePath)),
+  }).toStrictEqual({
+    error: {
+      code: 'check-failed',
+      message: expect.stringMatching(/^The page never showed the text "Shipped" after 1\.\d s\.$/u),
+      hint: 'Read the last snapshot in the evidence, `snapshot.yaml`, to see what the page showed.',
+    },
+    evidence: expect.stringContaining('Saved'),
+  });
+});
+
+test('it names the text that still shows when it never goes', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['browser', 'goto'], { path: '/' });
+
+  const result = await ctx.run('local', ['browser', 'snapshot'], { untilNoText: 'Place order' });
+
+  expect(result.envelope.error?.message).toMatch(
+    /^The page still shows the text "Place order" after /u,
+  );
+});
+
+test('it keeps a declared secret in the waited text redacted in the error', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+  await ctx.run('local', ['browser', 'goto'], { path: '/changing' });
+
+  const result = await ctx.run('local', ['browser', 'snapshot'], {
+    untilText: 'planted-shop-token',
+  });
+
+  expect(result.envelope.error?.message).toMatch(
+    /^The page never showed the text "\[redacted:SHOP_TOKEN\]" after /u,
+  );
+});
+
+test('it rejects an empty text to wait for', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('local', ['attach']);
+  await ctx.run('local', ['doctor']);
+
+  const result = await ctx.run('local', ['browser', 'snapshot'], { untilText: '' });
+
+  expect(result.envelope.error?.code).toBe('usage');
 });

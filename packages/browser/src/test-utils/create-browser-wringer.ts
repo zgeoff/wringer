@@ -24,6 +24,7 @@ export function createBrowserWringer(url: string, options: BrowserWringerOptions
 
   return createWringer({ name: 'shop' })
     .use(...shop.drivers)
+    .secret('SHOP_TOKEN')
     .target(
       'local',
       shop.defineTarget({

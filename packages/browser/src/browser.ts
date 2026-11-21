@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from 'node:timers/promises';
 import { WringerError, defineDriver, evidenceSchema } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
 import { chromium } from 'playwright-core';
@@ -21,6 +22,7 @@ import {
 import type { ElementTarget, PageArgs } from './page-service-contract.ts';
 import { startBrowserPage } from './page-session/start-browser-page.ts';
 import { pickActionEffect, pickBrowserEffect } from './pick-browser-effect.ts';
+import { readSnapshot } from './snapshot-wait/read-snapshot.ts';
 
 export type PageState = z.infer<typeof pageStateSchema>;
 
@@ -60,9 +62,17 @@ export interface DescribeRequest {
 
 export type TypeRequest = ElementTarget & { readonly value: string };
 
+export interface SnapshotRequest {
+  // Wait for a snapshot that holds this text.
+  readonly untilText?: string | undefined;
+
+  // Wait for a snapshot that lacks this text.
+  readonly untilNoText?: string | undefined;
+}
+
 export interface BrowserClient {
   readonly goto: (request: GotoRequest) => Promise<PageState>;
-  readonly snapshot: () => Promise<PageSnapshot>;
+  readonly snapshot: (request?: SnapshotRequest) => Promise<PageSnapshot>;
   readonly describe: (request: DescribeRequest) => Promise<DescribedElement>;
   readonly click: (element: ElementTarget) => Promise<ActionState>;
   readonly type: (request: TypeRequest) => Promise<PageState>;
@@ -116,6 +126,11 @@ const pressArgsSchema = z
 const gotoArgsSchema = z.strictObject({
   path: z.string().startsWith('/'),
   endpoint: z.string().min(1).optional(),
+});
+
+const snapshotArgsSchema = z.strictObject({
+  untilText: z.string().min(1).optional(),
+  untilNoText: z.string().min(1).optional(),
 });
 
 const tabArgsSchema = z.strictObject({
@@ -178,13 +193,16 @@ export const browser = defineDriver({
     const snapshot = fence({
       effect: () => 'read',
       describe: () => 'browser snapshot',
-      run: async (request: null) => {
-        const parsed = await callPage(page, 'snapshot', request);
-
-        await session.evidence.writeFile('browser', 'snapshot.yaml', parsed.snapshot);
-
-        return parsed;
-      },
+      run: (request: SnapshotRequest) =>
+        readSnapshot(request, {
+          takeSnapshot: () => callPage(page, 'snapshot', null),
+          wait: (delayMs, signal) => sleep(delayMs, undefined, { signal }),
+          timeLeftMs: session.timeLeftMs,
+          actionTimeoutMs: session.options.actionTimeoutMs,
+          writeSnapshot: async (text) => {
+            await session.evidence.writeFile('browser', 'snapshot.yaml', text);
+          },
+        }),
     });
 
     const screenshot = fence({
@@ -251,7 +269,7 @@ export const browser = defineDriver({
           return state;
         },
       }),
-      snapshot: () => snapshot(null),
+      snapshot: (request = {}) => snapshot(request),
       describe,
       click: async (element) =>
         acts.click({ ...(await prepare(element)), args: guardElement(session, element) }),
@@ -303,11 +321,12 @@ export const browser = defineDriver({
     }),
     command({
       path: ['browser', 'snapshot'],
-      summary: 'Print the page as an accessibility tree, with a ref for each element',
-      args: z.strictObject({}),
+      summary:
+        'Print the page as an accessibility tree, with a ref for each element, after --until-text shows or --until-no-text goes',
+      args: snapshotArgsSchema,
       data: snapshotSchema,
       effect: 'read',
-      run: (_args, ctx) => ctx.client.snapshot(),
+      run: (args, ctx) => ctx.client.snapshot(args),
     }),
     command({
       path: ['browser', 'click'],

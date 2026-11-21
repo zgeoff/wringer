@@ -21,6 +21,12 @@ const adminEnablingPage = `<!doctype html>
 <button id="search" disabled onclick="fetch('/api/search', { method: 'POST' })">Search</button>
 <script>setTimeout(() => { document.getElementById('search').disabled = false; }, 300);</script>`;
 
+// A page that says Saving, and says Saved instead after a moment.
+const changingPage = `<!doctype html>
+<title>Changing</title>
+<p id="state">Saving</p>
+<script>setTimeout(() => { document.getElementById('state').textContent = 'Saved'; }, 600);</script>`;
+
 const closingPage = `<!doctype html>
 <title>Closing</title>
 <button onclick="window.close()">Close this tab</button>`;
@@ -114,6 +120,9 @@ export function createShopPageServer(): ShopPageServer {
       },
       '/leaving': {
         GET: () => new Response(leavingPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/changing': {
+        GET: () => new Response(changingPage, { headers: { 'content-type': 'text/html' } }),
       },
       '/closing': {
         GET: () => new Response(closingPage, { headers: { 'content-type': 'text/html' } }),
