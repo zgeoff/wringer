@@ -174,7 +174,9 @@ async function runPublish(args: PublishArgs, ctx: BuiltinContext): Promise<Publi
     local: localFiles.size,
     cuts: written.plan.cuts,
     dryRun: false,
-    ...(setup.hasUploadTarget || localFiles.size === 0 ? {} : { warning: localEvidenceWarning }),
+    ...(args.upload && !setup.hasUploadTarget && localFiles.size > 0
+      ? { warning: localEvidenceWarning }
+      : {}),
   };
 }
 

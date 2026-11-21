@@ -26,6 +26,7 @@ async function setupTest() {
     local: z.number(),
     dryRun: z.boolean(),
     markdown: z.string().optional(),
+    warning: z.string().optional(),
     cuts: z.strictObject({
       droppedData: z.number(),
       collapsed: z.number(),
@@ -399,9 +400,13 @@ test('#publish with --no-upload gives no local-evidence warning', async () => {
 
   await ctx.verifyCheckout(['photo']);
 
-  const result = await ctx.publish({ upload: false });
+  const uploading = await ctx.publish({ upload: false });
+  const localOnly = await ctx.publishWith(ctx.base, { upload: false });
 
-  expect(ctx.readPublished(result.envelope.data)).not.toHaveProperty('warning');
+  expect({
+    uploading: ctx.readPublished(uploading.envelope.data).warning,
+    localOnly: ctx.readPublished(localOnly.envelope.data).warning,
+  }).toStrictEqual({ uploading: undefined, localOnly: undefined });
 });
 
 test('#publish fails with usage before it reads the PR when a target uploads and the registry has no hook', async () => {
