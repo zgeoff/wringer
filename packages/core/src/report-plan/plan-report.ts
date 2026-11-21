@@ -50,8 +50,7 @@ export function planReport(
   const counts = { droppedData: 0, collapsed: 0, shortCells: 0, omitted: 0 };
 
   if (total.chars > options.budgetChars) {
-    const noteChars = renderDataNote(hasLinkedFile(sized, secrets)).length + separatorChars;
-    const saving = dropAllData(models, noteChars);
+    const saving = dropAllData(models);
 
     if (saving !== null) {
       counts.droppedData = saving.steps;
@@ -59,8 +58,16 @@ export function planReport(
     }
   }
 
+  // The note's length depends on which links the cuts leave, so it is measured after each cut.
+  const measureNote = (): number =>
+    counts.droppedData === 0
+      ? 0
+      : renderDataNote(
+          hasLinkedFile(sized, { cuts: counts, features: toFeaturePlans(models) }, secrets),
+        ).length + separatorChars;
+
   for (const candidate of collectCandidates(models)) {
-    if (total.chars <= options.budgetChars) {
+    if (total.chars + measureNote() <= options.budgetChars) {
       break;
     }
 
@@ -82,11 +89,13 @@ export function planReport(
     total.chars -= saving;
   }
 
-  if (total.chars > options.budgetChars) {
-    return { ok: false, minimumChars: total.chars };
+  const finalChars = total.chars + measureNote();
+
+  if (finalChars > options.budgetChars) {
+    return { ok: false, minimumChars: finalChars };
   }
 
-  return { ok: true, plan: { cuts: counts, features: toFeaturePlans(models) }, chars: total.chars };
+  return { ok: true, plan: { cuts: counts, features: toFeaturePlans(models) }, chars: finalChars };
 }
 
 // Marks each file the plan sizes as a link with a `url`. The measure counts a link at `linkChars`
@@ -225,11 +234,10 @@ function measureModel(model: FeatureModel): number {
     : model.frameChars + 1 + measureJourneyTable(model.rows, model.state);
 }
 
-// The first cut: drops the data of every step at once, and shows a note above the feature lines.
-// Takes nothing, and returns null, when no step has data or the cut makes the report longer.
+// The first cut: drops the data of every step at once. Takes nothing, and returns null, when no
+// step has data.
 function dropAllData(
   models: readonly FeatureModel[],
-  noteChars: number,
 ): { readonly steps: number; readonly chars: number } | null {
   const withData = models.filter((model) => model.rows.some((row) => row.dataChars !== null));
 
@@ -247,20 +255,34 @@ function dropAllData(
     });
   }
 
-  const after = withData.reduce((sum, model) => sum + measureModel(model), 0) + noteChars;
-
-  if (after > before) {
-    for (const model of withData) {
-      model.state.droppedData.clear();
-    }
-
-    return null;
-  }
+  const after = withData.reduce((sum, model) => sum + measureModel(model), 0);
 
   return {
     steps: withData.reduce((sum, model) => sum + model.state.droppedData.size, 0),
     chars: before - after,
   };
+}
+
+function toFeaturePlans(models: readonly FeatureModel[]): ReadonlyMap<string, FeaturePlan> {
+  return new Map(
+    models
+      .filter(
+        (model) =>
+          model.state.omitted ||
+          model.state.collapsed ||
+          model.state.droppedData.size > 0 ||
+          model.state.shortCells.size > 0,
+      )
+      .map((model): [string, FeaturePlan] => [
+        model.name,
+        {
+          omitted: model.state.omitted,
+          collapsed: model.state.collapsed,
+          droppedData: new Set(model.state.droppedData),
+          shortCells: new Set(model.state.shortCells),
+        },
+      ]),
+  );
 }
 
 type Candidate =
@@ -351,26 +373,4 @@ function revertCandidate(candidate: Candidate): void {
       state.omitted = false;
     })
     .exhaustive();
-}
-
-function toFeaturePlans(models: readonly FeatureModel[]): ReadonlyMap<string, FeaturePlan> {
-  return new Map(
-    models
-      .filter(
-        (model) =>
-          model.state.omitted ||
-          model.state.collapsed ||
-          model.state.droppedData.size > 0 ||
-          model.state.shortCells.size > 0,
-      )
-      .map((model): [string, FeaturePlan] => [
-        model.name,
-        {
-          omitted: model.state.omitted,
-          collapsed: model.state.collapsed,
-          droppedData: new Set(model.state.droppedData),
-          shortCells: new Set(model.state.shortCells),
-        },
-      ]),
-  );
 }

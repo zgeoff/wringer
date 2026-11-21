@@ -22,7 +22,7 @@ export function renderReport(
 
   const parts = [
     reportMarkers.open,
-    ...(plan.cuts.droppedData > 0 ? [renderDataNote(hasLinkedFile(document, secrets))] : []),
+    ...(plan.cuts.droppedData > 0 ? [renderDataNote(hasLinkedFile(document, plan, secrets))] : []),
     ...changed.map((feature) =>
       renderFeatureLine(feature, document.journeys.get(feature.name), {
         linkHosts: document.linkHosts,

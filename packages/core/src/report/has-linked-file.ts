@@ -1,15 +1,18 @@
 import type { ReportDocument } from '../report-document/report-document.ts';
+import { collectShownEntries } from '../report-plan/collect-shown-files.ts';
+import type { ReportPlan } from '../report-plan/report-plan.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
 import { formatReportLink } from './format-report-link.ts';
 
-// Whether the report links any evidence file of its features.
-export function hasLinkedFile(document: ReportDocument, secrets: SecretSet): boolean {
-  return document.report.features.some((feature) =>
-    (document.journeys.get(feature.name)?.steps ?? []).some((step) =>
-      step.files.some(
-        (file) =>
-          file.url !== null && formatReportLink(file.url, document.linkHosts, secrets) !== null,
-      ),
-    ),
+// Whether the report, as the plan cuts it, shows a link to any evidence file.
+export function hasLinkedFile(
+  document: ReportDocument,
+  plan: ReportPlan,
+  secrets: SecretSet,
+): boolean {
+  return collectShownEntries(document, plan).some(
+    (entry) =>
+      entry.file.url !== null &&
+      formatReportLink(entry.file.url, document.linkHosts, secrets) !== null,
   );
 }
