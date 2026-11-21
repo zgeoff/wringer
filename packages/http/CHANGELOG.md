@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.8...@wringer/http@0.1.9) (2026-11-21)
+
+### Bug Fixes
+
+- **http:** skip an endpoint whose address is not an http url
+  ([#244](https://github.com/zgeoff/wringer/issues/244))
+  ([3d1f73a](https://github.com/zgeoff/wringer/commit/3d1f73a19fecc5e2dc01b9df5a3f20d11c282b97))
+
 ## [0.1.8](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.7...@wringer/http@0.1.8) (2026-11-21)
 
 ### Dependencies
