@@ -2,25 +2,26 @@
 
 ## [0.3.8](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.7...@wringer/gunshi@0.3.8) (2026-11-21)
 
-
 ### Features
 
-* **gunshi:** read declared secrets from a source once at up ([#237](https://github.com/zgeoff/wringer/issues/237)) ([c152bbe](https://github.com/zgeoff/wringer/commit/c152bbecb0b299a8c5833b5d30e58d1fc9c18480))
-
+- **gunshi:** read declared secrets from a source once at up
+  ([#237](https://github.com/zgeoff/wringer/issues/237))
+  ([c152bbe](https://github.com/zgeoff/wringer/commit/c152bbecb0b299a8c5833b5d30e58d1fc9c18480))
 
 ### Bug Fixes
 
-* remove the causes of the verify guide's mistake lists ([#224](https://github.com/zgeoff/wringer/issues/224)) ([272c96e](https://github.com/zgeoff/wringer/commit/272c96ec0533cd90867dcdd4510f384f1f2e7bc4))
-
+- remove the causes of the verify guide's mistake lists
+  ([#224](https://github.com/zgeoff/wringer/issues/224))
+  ([272c96e](https://github.com/zgeoff/wringer/commit/272c96ec0533cd90867dcdd4510f384f1f2e7bc4))
 
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.4.0
-    * @wringer/http bumped to 0.1.7
-  * peerDependencies
-    * @wringer/core bumped to 0.4.0
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.0
+    - @wringer/http bumped to 0.1.7
+  - peerDependencies
+    - @wringer/core bumped to 0.4.0
 
 ## [0.3.7](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.6...@wringer/gunshi@0.3.7) (2026-11-20)
 
