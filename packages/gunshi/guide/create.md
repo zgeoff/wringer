@@ -33,11 +33,13 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
    - `command`: the command a developer runs to start the app;
    - `env`: the app's environment. Point the app's state at `ctx.runDirectory` here, such as a
      SQLite file, so each run starts clean. For a database server, name a database per run;
-   - `ready`: a function that returns the app's endpoints once a line of the app's output shows the
-     app is ready, such as `{ web: 'http://127.0.0.1:4100' }`, and `null` before. The drivers use
-     the `web` endpoint unless a driver's config sets another `endpoint`. `ready` gets a JSON object
-     line as that object, and any other line as `{ message: <the line> }`, so match a plain-text
-     line on `line['message']`.
+   - `ready`: a function that the CLI calls with each line the app prints. Return `null` until the
+     line shows the app is ready. Then return the app's endpoints, such as
+     `{ web: 'http://127.0.0.1:4100' }`. The drivers use the `web` endpoint unless a driver's config
+     sets another `endpoint`.
+
+     A JSON object line arrives as that object. Any other line arrives as `{ message: <the line> }`,
+     so match plain text on `line['message']`.
 5. Write a target with `mode: 'attach'` for each instance that runs apart from the CLI, such as a
    staging or a production deployment. Its `endpoints` function returns the instance's URLs. Give a
    target `access: 'read-only'` when agents must never write there, such as production, and a
@@ -55,9 +57,9 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs
     of the files that change its behaviour. Write each glob relative to the repo root, as
-    `git ls-files` prints paths, even in a monorepo package.
-11. Map every file the repo tracks. The gate fails a PR that changes a file matched by neither a
-    feature's `paths` nor an ignore glob.
+    `git ls-files` prints paths. In a monorepo, do the same for a package's files.
+11. Map every file the repo tracks. In CI, `bun verify gate` fails a PR that changes a file matched
+    by neither a feature's `paths` nor an ignore glob.
     - Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
       `**/*.md`, `**/*.test.ts`, `.github/**` and `.claude/**`. Never ignore a file that changes
       behaviour: the gate skips an ignored file even when a feature's `paths` match it.

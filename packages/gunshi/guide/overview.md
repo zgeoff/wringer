@@ -101,8 +101,8 @@ skill, an ignore list for the files with no runtime effect, and `bun verify lint
 The work is done only when each of these holds. The `prove` topic gives the commands.
 
 1. `bun verify doctor` passes on `local`.
-2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. New
-   feature files need one pass by an agent who did not write it, and this run is that pass.
+2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. Each new
+   feature file needs one pass by an agent who did not write it, and this run is that pass.
 3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
    `doctor-required`. On a read-only target, if the repo has one, try one write: the CLI refuses it
    with `read-only`.
