@@ -637,7 +637,7 @@ test('#up keeps the password out of the error when the whole log tail is one cut
 
   const result = await ctx.runWithExitingSupervisor(
     'local',
-    String.raw`printf "cannot open postgres://app:sample-password@db/x"; head -c 16400 /dev/zero | tr "\0" x; exit 1`,
+    String.raw`printf "cannot open postgres://app:sample-password@db/x"; head -c 16360 /dev/zero | tr "\0" x; exit 1`,
   );
 
   expect(result.envelope.error?.message).not.toContain('sample-password');
