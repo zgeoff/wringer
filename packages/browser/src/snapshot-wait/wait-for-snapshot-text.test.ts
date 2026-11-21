@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
+import { setImmediate } from 'node:timers/promises';
+import { createFakeClock, runClockUntil } from '@zgeoff/testing/clock';
 import type { PageSnapshot } from '../browser.ts';
-import { createFakeClock } from '../test-utils/create-fake-clock.ts';
 import type { SnapshotTextWait } from './wait-for-snapshot-text.ts';
 import { waitForSnapshotText } from './wait-for-snapshot-text.ts';
 
@@ -25,7 +26,7 @@ function setupTest(
     const snapshot = { url: 'http://shop.test/', title: 'Shop', snapshot: text };
 
     if (snapshotDelayMs > 0) {
-      return clock.wait(snapshotDelayMs, new AbortController().signal).then(() => snapshot);
+      return clock.sleep(snapshotDelayMs).then(() => snapshot);
     }
 
     return Promise.resolve(snapshot);
@@ -34,14 +35,27 @@ function setupTest(
   return {
     clock,
     taken: () => taken,
-    wait: (request: SnapshotTextWait) =>
-      clock.runUntilSettled(
-        waitForSnapshotText(request, {
-          takeSnapshot,
-          wait: clock.wait,
-          timeLeftMs: () => deadlineMs - clock.nowMs(),
-        }),
-      ),
+    wait: async (request: SnapshotTextWait) => {
+      let settled = false;
+
+      const work = (async () => {
+        try {
+          return await waitForSnapshotText(request, {
+            takeSnapshot,
+            clock,
+            timeLeftMs: () => deadlineMs - clock.now(),
+          });
+        } finally {
+          settled = true;
+        }
+      })();
+
+      // Lets the first snapshot and the first sleep start, so the clock has a timer to step to.
+      await setImmediate();
+      await runClockUntil(clock, () => settled, { maxMs: 600_000 });
+
+      return work;
+    },
   };
 }
 
@@ -50,7 +64,7 @@ test('it returns the first snapshot at once when it shows the text', async () =>
 
   const outcome = await ctx.wait({ untilText: 'Saved', actionTimeoutMs: 10_000 });
 
-  expect({ outcome, taken: ctx.taken(), nowMs: ctx.clock.nowMs() }).toStrictEqual({
+  expect({ outcome, taken: ctx.taken(), nowMs: ctx.clock.now() }).toStrictEqual({
     outcome: {
       kind: 'matched',
       snapshot: { url: 'http://shop.test/', title: 'Shop', snapshot: 'heading "Saved"' },
@@ -65,7 +79,7 @@ test('it returns the third snapshot when the text shows after 2 polls', async ()
 
   const outcome = await ctx.wait({ untilText: 'Saved', actionTimeoutMs: 10_000 });
 
-  expect({ kind: outcome.kind, taken: ctx.taken(), nowMs: ctx.clock.nowMs() }).toStrictEqual({
+  expect({ kind: outcome.kind, taken: ctx.taken(), nowMs: ctx.clock.now() }).toStrictEqual({
     kind: 'matched',
     taken: 3,
     nowMs: 500,
@@ -138,7 +152,7 @@ test('it times out when the first snapshot finishes after the action timeout', a
 
   const outcome = await ctx.wait({ untilText: 'Saved', actionTimeoutMs: 1000 });
 
-  expect({ outcome, nowMs: ctx.clock.nowMs() }).toStrictEqual({
+  expect({ outcome, nowMs: ctx.clock.now() }).toStrictEqual({
     outcome: {
       kind: 'timed-out',
       last: null,
