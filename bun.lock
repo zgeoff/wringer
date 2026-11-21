@@ -201,7 +201,7 @@
     "@orpc/openapi": "1.16.1",
     "@orpc/openapi-client": "1.16.1",
     "@orpc/server": "1.16.1",
-    "@zgeoff/oxlint-config": "0.11.1",
+    "@zgeoff/oxlint-config": "0.11.3",
     "@zgeoff/std": "0.4.5",
     "@zgeoff/testing": "0.4.0",
     "ajv": "8.20.0",
@@ -627,7 +627,7 @@
 
     "@zgeoff/format-codemod": ["@zgeoff/format-codemod@0.3.6", "", { "dependencies": { "gunshi": "1.0.0-rc.1", "oxc-parser": "0.158.0" }, "bin": { "format-codemod": "dist/cli.js" } }, "sha512-hoa6JerU9JHgikqumdtu23VE8wemOgkTr1zrwBFGnLyBns59bTt7Z3kkV6IBxc07CveYKtPT94IDTWFmFj5qHA=="],
 
-    "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.11.1", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-Ja1TWQbOIxFk80v2YsvKLt7Hw9koRLK98yc1piQfqQuAPFL53+YAWtTOUBQgoPTrbe/F6VrBGsMTQSA5H1eJcA=="],
+    "@zgeoff/oxlint-config": ["@zgeoff/oxlint-config@0.11.3", "", { "dependencies": { "@stylistic/eslint-plugin": "5.10.0" }, "peerDependencies": { "oxlint": ">=1.78.0" } }, "sha512-Kqmdqc9CI7tpQ9Zb7X3cRtpRsueSC+rUlJQsPHSy6QDn2f2HWhbF5CepBh68RMdZOGsNAHe2l34V/7Q7Ou0tUA=="],
 
     "@zgeoff/std": ["@zgeoff/std@0.4.5", "", {}, "sha512-Z2rD5v0OVXRZTa3Jh2I8zmx9znzvnAa/bC5Ai0NidPh+pfJGfDLmQIVZhshbGXPu/S/9SFdP/chDw+N5Pk/lzg=="],
 
