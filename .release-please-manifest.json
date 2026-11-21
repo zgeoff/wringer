@@ -2,8 +2,8 @@
   "packages/core": "0.4.1",
   "packages/browser": "0.2.1",
   "packages/db": "0.1.8",
-  "packages/gunshi": "0.3.9",
-  "packages/http": "0.1.8",
+  "packages/gunshi": "0.3.10",
+  "packages/http": "0.1.9",
   "packages/stream": "0.1.8",
   "packages/terminal": "0.1.5",
   "packages/mcp": "0.1.6"
