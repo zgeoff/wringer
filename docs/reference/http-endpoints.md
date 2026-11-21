@@ -7,8 +7,9 @@ session, to show that the app refuses it.
 ## Endpoints
 
 The target's `endpoint` field names its default endpoint, `web` unless you set it. The `endpoints`
-field adds named endpoints. Each name must also appear in the target's own `endpoints` map, which
-holds its address.
+field sets the health check of a named endpoint. Each named endpoint takes its address from the
+target's own `endpoints` map, and an endpoint that only that map names is also one the driver may
+call, with the default health path and the session.
 
 ```ts
 drivers: {

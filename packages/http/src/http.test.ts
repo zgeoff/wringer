@@ -963,6 +963,43 @@ test('it refuses an unknown endpoint with a usage error that lists the names, an
   });
 });
 
+test('it sends --endpoint to an endpoint that only the target names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('target-only', ['attach']);
+  await ctx.runRouted('target-only', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  const result = await ctx.runRouted('target-only', ['http', 'request'], {
+    path: '/api/users',
+    endpoint: 'admin',
+  });
+
+  expect({ exitCode: result.exitCode, routed: ctx.routed }).toStrictEqual({
+    exitCode: 0,
+    routed: [
+      {
+        url: `${ADMIN_API_URL}/api/users`,
+        route: { endpoint: 'admin', auth: true },
+        session: 'on',
+      },
+    ],
+  });
+});
+
+test('it checks an endpoint that only the target names at the default health path', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('target-only', ['attach']);
+  await ctx.runRouted('target-only', ['doctor']);
+
+  expect(ctx.routed).toStrictEqual([
+    { url: `${SHOP_API_URL}/`, route: { endpoint: 'web', auth: true }, session: 'on' },
+    { url: `${ADMIN_API_URL}/`, route: { endpoint: 'admin', auth: true }, session: 'on' },
+  ]);
+});
+
 test('it applies baseURL to the default endpoint only', async () => {
   const ctx = await setupTest();
 
@@ -1071,6 +1108,28 @@ test('it names a named endpoint in the doctor failure', async () => {
         code: 'check-failed',
         message: 'GET /api/health on endpoint admin answered 503.',
       },
+    ],
+  });
+});
+
+test('it names a named endpoint in the doctor failure when its transport throws', async () => {
+  const ctx = await setupTest();
+
+  server.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.error()));
+
+  await ctx.run('multi', ['attach']);
+
+  const result = await ctx.run('multi', ['doctor']);
+
+  expect(result.envelope.data).toStrictEqual({
+    passed: false,
+    results: [
+      expect.objectContaining({
+        name: 'http.reachable',
+        status: 'failed',
+        code: 'environment',
+        message: expect.stringContaining('(endpoint admin)'),
+      }),
     ],
   });
 });

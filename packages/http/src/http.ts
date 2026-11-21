@@ -182,30 +182,18 @@ export const http = defineDriver({
       run: async (ctx) => {
         const config = ctx.session.config;
 
-        const probes = [
-          {
-            endpoint: config.endpoint,
-            healthPath: config.healthPath,
-            healthAuth: config.healthAuth,
-          },
-          ...Object.entries(config.endpoints).map(([endpoint, named]) => ({
-            endpoint,
-            healthPath: named.healthPath,
-            healthAuth: named.healthAuth,
-          })),
-        ];
+        for (const endpoint of listEndpointNames(ctx.session)) {
+          const probe = pickHealth(config, endpoint);
+          const where = endpoint === config.endpoint ? '' : ` on endpoint ${endpoint}`;
 
-        for (const probe of probes) {
-          const response = await ctx.client.request({
-            path: probe.healthPath,
-            endpoint: probe.endpoint,
-            auth: probe.healthAuth,
-          });
+          const response = await requestHealth(
+            ctx.client,
+            endpoint,
+            probe,
+            endpoint === config.endpoint,
+          );
 
           if (response.status >= 500) {
-            const where =
-              probe.endpoint === config.endpoint ? '' : ` on endpoint ${probe.endpoint}`;
-
             throw new WringerError('check-failed', {
               message: `GET ${probe.healthPath}${where} answered ${response.status}.`,
             });
@@ -248,7 +236,7 @@ async function sendRequest(
 ): Promise<SentRequest> {
   const redaction = buildRedaction(session.options.redact);
   const endpoint = request.endpoint ?? session.config.endpoint;
-  const names = listEndpointNames(session.config);
+  const names = listEndpointNames(session);
 
   if (!names.includes(endpoint)) {
     throw new WringerError('usage', {
@@ -330,8 +318,15 @@ async function sendRequest(
   return { real, redacted: exchange.response };
 }
 
-function listEndpointNames(config: HttpConfig): string[] {
-  return [config.endpoint, ...Object.keys(config.endpoints)];
+// The default endpoint, then each endpoint the driver's config or the target names.
+function listEndpointNames(session: DriverSession<HttpOptions, HttpConfig>): string[] {
+  return [
+    ...new Set([
+      session.config.endpoint,
+      ...Object.keys(session.config.endpoints),
+      ...Object.keys(session.endpoints),
+    ]),
+  ];
 }
 
 // A transport that declares fewer than three parameters cannot receive the auth choice.
@@ -473,4 +468,47 @@ function splitHeader(header: string): readonly [string, string] {
   const index = header.indexOf(':');
 
   return [header.slice(0, index).trim(), header.slice(index + 1).trim()];
+}
+
+interface HealthProbe {
+  readonly healthPath: string;
+  readonly healthAuth: boolean;
+}
+
+// An endpoint with no entry in the config's `endpoints` is probed at the defaults.
+function pickHealth(config: HttpConfig, endpoint: string): HealthProbe {
+  if (endpoint === config.endpoint) {
+    return config;
+  }
+
+  return findOwnValue(config.endpoints, endpoint) ?? { healthPath: '/', healthAuth: true };
+}
+
+// A failure that escapes the request names the endpoint, as a bad status does.
+async function requestHealth(
+  client: HttpClient,
+  endpoint: string,
+  probe: HealthProbe,
+  isDefault: boolean,
+): Promise<HttpResponse> {
+  try {
+    return await client.request({
+      path: probe.healthPath,
+      endpoint,
+      auth: probe.healthAuth,
+    });
+  } catch (error) {
+    if (isDefault || !(error instanceof WringerError)) {
+      throw error;
+    }
+
+    const message = `${error.message} (endpoint ${endpoint})`;
+
+    const details =
+      error.hint === undefined
+        ? { message, data: error.data }
+        : { message, hint: error.hint, data: error.data };
+
+    throw new WringerError(error.code, details);
+  }
 }

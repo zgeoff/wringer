@@ -15,7 +15,7 @@ const sentSchema = z.strictObject({ sent: z.string(), isReal: z.boolean() });
 
 // A verify CLI against the app at `url`, through `transport` when given, timing out at 500 ms.
 // `local` may write; read-only `prod` grants POST /api/search; `multi` and `multi-prod` add an admin
-// endpoint; `broken`, `bare`, `inherited`, `public` and `based` each break one config rule.
+// endpoint, and `target-only` names it in the target alone; `broken`, `bare`, `inherited`, `public` and `based` each break one config rule.
 export function createHttpWringer(
   url: string,
   transport?: HttpTransport,
@@ -90,6 +90,16 @@ export function createHttpWringer(
             endpoints: { admin: { healthPath: '/api/health', healthAuth: false } },
           }),
         },
+      }),
+    )
+    .target(
+      'target-only',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: url, admin: ADMIN_API_URL }),
+        drivers: { http: () => ({}) },
       }),
     )
     .target(
