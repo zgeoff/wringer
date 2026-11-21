@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, stat } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { createSocketFolder } from './create-socket-folder.ts';

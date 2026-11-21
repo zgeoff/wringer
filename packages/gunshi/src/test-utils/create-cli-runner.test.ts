@@ -3,7 +3,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildEnvelope } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { probeProcess } from '../../../core/src/host/probe-process.ts';
 import { createCleanupRegistry } from './create-cleanup-registry.ts';

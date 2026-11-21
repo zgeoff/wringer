@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { reportSchema } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
 import { createWringerRegistry } from './create-wringer-registry.ts';

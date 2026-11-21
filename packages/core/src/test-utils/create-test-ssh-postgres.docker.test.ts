@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import { $, SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { createTestFolder } from './create-test-folder.ts';

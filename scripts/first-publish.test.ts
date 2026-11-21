@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { writeTreeFiles } from '@zgeoff/testing/helpers';
+import { writeTreeFiles } from '@zgeoff/testing/fs';
 import { $ } from 'bun';
 import type { StubNPMAnswer } from './test-utils/create-stub-npm.ts';
 import { createStubNPM } from './test-utils/create-stub-npm.ts';

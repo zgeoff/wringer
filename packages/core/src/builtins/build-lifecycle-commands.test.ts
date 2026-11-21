@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { runGit } from '../change-facts/run-git.ts';
 import { local } from '../host/local.ts';

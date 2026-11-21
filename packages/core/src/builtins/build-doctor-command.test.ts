@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setImmediate } from 'node:timers/promises';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { local } from '../host/local.ts';

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { z } from 'zod';
 import { createFixtureHTTPServer } from './test-utils/create-fixture-http-server.ts';
 import type { FixtureHTTPServerOptions } from './test-utils/create-fixture-http-server.ts';

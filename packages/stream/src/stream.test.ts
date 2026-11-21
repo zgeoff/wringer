@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { buildRunPaths } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { readStreamSlice } from './read-stream-slice.ts';
 import { streamSliceSchema } from './stream.ts';

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';

@@ -6,7 +6,7 @@ import { createTestSession } from '@wringer/core/test-utils/create-test-session.
 import { parsePublishedEnvelope } from '@wringer/core/test-utils/parse-published-envelope.ts';
 import type { PublishedEnvelopeResult } from '@wringer/core/test-utils/parse-published-envelope.ts';
 import { httpResponseSchema } from '@wringer/http';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { createShopRegistry } from '../src/create-shop-registry.ts';
 import { ordersSchema } from '../src/shop-contract.ts';

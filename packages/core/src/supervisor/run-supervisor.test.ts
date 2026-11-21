@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { local } from '../host/local.ts';

@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { killProcessGroup } from '../host/kill-process-group.ts';
 import { probeProcess } from '../host/probe-process.ts';

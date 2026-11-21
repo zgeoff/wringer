@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { createTerminalWringer } from './test-utils/create-terminal-wringer.ts';
 
 async function setupTest() {

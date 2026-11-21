@@ -5,7 +5,7 @@ import { createDirectory, local } from '@wringer/core';
 import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { readOptionalText } from '@zgeoff/std';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { appendWholeText } from '../append-whole-text.ts';
 import { readFileFrom } from '../file-source/read-file-from.ts';

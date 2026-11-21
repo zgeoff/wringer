@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';

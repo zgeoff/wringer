@@ -1,6 +1,6 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';

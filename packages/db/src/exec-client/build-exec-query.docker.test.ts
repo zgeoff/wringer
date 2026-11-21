@@ -3,7 +3,7 @@ import { rm } from 'node:fs/promises';
 import { ssh } from '@wringer/core';
 import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSSHPostgres } from '@wringer/core/test-utils/create-test-ssh-postgres.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { buildExecQuery } from './build-exec-query.ts';
