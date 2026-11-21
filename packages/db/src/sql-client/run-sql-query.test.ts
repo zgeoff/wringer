@@ -1,6 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock, runClockUntil } from '@zgeoff/testing/clock';
 import { createTempDir } from '@zgeoff/testing/fs';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
@@ -49,19 +50,15 @@ function setupTest() {
   });
 
   const cancelFailures: string[] = [];
-  const waits: number[] = [];
+  const clock = createFakeClock();
 
-  // The cancel loop's waits end at once, so a retry takes no real time.
+  // The cancel loop sleeps on the fake clock, so a retry takes no real time once a test advances it.
   const clients: SQLClients = {
     ...createSQLClients(),
     reportCancelFailure: (message) => {
       cancelFailures.push(message);
     },
-    wait: (delayMs) => {
-      waits.push(delayMs);
-
-      return Promise.resolve();
-    },
+    clock,
   };
 
   // The fake records a statement at its Parse message, which Bun.SQL skips for a statement it has
@@ -76,7 +73,7 @@ function setupTest() {
     directory,
     file,
     cancelFailures,
-    waits,
+    clock,
     stalledSockets,
     postgresStatements: postgres.statements,
     refusingPostgresStatements: refusingPostgres.statements,
@@ -318,9 +315,23 @@ test('it reports a refused cancel once, then cancels the Postgres write on a new
 
   controller.abort();
 
-  const failure = await running.catch((error: unknown) => error);
+  let settled = false;
 
-  expect({ failure, reports: ctx.cancelFailures, waits: ctx.waits }).toStrictEqual({
+  const failing = (async () => {
+    try {
+      return await running;
+    } catch (error) {
+      return error;
+    } finally {
+      settled = true;
+    }
+  })();
+
+  await runClockUntil(ctx.clock, () => settled, { maxMs: 10_000 });
+
+  const failure = await failing;
+
+  expect({ failure, reports: ctx.cancelFailures, waits: ctx.clock.delays }).toStrictEqual({
     failure: expect.objectContaining({ errno: '57014' }),
     reports: [expect.stringContaining('sorry, too many clients already')],
     waits: [100, 100],
@@ -507,9 +518,12 @@ test('it starts a second cancel attempt within the attempt and close bounds', as
 
   controller.abort();
 
-  // Two bounds of 2 s each end the first attempt and its close.
+  // Two bounds of 2 s each end the first attempt and its close, in real time. Each poll moves the
+  // fake clock past the cancel loop's retry wait, because the I/O between them is real.
   await waitFor(
     () => {
+      ctx.clock.advance(100);
+
       invariant(ctx.stalledSockets.accepted >= 2, 'No second cancel attempt has started yet.');
     },
     { timeoutMs: 4800 },

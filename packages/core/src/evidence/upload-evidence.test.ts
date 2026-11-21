@@ -1,12 +1,12 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { createTempDir } from '@zgeoff/testing/fs';
 import type { Evidence } from '../envelope/envelope.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
 import { createRepoState } from '../state/create-repo-state.ts';
-import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createFileHostStandIn } from '../test-utils/create-file-host-stand-in.ts';
 import type { FileHostStandInOptions } from '../test-utils/create-file-host-stand-in.ts';
 import { seedEvidenceFile } from '../test-utils/seed-evidence-file.ts';
@@ -22,11 +22,9 @@ async function setupTest(hostOptions: Partial<FileHostStandInOptions> = {}) {
   await mkdir(features, { recursive: true });
 
   const host = createFileHostStandIn({ token, ...hostOptions });
-  const clock = buildStubClock();
+  const clock = createFakeClock({ startMs: Date.parse('2026-11-13T00:00:00.000Z') });
   const state = createRepoState(root, '.wringer');
   const secrets = createSecretSet();
-
-  clock.set('2026-11-13T00:00:00.000Z');
 
   const createServices = (env: Record<string, string | undefined>) => ({
     uploader: createHostUploader({ urlEnv: 'URL', tokenEnv: 'FILE_ACCESS' }, { env, fetch }),
@@ -35,7 +33,7 @@ async function setupTest(hostOptions: Partial<FileHostStandInOptions> = {}) {
     root,
     stateDir: join(root, '.wringer'),
     secrets,
-    now: clock.now,
+    now: () => new Date(clock.now()),
     signal: AbortSignal.timeout(10_000),
   });
 
@@ -113,7 +111,7 @@ test('it reuses a link with 7 days left and sends nothing', async () => {
 
   await ctx.upload([ctx.buildItem(evidence)]);
 
-  ctx.clock.set('2026-12-06T00:00:00.000Z');
+  ctx.clock.advance(23 * 24 * 60 * 60 * 1000);
 
   const outcomes = await ctx.upload([ctx.buildItem(evidence)]);
 
@@ -132,7 +130,7 @@ test('it uploads a file again when its link has less than 7 days left', async ()
 
   await ctx.upload([ctx.buildItem(evidence)]);
 
-  ctx.clock.set('2026-12-06T00:00:01.000Z');
+  ctx.clock.advance(23 * 24 * 60 * 60 * 1000 + 1);
 
   await ctx.upload([ctx.buildItem(evidence)]);
 

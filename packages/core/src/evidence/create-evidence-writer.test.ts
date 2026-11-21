@@ -1,18 +1,18 @@
 import { expect, test } from 'bun:test';
 import { readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { createTempDir } from '@zgeoff/testing/fs';
 import type { Evidence } from '../envelope/envelope.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
-import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { seedEvidenceFolder } from '../test-utils/seed-evidence-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import { pickContentType } from './pick-content-type.ts';
 
 function setupTest() {
   const root = createTempDir('evidence-writer').path;
-  const clock = buildStubClock();
+  const clock = createFakeClock();
   const secrets = createSecretSet();
 
   secrets.add({ name: 'SHOP_API_TOKEN', value: 'planted-shop-token', origin: 'declared' });
@@ -20,7 +20,7 @@ function setupTest() {
   const evidence = createEvidenceWriter({
     root,
     directory: join(root, '.wringer', 'evidence'),
-    now: clock.now,
+    now: () => new Date(clock.now()),
     files: createNodeRepoHost(),
     secrets,
   });
@@ -37,7 +37,7 @@ function setupTest() {
 test('it writes a file under a stamped name, relative to the root', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const evidence = await ctx.evidence.writer.writeFile('http', 'get.json', '{"ok":true}');
 
@@ -209,7 +209,7 @@ test('it refuses to add a file that does not exist', async () => {
 test('it keeps both files when two writes in one millisecond share a name', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const written = await Promise.all([
     ctx.evidence.writer.writeFile('http', 'get.json', 'first'),

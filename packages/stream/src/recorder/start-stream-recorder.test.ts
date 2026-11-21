@@ -2,9 +2,9 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, open, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
-import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
 import { readOptionalText } from '@zgeoff/std';
 import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { appendWholeText } from '../append-whole-text.ts';
@@ -32,7 +32,7 @@ function setupTest() {
     readFileFrom(path, from, limitBytes, (file) => open(file, 'r')),
   );
 
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   return {
     directory,
@@ -86,7 +86,7 @@ function setupTest() {
         directory: streams,
         host: local(),
         access: 'read-only',
-        now: clock.now,
+        now: () => new Date(clock.now()),
         createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
         readFileFrom: readFileCalls,
@@ -151,7 +151,7 @@ test('it records the lines a command source printed as the recorder stopped', as
 test('it records each line of a command source with the time it arrived', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted', 'ready'] } });
 
@@ -171,7 +171,7 @@ test('it records each line of a command source with the time it arrived', async 
 test('it records the lines appended to a file source', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -197,7 +197,7 @@ test('it records the lines appended to a file source', async () => {
 test('it records the lines a file source gained just before the recorder stopped', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -221,7 +221,7 @@ test('it records the lines a file source gained just before the recorder stopped
 test('it records the rest of a file source after a read that stopped short of its end', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -258,7 +258,7 @@ test('it ends its stop when a file source never reaches its end', async () => {
 test('it records a longer file that replaced a file source from its start, without the old unfinished line', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
   const replacement = join(ctx.directory, 'app.log.new');
@@ -303,7 +303,7 @@ test('it records a file source that held a large log before the start in reads o
 test('it caps a file source line that arrives over several reads at 4096 characters', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -325,7 +325,7 @@ test('it caps a file source line that arrives over several reads at 4096 charact
 test('it caps a long line at 4096 characters', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
 
@@ -418,7 +418,7 @@ test('it fails its stop with an environment error when a file source cannot be r
 test('it keeps a batch that failed to write and writes it once the disk recovers', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await mkdir(ctx.streamPath('app'), { recursive: true });
 

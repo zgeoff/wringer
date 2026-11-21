@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { mkdir, open } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
+import { createFakeClock } from '@zgeoff/testing/clock';
 import { createTempDir } from '@zgeoff/testing/fs';
 import { readStreamSlice } from './read-stream-slice.ts';
 import { buildStreamSeeder } from './test-utils/build-stream-seeder.ts';
@@ -10,12 +10,12 @@ function setupTest() {
   const directory = createTempDir('stream-slice').path;
   const streams = join(directory, 'streams');
   const path = join(streams, 'app.ndjson');
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   return {
     path,
     clock,
-    seed: buildStreamSeeder({ streams, now: clock.now }),
+    seed: buildStreamSeeder({ streams, now: () => new Date(clock.now()) }),
     read: (from: number, maxBytes = 64 * 1024) =>
       readStreamSlice({ path, from, maxBytes }, (file) => open(file, 'r')),
   };
@@ -40,7 +40,7 @@ test('it rejects a stream path that is a folder with an environment error', asyn
 test('it reads every record and returns the end of the file as the cursor', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
@@ -59,7 +59,7 @@ test('it reads every record and returns the end of the file as the cursor', asyn
 test('it stops at the last whole record within maxBytes and says there is more', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
@@ -78,7 +78,7 @@ test('it stops at the last whole record within maxBytes and says there is more',
 test('it starts at the next record when the cursor lands inside one', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await ctx.seed.stream('app', ['booted', 'order 7 placed']);
 
@@ -90,7 +90,7 @@ test('it starts at the next record when the cursor lands inside one', async () =
 test('it starts over at 0 when the cursor is past the end of the file', async () => {
   const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await ctx.seed.stream('app', ['booted']);
 
