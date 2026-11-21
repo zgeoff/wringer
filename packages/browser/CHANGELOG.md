@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.2.0](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.1.7...@wringer/browser@0.2.0) (2026-11-21)
+
+### ⚠ BREAKING CHANGES
+
+- **browser:** report downloads and find elements by shown text
+  ([#240](https://github.com/zgeoff/wringer/issues/240))
+
+### Features
+
+- **browser:** add check, press, hover, tabs and label locators
+  ([#236](https://github.com/zgeoff/wringer/issues/236))
+  ([bc87b81](https://github.com/zgeoff/wringer/commit/bc87b814a813be035a2b0b5f752ed1df7fa9d162))
+- **browser:** report downloads and find elements by shown text
+  ([#240](https://github.com/zgeoff/wringer/issues/240))
+  ([837af34](https://github.com/zgeoff/wringer/commit/837af34ae011e6c376294d13dd803eb960301afb))
+- **browser:** wait for a text in snapshot ([#238](https://github.com/zgeoff/wringer/issues/238))
+  ([91db679](https://github.com/zgeoff/wringer/commit/91db679dc1aa1f527b3f7d940166f14e0c9eead7))
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.0
+  - peerDependencies
+    - @wringer/core bumped to 0.4.0
+
 ## [0.1.7](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.1.6...@wringer/browser@0.1.7) (2026-11-20)
 
 ### Dependencies

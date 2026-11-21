@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.4.0](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.3...@wringer/core@0.4.0) (2026-11-21)
+
+### ⚠ BREAKING CHANGES
+
+- **core:** the publish data's pr is null for a dry run on a branch with no open PR.
+
+### Features
+
+- **core:** show one line per changed feature in the report
+  ([#234](https://github.com/zgeoff/wringer/issues/234))
+  ([bf3e817](https://github.com/zgeoff/wringer/commit/bf3e8177aa2f64bad1cfaf65047c71213f53d72c))
+- **gunshi:** read declared secrets from a source once at up
+  ([#237](https://github.com/zgeoff/wringer/issues/237))
+  ([c152bbe](https://github.com/zgeoff/wringer/commit/c152bbecb0b299a8c5833b5d30e58d1fc9c18480))
+
+### Bug Fixes
+
+- **core:** fit the supervisor socket in a long tmpdir
+  ([#228](https://github.com/zgeoff/wringer/issues/228))
+  ([904bb06](https://github.com/zgeoff/wringer/commit/904bb06046fe9a1a6385666d6de5e0e24d2234b2))
+- **core:** let publish --dry-run run with no open pr
+  ([#231](https://github.com/zgeoff/wringer/issues/231))
+  ([59d4d28](https://github.com/zgeoff/wringer/commit/59d4d28834f7513c988fa6ada3e986f33b008a64))
+- **core:** link evidence on a plain-http file host
+  ([#230](https://github.com/zgeoff/wringer/issues/230))
+  ([430e5be](https://github.com/zgeoff/wringer/commit/430e5bec9a72b62404c194299cba7c9135ec405f))
+- **core:** treat .yml as text evidence and refuse negated globs
+  ([#233](https://github.com/zgeoff/wringer/issues/233))
+  ([27c4f1e](https://github.com/zgeoff/wringer/commit/27c4f1e5f91e0092d52c9667c8d678be2d44c93b))
+- remove the causes of the verify guide's mistake lists
+  ([#224](https://github.com/zgeoff/wringer/issues/224))
+  ([272c96e](https://github.com/zgeoff/wringer/commit/272c96ec0533cd90867dcdd4510f384f1f2e7bc4))
+
 ## [0.3.3](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.2...@wringer/core@0.3.3) (2026-11-20)
 
 ### Bug Fixes
