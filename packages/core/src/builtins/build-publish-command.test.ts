@@ -39,7 +39,7 @@ async function setupTest() {
   const env = { WRINGER_UPLOAD_URL: fileHost.url, WRINGER_UPLOAD_TOKEN: token };
   const base = createShopWringer();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: base, env });
+  const shop = await createTestSession({ wringer: base, env });
 
   const buildWringer = (uploader: EvidenceUploader | undefined): Wringer => ({
     ...base,

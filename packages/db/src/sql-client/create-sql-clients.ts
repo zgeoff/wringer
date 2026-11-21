@@ -1,4 +1,5 @@
 import { Database } from 'bun:sqlite';
+import { systemClock } from '@zgeoff/std';
 import { SQL } from 'bun';
 import type { SQLClients } from './run-sql-query.ts';
 
@@ -17,7 +18,6 @@ export function createSQLClients(): SQLClients {
     reportCancelFailure: (message) => {
       process.stderr.write(`${message}\n`);
     },
-    now: () => Date.now(),
-    wait: (delayMs) => Bun.sleep(delayMs),
+    clock: systemClock,
   };
 }

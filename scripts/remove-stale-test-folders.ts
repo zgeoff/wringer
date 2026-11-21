@@ -1,6 +1,7 @@
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readRunFolderPrefix } from '@zgeoff/testing/fs';
 import { probeProcess } from '../packages/core/src/host/probe-process.ts';
-import { readPIDNamespace } from '../packages/core/src/host/read-pid-namespace.ts';
 import type { FileSystem } from './ci/file-system.ts';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 
@@ -11,7 +12,8 @@ export interface StaleTestFoldersRequest {
   readonly probeProcess: (pid: number) => boolean;
 }
 
-// A test run that the runner kills skips its cleanup and leaves its temp folders behind.
+// A test run that the runner kills skips its cleanup and leaves its temp folders behind. The sweep
+// reads the temp folder, where the kit makes them.
 export async function removeStaleTestFolders(
   request: StaleTestFoldersRequest,
 ): Promise<readonly string[]> {
@@ -33,27 +35,17 @@ export interface TestFolder {
   readonly path: string;
 }
 
-const skippedFolderNames = new Set(['.git', '.worktrees', 'node_modules', 'dist']);
-
+// The kit's test folders sit directly in the temp folder, each named with the process and the PID
+// namespace of the run that made it.
 export async function readTestFolders(
   fileSystem: Pick<FileSystem, 'readFolderNames'>,
   directory: string,
 ): Promise<readonly TestFolder[]> {
   const names = await fileSystem.readFolderNames(directory);
 
-  const folders = names
-    .filter((name) => !skippedFolderNames.has(name))
+  return names
+    .filter((name) => parseTestFolderOwner(name) !== null)
     .map((name) => ({ name, path: join(directory, name) }));
-
-  const found = folders.filter((folder) => folder.name.startsWith('.test-'));
-
-  const nested = await Promise.all(
-    folders
-      .filter((folder) => !folder.name.startsWith('.test-'))
-      .map((folder) => readTestFolders(fileSystem, folder.path)),
-  );
-
-  return [...found, ...nested.flat()];
 }
 
 // The PIDs worth a liveness check: those of folders from this namespace only.
@@ -70,7 +62,7 @@ export interface TestFolderOwner {
   readonly pid: number;
 }
 
-const testFolderPattern = /^\.test-n(?<namespace>\d+|host)-p(?<pid>\d+)-/v;
+const testFolderPattern = /pid(?<pid>\d+)-ns(?<namespace>\d+|host|unknown)-/v;
 
 export function parseTestFolderOwner(name: string): TestFolderOwner | null {
   const groups = testFolderPattern.exec(name)?.groups;
@@ -80,6 +72,17 @@ export function parseTestFolderOwner(name: string): TestFolderOwner | null {
   }
 
   return { namespace: groups['namespace'] ?? '', pid: Number(groups['pid']) };
+}
+
+// The owner that the kit puts in the name of each folder this process makes.
+export function readTestRunOwner(): TestFolderOwner {
+  const owner = parseTestFolderOwner(readRunFolderPrefix(''));
+
+  if (owner === null) {
+    throw new Error('The kit names its test folders after the process and its PID namespace.');
+  }
+
+  return owner;
 }
 
 export interface LiveProcesses {
@@ -107,8 +110,8 @@ export function pickStaleTestFolders(
 
 if (import.meta.main) {
   const removed = await removeStaleTestFolders({
-    root: join(import.meta.dir, '..'),
-    namespace: readPIDNamespace(),
+    root: tmpdir(),
+    namespace: readTestRunOwner().namespace,
     fileSystem: nodeFileSystem,
     probeProcess,
   });

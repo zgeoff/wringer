@@ -32,6 +32,7 @@
     "typecheck": "tsrs --fast --noEmit"
   },
   "dependencies": {
+    "@zgeoff/std": "catalog:",
     "playwright-core": "catalog:",
     "tiny-invariant": "catalog:",
     "xstate": "catalog:"

@@ -1,17 +1,17 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import type { SupervisorRequestHandler } from './answer-supervisor-connection.ts';
 import { callSupervisor } from './call-supervisor.ts';
 import { listenSupervisorSocket } from './listen-supervisor-socket.ts';
 
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'supervisor-socket');
+  const directory = createTempDir('supervisor-socket').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
@@ -36,7 +36,7 @@ async function setupTest() {
 }
 
 test('it answers a request with the result of its handler', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.listen((request) => Promise.resolve({ method: request.method }));
 
@@ -46,8 +46,7 @@ test('it answers a request with the result of its handler', async () => {
 });
 
 test('it aborts the handler signal when the caller stops waiting', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const started = Promise.withResolvers<undefined>();
   const aborted = Promise.withResolvers<boolean>();
 

@@ -1,7 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { z } from 'zod';
 import { createFixtureHTTPServer } from './test-utils/create-fixture-http-server.ts';
 import type { FixtureHTTPServerOptions } from './test-utils/create-fixture-http-server.ts';
@@ -20,7 +20,7 @@ function setupTest() {
     startSession: async (servers: MCPServers) => {
       const wringer = createMCPWringer(servers);
 
-      const shop = await createTestSession({ parent: import.meta.dir, wringer });
+      const shop = await createTestSession({ wringer });
 
       const run = (target: string, path: readonly string[], args: unknown = {}) =>
         shop.dispatch(wringer, path, args, { ...shop.session, target });

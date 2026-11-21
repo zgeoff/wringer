@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { $, SQL } from 'bun';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from './create-test-folder.ts';
 import { createTestSSHPostgres } from './create-test-ssh-postgres.ts';
 
 // One stack frees what each test took, in the reverse of the order it took it: the connection,
@@ -13,7 +13,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'create-test-ssh-postgres');
+  const directory = createTempDir('create-test-ssh-postgres').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 

@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { createTestPostgres } from '../test-utils/create-test-postgres.ts';

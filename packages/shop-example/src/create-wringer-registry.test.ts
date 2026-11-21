@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { reportSchema } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
 import { createWringerRegistry } from './create-wringer-registry.ts';
@@ -11,7 +11,7 @@ import { createWringerRegistry } from './create-wringer-registry.ts';
 async function setupTest() {
   const registry = createWringerRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   return {
     registry,

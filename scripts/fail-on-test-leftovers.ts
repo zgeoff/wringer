@@ -1,16 +1,15 @@
 import { afterAll } from 'bun:test';
-import { join } from 'node:path';
-import { readPIDNamespace } from '../packages/core/src/host/read-pid-namespace.ts';
-import { removeTestFolder } from '../packages/core/src/test-utils/remove-test-folder.ts';
+import { tmpdir } from 'node:os';
 import { nodeFileSystem } from './ci/node-file-system.ts';
+import { readTestRunOwner } from './remove-stale-test-folders.ts';
 import { readProcesses, runTestLeftoversCheck, stopProcess } from './run-test-leftovers-check.ts';
 
 // A hook in the test preload runs once, after the last test file of the run.
 afterAll(async () => {
   const leftovers = await runTestLeftoversCheck({
-    root: join(import.meta.dir, '..'),
-    owner: { namespace: readPIDNamespace(), pid: process.pid },
-    fileSystem: { ...nodeFileSystem, removePath: removeTestFolder },
+    root: tmpdir(),
+    owner: readTestRunOwner(),
+    fileSystem: nodeFileSystem,
     readProcesses,
     stopProcess,
     exitWaitMs: 1500,

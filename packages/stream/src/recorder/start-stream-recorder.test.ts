@@ -2,10 +2,10 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { appendFile, mkdir, open, rename, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createDirectory, local } from '@wringer/core';
-import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { readOptionalText } from '@zgeoff/std';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createFakeClock } from '@zgeoff/testing/clock';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { appendWholeText } from '../append-whole-text.ts';
 import { readFileFrom } from '../file-source/read-file-from.ts';
@@ -16,12 +16,12 @@ import type { StreamSource } from './start-stream-recorder.ts';
 
 // The recorder writes into the test folder until it stops, so the stack stops every recorder
 // before it removes the folder.
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'stream-recorder');
+  const directory = createTempDir('stream-recorder').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
@@ -32,7 +32,7 @@ async function setupTest() {
     readFileFrom(path, from, limitBytes, (file) => open(file, 'r')),
   );
 
-  const clock = buildStubClock();
+  const clock = createFakeClock();
 
   return {
     directory,
@@ -86,7 +86,7 @@ async function setupTest() {
         directory: streams,
         host: local(),
         access: 'read-only',
-        now: clock.now,
+        now: () => new Date(clock.now()),
         createDirectory: createDirectoryCalls,
         appendText: appendWholeText,
         readFileFrom: readFileCalls,
@@ -111,7 +111,7 @@ async function setupTest() {
 }
 
 test('it creates its folder through the folder creator it is given', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.start({});
 
@@ -119,8 +119,7 @@ test('it creates its folder through the folder creator it is given', async () =>
 });
 
 test('it records the lines a command source printed as the recorder stopped', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const gate = join(ctx.directory, 'gate');
 
   const recorder = await ctx.start({
@@ -150,9 +149,9 @@ test('it records the lines a command source printed as the recorder stopped', as
 });
 
 test('it records each line of a command source with the time it arrived', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'booted', 'ready'] } });
 
@@ -170,9 +169,9 @@ test('it records each line of a command source with the time it arrived', async 
 });
 
 test('it records the lines appended to a file source', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -196,9 +195,9 @@ test('it records the lines appended to a file source', async () => {
 });
 
 test('it records the lines a file source gained just before the recorder stopped', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -220,9 +219,9 @@ test('it records the lines a file source gained just before the recorder stopped
 });
 
 test('it records the rest of a file source after a read that stopped short of its end', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -246,8 +245,7 @@ test('it records the rest of a file source after a read that stopped short of it
 });
 
 test('it ends its stop when a file source never reaches its end', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const log = join(ctx.directory, 'app.log');
 
   ctx.feedEndlessFile();
@@ -258,9 +256,9 @@ test('it ends its stop when a file source never reaches its end', async () => {
 });
 
 test('it records a longer file that replaced a file source from its start, without the old unfinished line', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
   const replacement = join(ctx.directory, 'app.log.new');
@@ -285,8 +283,7 @@ test('it records a longer file that replaced a file source from its start, witho
 });
 
 test('it records a file source that held a large log before the start in reads of 64 KiB at most', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const log = join(ctx.directory, 'app.log');
 
   await writeFile(log, 'order placed for the spring catalogue\n'.repeat(5000));
@@ -304,9 +301,9 @@ test('it records a file source that held a large log before the start in reads o
 });
 
 test('it caps a file source line that arrives over several reads at 4096 characters', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const log = join(ctx.directory, 'app.log');
 
@@ -326,9 +323,9 @@ test('it caps a file source line that arrives over several reads at 4096 charact
 });
 
 test('it caps a long line at 4096 characters', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', 'x'.repeat(10_000)] } });
 
@@ -346,8 +343,7 @@ test('it caps a long line at 4096 characters', async () => {
 });
 
 test('it drops the lines past the pending limit and records how many it dropped', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const lines = Array.from({ length: 50 }, (_, index) => `line ${index}`);
 
   const recorder = await ctx.start({ app: { command: ['printf', '%s\n', ...lines] } }, 2);
@@ -366,7 +362,7 @@ test('it drops the lines past the pending limit and records how many it dropped'
 });
 
 test('it reports a running source, an exited source and a failed source', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const recorder = await ctx.start({
     tail: { command: ['sleep', '60'] },
@@ -395,7 +391,7 @@ test('it reports a running source, an exited source and a failed source', async 
 });
 
 test('it fails its stop with an environment error when records never reach the disk', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await mkdir(ctx.streamPath('app'), { recursive: true });
 
@@ -409,8 +405,7 @@ test('it fails its stop with an environment error when records never reach the d
 });
 
 test('it fails its stop with an environment error when a file source cannot be read', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const log = join(ctx.directory, 'app.log');
 
   await mkdir(log);
@@ -421,9 +416,9 @@ test('it fails its stop with an environment error when a file source cannot be r
 });
 
 test('it keeps a batch that failed to write and writes it once the disk recovers', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  ctx.clock.set('2026-03-01T09:30:00.000Z');
+  ctx.clock.advance(Date.parse('2026-03-01T09:30:00.000Z'));
 
   await mkdir(ctx.streamPath('app'), { recursive: true });
 
@@ -443,7 +438,7 @@ test('it keeps a batch that failed to write and writes it once the disk recovers
 });
 
 test('it reports a source as running again once a write succeeds after one that failed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await mkdir(ctx.streamPath('app'), { recursive: true });
 

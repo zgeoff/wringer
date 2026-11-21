@@ -1,13 +1,11 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from './create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { seedEvidenceFile } from './seed-evidence-file.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'seed-evidence-file');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('seed-evidence-file').path;
 
   return {
     root,
@@ -16,7 +14,8 @@ async function setupTest() {
 }
 
 test('it returns text evidence that records the file it wrote', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const evidence = await seedEvidenceFile(ctx.root, 'receipt.txt', 'paid 12');
 
   expect(evidence).toStrictEqual({
@@ -28,7 +27,8 @@ test('it returns text evidence that records the file it wrote', async () => {
 });
 
 test('it writes the content under the features folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const evidence = await seedEvidenceFile(ctx.root, 'receipt.txt', 'paid 12');
   const text = await ctx.readText(evidence.path);
 
@@ -36,7 +36,8 @@ test('it writes the content under the features folder', async () => {
 });
 
 test('it records an opaque scrub when asked for one', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const evidence = await seedEvidenceFile(ctx.root, 'page.png', 'png bytes', 'opaque');
 
   expect(evidence.scrub).toBe('opaque');

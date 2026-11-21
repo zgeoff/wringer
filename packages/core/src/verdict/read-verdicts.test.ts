@@ -1,17 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createRepoState } from '../state/create-repo-state.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedOverCapDone } from '../test-utils/seed-over-cap-done.ts';
 import { readVerdicts } from './read-verdicts.ts';
 import type { Verdict } from './report-schema.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'read-verdicts');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
-
+function setupTest() {
+  const root = createTempDir('read-verdicts').path;
   const state = createRepoState(root, '.wringer');
 
   return {
@@ -22,7 +18,7 @@ async function setupTest() {
 }
 
 test('it reads a verdict whose data went to a payload file over the cap', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const verdict: Verdict = {
     feature: 'checkout',
@@ -43,7 +39,7 @@ test('it reads a verdict whose data went to a payload file over the cap', async 
 });
 
 test('it reads a verdict recorded before version 2 as missing', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.seed.overCapDone({
     feature: 'checkout',

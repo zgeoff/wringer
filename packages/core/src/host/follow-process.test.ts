@@ -1,16 +1,14 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { expect, mock, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { followProcess } from './follow-process.ts';
 import { probeProcess } from './probe-process.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'follow-process');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('follow-process').path;
 
   return {
     pidPath: join(directory, 'follow.pid'),
@@ -24,8 +22,7 @@ async function setupTest() {
 }
 
 test('it hands each stdout line to onLine and resolves with the exit code', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const lines: string[] = [];
 
   const followed = await ctx.followProcess({
@@ -43,7 +40,7 @@ test('it hands each stdout line to onLine and resolves with the exit code', asyn
 });
 
 test('it keeps only the last 4096 characters of the command stderr', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const followed = await ctx.followProcess({
     argv: ['sh', '-c', String.raw`head -c 5000 /dev/zero | tr "\0" a >&2; printf "%s" "-last" >&2`],
@@ -54,8 +51,8 @@ test('it keeps only the last 4096 characters of the command stderr', async () =>
   expect(followed.stderr).toBe(`${'a'.repeat(4091)}-last`);
 });
 
-test('it stops a command that never ends when the signal fires', async () => {
-  const ctx = await setupTest();
+test('it stops a command that never ends when the signal fires', () => {
+  const ctx = setupTest();
 
   const controller = new AbortController();
 
@@ -73,7 +70,7 @@ test('it stops a command that never ends when the signal fires', async () => {
 });
 
 test('it stops a child the command started when the signal fires', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const controller = new AbortController();
 
@@ -92,8 +89,8 @@ test('it stops a child the command started when the signal fires', async () => {
   expect(performance.now() - startedMs).toBeLessThan(5000);
 });
 
-test('it stops a command that closed its stdout and runs on when the signal fires', async () => {
-  const ctx = await setupTest();
+test('it stops a command that closed its stdout and runs on when the signal fires', () => {
+  const ctx = setupTest();
 
   const followed = ctx.followProcess({
     argv: ['sh', '-c', 'exec 1>&-; exec sleep 60'],
@@ -105,8 +102,7 @@ test('it stops a command that closed its stdout and runs on when the signal fire
 });
 
 test('it ends when the command exits, though a child it left running holds stdout', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const startedMs = performance.now();
 
   await ctx.followProcess({
@@ -119,7 +115,7 @@ test('it ends when the command exits, though a child it left running holds stdou
 });
 
 test('it stops a child the command left running when the command exits', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.followProcess({
     argv: ['sh', '-c', 'sleep 60 >/dev/null 2>&1 & echo $! > "$0"', ctx.pidPath],
@@ -140,7 +136,7 @@ test('it stops a child the command left running when the command exits', async (
 });
 
 test('it stops the command and rethrows when onLine throws', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const onLine = mock<(line: string) => void>(() => {
     throw new Error('the shelf is full');
@@ -161,8 +157,8 @@ test('it stops the command and rethrows when onLine throws', async () => {
   });
 });
 
-test('it rejects a command that is not on the PATH', async () => {
-  const ctx = await setupTest();
+test('it rejects a command that is not on the PATH', () => {
+  const ctx = setupTest();
 
   expect(
     ctx.followProcess({

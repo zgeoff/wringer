@@ -8,14 +8,6 @@ function setupTest() {
   return { appURL: app.url.href, send: (url: string) => fetch(url) };
 }
 
-test('it answers a request to a host that no handler matches with 500', async () => {
-  const ctx = setupTest();
-
-  const response = await ctx.send('https://elsewhere.example/');
-
-  expect(response.status).toBe(500);
-});
-
 test('it lets a request to a loopback app through', async () => {
   const ctx = setupTest();
 

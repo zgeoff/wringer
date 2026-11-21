@@ -2,15 +2,15 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock } from '@zgeoff/std/with-file-lock';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createLockHolder } from './create-lock-holder.ts';
-import { createTestFolder } from './create-test-folder.ts';
 
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'create-lock-holder');
+  const directory = createTempDir('create-lock-holder').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
@@ -29,7 +29,8 @@ async function setupTest() {
 }
 
 test('it keeps the lock from this process while it runs', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const holder = await ctx.holdLock();
   const result = await ctx.tryLock();
 
@@ -37,7 +38,8 @@ test('it keeps the lock from this process while it runs', async () => {
 });
 
 test('it frees the lock once it is killed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const holder = await ctx.holdLock();
 
   await holder.kill();

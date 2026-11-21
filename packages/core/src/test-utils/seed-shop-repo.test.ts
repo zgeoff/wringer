@@ -1,13 +1,10 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runGit } from '../change-facts/run-git.ts';
-import { createTestFolder } from './create-test-folder.ts';
 import { seedShopRepo } from './seed-shop-repo.ts';
 
 async function setupTest() {
-  const repo = await createTestFolder(import.meta.dir, 'seed-shop-repo');
-
-  onTestFinished(() => rm(repo, { recursive: true, force: true }));
+  const repo = createTempDir('seed-shop-repo').path;
 
   await runGit({ cwd: repo, args: ['init', '--quiet', '--initial-branch=main'] });
   await runGit({ cwd: repo, args: ['config', 'user.email', 'tester@example.com'] });

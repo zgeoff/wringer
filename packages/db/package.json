@@ -31,6 +31,7 @@
     "typecheck": "tsrs --fast --noEmit"
   },
   "dependencies": {
+    "@zgeoff/std": "catalog:",
     "ts-pattern": "catalog:"
   },
   "devDependencies": {

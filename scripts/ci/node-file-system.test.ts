@@ -1,20 +1,16 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { nodeFileSystem } from './node-file-system.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'node-file-system');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('node-file-system').path;
 
   return { directory };
 }
 
 test('it writes a file in folders it creates and reads it back as text and bytes', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const path = join(ctx.directory, 'kettle/spout/water.txt');
 
   await nodeFileSystem.writeText(path, 'hot\n');
@@ -28,8 +24,7 @@ test('it writes a file in folders it creates and reads it back as text and bytes
 });
 
 test('it lists a folder it created and probes a path before and after its removal', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const folder = join(ctx.directory, 'cups/blue');
 
   await nodeFileSystem.createDirectory(folder);
@@ -47,7 +42,7 @@ test('it lists a folder it created and probes a path before and after its remova
 });
 
 test('it lists only the folders in a folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await nodeFileSystem.createDirectory(join(ctx.directory, 'cups'));
   await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
@@ -58,7 +53,7 @@ test('it lists only the folders in a folder', async () => {
 });
 
 test('it rejects a probe of a path below a file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await nodeFileSystem.writeText(join(ctx.directory, 'tea.txt'), 'green\n');
 
@@ -68,7 +63,7 @@ test('it rejects a probe of a path below a file', async () => {
 });
 
 test('it removes a missing path with no error', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await nodeFileSystem.removePath(join(ctx.directory, 'teapot'));
 

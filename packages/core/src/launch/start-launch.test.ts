@@ -2,12 +2,12 @@ import { expect, mock, onTestFinished, test } from 'bun:test';
 import { once } from 'node:events';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { killProcessGroup } from '../host/kill-process-group.ts';
 import { probeProcess } from '../host/probe-process.ts';
 import { createSetsid } from '../test-utils/create-setsid.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { WringerError } from '../wringer-error.ts';
 import { readLaunchHost } from './read-launch-host.ts';
 import type { LaunchHost } from './read-launch-host.ts';
@@ -21,7 +21,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'start-launch');
+  const directory = createTempDir('start-launch').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 

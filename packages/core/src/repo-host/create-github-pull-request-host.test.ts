@@ -1,8 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
+import { createStubBin } from '@zgeoff/testing/bin';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runGit } from '../change-facts/run-git.ts';
 import { runProcess } from '../host/run-process.ts';
 import { buildStandInPull } from '../test-utils/build-stand-in-pull.ts';
-import { createFakeGH } from '../test-utils/create-fake-gh.ts';
 import { createGitHubStandIn } from '../test-utils/create-github-stand-in.ts';
 import type { StandInPull } from '../test-utils/create-github-stand-in.ts';
 import { createTestRepo } from '../test-utils/create-test-repo.ts';
@@ -17,9 +18,11 @@ interface SetupOptions {
 async function setupTest(options: SetupOptions = {}) {
   const token = 'ghp_standintoken0123456789';
 
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   const standIn = createGitHubStandIn({
     token,
@@ -221,7 +224,12 @@ test('it sends the GITHUB_TOKEN as a bearer token', async () => {
 
 test('it takes the token from `gh auth token` when GITHUB_TOKEN is unset', async () => {
   const ctx = await setupTest({ pulls: [buildStandInPull()], env: { GITHUB_TOKEN: '' } });
-  const path = await createFakeGH(ctx.root, `echo ${ctx.token}`);
+
+  const bin = createTempDir('gh').path;
+
+  createStubBin(bin, 'gh', { script: `#!/bin/sh\necho ${ctx.token}\n` });
+
+  const path = `${bin}:${process.env['PATH'] ?? ''}`;
 
   const host = createGitHubPullRequestHost({
     root: ctx.root,
@@ -238,7 +246,14 @@ test('it takes the token from `gh auth token` when GITHUB_TOKEN is unset', async
 
 test('it fails without a token when gh exits non-zero, and never leaks its output', async () => {
   const ctx = await setupTest({ pulls: [buildStandInPull()] });
-  const path = await createFakeGH(ctx.root, `echo ${ctx.token}; echo ${ctx.token} >&2; exit 1`);
+
+  const bin = createTempDir('gh').path;
+
+  createStubBin(bin, 'gh', {
+    script: `#!/bin/sh\necho ${ctx.token}; echo ${ctx.token} >&2; exit 1\n`,
+  });
+
+  const path = `${bin}:${process.env['PATH'] ?? ''}`;
 
   const host = createGitHubPullRequestHost({
     root: ctx.root,

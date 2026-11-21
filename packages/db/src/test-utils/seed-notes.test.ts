@@ -1,15 +1,11 @@
 import { Database } from 'bun:sqlite';
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { seedNotes } from './seed-notes.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'seed-notes');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('seed-notes').path;
   const file = join(directory, 'shop.db');
 
   return {
@@ -22,8 +18,8 @@ async function setupTest() {
   };
 }
 
-test('it writes one numbered note row per text, in order', async () => {
-  const ctx = await setupTest();
+test('it writes one numbered note row per text, in order', () => {
+  const ctx = setupTest();
 
   seedNotes(ctx.file, ['pay', 'ship']);
 
@@ -33,8 +29,8 @@ test('it writes one numbered note row per text, in order', async () => {
   ]);
 });
 
-test('it creates an empty notes table for no texts', async () => {
-  const ctx = await setupTest();
+test('it creates an empty notes table for no texts', () => {
+  const ctx = setupTest();
 
   seedNotes(ctx.file, []);
 

@@ -33,6 +33,7 @@
   "devDependencies": {
     "@mswjs/interceptors": "catalog:",
     "@wringer/core": "workspace:*",
+    "@zgeoff/testing": "catalog:",
     "msw": "catalog:",
     "zod": "catalog:"
   },

@@ -1,15 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { capData } from './cap-data.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'cap-data');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('cap-data').path;
 
   return {
     capData: (data: unknown) =>
@@ -28,7 +26,8 @@ async function setupTest() {
 }
 
 test('it keeps data under the cap in the envelope', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const capped = await ctx.capData({ shelf: 'apples' });
 
   expect(capped).toStrictEqual({
@@ -40,8 +39,7 @@ test('it keeps data under the cap in the envelope', async () => {
 });
 
 test('it moves data over 32768 bytes to a payload file and keeps its path', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const shelf = 'a'.repeat(40_000);
 
   const capped = await ctx.capData({ shelf });
@@ -54,7 +52,7 @@ test('it moves data over 32768 bytes to a payload file and keeps its path', asyn
 });
 
 test('it carries a failure with no data or evidence when the payload file cannot be written', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.blockPayloadFolder();
 
@@ -69,7 +67,8 @@ test('it carries a failure with no data or evidence when the payload file cannot
 });
 
 test('it carries a failure when the data does not serialize', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const capped = await ctx.capData({ count: 1n });
 
   expect(capped.failure).toMatchObject({ code: 'internal' });

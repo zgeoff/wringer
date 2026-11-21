@@ -1,15 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { open, rename, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { open, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { readFileFrom } from './read-file-from.ts';
 import type { FilePosition } from './read-file-from.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'read-file-from');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('read-file-from').path;
   const logPath = join(directory, 'app.log');
 
   return {
@@ -21,7 +18,7 @@ async function setupTest() {
 }
 
 test('it reads a file from the offset to its end', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(ctx.logPath, 'booted\nready\n');
 
@@ -34,14 +31,15 @@ test('it reads a file from the offset to its end', async () => {
 });
 
 test('it reads a file that does not exist yet as empty', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const chunk = await ctx.readFrom({ offset: 0, identity: null }, 1024);
 
   expect(chunk).toStrictEqual({ start: 0, identity: null, bytes: new Uint8Array() });
 });
 
 test('it reads a file that shrank below the offset from its start', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(ctx.logPath, 'new\n');
 
@@ -54,8 +52,7 @@ test('it reads a file that shrank below the offset from its start', async () => 
 });
 
 test('it reads a longer file that replaced the one it read from its start', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const replacement = join(ctx.directory, 'app.log.new');
 
   await writeFile(ctx.logPath, 'booted\n');
@@ -74,7 +71,7 @@ test('it reads a longer file that replaced the one it read from its start', asyn
 });
 
 test('it reads at most the limit from the offset', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(ctx.logPath, 'booted\nready\nserving\n');
 

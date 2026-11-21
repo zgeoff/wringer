@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { killProcessGroup } from '../host/kill-process-group.ts';
 import { isErrorCode } from '../is-error-code.ts';

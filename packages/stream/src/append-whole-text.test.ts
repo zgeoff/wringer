@@ -1,16 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readText } from '@wringer/core';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { appendWholeText } from './append-whole-text.ts';
 import { runAppendUnderSizeLimit } from './test-utils/run-append-under-size-limit.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'append-whole-text');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('append-whole-text').path;
   const path = join(directory, 'app.ndjson');
 
   return {
@@ -22,7 +19,7 @@ async function setupTest() {
 }
 
 test('it appends the text to a file that does not exist yet', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.appendWholeText(ctx.path, '{"line":"up"}\n');
 
@@ -32,7 +29,7 @@ test('it appends the text to a file that does not exist yet', async () => {
 });
 
 test('it cuts the part of a failed append that reached the file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.writeText('{"line":"up"}\n');
 

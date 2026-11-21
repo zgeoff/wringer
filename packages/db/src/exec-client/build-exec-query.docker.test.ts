@@ -1,9 +1,9 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { ssh } from '@wringer/core';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSSHPostgres } from '@wringer/core/test-utils/create-test-ssh-postgres.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { buildExecQuery } from './build-exec-query.ts';
@@ -16,7 +16,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'build-exec-query');
+  const directory = createTempDir('build-exec-query').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 

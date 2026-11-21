@@ -1,11 +1,10 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { createFakeSSH } from '../test-utils/create-fake-ssh.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
-import { removeTestFolder } from '../test-utils/remove-test-folder.ts';
 import { probeProcess } from './probe-process.ts';
 import { ssh } from './ssh.ts';
 
@@ -15,9 +14,12 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'ssh');
+  const folder = createTempDir('ssh', { cleanup: 'manual' });
+  const directory = folder.path;
 
-  stack.defer(() => removeTestFolder(directory));
+  stack.defer(() => {
+    folder.remove();
+  });
 
   const fake = await createFakeSSH(directory);
 

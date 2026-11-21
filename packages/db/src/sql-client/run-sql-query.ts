@@ -1,6 +1,7 @@
 import type { Database, SQLQueryBindings } from 'bun:sqlite';
 import { randomUUID } from 'node:crypto';
 import { WringerError } from '@wringer/core';
+import type { Clock } from '@zgeoff/std';
 import type { SQL } from 'bun';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
@@ -22,8 +23,7 @@ export interface SQLClients {
   readonly openSqlite: (file: string, mode: SqliteMode) => Database;
   readonly openPostgres: (url: string, sessionName: string) => SQL;
   readonly reportCancelFailure: (message: string) => void;
-  readonly now: () => number;
-  readonly wait: (delayMs: number) => Promise<void>;
+  readonly clock: Pick<Clock, 'now' | 'sleep'>;
 }
 
 export interface SQLQueryInput {
@@ -224,7 +224,7 @@ async function runCancelLoop(
           return null;
         })
         .with({ kind: 'wait' }, async (): Promise<CancelEvent> => {
-          await clients.wait(cancelRetryMs);
+          await clients.clock.sleep(cancelRetryMs);
 
           return { kind: 'tick', settled: progress.settled };
         })

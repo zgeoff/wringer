@@ -1,20 +1,17 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildEnvelope } from '@wringer/core';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { probeProcess } from '../../../core/src/host/probe-process.ts';
 import { createCleanupRegistry } from './create-cleanup-registry.ts';
 import { createCLIRunner } from './create-cli-runner.ts';
 import { readPIDFile } from './read-pid-file.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'cli-runner');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('cli-runner').path;
   const script = join(directory, 'cli.ts');
   const cleanups = createCleanupRegistry();
 
@@ -34,7 +31,7 @@ async function setupTest() {
 }
 
 test('it returns the exit code and the envelope the CLI printed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const envelope = buildEnvelope({
     command: 'restock',
@@ -60,7 +57,7 @@ test('it returns the exit code and the envelope the CLI printed', async () => {
 });
 
 test('it stops the process group a run left behind in the cleanup it registers', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const envelope = buildEnvelope({
     command: 'restock',
@@ -104,7 +101,7 @@ test('it stops the process group a run left behind in the cleanup it registers',
 });
 
 test('it reads the envelope of a CLI that writes more to stderr than a pipe holds', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const envelope = buildEnvelope({
     command: 'restock',
@@ -136,8 +133,7 @@ test('it reads the envelope of a CLI that writes more to stderr than a pipe hold
 test.each(['stdout', 'stderr'])(
   'it lets a CLI run to its end when it writes more to %s than a pipe holds',
   async (stream) => {
-    const ctx = await setupTest();
-
+    const ctx = setupTest();
     const donePath = join(ctx.directory, 'done');
 
     await ctx.writeScript(
@@ -157,7 +153,7 @@ test.each(['stdout', 'stderr'])(
 );
 
 test('it ends a CLI that runs past the deadline of a run to its end', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.writeScript('await Bun.sleep(60_000);\n');
 

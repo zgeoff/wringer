@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createLockHolder } from '../test-utils/create-lock-holder.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { WringerError } from '../wringer-error.ts';
 import { appendRunEvent, canMoveRunStatus, findRunStatusMove } from './append-run-event.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
@@ -10,12 +10,12 @@ import { parseRunLog } from './parse-run-log.ts';
 import type { RunEvent } from './run-event.ts';
 
 // The stack kills each process that holds the lock before it removes the folder the lock sits in.
-async function setupTest() {
+function setupTest() {
   const stack = new AsyncDisposableStack();
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'append-run-event');
+  const directory = createTempDir('append-run-event').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 
@@ -57,7 +57,8 @@ async function setupTest() {
 }
 
 test('#appendRunEvent writes the first event of a log that does not exist', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const wrote = await ctx.append({ type: 'run-ended', at: '2026-11-04T10:00:00.000Z' });
 
   expect({ wrote, log: await ctx.readLog() }).toStrictEqual({
@@ -67,7 +68,8 @@ test('#appendRunEvent writes the first event of a log that does not exist', asyn
 });
 
 test('#appendRunEvent refuses with an environment error while another process holds the run lock', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const holding = await ctx.holdInOtherProcess();
 
   const [appended] = await Promise.allSettled([
@@ -81,7 +83,8 @@ test('#appendRunEvent refuses with an environment error while another process ho
 });
 
 test('#appendRunEvent writes once the process that held the run lock is killed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const holding = await ctx.holdInOtherProcess();
 
   await holding.kill();
@@ -92,7 +95,7 @@ test('#appendRunEvent writes once the process that held the run lock is killed',
 });
 
 test('#appendRunEvent cuts a torn last line before it writes', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(
     ctx.logPath,
@@ -109,7 +112,7 @@ test('#appendRunEvent cuts a torn last line before it writes', async () => {
 });
 
 test('#appendRunEvent cuts a torn last line of characters that take more than one byte each', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(
     ctx.logPath,
@@ -126,7 +129,7 @@ test('#appendRunEvent cuts a torn last line of characters that take more than on
 });
 
 test('#appendRunEvent keeps a log that ends on a whole line as it was before the new event', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(ctx.logPath, '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n');
 
@@ -140,7 +143,7 @@ test('#appendRunEvent keeps a log that ends on a whole line as it was before the
 });
 
 test('#appendRunEvent rejects with the refusal its check returns and writes nothing', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(ctx.logPath, '{"type":"run-ended","at":"2026-11-04T10:00:00.000Z"}\n');
 
@@ -157,7 +160,7 @@ test('#appendRunEvent rejects with the refusal its check returns and writes noth
 });
 
 test('#appendRunEvent refuses a move that the status table does not allow', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.append({
     type: 'run-started',

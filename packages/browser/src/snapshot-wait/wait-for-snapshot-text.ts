@@ -1,3 +1,4 @@
+import type { Clock } from '@zgeoff/std';
 import type { PageSnapshot } from '../browser.ts';
 import { collectUnmetConditions } from './collect-unmet-conditions.ts';
 import type { SnapshotTextConditions } from './collect-unmet-conditions.ts';
@@ -15,9 +16,7 @@ export interface SnapshotTextWait extends SnapshotTextConditions {
 
 export interface SnapshotTextWaitDependencies {
   readonly takeSnapshot: () => Promise<PageSnapshot>;
-
-  // Settles after `delayMs`, and rejects when `signal` aborts first.
-  readonly wait: (delayMs: number, signal: AbortSignal) => Promise<void>;
+  readonly clock: Pick<Clock, 'sleep'>;
   readonly timeLeftMs: () => number;
 }
 
@@ -56,12 +55,12 @@ export async function waitForSnapshotText(
     const budgetMs = readBudgetMs();
 
     if (budgetMs <= pollEveryMs) {
-      await dependencies.wait(Math.max(budgetMs, 0), new AbortController().signal);
+      await dependencies.clock.sleep(Math.max(budgetMs, 0));
 
       break;
     }
 
-    await dependencies.wait(pollEveryMs, new AbortController().signal);
+    await dependencies.clock.sleep(pollEveryMs);
 
     const next = await raceSnapshot(dependencies, readBudgetMs());
 
@@ -91,11 +90,7 @@ async function raceSnapshot(
   const cancel = new AbortController();
 
   const expire = async (): Promise<null> => {
-    try {
-      await dependencies.wait(budgetMs, cancel.signal);
-    } catch {
-      return null;
-    }
+    await dependencies.clock.sleep(budgetMs, cancel.signal);
 
     return null;
   };

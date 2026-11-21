@@ -1,18 +1,15 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import type { RunView } from '../state/build-run-view.ts';
 import { listenSupervisorSocket } from '../supervisor/listen-supervisor-socket.ts';
 import { makeProcessSupervisorPort } from '../supervisor/make-process-supervisor-port.ts';
 import { buildMockRunView } from '../test-utils/build-mock-run-view.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { WringerError } from '../wringer-error.ts';
 import { callRunSupervisor, isSupervisorGone } from './call-run-supervisor.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'call-run-supervisor');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('call-run-supervisor').path;
 
   const supervisor = makeProcessSupervisorPort({
     selfCommand: ['true'],
@@ -37,7 +34,7 @@ test.each([
 });
 
 test('it reads a run that never got a supervisor as gone', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const reach = await ctx.callRunSupervisor(
     buildMockRunView({ supervisor: null }),
@@ -48,7 +45,7 @@ test('it reads a run that never got a supervisor as gone', async () => {
 });
 
 test('it reads a socket that nothing listens on as gone', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const reach = await ctx.callRunSupervisor(
     buildMockRunView({ supervisor: { pid: 1, socket: ctx.socket } }),
@@ -59,8 +56,7 @@ test('it reads a socket that nothing listens on as gone', async () => {
 });
 
 test('it rejects a call that a live supervisor answers too late', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const answer = Promise.withResolvers<null>();
   const transportErrors: unknown[] = [];
 

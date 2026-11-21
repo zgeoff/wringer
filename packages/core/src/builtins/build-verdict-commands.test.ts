@@ -23,7 +23,7 @@ async function setupTest() {
     release.resolve(undefined);
   });
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   const failureSchema = z.object({ name: z.string(), status: z.string() });
   const unmappedSchema = z.looseObject({ unmapped: z.array(z.string()) });

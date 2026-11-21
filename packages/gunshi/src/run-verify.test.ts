@@ -10,7 +10,7 @@ import { writeLintSkill } from './test-utils/write-lint-skill.ts';
 // supervisor process, detached, as they do for a repo. Each event line and the final envelope the
 // script prints are checked against the published schema.
 async function setupTest() {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
   const cli = createCLIRunner({
     script: join(import.meta.dir, 'test-utils', 'demo-cli.ts'),
@@ -21,7 +21,8 @@ async function setupTest() {
   onTestFinished(async () => {
     await cli.runToEnd(['down', '--target', 'local'], 10_000);
     await cli.runToEnd(['detach', '--target', 'prod'], 10_000);
-    await repo.remove();
+
+    repo.remove();
   });
 
   return {

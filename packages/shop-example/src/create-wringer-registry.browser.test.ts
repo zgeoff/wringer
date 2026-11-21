@@ -5,7 +5,7 @@ import type { Wringer } from '@wringer/core';
 import { createFakePullRequestHost } from '@wringer/core/test-utils/create-fake-pull-request-host.ts';
 import { createFileHostStandIn } from '@wringer/core/test-utils/create-file-host-stand-in.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { createShopRegistry } from './create-shop-registry.ts';
 import { createWringerRegistry } from './create-wringer-registry.ts';
@@ -13,7 +13,7 @@ import { createWringerRegistry } from './create-wringer-registry.ts';
 async function setupTest() {
   const registry = createWringerRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   const pullRequests = createFakePullRequestHost([
     {

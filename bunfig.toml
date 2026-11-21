@@ -24,10 +24,11 @@ minimumReleaseAgeExcludes = [
 ]
 
 [test]
-# registers the jest-extended matchers, starts the MSW server for HTTP tests, then fails the run
-# on a process or a test folder that outlived its test
+# registers the jest-extended matchers, restores the env vars a test changed, starts the test network
+# for HTTP tests, then fails the run on a process or a test folder that outlived its test
 preload = [
   "@zgeoff/bun-test-extended",
-  "./packages/http/src/test-utils/test-preload.ts",
+  "@zgeoff/testing/preload",
+  "./packages/http/src/test-utils/network.ts",
   "./scripts/fail-on-test-leftovers.ts",
 ]
