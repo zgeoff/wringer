@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.7](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.6...@wringer/http@0.1.7) (2026-11-21)
+
+
+### Features
+
+* **http:** add named endpoints and requests without the session ([#239](https://github.com/zgeoff/wringer/issues/239)) ([b4ca76b](https://github.com/zgeoff/wringer/commit/b4ca76b00891ac24a1c7b7b9f3ae694d422a3152))
+
+
+### Bug Fixes
+
+* **http:** redact the cf-access-jwt-assertion header ([#232](https://github.com/zgeoff/wringer/issues/232)) ([60f35ae](https://github.com/zgeoff/wringer/commit/60f35ae351b5dc956493974b15b2578c7750ca5e))
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @wringer/core bumped to 0.4.0
+  * peerDependencies
+    * @wringer/core bumped to 0.4.0
+
 ## [0.1.6](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.5...@wringer/http@0.1.6) (2026-11-20)
 
 ### Dependencies
