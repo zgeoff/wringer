@@ -199,3 +199,22 @@ test('it hands over no secret while the token is not set', () => {
 
   expect(ctx.createUploader({ UPLOAD_URL: ctx.host.url }).readSecrets?.()).toStrictEqual([]);
 });
+
+test('it reads WRINGER_UPLOAD_URL and WRINGER_UPLOAD_TOKEN when the options name no variables', async () => {
+  const ctx = setupTest();
+
+  const uploader = createHostUploader(
+    {},
+    {
+      env: { WRINGER_UPLOAD_URL: ctx.host.url, WRINGER_UPLOAD_TOKEN: 'planted-upload-token' },
+      fetch,
+    },
+  );
+
+  await uploader.upload(ctx.file, AbortSignal.timeout(5000));
+
+  expect({
+    secrets: uploader.readSecrets?.().map((secret) => secret.name),
+    uploads: ctx.host.uploads.length,
+  }).toStrictEqual({ secrets: ['WRINGER_UPLOAD_TOKEN'], uploads: 1 });
+});

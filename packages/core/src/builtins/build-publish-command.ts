@@ -49,6 +49,10 @@ const publishDataSchema = z.strictObject({
   cuts: reportCutsSchema,
   dryRun: z.boolean(),
   markdown: z.string().optional(),
+
+  // Set when files stayed local because no target of the registry uploads, so a reader of the
+  // result sees why `uploaded` is 0.
+  warning: z.string().optional(),
 });
 
 type PublishData = z.infer<typeof publishDataSchema>;
@@ -74,6 +78,10 @@ export function buildPublishCommand(): RegisteredCommand {
 
   return buildBuiltinCommand(publish);
 }
+
+const localEvidenceWarning =
+  "Evidence stayed local: no target of this registry uploads. Give a target `evidence: 'upload'` " +
+  'and the registry an `upload` hook to put the files on the file host.';
 
 async function runPublish(args: PublishArgs, ctx: BuiltinContext): Promise<PublishData> {
   const setup = readUploadSetup(args, ctx);
@@ -166,6 +174,7 @@ async function runPublish(args: PublishArgs, ctx: BuiltinContext): Promise<Publi
     local: localFiles.size,
     cuts: written.plan.cuts,
     dryRun: false,
+    ...(setup.hasUploadTarget || localFiles.size === 0 ? {} : { warning: localEvidenceWarning }),
   };
 }
 
@@ -175,6 +184,9 @@ interface UploadSetup {
 
   // Whether a journey on an uploading target may upload.
   readonly isAllowed: boolean;
+
+  // Whether any target of the registry uploads its evidence.
+  readonly hasUploadTarget: boolean;
 }
 
 // A registry whose target uploads needs the hook, and the hook needs its configuration, before the
@@ -185,7 +197,7 @@ function readUploadSetup(args: PublishArgs, ctx: BuiltinContext): UploadSetup {
   );
 
   if (!args.upload || !targetsUpload) {
-    return { uploader: undefined, isAllowed: false };
+    return { uploader: undefined, isAllowed: false, hasUploadTarget: targetsUpload };
   }
 
   const uploader = ctx.wringer.hooks.upload;
@@ -205,7 +217,7 @@ function readUploadSetup(args: PublishArgs, ctx: BuiltinContext): UploadSetup {
     ctx.secrets.add(secret);
   }
 
-  return { uploader, isAllowed: true };
+  return { uploader, isAllowed: true, hasUploadTarget: true };
 }
 
 // A dry run of a branch with no open PR gets null: the report is built against the default base,

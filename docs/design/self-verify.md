@@ -229,8 +229,8 @@ jobs:
 - A change limited to tests, test utils, docs, `.claude/` or `scripts/` leaves every verdict fresh.
 - The `local` target of the wringer registry uploads its evidence through the core uploader [PR].
   The `local` target of the shop registry keeps its evidence local.
-- The wringer registry reads the upload URL and token from `VERIFY_UPLOAD_URL` and
-  `VERIFY_UPLOAD_TOKEN`, only when `publish` uploads. A command that never uploads, such as `report`
+- The wringer registry reads the upload URL and token from `CLOUD_FILES_URL` and
+  `CLOUD_FILES_TOKEN`, only when `publish` uploads. A command that never uploads, such as `report`
   or `publish --dry-run`, needs neither.
 - `lint` fails when a feature has no `references/feature-<name>.md`, and when a
   `references/feature-*.md` matches no registered feature.
