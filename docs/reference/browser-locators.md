@@ -1,65 +1,69 @@
 # Browser locators
 
-The `click`, `type`, `check`, `uncheck`, `press` and `hover` commands of `@wringer/browser` name
-their element with flags. Each command takes one of four forms: a ref, a role and a name, a label,
-or a shown text. A `press` with no form presses the key on the focused element. A flag mix that fits
-no form fails with a usage error, and the exit code is 2.
+The `click`, `type`, `check`, `uncheck`, `press` and `hover` commands of `@wringer/browser` take
+flags that name one element on the page. Pass the flags of one row:
 
-| Form       | Flags                 | Finds                                                              |
-| ---------- | --------------------- | ------------------------------------------------------------------ |
-| Ref        | `--ref`               | the element of that ref in the last `browser snapshot`             |
-| Role       | `--role` and `--name` | the element of that role whose accessible name is exactly the name |
-| Label      | `--label`, `--role`   | the control that has the label, narrowed by the role when given    |
-| Shown text | `--text`, `--role`    | the visible element that shows the text, as the sections below say |
+| Way to name it | Flags                           | The command acts on                                         |
+| -------------- | ------------------------------- | ----------------------------------------------------------- |
+| Ref            | `--ref`                         | the element with that ref in the last `browser snapshot`    |
+| Role and name  | `--role` with `--name`          | the element of that role whose accessible name is the name  |
+| Label          | `--label`, with `--role` or not | the control with that label, of that role when you give one |
+| Shown text     | `--text`, with `--role` or not  | the visible element that shows the text                     |
 
-`--ref` takes no other flag. `--name` takes `--role` and nothing else. `--role` alone is a usage
-error. `--label` and `--text` each take `--role` at most, and never go with each other or with
-`--name`.
+When you pass any other mix of these flags, the command fails with `usage`. When you pass none,
+`press` presses its key on the element that has focus. The
+[error codes](../../packages/core/README.md#error-codes) table in the core README lists the exit
+code of each error.
+
+## When the command fails
+
+For each way but a ref, the command waits for a match up to `actionTimeoutMs`, which you set in
+`browser()` as the [browser README](../../packages/browser/README.md) shows. When the time runs out
+with no match, the command fails with `check-failed`.
+
+When two or more elements match, the command fails at once, with no wait:
+
+- with `usage` for a role and name, or a label;
+- with `check-failed` and the count for a shown text.
+
+To pick one element, add `--role`, give a longer text, or pass `--ref`.
 
 ## Ref
 
-A ref acts on the element of the last snapshot, so take a new snapshot after the page changes. A tab
-switch forgets the refs.
+`browser snapshot` prints a ref on each element, such as `[ref=e5]`, which you pass as `--ref e5`.
+After the page changes or you switch tabs, take a new snapshot before you pass a ref. When the last
+snapshot has no element with the ref, the command fails with `usage`.
 
-## Role and name
+## Role and name, and label
 
-The match is Playwright's `getByRole` with an exact name. Two matching elements fail with a usage
-error that points at refs.
-
-## Label
-
-The match is Playwright's `getByLabel` with an exact label. No control with the label waits out the
-action timeout, then fails with `check-failed`. Several matches fail at once with a usage error: add
-`--role` or use `--ref`.
+The command uses Playwright's `getByRole` or `getByLabel`, and matches the name or the label
+exactly.
 
 ## Shown text
 
-`--text` finds an element by the text a person sees. It helps for a menu item, a card or any control
-that has no useful role or name.
+Use `--text` for an element that a person finds by its text, such as a menu item or a card with no
+useful role or name.
 
-- With `--text` alone, the element is the innermost visible element whose whole shown text equals
-  the text.
-- With `--role`, the element is any visible element of that role whose shown text contains the text.
-- The comparison is case-sensitive. Runs of whitespace, line breaks and the gap between two blocks
-  each read as one space.
-- Hidden elements add no text, and hidden elements never match. The match reaches into open shadow
-  roots.
-- CSS `text-transform` has no effect, so the match reads the text as written in the page.
-- An `aria-label` is never shown text.
+- With `--text` alone, the command finds the innermost visible element whose whole text is exactly
+  the text. A click on a `<span>` inside a button reaches the button.
+- With `--role` too, the command finds the visible element of that role whose text contains the
+  text.
 
-No match waits out the action timeout, then fails with `check-failed`. More than one match fails at
-once with `check-failed` and the number of matches: add `--role`, make the text longer, or use
-`--ref`.
+The command reads an element's text as a person sees it:
+
+- Case counts.
+- Each run of spaces, each line break, and the break between two block elements read as one space.
+- The command skips hidden elements and hidden text.
+- The command reads into open shadow roots.
+- The command reads the text as the page's HTML writes it, before CSS `text-transform`.
+- The command never reads an `aria-label` as text.
 
 ## Read-only targets
 
-A write on a read-only target needs a grant in `readOnly.allow` that lists the element's role and
-exact name. The command cannot see a ref's role, so name a granted element by `--role` and `--name`,
-by `--label` with `--role`, or by `--text` with `--role`. A `--text` with no `--role` is always a
-write.
+The [browser README](../../packages/browser/README.md#read-only-targets) says which commands a
+read-only target refuses, with exit code 3, and how a role and an exact name in `readOnly.allow`
+grant one. Two rules apply to `--text`:
 
-A granted `--text` also requires the element's accessible name to equal the text, so a button named
-`Search all orders` is never clicked under the grant for `Search`.
-
-A granted write runs every wait first, checks that the active tab is on the origin of the default
-endpoint or a listed one, and then acts at once.
+- A read-only target always refuses `--text` without `--role`.
+- For `--text` with `--role`, the grant covers the element only when its accessible name is exactly
+  the text. A grant for the button `Search` never covers a button named `Search all orders`.

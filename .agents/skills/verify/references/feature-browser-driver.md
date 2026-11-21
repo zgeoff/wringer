@@ -1,8 +1,6 @@
 # browser-driver
 
-The browser driver opens the shop page in a real browser, reads it as an accessibility tree, finds
-elements by role and name or by the text they show, and waits for the page to show an order's
-confirmation.
+The browser driver opens the shop page in a real browser and reads it as an accessibility tree.
 
 ## Journey
 
@@ -17,7 +15,10 @@ bun verify browser snapshot --until-text placed
 
 ## End state
 
+Each command exits 0. A non-zero exit fails the journey.
+
 - The first snapshot holds a button named `Place order`.
-- The `hover` exits 0 and returns the page's URL and its title, `Shop`.
-- The second snapshot holds a heading that reads `Order <id> placed`, with any order ID in place of
-  `<id>`, and the command exits 0 with no timeout.
+- The `hover` output holds the page's title, `Shop`, in `data.title`. The page shows `Place order`
+  once, so `--text` finds one element.
+- The last snapshot holds a heading `Order <id> placed`, with any order ID in place of `<id>`. The
+  command waits until the snapshot text holds `placed`, with case counted.
