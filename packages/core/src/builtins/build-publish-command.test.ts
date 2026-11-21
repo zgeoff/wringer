@@ -19,7 +19,7 @@ async function setupTest() {
   const intro = 'Adds the express checkout.\n';
 
   const publishedSchema = z.looseObject({
-    pr: z.strictObject({ number: z.number(), url: z.string() }),
+    pr: z.strictObject({ number: z.number(), url: z.string() }).nullable(),
     action: z.string(),
     uploaded: z.number(),
     reused: z.number(),
@@ -120,6 +120,8 @@ async function setupTest() {
       options?: Parameters<typeof dispatchOn>[3],
     ) => dispatchOn(wringer, ['publish'], args, options),
     readPublished: (data: unknown) => publishedSchema.parse(data),
+    readReportBase: (markdown: string | undefined) =>
+      markdown?.match(/"base":"(?<base>[^"]*)"/u)?.groups?.['base'],
     readBody: (host: FakePullRequestHost = pullRequests) => host.readStoredBody(7) ?? '',
     token,
     prURL,
@@ -431,6 +433,87 @@ test('#publish fails with environment, and says to open the PR, when the branch 
   }).toStrictEqual({
     code: 'environment',
     hint: 'Open the pull request, or pass `--pr <number>`.',
+  });
+});
+
+test('#publish with --dry-run builds the report against the default base when the branch has no PR', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout(['photo']);
+  await ctx.git('checkout', '--quiet', '-b', 'feature-without-pr');
+  await ctx.git('add', '--all');
+  await ctx.git('commit', '--quiet', '-m', 'feat: add checkout');
+  await ctx.git('update-ref', 'refs/remotes/origin/trunk', 'HEAD');
+  await ctx.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
+
+  const result = await ctx.publishWith(ctx.uploading, { dryRun: true });
+
+  const data = ctx.readPublished(result.envelope.data);
+
+  expect({
+    ok: result.envelope.ok,
+    pr: data.pr,
+    action: data.action,
+    dryRun: data.dryRun,
+    reportBase: ctx.readReportBase(data.markdown),
+    body: ctx.readBody(),
+  }).toStrictEqual({
+    ok: true,
+    pr: null,
+    action: 'created',
+    dryRun: true,
+    reportBase: 'origin/trunk',
+    body: ctx.intro,
+  });
+});
+
+test('#publish with --dry-run and --base builds the report against that base when the branch has no PR', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout(['photo']);
+  await ctx.git('checkout', '--quiet', '-b', 'feature-without-pr');
+  await ctx.git('update-ref', 'refs/remotes/origin/trunk', 'HEAD');
+  await ctx.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
+
+  const result = await ctx.publishWith(ctx.uploading, { dryRun: true, base: 'main' });
+  const bad = await ctx.publishWith(ctx.uploading, { dryRun: true, base: 'no-such-base' });
+
+  const data = ctx.readPublished(result.envelope.data);
+
+  expect({
+    ok: result.envelope.ok,
+    pr: data.pr,
+    reportBase: ctx.readReportBase(data.markdown),
+    badOk: bad.envelope.ok,
+  }).toStrictEqual({ ok: true, pr: null, reportBase: 'main', badOk: false });
+});
+
+test('#publish with --dry-run still fails when the PR lookup fails for another reason', async () => {
+  const ctx = await setupTest();
+
+  const broken: PullRequestHost = {
+    ...ctx.pullRequests,
+    findOpen: () => Promise.reject(new Error('gh exploded')),
+  };
+
+  const result = await ctx.publish({ dryRun: true }, { pullRequests: broken });
+
+  expect(result.envelope.ok).toBe(false);
+});
+
+test('#publish without --dry-run still fails when the branch has no PR', async () => {
+  const ctx = await setupTest();
+
+  await ctx.git('checkout', '--quiet', '-b', 'feature-without-pr');
+
+  const result = await ctx.publish({ upload: false });
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+  }).toStrictEqual({
+    code: 'environment',
+    message: 'The current branch has no open pull request.',
   });
 });
 
@@ -747,6 +830,6 @@ test('#publish takes the PR from --pr, whatever branch is checked out', async ()
 
   expect({
     ok: result.envelope.ok,
-    pr: ctx.readPublished(result.envelope.data).pr.number,
+    pr: ctx.readPublished(result.envelope.data).pr?.number,
   }).toStrictEqual({ ok: true, pr: 7 });
 });

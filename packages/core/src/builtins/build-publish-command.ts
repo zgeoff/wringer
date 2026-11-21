@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { readDefaultBase } from '../change-facts/read-default-base.ts';
 import { collectUploadItems } from '../evidence/collect-upload-items.ts';
 import type { EvidenceUploader } from '../evidence/evidence-uploader.ts';
 import type { UploadRefusal } from '../evidence/pick-upload-refusal.ts';
@@ -39,7 +40,8 @@ const publishArgsSchema = z.strictObject({
 type PublishArgs = z.infer<typeof publishArgsSchema>;
 
 const publishDataSchema = z.strictObject({
-  pr: z.strictObject({ number: z.number().int(), url: z.string() }),
+  // Null on a dry run of a branch with no open PR.
+  pr: z.strictObject({ number: z.number().int(), url: z.string() }).nullable(),
   action: z.enum(['created', 'replaced', 'unchanged']),
   uploaded: z.number().int().nonnegative(),
   reused: z.number().int().nonnegative(),
@@ -76,8 +78,8 @@ export function buildPublishCommand(): RegisteredCommand {
 async function runPublish(args: PublishArgs, ctx: BuiltinContext): Promise<PublishData> {
   const setup = readUploadSetup(args, ctx);
 
-  const pr = await readPullRequest(args, ctx);
-  const base = await readBase(args, pr, ctx);
+  const found = await readPullRequest(args, ctx);
+  const base = await readBase(args, found, ctx);
   const report = await readCurrentReport(ctx, base);
 
   await readVerdictSecrets(
@@ -103,7 +105,14 @@ async function runPublish(args: PublishArgs, ctx: BuiltinContext): Promise<Publi
   failOnSecretFile(document);
 
   if (args.dryRun) {
-    return runDryRun(document, pr, ctx);
+    return runDryRun(document, found, ctx);
+  }
+
+  // Only a dry run reads no PR, so a PR is in hand from here on.
+  const pr = found;
+
+  if (pr === null) {
+    throw new WringerError('internal', { message: 'A publish reached its write with no PR.' });
   }
 
   const linkChars = setup.uploader === undefined ? 0 : setup.uploader.maxURLLength;
@@ -199,10 +208,19 @@ function readUploadSetup(args: PublishArgs, ctx: BuiltinContext): UploadSetup {
   return { uploader, isAllowed: true };
 }
 
-async function readPullRequest(args: PublishArgs, ctx: BuiltinContext): Promise<PullRequestView> {
+// A dry run of a branch with no open PR gets null: the report is built against the default base,
+// with an empty description. Every other failure to find the PR stands.
+async function readPullRequest(
+  args: PublishArgs,
+  ctx: BuiltinContext,
+): Promise<PullRequestView | null> {
   const request = args.pr === undefined ? { branch: await readBranch(ctx) } : { number: args.pr };
 
   const found = await ctx.session.pullRequests.findOpen(request);
+
+  if (args.dryRun && args.pr === undefined && found.kind === 'none') {
+    return null;
+  }
 
   const picked = pickPullRequest(found, args.pr !== undefined);
 
@@ -238,11 +256,15 @@ async function readBranch(ctx: BuiltinContext): Promise<string> {
 // The base is the PR's own, as `origin/<base>` when the clone has that branch, else `<base>`.
 async function readBase(
   args: PublishArgs,
-  pr: PullRequestView,
+  pr: PullRequestView | null,
   ctx: BuiltinContext,
 ): Promise<string> {
   if (args.base !== undefined) {
     return args.base;
+  }
+
+  if (pr === null) {
+    return readDefaultBase(ctx.session.repoHost, ctx.session.root);
   }
 
   if (pr.baseBranch.length === 0 || pr.baseBranch.length > maxBaseLength - 'origin/'.length) {
@@ -293,13 +315,14 @@ function failOnSecretFile(document: ReportDocument): void {
 // Prints the block with local evidence, and counts the files a real run would upload.
 function runDryRun(
   document: ReportDocument,
-  pr: PullRequestView,
+  pr: PullRequestView | null,
   ctx: BuiltinContext,
 ): PublishData {
+  const body = pr === null ? '' : pr.body;
   const local = buildLocalDocument(document);
-  const planned = planAgainst({ document: local, body: pr.body, linkChars: 0 }, ctx);
+  const planned = planAgainst({ document: local, body, linkChars: 0 }, ctx);
   const block = renderBlock(local, planned.plan, ctx);
-  const edit = writeReportSpan(pr.body, block);
+  const edit = writeReportSpan(body, block);
 
   if (!edit.ok) {
     throw new WringerError('check-failed', { message: edit.reason });
@@ -317,7 +340,7 @@ function runDryRun(
   );
 
   return {
-    pr: { number: pr.number, url: pr.url },
+    pr: pr === null ? null : { number: pr.number, url: pr.url },
     action: edit.action,
     uploaded: wouldUpload.size,
     reused: 0,
