@@ -63,7 +63,7 @@ installed template.
    `verify.ts` names, such as `.claude/skills/verify/`. List the new folder in `.git/info/exclude`,
    so git ignores it without a change to `.gitignore`.
 3. Copy the template's `verify/` folder to the skill folder path, which no longer exists after
-   step 2. Into a folder that exists, `cp -R` nests the copy inside it.
+   step 2. `cp -R` into a folder that exists nests the copy inside it.
 4. Delete the new skill's `references/feature-add-item.md`, the template's example feature, which
    fails `lint` unless the repo has a feature of that name. From the old skill's `references/`, copy
    each file that the new skill's `references/` lacks, such as each `feature-*.md` file. Keep the
