@@ -9,7 +9,9 @@ session, to show that the app refuses it.
 The target's `endpoint` field names its default endpoint, `web` unless you set it. The `endpoints`
 field sets the health check of a named endpoint. Each named endpoint takes its address from the
 target's own `endpoints` map, and an endpoint that only that map names is also one the driver may
-call, with the default health path and the session.
+call, with the default health path and the session, when its address is an `http` or `https` URL.
+The driver leaves out any other entry in that map, such as a database file, which no request can
+reach.
 
 ```ts
 drivers: {
