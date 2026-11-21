@@ -2,10 +2,11 @@
 
 ## [0.4.1](https://github.com/zgeoff/wringer/compare/@wringer/core@0.4.0...@wringer/core@0.4.1) (2026-11-21)
 
-
 ### Features
 
-* **core:** default upload variable names; warn on local evidence ([#242](https://github.com/zgeoff/wringer/issues/242)) ([f7b9b8d](https://github.com/zgeoff/wringer/commit/f7b9b8d68e49cddff503b8910edd81a2352081f0))
+- **core:** default upload variable names; warn on local evidence
+  ([#242](https://github.com/zgeoff/wringer/issues/242))
+  ([f7b9b8d](https://github.com/zgeoff/wringer/commit/f7b9b8d68e49cddff503b8910edd81a2352081f0))
 
 ## [0.4.0](https://github.com/zgeoff/wringer/compare/@wringer/core@0.3.3...@wringer/core@0.4.0) (2026-11-21)
 

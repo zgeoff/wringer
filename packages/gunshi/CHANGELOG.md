@@ -2,15 +2,14 @@
 
 ## [0.3.9](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.8...@wringer/gunshi@0.3.9) (2026-11-21)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.4.1
-    * @wringer/http bumped to 0.1.8
-  * peerDependencies
-    * @wringer/core bumped to 0.4.1
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.1
+    - @wringer/http bumped to 0.1.8
+  - peerDependencies
+    - @wringer/core bumped to 0.4.1
 
 ## [0.3.8](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.7...@wringer/gunshi@0.3.8) (2026-11-21)
 
