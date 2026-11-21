@@ -6,6 +6,7 @@ import { collectDeadGlobs } from './lint-command/collect-dead-globs.ts';
 import { collectJourneyCommands } from './lint-command/collect-journey-commands.ts';
 import type { JourneyCommand, MarkdownFile } from './lint-command/collect-journey-commands.ts';
 import { collectUnclaimedFiles } from './lint-command/collect-unclaimed-files.ts';
+import { findJourneyPlaceholder } from './lint-command/find-journey-placeholder.ts';
 import {
   parseFeatureTableSpan,
   toComparableTable,
@@ -69,7 +70,7 @@ export async function resolveLintFailures(input: LintInput): Promise<LintResult>
   const pathFailures = collectDeadGlobs(input.wringer, input.files).map((dead): LintFailure => ({
     check: 'paths',
     where: dead.where,
-    problem: `The glob \`${dead.glob}\` matches no file.`,
+    problem: `The glob \`${dead.glob}\` matches no file. Write it relative to the repo root, as \`git ls-files\` prints paths, or remove it.`,
   }));
 
   const unclaimedFailures = collectUnclaimedFiles(input.wringer, input.files).map(
@@ -102,10 +103,7 @@ async function resolveJourneyFailure(
   wringer: Wringer,
   journey: JourneyCommand,
 ): Promise<LintFailure | null> {
-  const problem =
-    journey.argv === null
-      ? 'The line has an unclosed quote.'
-      : await resolveJourneyProblem(wringer, journey.argv);
+  const problem = await resolveJourneyLineProblem(wringer, journey);
 
   if (problem === null) {
     return null;
@@ -116,6 +114,25 @@ async function resolveJourneyFailure(
     where: `${journey.path}:${journey.line}`,
     problem: `\`${journey.text}\`: ${problem}`,
   };
+}
+
+function resolveJourneyLineProblem(
+  wringer: Wringer,
+  journey: JourneyCommand,
+): Promise<string | null> {
+  const placeholder = findJourneyPlaceholder(journey.text);
+
+  if (placeholder !== null) {
+    return Promise.resolve(
+      `The shell reads \`${placeholder}\` as a redirect. Write the line as a command that runs as written, or move a command with a placeholder into inline code.`,
+    );
+  }
+
+  if (journey.argv === null) {
+    return Promise.resolve('The line has an unclosed quote.');
+  }
+
+  return resolveJourneyProblem(wringer, journey.argv);
 }
 
 // The registry file must sit under a shared glob or a feature's `paths`, so a change to it makes
