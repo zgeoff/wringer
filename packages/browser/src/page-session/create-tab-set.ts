@@ -11,6 +11,8 @@ interface DownloadWait {
 // on. A tab that closes by itself stays in the list until the next read, so a caller can find the
 // index it held.
 export interface TabSet {
+  readonly actionTimeoutMs: number;
+
   // The tabs that are still open.
   readonly list: () => readonly Page[];
   readonly getActive: () => Page;
@@ -107,6 +109,7 @@ export async function createTabSet(
   };
 
   return {
+    actionTimeoutMs,
     list,
     getActive,
     getOpener: (page) => openers.get(page) ?? null,

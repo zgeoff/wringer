@@ -17,6 +17,12 @@ export const TEXT_ENGINE_SOURCE = String.raw`(() => {
       return assigned.length > 0 ? assigned : Array.from(node.childNodes);
     }
 
+    if (node.localName === 'details' && !node.open) {
+      const summary = Array.from(node.children).find((child) => child.localName === 'summary');
+
+      return summary ? [summary] : [];
+    }
+
     return Array.from(node.childNodes);
   };
 
@@ -49,8 +55,9 @@ export const TEXT_ENGINE_SOURCE = String.raw`(() => {
           inner = ' ';
         }
 
-        const isInline =
-          style.display === 'inline' || style.display === 'contents' || style.display === 'inline-block';
+        const isInline = ['inline', 'contents', 'inline-block', 'inline-flex', 'inline-grid'].includes(
+          style.display,
+        );
 
         text = isInline ? inner : ' ' + inner + ' ';
       }

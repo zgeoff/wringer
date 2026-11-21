@@ -1198,6 +1198,12 @@ test.each([
     command: 'press',
     args: { key: 'Enter', role: 'link', name: 'Download in this tab' },
   },
+  {
+    case: 'a click on a download-attribute link whose response is delayed',
+    command: 'click',
+    args: { role: 'link', name: 'Download after a delay' },
+    fileName: 'slow-report.csv',
+  },
 ])('it reports the download of $case and stays on the page with one tab', async (row) => {
   const ctx = await setupTest();
 
@@ -1216,7 +1222,10 @@ test.each([
     data: {
       url: expect.stringMatching(/\/downloads$/u),
       title: 'Downloads',
-      download: { url: expect.stringMatching(/\/files\/report\.csv$/u), fileName: 'report.csv' },
+      download: {
+        url: expect.stringMatching(/\/files\/(?:slow-)?report\.csv$/u),
+        fileName: row.fileName ?? 'report.csv',
+      },
     },
     tabs: {
       tabs: [
@@ -1263,6 +1272,16 @@ test.each([
   { case: 'a text across a line break', args: { text: 'Gift wrap now' }, picked: 'broken' },
   { case: 'a text across two blocks', args: { text: 'Two blocks' }, picked: 'blocks' },
   { case: 'a text with a hidden child', args: { text: 'Save' }, picked: 'hidden-child' },
+  {
+    case: 'a text joined to an inline-flex child',
+    args: { text: 'Savedraft' },
+    picked: 'inline-flex',
+  },
+  {
+    case: 'a text beside a closed details element',
+    args: { text: 'Keep Options' },
+    picked: 'closed-details',
+  },
   { case: 'a text in an open shadow root', args: { text: 'Inside the shadow' }, picked: 'shadow' },
   { case: 'a text before its text-transform', args: { text: 'Pay now' }, picked: 'transformed' },
   {
@@ -1289,6 +1308,10 @@ test.each([
   { case: 'a text in the case of its text-transform', text: 'PAY NOW' },
   { case: 'a text that a hidden child completes', text: 'Save draft' },
   { case: 'a part of a text without a role', text: 'invoices' },
+  {
+    case: 'a text that the content of a closed details element completes',
+    text: 'Keep Options secret',
+  },
 ])('it fails $case with check-failed once the action times out', async (row) => {
   const ctx = await setupTest();
 

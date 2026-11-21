@@ -37,6 +37,7 @@ const downloadsPage = `<!doctype html>
 <title>Downloads</title>
 <a href="/files/report.csv" target="_blank" rel="opener">Download in a new tab</a>
 <a href="/files/report.csv">Download in this tab</a>
+<a href="/files/slow-report.csv" download>Download after a delay</a>
 <a href="/orders" target="_blank" rel="opener">Open orders</a>`;
 
 // A page whose elements record the one that was clicked in the title, to show how a text is found:
@@ -51,6 +52,8 @@ const textPage = `<!doctype html>
 <button onclick="pick('hidden-child')">Save<span hidden> draft</span></button>
 <button class="upper" onclick="pick('transformed')">Pay now</button>
 <button aria-label="Remove item" onclick="pick('labelled')">X</button>
+<button onclick="pick('inline-flex')">Save<span style="display:inline-flex">draft</span></button>
+<div onclick="pick('closed-details')">Keep<details><summary>Options</summary><span>secret</span></details></div>
 <div onclick="pick('twin-one')">Twin</div>
 <div onclick="pick('twin-two')">Twin</div>
 <a role="menuitem" tabindex="0" onclick="pick('menu')">Billing and invoices</a>
@@ -174,6 +177,18 @@ export function createShopPageServer(): ShopPageServer {
               'content-disposition': 'attachment; filename="report.csv"',
             },
           }),
+      },
+      '/files/slow-report.csv': {
+        GET: async () => {
+          await Bun.sleep(600);
+
+          return new Response('sku,count\nmug,2\n', {
+            headers: {
+              'content-type': 'text/csv',
+              'content-disposition': 'attachment; filename="slow-report.csv"',
+            },
+          });
+        },
       },
       '/closing': {
         GET: () => new Response(closingPage, { headers: { 'content-type': 'text/html' } }),

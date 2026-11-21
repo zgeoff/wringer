@@ -5,6 +5,7 @@ import type { PageActionResult } from './create-browser-page-machine.ts';
 import type { TabSet } from './create-tab-set.ts';
 import { pickReturnTab } from './pick-return-tab.ts';
 import { readPageState } from './read-page-state.ts';
+import { trackDownloadClick } from './track-download-click.ts';
 import type { DownloadInfo } from './types.ts';
 import { waitQuietly } from './wait-quietly.ts';
 
@@ -19,6 +20,8 @@ export async function runTracked(
   const active = tabSet.getActive();
   const activeIndex = before.indexOf(active);
   const downloadsBefore = tabSet.listDownloads().length;
+
+  const probeDownloadClick = await trackDownloadClick(active);
 
   try {
     await act(active);
@@ -38,7 +41,15 @@ export async function runTracked(
 
   await Promise.all(tabSet.list().map((page) => waitQuietly(page.evaluate('0'))));
 
-  const data = await reconcileTabs(tabSet, { before, active, activeIndex, downloadsBefore });
+  const clickedDownloadLink = await probeDownloadClick();
+
+  const data = await reconcileTabs(tabSet, {
+    before,
+    active,
+    activeIndex,
+    downloadsBefore,
+    clickedDownloadLink,
+  });
 
   // A switch of tabs leaves the last snapshot's refs pointing at another page.
   return data.openedTab === undefined && data.closedTab === undefined
@@ -66,6 +77,7 @@ interface TabsBefore {
   readonly active: Page;
   readonly activeIndex: number;
   readonly downloadsBefore: number;
+  readonly clickedDownloadLink: boolean;
 }
 
 async function reconcileTabs(tabSet: TabSet, was: TabsBefore): Promise<PageResult<'click'>> {
@@ -103,9 +115,9 @@ async function reconcileTabs(tabSet: TabSet, was: TabsBefore): Promise<PageResul
   return { ...state, closedTab: was.activeIndex, ...downloaded };
 }
 
-// A download that opened a tab leaves it blank, and a blank tab never finishes loading, so the
-// wait for its load ends with the download instead. The blank tab closes, and the driver stays on
-// the page. A tab that has a URL stays open next to the download.
+// A blank tab that a download opened never finishes loading, so the wait for its load ends with the
+// download, and the tab closes. A click on a download link opens no tab, and the browser reports
+// the download only once the server answers, so that wait ends at the action timeout.
 async function settleDownload(tabSet: TabSet, was: TabsBefore): Promise<DownloadInfo | undefined> {
   const opened = tabSet.list().findLast((page) => !was.before.includes(page));
 
@@ -115,6 +127,18 @@ async function settleDownload(tabSet: TabSet, was: TabsBefore): Promise<Download
     try {
       await Promise.race([waitQuietly(opened.waitForLoadState('domcontentloaded')), wait.done]);
     } finally {
+      wait.cancel();
+    }
+  } else if (was.clickedDownloadLink) {
+    const wait = tabSet.waitForDownload(was.downloadsBefore);
+    const timeout = Promise.withResolvers<void>();
+    const timer = setTimeout(timeout.resolve, tabSet.actionTimeoutMs);
+
+    try {
+      await Promise.race([wait.done, timeout.promise]);
+    } finally {
+      clearTimeout(timer);
+
       wait.cancel();
     }
   }
