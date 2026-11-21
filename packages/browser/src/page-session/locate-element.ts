@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { isListedOrigin } from '../is-listed-origin.ts';
 import type { ElementTarget } from '../page-service-contract.ts';
 
-// An element that carries origins is a granted write. The action waits for the element before it
-// acts, and the tab can navigate meanwhile, so the origin is checked once the element is in the
-// state the action needs, and a tab that left the origins is refused.
+// An element that carries origins is a granted write. The tab can navigate while the action waits,
+// so the origin is checked once the element is shown (or attached) and enabled, with nothing left
+// to wait for, and a tab that left the origins is refused.
 export async function locateElement(
   page: Page,
   element: ElementTarget,
@@ -16,7 +16,7 @@ export async function locateElement(
   const locator = await findLocator(page, element);
 
   if (element.origins !== undefined) {
-    await locator.waitFor({ state: readyState });
+    await locator.and(page.locator(':not(:disabled)')).waitFor({ state: readyState });
 
     if (!isListedOrigin(page.url(), element.origins)) {
       throw new WringerError('read-only', {

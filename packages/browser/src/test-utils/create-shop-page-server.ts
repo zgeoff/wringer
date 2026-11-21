@@ -43,6 +43,7 @@ export function createShopPageServer(): ShopPageServer {
 
   const page = buildShopPage(adminServer.url.href);
   const leavingPage = buildLeavingPage(adminServer.url.href);
+  const armingPage = buildArmingPage(adminServer.url.href);
   let restockReady = false;
   let pageLoads = 0;
   let basketFilled = false;
@@ -90,6 +91,9 @@ export function createShopPageServer(): ShopPageServer {
             }),
             { headers: { 'content-type': 'text/html' } },
           ),
+      },
+      '/arming': {
+        GET: () => new Response(armingPage, { headers: { 'content-type': 'text/html' } }),
       },
       '/leaving': {
         GET: () => new Response(leavingPage, { headers: { 'content-type': 'text/html' } }),
@@ -199,5 +203,14 @@ function buildLeavingPage(adminURL: string): string {
   return `<!doctype html>
 <title>Leaving</title>
 <button hidden>Search</button>
+<script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
+}
+
+// A page whose only Search button is shown but disabled, and which moves to the admin app after a
+// moment, so a click on the button waits to be enabled and then finds the admin page's button.
+function buildArmingPage(adminURL: string): string {
+  return `<!doctype html>
+<title>Arming</title>
+<button disabled>Search</button>
 <script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
 }
