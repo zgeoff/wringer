@@ -14,7 +14,8 @@ const encoded: Readonly<Record<string, string>> = {
   '|': '%7C',
 };
 
-// A link for an HTML attribute, or null when it is not an `https` or `http` link to one of the hosts.
+// A link for an HTML attribute, or null when it is not an `https` or `http` link to one of the
+// hosts.
 export function formatReportLink(
   url: string,
   linkHosts: readonly string[],
