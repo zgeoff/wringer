@@ -3,13 +3,13 @@ import { readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { HttpResponse, delay, http } from 'msw';
-import type { HttpTransport } from './http.ts';
+import type { HttpTransport, HttpTransportRoute } from './http.ts';
 import { buildBrokenBody } from './test-utils/build-broken-body.ts';
 import { buildStalledBody } from './test-utils/build-stalled-body.ts';
 import { createHttpWringer } from './test-utils/create-http-wringer.ts';
 import { createLoopbackApp } from './test-utils/create-loopback-app.ts';
 import { server } from './test-utils/mocks/server.ts';
-import { SHOP_API_URL, shopRequests } from './test-utils/shop-handlers.ts';
+import { ADMIN_API_URL, SHOP_API_URL, shopRequests } from './test-utils/shop-handlers.ts';
 
 async function setupTest() {
   const wringer = createHttpWringer(SHOP_API_URL);
@@ -56,7 +56,56 @@ async function setupTest() {
     wringer: redactingWringer,
   });
 
+  // A transport that declares the route, and leaves the session off when `route.auth` is false.
+  const routed: { url: string; route: HttpTransportRoute; session: string | null }[] = [];
+
+  const routedTransport = (
+    url: URL,
+    init: RequestInit,
+    route: HttpTransportRoute,
+  ): Promise<Response> => {
+    const headers = new Headers(init.headers);
+
+    if (route.auth) {
+      headers.set('x-session', 'on');
+    }
+
+    routed.push({ url: url.href, route, session: headers.get('x-session') });
+
+    return fetch(url, { ...init, headers });
+  };
+
+  const routedWringer = createHttpWringer(SHOP_API_URL, routedTransport);
+
+  const routedShop = await createTestSession({ parent: import.meta.dir, wringer: routedWringer });
+
+  // A transport that declares two parameters, so it cannot receive the route.
+  const twoParamCalls: string[] = [];
+
+  const twoParamWringer = createHttpWringer(SHOP_API_URL, (url, init) => {
+    twoParamCalls.push(url.href);
+
+    return fetch(url, init);
+  });
+
+  const twoParamShop = await createTestSession({
+    parent: import.meta.dir,
+    wringer: twoParamWringer,
+  });
+
   return {
+    routed,
+    twoParamCalls,
+    runRouted: (target: string, path: readonly string[], args: unknown = {}) =>
+      routedShop.dispatch(routedWringer, path, args, { ...routedShop.session, target }),
+    runTwoParam: (target: string, path: readonly string[], args: unknown = {}) =>
+      twoParamShop.dispatch(twoParamWringer, path, args, { ...twoParamShop.session, target }),
+    readRoutedEvidence: async (path: string) => {
+      const evidence: unknown = await Bun.file(join(routedShop.repo.root, path)).json();
+
+      return evidence;
+    },
+
     // Every file wringer keeps for an upload or a report: the features folders and the run logs.
     readSinks: async (root: string): Promise<string> => {
       const stateDir = join(root, wringer.stateDir);
@@ -131,6 +180,8 @@ test('it sends a GET and keeps the response as evidence', async () => {
       json: { method: 'GET', path: '/api/cart' },
     },
     evidence: {
+      endpoint: 'web',
+      auth: true,
       request: {
         method: 'GET',
         path: '/api/cart',
@@ -454,8 +505,16 @@ test('it sends each request through the transport the repo passes', async () => 
   }).toStrictEqual({
     data: expect.objectContaining({ status: 200, json: { method: 'GET', path: '/api/cart' } }),
     calls: [
-      [new URL(`${SHOP_API_URL}/`), expect.objectContaining({ method: 'GET' })],
-      [new URL(`${SHOP_API_URL}/api/cart`), expect.objectContaining({ method: 'GET' })],
+      [
+        new URL(`${SHOP_API_URL}/`),
+        expect.objectContaining({ method: 'GET' }),
+        { endpoint: 'web', auth: true },
+      ],
+      [
+        new URL(`${SHOP_API_URL}/api/cart`),
+        expect.objectContaining({ method: 'GET' }),
+        { endpoint: 'web', auth: true },
+      ],
     ],
     requests: ['GET /', 'GET /api/cart'],
   });
@@ -613,6 +672,8 @@ test('it redacts a configured header, query parameter and body path in the evide
       json: { method: '[redacted:http.body]', path: '/api/cart' },
     }),
     evidence: {
+      endpoint: 'web',
+      auth: true,
       request: {
         method: 'GET',
         path: '/api/cart?signature=[redacted:http.query.signature]',
@@ -782,4 +843,381 @@ test('it refuses an action post to a URL with a password on a read-only target w
     leaked: everything.match(/planted-url-pass/gu),
     code: result.envelope.error?.code,
   }).toStrictEqual({ leaked: null, code: 'usage' });
+});
+
+test('it sends to the default endpoint with the session when no flag is given', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  await ctx.runRouted('multi', ['http', 'request'], { path: '/api/cart' });
+
+  expect(ctx.routed).toStrictEqual([
+    { url: `${SHOP_API_URL}/api/cart`, route: { endpoint: 'web', auth: true }, session: 'on' },
+  ]);
+});
+
+test('it sends --no-auth to the default endpoint without the session', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  await ctx.runRouted('multi', ['http', 'request'], { path: '/api/cart', auth: false });
+
+  expect(ctx.routed).toStrictEqual([
+    { url: `${SHOP_API_URL}/api/cart`, route: { endpoint: 'web', auth: false }, session: null },
+  ]);
+});
+
+test('it sends --endpoint to a named endpoint with the session', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  const result = await ctx.runRouted('multi', ['http', 'request'], {
+    path: '/api/users',
+    endpoint: 'admin',
+  });
+
+  expect({
+    json: result.envelope.data,
+    routed: ctx.routed,
+  }).toStrictEqual({
+    json: expect.objectContaining({ json: { method: 'GET', path: '/api/users', app: 'admin' } }),
+    routed: [
+      {
+        url: `${ADMIN_API_URL}/api/users`,
+        route: { endpoint: 'admin', auth: true },
+        session: 'on',
+      },
+    ],
+  });
+});
+
+test('it sends --endpoint with --no-auth to a named endpoint without the session', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  await ctx.runRouted('multi', ['http', 'request'], {
+    path: '/api/users',
+    endpoint: 'admin',
+    auth: false,
+  });
+
+  expect(ctx.routed).toStrictEqual([
+    { url: `${ADMIN_API_URL}/api/users`, route: { endpoint: 'admin', auth: false }, session: null },
+  ]);
+});
+
+test('it accepts the default endpoint by name', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  await ctx.runRouted('multi', ['http', 'request'], { path: '/api/cart', endpoint: 'web' });
+
+  expect(ctx.routed.map((call) => call.route)).toStrictEqual([{ endpoint: 'web', auth: true }]);
+});
+
+test('it refuses an unknown endpoint with a usage error that lists the names, and sends nothing', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  const result = await ctx.runRouted('multi', ['http', 'request'], {
+    path: '/api/cart',
+    endpoint: 'billing',
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    error: result.envelope.error,
+    routed: ctx.routed,
+  }).toStrictEqual({
+    exitCode: 2,
+    error: {
+      code: 'usage',
+      message: 'Target multi has no http endpoint billing.',
+      hint: 'Name one of: web, admin.',
+    },
+    routed: [],
+  });
+});
+
+test('it sends --endpoint to an endpoint that only the target names', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('target-only', ['attach']);
+  await ctx.runRouted('target-only', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  const result = await ctx.runRouted('target-only', ['http', 'request'], {
+    path: '/api/users',
+    endpoint: 'admin',
+  });
+
+  expect({ exitCode: result.exitCode, routed: ctx.routed }).toStrictEqual({
+    exitCode: 0,
+    routed: [
+      {
+        url: `${ADMIN_API_URL}/api/users`,
+        route: { endpoint: 'admin', auth: true },
+        session: 'on',
+      },
+    ],
+  });
+});
+
+test('it checks an endpoint that only the target names at the default health path', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('target-only', ['attach']);
+  await ctx.runRouted('target-only', ['doctor']);
+
+  expect(ctx.routed).toStrictEqual([
+    { url: `${SHOP_API_URL}/`, route: { endpoint: 'web', auth: true }, session: 'on' },
+    { url: `${ADMIN_API_URL}/`, route: { endpoint: 'admin', auth: true }, session: 'on' },
+  ]);
+});
+
+test('it applies baseURL to the default endpoint only', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('based', ['attach']);
+  await ctx.runRouted('based', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  await ctx.runRouted('based', ['http', 'request'], { path: '/api/cart' });
+  await ctx.runRouted('based', ['http', 'request'], { path: '/api/users', endpoint: 'admin' });
+
+  expect(ctx.routed.map((call) => call.url)).toStrictEqual([
+    `${SHOP_API_URL}/api/cart`,
+    `${ADMIN_API_URL}/api/users`,
+  ]);
+});
+
+test('it grants a write on the default endpoint only to a grant with no endpoint', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('multi-prod', ['attach']);
+  await ctx.run('multi-prod', ['doctor']);
+
+  shopRequests.splice(0);
+
+  const granted = await ctx.run('multi-prod', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/search',
+  });
+
+  const onAdmin = await ctx.run('multi-prod', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/search',
+    endpoint: 'admin',
+  });
+
+  expect({
+    granted: granted.exitCode,
+    onAdmin: onAdmin.envelope.error?.code,
+    requests: shopRequests,
+  }).toStrictEqual({ granted: 0, onAdmin: 'read-only', requests: ['POST /api/search'] });
+});
+
+test('it grants a write on a named endpoint only to a grant that names it', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run('multi-prod', ['attach']);
+  await ctx.run('multi-prod', ['doctor']);
+
+  shopRequests.splice(0);
+
+  const granted = await ctx.run('multi-prod', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/audit',
+    endpoint: 'admin',
+  });
+
+  const onDefault = await ctx.run('multi-prod', ['http', 'request'], {
+    method: 'POST',
+    path: '/api/audit',
+  });
+
+  expect({
+    granted: granted.exitCode,
+    onDefault: onDefault.envelope.error?.code,
+    requests: shopRequests,
+  }).toStrictEqual({ granted: 0, onDefault: 'read-only', requests: ['POST admin /api/audit'] });
+});
+
+test('it checks every endpoint at its own health path, with the session unless healthAuth is false', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+
+  const result = await ctx.runRouted('multi', ['doctor']);
+
+  expect({ passed: result.envelope.data, routed: ctx.routed }).toStrictEqual({
+    passed: expect.objectContaining({ passed: true }),
+    routed: [
+      { url: `${SHOP_API_URL}/`, route: { endpoint: 'web', auth: true }, session: 'on' },
+      {
+        url: `${ADMIN_API_URL}/api/health`,
+        route: { endpoint: 'admin', auth: false },
+        session: null,
+      },
+    ],
+  });
+});
+
+test('it names a named endpoint in the doctor failure', async () => {
+  const ctx = await setupTest();
+
+  server.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.json({}, { status: 503 })));
+
+  await ctx.run('multi', ['attach']);
+
+  const result = await ctx.run('multi', ['doctor']);
+
+  expect(result.envelope.data).toStrictEqual({
+    passed: false,
+    results: [
+      {
+        name: 'http.reachable',
+        status: 'failed',
+        durationMs: expect.any(Number),
+        code: 'check-failed',
+        message: 'GET /api/health on endpoint admin answered 503.',
+      },
+    ],
+  });
+});
+
+test('it names a named endpoint in the doctor failure when its transport throws', async () => {
+  const ctx = await setupTest();
+
+  server.use(http.all(`${ADMIN_API_URL}/api/health`, () => HttpResponse.error()));
+
+  await ctx.run('multi', ['attach']);
+
+  const result = await ctx.run('multi', ['doctor']);
+
+  expect(result.envelope.data).toStrictEqual({
+    passed: false,
+    results: [
+      expect.objectContaining({
+        name: 'http.reachable',
+        status: 'failed',
+        code: 'environment',
+        message: expect.stringContaining('(endpoint admin)'),
+      }),
+    ],
+  });
+});
+
+test('it refuses --no-auth for a two-parameter transport before it sends anything', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runTwoParam('local', ['attach']);
+  await ctx.runTwoParam('local', ['doctor']);
+
+  ctx.twoParamCalls.splice(0);
+  shopRequests.splice(0);
+
+  const result = await ctx.runTwoParam('local', ['http', 'request'], {
+    path: '/api/cart',
+    auth: false,
+  });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    hint: result.envelope.error?.hint,
+    calls: ctx.twoParamCalls,
+    requests: shopRequests,
+  }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+    hint: expect.stringContaining('third parameter'),
+    calls: [],
+    requests: [],
+  });
+});
+
+test('it refuses a two-parameter transport when a healthAuth is false, at the doctor', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runTwoParam('public', ['attach']);
+
+  const result = await ctx.runTwoParam('public', ['doctor']);
+
+  expect({ data: result.envelope.data, calls: ctx.twoParamCalls }).toStrictEqual({
+    data: {
+      passed: false,
+      results: [
+        expect.objectContaining({ name: 'http.reachable', status: 'failed', code: 'usage' }),
+      ],
+    },
+    calls: [],
+  });
+});
+
+test('it still sends with a two-parameter transport when nothing leaves the session off', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runTwoParam('local', ['attach']);
+  await ctx.runTwoParam('local', ['doctor']);
+
+  ctx.twoParamCalls.splice(0);
+  shopRequests.splice(0);
+
+  const result = await ctx.runTwoParam('local', ['http', 'request'], { path: '/api/cart' });
+
+  expect({ exitCode: result.exitCode, calls: ctx.twoParamCalls }).toStrictEqual({
+    exitCode: 0,
+    calls: [`${SHOP_API_URL}/api/cart`],
+  });
+});
+
+test('it records the endpoint and the session choice in each request evidence', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runRouted('multi', ['attach']);
+  await ctx.runRouted('multi', ['doctor']);
+
+  ctx.routed.splice(0);
+
+  const result = await ctx.runRouted('multi', ['http', 'request'], {
+    path: '/api/users',
+    endpoint: 'admin',
+    auth: false,
+  });
+
+  const evidence = await ctx.readRoutedEvidence(result.envelope.evidence[0]?.path ?? '');
+
+  expect(evidence).toStrictEqual({
+    endpoint: 'admin',
+    auth: false,
+    request: expect.objectContaining({ url: `${ADMIN_API_URL}/api/users` }),
+    response: expect.objectContaining({ status: 200 }),
+  });
 });
