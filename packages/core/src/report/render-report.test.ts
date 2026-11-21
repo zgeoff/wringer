@@ -308,16 +308,24 @@ test('it shows an uploaded raster image as an image and another file as a link n
   );
 });
 
-test('it shows a link to another host or over http as a local file', () => {
+test('it shows a link to another host as a local file', () => {
   const ctx = setupTest();
   const other = ctx.buildFile('a/one.png', { url: 'https://evil.example/one.png' });
-  const plain = ctx.buildFile('a/two.png', { url: 'http://files.example/two.png' });
+  const plain = ctx.buildFile('a/two.png', { url: 'http://evil.example/two.png' });
 
   const text = ctx.render([ctx.buildStep({ files: [other, plain] })], {
     linkHosts: ['files.example'],
   });
 
   expect(text).toContain('<td>one.png (2.0 KB)<br>two.png (2.0 KB)</td>');
+});
+
+test('it shows an http image as a link, never as an image', () => {
+  const ctx = setupTest();
+  const image = ctx.buildFile('a/cart.png', { url: 'http://files.example/a1/cart.png' });
+  const text = ctx.render([ctx.buildStep({ files: [image] })], { linkHosts: ['files.example'] });
+
+  expect(text).toContain('<td><a href="http://files.example/a1/cart.png">screenshot</a></td>');
 });
 
 test('it shows a local file by its name and size, or as missing', () => {

@@ -6,7 +6,7 @@ import { escapeReportText } from './escape-report-text.ts';
 import { formatReportLink } from './format-report-link.ts';
 import { isRasterFile } from './is-raster-file.ts';
 
-// One step's files: a raster image as an image, any other uploaded file as a link named by its
+// One step's files: a raster image on https as an image, any other uploaded file as a link named by its
 // kind, and a file that stayed local by its name and size. A shortened cell names how many files
 // it leaves out.
 export function renderEvidenceCell(
@@ -28,7 +28,8 @@ function renderFile(file: JourneyFile, linkHosts: readonly string[], secrets: Se
     return renderLocalFile(file, secrets);
   }
 
-  return isRasterFile(file)
+  // A browser on an https page blocks an http image, so an http file is always a link.
+  return isRasterFile(file) && link.startsWith('https://')
     ? `<img src="${link}" width="320" />`
     : `<a href="${link}">${escapeReportText(file.evidence.kind, secrets)}</a>`;
 }
