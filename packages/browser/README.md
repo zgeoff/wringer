@@ -40,38 +40,61 @@ export const registry = createWringer({ name: 'shop' })
 
 An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 
-| Client call             | Command                                         | Effect |
-| ----------------------- | ----------------------------------------------- | ------ |
-| `goto({ path })`        | `browser goto /cart`                            | read   |
-| `snapshot()`            | `browser snapshot`                              | read   |
-| `describe({ ref })`     | none                                            | read   |
-| `click({ ref })`        | `browser click --ref e5`                        | write  |
-| `click({ role, name })` | `browser click --role button --name Search`     | write  |
-| `type({ ref, value })`  | `browser type --ref e4 --value buyer@shop.test` | write  |
-| `screenshot()`          | `browser screenshot`                            | read   |
+| Client call                | Command                                              | Effect |
+| -------------------------- | ---------------------------------------------------- | ------ |
+| `goto({ path })`           | `browser goto /cart`                                 | read   |
+| `snapshot()`               | `browser snapshot`                                   | read   |
+| `click({ ref })`           | `browser click --ref e5`                             | write  |
+| `click({ role, name })`    | `browser click --role button --name Search`          | write  |
+| `type({ ref, value })`     | `browser type --ref e4 --value buyer@shop.test`      | write  |
+| `check(element)`           | `browser check --label "Gift wrap"`, `uncheck`       | write  |
+| `press({ key, element })`  | `browser press Enter --label Email`                  | write  |
+| `tabs()`, `tab({ index })` | `browser tabs`, `browser tab 1`, `browser tab close` | read   |
+| `screenshot()`             | `browser screenshot`                                 | read   |
 
-The doctor check `browser.launched` fails when the browser has closed.
+`check`, `uncheck`, `hover` (a read) and `press` take the element flags of `click`. `press` takes a
+[Playwright key](https://playwright.dev/docs/api/class-keyboard#keyboard-press) such as `Control+A`,
+and with no element flag presses it on the focused element. `check` answers with the new `checked`
+state, and a disabled control or a non-checkbox fails with a usage error.
 
-One second before a command's deadline, the driver starts to close the page under a browser action
-that is still running. When the page closes within half a second, the command fails with a timeout,
-and the driver opens a new page and tries to load the old page's URL in it, without the input the
-old page held. When that load fails, the new page stays blank until a `browser goto`. When the page
-does not close in that time, the action may still land: the command fails with an environment error,
-and the browser refuses every later command until `up --restart`.
+The doctor check `browser.launched` fails when the browser has closed. `browser.reachable` sends
+HEAD to each endpoint, and GET after a 404, 405 or 501. It names the endpoint that cannot connect or
+answers 5xx, and passes a redirect.
 
-A command that runs past its deadline answers only once the driver has answered for its cancelled
-action, so a timeout means the action stopped. When the run's supervisor gives no answer within 2 s
-of the deadline, such as on a host too busy to run the close, the command fails with an environment
-error, because the action may still land.
+One second before a command's deadline, the driver closes the page under a running action, fails the
+command with a timeout, and opens a new page at the old URL. An action that had landed fails with an
+environment error that points at `browser tabs`. A page that does not close in half a second fails
+every later command until `up --restart`.
 
 ## Snapshots and refs
 
-`snapshot` prints the page as an accessibility tree, with a ref such as `[ref=e5]` on each element,
-and keeps it as evidence. A click or a type by ref acts on the element of the last snapshot, so take
-a snapshot after the page changes. `screenshot` keeps a PNG of the whole page as evidence.
+`snapshot` prints the page as an accessibility tree with a ref such as `[ref=e5]` on each element,
+and keeps it as evidence. A ref acts on the last snapshot's element, so snapshot again after the
+page changes. `screenshot` keeps a PNG. Both need a `goto` first.
+
+## Finding a control by its label
+
+`--label <text>` finds a control through Playwright's `getByLabel`, and `--role` narrows the match.
+It cannot go with `--name`. No match fails with `check-failed` after the action timeout, and several
+matches fail at once with a usage error: add `--role` or use `--ref`.
+
+## Tabs
+
+`tabs` lists each tab's index, URL and title, and marks the active one. `tab <index>` switches to a
+tab, and `tab close` closes the active tab and returns to its opener, but never the last tab. A
+click or key press that opens a tab switches to it, and its result carries `openedTab`. A tab that
+closes itself returns the driver to its opener, and the result carries `closedTab`. A switch forgets
+the last snapshot's refs.
+
+## Endpoints
+
+The browser config takes `endpoints`, a list of other run endpoints the browser may visit.
+`browser goto /users --endpoint admin` opens a path on one, and an unlisted name is a usage error.
 
 ## Read-only targets
 
-A read-only target refuses each click and type with exit code 3 and the target's hint, unless its
-`readOnly.allow` lists the element's role and exact name. The CLI cannot see a ref's role before it
-runs, so name a granted element by `--role` and `--name` on a read-only target.
+A read-only target refuses each click, type, check, uncheck and key press with exit code 3 and the
+target's hint, unless its `readOnly.allow` lists the element's role and exact name. Name a granted
+element by `--role` and `--name`, or by `--label` with `--role`, because the CLI cannot see a ref's
+role. A `press` with no element is always a write. A grant holds only while the active tab is on the
+origin of the default endpoint or a listed one.
