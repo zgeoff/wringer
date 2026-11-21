@@ -2,10 +2,11 @@ import type { SupervisorExit } from '../types.ts';
 import { describeSupervisorExit } from './describe-supervisor-exit.ts';
 
 const tailLines = 10;
-const urlCredentialsPattern = /(?<scheme>[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]+:[^\s/@]*@/giu;
+const urlCredentialsPattern = /(?<scheme>[a-z][a-z0-9+.-]*:\/\/)[^\s/@:]*:[^\s/]*@/giu;
 
 // The reason a supervisor's early exit gives, with the end of its log, for the one message the
-// caller reads. A line that holds URL credentials has them redacted.
+// caller reads. A line that holds URL credentials has them redacted, up to the last `@` of the
+// authority, as a password may hold one.
 export function formatSupervisorExit(exit: SupervisorExit, logText: string): string {
   const reason = `the supervisor exited with ${describeSupervisorExit(exit)} before the run was ready`;
 

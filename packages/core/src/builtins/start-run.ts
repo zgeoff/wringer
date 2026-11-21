@@ -267,12 +267,20 @@ async function waitForReady(
 
 const logTailBytes = 16_384;
 
-// The end of a log, empty when the file is missing or unreadable.
+// The end of a log, empty when the file is missing or unreadable. A tail that starts inside a line
+// loses that line, as its start may cut a URL's scheme off from the credentials after it.
 async function readLogTail(path: string): Promise<string> {
   try {
     const file = Bun.file(path);
+    const start = Math.max(0, file.size - logTailBytes);
 
-    return await file.slice(Math.max(0, file.size - logTailBytes)).text();
+    const text = await file.slice(start).text();
+
+    if (start === 0) {
+      return text;
+    }
+
+    return text.slice(text.indexOf('\n') + 1);
   } catch {
     return '';
   }

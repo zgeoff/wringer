@@ -621,6 +621,17 @@ test('#up puts the end of the supervisor log in the error when the supervisor ex
   });
 });
 
+test('#up keeps the password out of the error when the log tail starts inside the credentials', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.runWithExitingSupervisor(
+    'local',
+    String.raw`echo "cannot open postgres://app:sample-password@db/x"; head -c 16370 /dev/zero | tr "\0" x; echo; exit 1`,
+  );
+
+  expect(result.envelope.error?.message).not.toContain('sample-password');
+});
+
 test('#up refuses an attach target with a usage error naming attach', async () => {
   const ctx = await setupTest();
   const result = await ctx.run('prod', ['up']);

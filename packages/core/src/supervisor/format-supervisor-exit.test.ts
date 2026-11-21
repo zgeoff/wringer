@@ -53,6 +53,18 @@ test.each([
     expected: `the supervisor exited with code 1 before the run was ready; the end of its log:\ncannot reach postgres://[redacted]@db.local:5432/app`,
   },
   {
+    name: 'URL credentials with an empty username',
+    exit: { code: 1, signal: null },
+    log: 'cannot reach postgres://:sample-password@db/app\n',
+    expected: `the supervisor exited with code 1 before the run was ready; the end of its log:\ncannot reach postgres://[redacted]@db/app`,
+  },
+  {
+    name: 'URL credentials with an @ in the password',
+    exit: { code: 1, signal: null },
+    log: 'cannot reach postgres://app:first@second@db/app\n',
+    expected: `the supervisor exited with code 1 before the run was ready; the end of its log:\ncannot reach postgres://[redacted]@db/app`,
+  },
+  {
     name: 'a URL without credentials',
     exit: { code: 1, signal: null },
     log: 'cannot reach https://db.local/app\n',
