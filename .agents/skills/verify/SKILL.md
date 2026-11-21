@@ -5,7 +5,7 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:3a8295eb8ec4'
+  wringer-template: 'sha256:c276ebe8d896'
   wringer-command: bun verify
 ---
 
@@ -15,17 +15,6 @@ Use `bun verify` to start the shop example app, drive each feature your change t
 real CLI, and record a verdict. Put the report in the PR with step 10 of
 [Check a change](#check-a-change), and hand back the PR link and each feature you could not verify.
 When a blocker stops you before `publish`, hand back the blocker.
-
-The mistakes that cost the most time:
-
-- **Using the app before `doctor` passes.** `doctor` checks the app and each driver. A driver is a
-  package, such as `@wringer/http`, that adds a group of commands, such as
-  `bun verify http request`. Until `doctor` passes after `up`, commands that touch the app fail with
-  exit code 3.
-- **Editing a package while `up` runs it.** Run `bun verify up --restart` and `bun verify doctor`,
-  then the journey again.
-- **Running `done` before you check the end state.** `done` checks only that a journey command
-  succeeded.
 
 ## Key rules
 
@@ -76,7 +65,8 @@ Read a feature's file before you run its journey.
      again.
    - In any other case, such as a bug your change did not cause, skip `done`. List the feature in
      your reply with the end state you expected and the `data` you got.
-5. Run `bun verify done`. Expect: `ok: true`.
+5. Once the end state matches in step 4, run `bun verify done`. `done` checks only that a journey
+   command succeeded, and never reads the end state. Expect: `ok: true`.
 6. Repeat steps 3 to 5 for each changed feature. An edit to a file that matches a feature's `paths`
    after `done` makes its verdict `stale`: run `bun verify up --restart` and `bun verify doctor`,
    then repeat steps 3 to 5 for it.

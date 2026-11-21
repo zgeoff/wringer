@@ -21,6 +21,28 @@ test('it reads the remote default branch when the clone knows it', async () => {
   expect(base).toBe('origin/trunk');
 });
 
+test('it reads the remote default branch over origin/main when the clone has both', async () => {
+  const ctx = await setupTest();
+
+  await ctx.git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+  await ctx.git('update-ref', 'refs/remotes/origin/trunk', 'HEAD');
+  await ctx.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
+
+  const base = await ctx.readDefaultBase();
+
+  expect(base).toBe('origin/trunk');
+});
+
+test('it reads origin/main over a local main when the clone has no remote default branch', async () => {
+  const ctx = await setupTest();
+
+  await ctx.git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+
+  const base = await ctx.readDefaultBase();
+
+  expect(base).toBe('origin/main');
+});
+
 test('it falls back to main when the clone has no remote default branch', async () => {
   const ctx = await setupTest();
   const base = await ctx.readDefaultBase();

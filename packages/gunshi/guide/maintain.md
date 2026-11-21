@@ -5,15 +5,6 @@ Keep the gate, lint and the journeys true, and upgrade the verify skill
 Wire `bun verify lint` and the gate into the repo's CI, fix a journey when its feature changes, and
 upgrade the `verify` skill when `lint` reports an older template.
 
-The mistakes that cost the most:
-
-- **A shallow checkout.** The gate needs the merge base with the PR's base branch, so it fails on a
-  checkout without the full history.
-- **No run on a body edit.** The gate reads the report from the PR body, so a run that skips the
-  `edited` event misses a report that `bun verify publish` writes later.
-- **A nested copy.** `cp -R` into a folder that exists nests the copy inside it. Move the old
-  `verify` skill folder away first, as step 2 of the upgrade does.
-
 ## Wire the checks into CI
 
 `bun verify lint` and `bun verify gate --base <ref> --body-file <file>` need no running app, so they
@@ -47,7 +38,9 @@ jobs:
       - run: bun verify gate --base "origin/$GITHUB_BASE_REF" --body-file "$RUNNER_TEMP/pr-body.md"
 ```
 
-Keep it a workflow of its own, so a body edit reruns only this job.
+Keep the `edited` type: `bun verify publish` writes the report into the PR body after the push, and
+the gate reads the report only from there. Keep it a workflow of its own, so a body edit reruns only
+this job.
 
 ## Fix a drifted journey
 
@@ -70,7 +63,7 @@ installed template.
    `verify.ts` names, such as `.claude/skills/verify/`. List the new folder in `.git/info/exclude`,
    so git ignores it without a change to `.gitignore`.
 3. Copy the template's `verify/` folder to the skill folder path, which no longer exists after
-   step 2.
+   step 2. `cp -R` into a folder that exists nests the copy inside it.
 4. Delete the new skill's `references/feature-add-item.md`, the template's example feature, which
    fails `lint` unless the repo has a feature of that name. From the old skill's `references/`, copy
    each file that the new skill's `references/` lacks, such as each `feature-*.md` file. Keep the

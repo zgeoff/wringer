@@ -282,6 +282,40 @@ test('it fails a journey line with an unclosed quote', async () => {
   });
 });
 
+test('it fails a journey line with a placeholder, and the problem says how to write it', async () => {
+  const skill = [
+    '---',
+    'metadata:',
+    '  wringer-template: sha256:0a1b2c3d4e5f',
+    '  wringer-command: bun verify',
+    '---',
+    '```bash',
+    'bun verify action greet --name <name>',
+    '```',
+  ].join('\n');
+
+  const wringer = createDemoWringer({ ignore: ['skill/**'] });
+
+  const result = await resolveLintFailures({
+    wringer,
+    ...buildLintFixture(wringer, skill),
+    registryFile: null,
+    templateHash: 'sha256:0a1b2c3d4e5f',
+  });
+
+  expect(result).toStrictEqual({
+    commands: 2,
+    failures: [
+      {
+        check: 'journey',
+        where: 'skill/SKILL.md:7',
+        problem:
+          '`bun verify action greet --name <name>`: The shell reads `<name>` as a redirect. Write the line as a command that runs as written, or move a command with a placeholder into inline code.',
+      },
+    ],
+  });
+});
+
 test('it fails a registry file that only an ignore glob matches', async () => {
   const wringer = createCoverWringer({ ignore: ['verify/**', 'skill/**'] });
 
@@ -553,7 +587,9 @@ test.each([
     {
       check: 'paths',
       where,
-      problem: expect.stringMatching(/^The glob `[^`]+` matches no file\.$/u),
+      problem: expect.stringMatching(
+        /^The glob `[^`]+` matches no file\. Write it relative to the repo root/u,
+      ),
     },
   ]);
 });

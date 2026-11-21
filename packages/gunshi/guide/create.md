@@ -7,22 +7,6 @@ Add the verify CLI, its
 repo's `verify` skill. `create-verify-registry.ts` in the template shows one target, driver, action,
 repo command, doctor check and feature, on the builder that `createWringer` returns.
 
-The mistakes that cost the most:
-
-- **Leaving a read unmarked.** A repo command is a write unless it declares `effect: 'read'`, and an
-  action must declare its effect. A read-only target refuses each write with exit code 3.
-- **A glob relative to a package.** Write each feature's `paths` globs relative to the repo root, as
-  `git ls-files` prints paths. In a monorepo, a glob relative to a package folder matches nothing.
-- **Ignoring a file that changes behaviour.** Ignore only files the running app never reads, such as
-  docs and tests. The gate skips a file that an ignore glob matches, even when a feature's `paths`
-  match it too, so a change to it never needs a verdict.
-- **A placeholder in a journey.** In the `verify` skill's fenced code blocks, `bun verify lint`
-  parses each line that starts with `bun verify`, and reads `<name>` as a shell redirect. Write each
-  such line as a command that runs, and put a command with a placeholder in inline code.
-- **Matching a plain-text ready line as a string.** The launch target's `ready` function gets a JSON
-  object line as that object, and any other line as `{ message: <the line> }`. Match plain text on
-  `line['message']`.
-
 ## Steps
 
 1. Install each driver the app needs, at an exact version, such as
@@ -49,9 +33,13 @@ The mistakes that cost the most:
    - `command`: the command a developer runs to start the app;
    - `env`: the app's environment. Point the app's state at `ctx.runDirectory` here, such as a
      SQLite file, so each run starts clean. For a database server, name a database per run;
-   - `ready`: a function that returns the app's endpoints once a line shows the app is ready, such
-     as `{ web: 'http://127.0.0.1:4100' }`, and `null` before. The drivers use the `web` endpoint
-     unless a driver's config sets another `endpoint`.
+   - `ready`: a function that the CLI calls with each line the app prints. Return `null` until the
+     line shows the app is ready. Then return the app's endpoints, such as
+     `{ web: 'http://127.0.0.1:4100' }`. The drivers use the `web` endpoint unless a driver's config
+     sets another `endpoint`.
+
+     A JSON object line arrives as that object. Any other line arrives as `{ message: <the line> }`,
+     so match plain text on `line['message']`.
 5. Write a target with `mode: 'attach'` for each instance that runs apart from the CLI, such as a
    staging or a production deployment. Its `endpoints` function returns the instance's URLs. Give a
    target `access: 'read-only'` when agents must never write there, such as production, and a
@@ -60,28 +48,35 @@ The mistakes that cost the most:
    config for a driver refuses that driver's commands.
 7. Write an action with `.action` for each setup step a journey needs and a user can't do quickly in
    the app, such as seeding a record. The CLI runs it as `bun verify action <name>`.
-8. Write a repo command with `.command` for a read that a journey checks, such as a count.
+8. Write a repo command with `.command` for a read that a journey checks, such as a count. Give it
+   `effect: 'read'`: a command without one is a write, and a read-only target refuses each write.
 9. Write a doctor check with `.check` for each thing that must hold before a journey means anything,
    such as an API that answers. When a check holds only on some targets, list them in its `targets`;
    the doctor reports it as `skipped` on the rest. Then run `bun verify up`, then
    `bun verify doctor`. Expect: `data.passed: true`. Run `bun verify down`.
 10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
     journeys users take most, from the app's routes and its README, and give each feature the globs
-    of the files that change its behaviour.
-11. The gate fails a PR that changes a file matched by neither a feature's `paths` nor an ignore
-    glob. Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
-    `**/*.md`, `**/*.test.ts`, `.github/**` and `.claude/**`. Add each other file to the `paths` of
-    each feature whose behaviour it changes: a file such as `package.json` changes every feature.
-    Call `.shared` with the globs of the files that change every feature, such as the registry's own
-    folder, because `lint` fails a registry file that no shared glob or `paths` glob matches.
+    of the files that change its behaviour. Write each glob relative to the repo root, as
+    `git ls-files` prints paths. In a monorepo, do the same for a package's files.
+11. Map every file the repo tracks. In CI, `bun verify gate` fails a PR that changes a file matched
+    by neither a feature's `paths` nor an ignore glob.
+    - Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
+      `**/*.md`, `**/*.test.ts`, `.github/**` and `.claude/**`. Never ignore a file that changes
+      behaviour: the gate skips an ignored file even when a feature's `paths` match it.
+    - Add each other file to the `paths` of each feature whose behaviour it changes.
+    - Call `.shared` with the globs of the files that change every feature, such as `package.json`
+      and the registry's own folder. `lint` fails a registry file that no shared glob or `paths`
+      glob matches.
+
     Expect: each file that `git ls-files` prints matches a feature's `paths` or an ignore glob.
+
 12. Copy `verify/` from the template to `.claude/skills/verify/`. Rewrite the frontmatter's `name`
     and `description` and the `#` title for the app. Set `metadata.wringer-command` to the command
     that runs the script, `bun verify` by default. Rewrite each `<!-- repo: <part> -->` block:
     - `targets`: one row per target, with the command that starts a run, and what to do on a
       refusal.
     - `commands`: what `--help` can't say about the actions and repo commands, such as the order to
-      run them in.
+      run them in. A copy of `--help` goes stale.
     - `registry`: the path of the registry file.
 
     Then delete `references/feature-add-item.md` and write one `references/feature-<name>.md` per

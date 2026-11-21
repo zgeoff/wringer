@@ -130,7 +130,8 @@ test('it fails with exit code 1 on a feature glob that matches no file', async (
           {
             check: 'paths',
             where: 'feature greeting',
-            problem: 'The glob `src/**` matches no file.',
+            problem:
+              'The glob `src/**` matches no file. Write it relative to the repo root, as `git ls-files` prints paths, or remove it.',
           },
         ],
       },
@@ -243,7 +244,12 @@ test('it treats a tracked file that the working tree deleted as gone', async () 
     skill: 'docs/verify/SKILL.md',
     commands: 1,
     failures: [
-      { check: 'paths', where: 'feature greeting', problem: 'The glob `src/**` matches no file.' },
+      {
+        check: 'paths',
+        where: 'feature greeting',
+        problem:
+          'The glob `src/**` matches no file. Write it relative to the repo root, as `git ls-files` prints paths, or remove it.',
+      },
     ],
   });
 });
@@ -260,7 +266,7 @@ test('it prints each failure with its place for a person', async () => {
   expect(result).toStrictEqual({
     exitCode: 1,
     stdout:
-      'lint failed (check-failed): 3 lint failure(s). ignore: The glob `docs/**` matches no file. feature greeting: The skill folder has no `references/feature-greeting.md`. Write it with a Journey and an End state. docs/verify/SKILL.md: The verify skill is missing.\nhint: Fix each failure in the feature map or the verify skill, then run `lint` again.\n',
+      'lint failed (check-failed): 3 lint failure(s). ignore: The glob `docs/**` matches no file. Write it relative to the repo root, as `git ls-files` prints paths, or remove it. feature greeting: The skill folder has no `references/feature-greeting.md`. Write it with a Journey and an End state. docs/verify/SKILL.md: The verify skill is missing.\nhint: Fix each failure in the feature map or the verify skill, then run `lint` again.\n',
   });
 });
 
