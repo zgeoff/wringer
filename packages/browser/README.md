@@ -56,7 +56,7 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 [Playwright key](https://playwright.dev/docs/api/class-keyboard#keyboard-press) such as `Control+A`,
 and with no element flag presses it on the focused element. `check` answers with the new `checked`
 state, and a disabled control or a non-checkbox fails with a usage error. `goto --endpoint admin`
-opens a path on another endpoint that the config lists in `endpoints`.
+opens a path on an endpoint listed in `endpoints`, and an unlisted name is a usage error.
 
 The doctor check `browser.launched` fails when the browser has closed. `browser.reachable` sends
 HEAD to each endpoint, and GET after a 404, 405 or 501. It names the endpoint that cannot connect or
