@@ -4,6 +4,7 @@ import type { Locator, Page } from 'playwright-core';
 import { z } from 'zod';
 import { isListedOrigin } from '../is-listed-origin.ts';
 import type { ElementTarget } from '../page-service-contract.ts';
+import { buildTextSelector } from './build-text-selector.ts';
 
 // An element that carries origins is a granted write. The wait for it to be shown (or attached)
 // happens here. The caller then runs every other wait, the enabled wait included, in a trial or in
@@ -52,6 +53,10 @@ function findLocator(page: Page, element: ElementTarget): Promise<Locator> {
     return locateLabel(page, element.label, element.role);
   }
 
+  if ('text' in element) {
+    return locateText(page, element.text, element.role, element.origins !== undefined);
+  }
+
   return Promise.resolve(
     page.getByRole(toAriaRole(element.role), { name: element.name, exact: true }),
   );
@@ -92,4 +97,43 @@ const ariaRoleSchema = z.custom<AriaRole>((value) => typeof value === 'string');
 
 function toAriaRole(role: string): AriaRole {
   return ariaRoleSchema.parse(role);
+}
+
+// A granted write also needs the accessible name to be the text. A grant names a role and an exact
+// name, and a longer name that holds the text must not take the click.
+async function locateText(
+  page: Page,
+  text: string,
+  role: string | undefined,
+  isGranted: boolean,
+): Promise<Locator> {
+  const byText = page.locator(buildTextSelector(text, role !== undefined));
+  const roleOptions = isGranted ? { name: text, exact: true } : {};
+
+  const locator =
+    role === undefined ? byText : byText.and(page.getByRole(toAriaRole(role), roleOptions));
+
+  try {
+    await locator.first().waitFor({ state: 'attached' });
+  } catch (error) {
+    if (error instanceof errors.TimeoutError) {
+      throw new WringerError('check-failed', {
+        message: `No visible element shows the text "${text}"${role === undefined ? '' : ` with the role ${role}`}.`,
+        hint: 'Run `browser snapshot` to see the page as it is now.',
+      });
+    }
+
+    throw error;
+  }
+
+  const count = await locator.count();
+
+  if (count > 1) {
+    throw new WringerError('check-failed', {
+      message: `${count} elements show the text "${text}"${role === undefined ? '' : ` with the role ${role}`}.`,
+      hint: 'Add --role to narrow the match, or use --ref from `browser snapshot`.',
+    });
+  }
+
+  return locator;
 }

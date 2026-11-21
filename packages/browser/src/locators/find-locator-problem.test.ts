@@ -4,7 +4,8 @@ import { findLocatorProblem } from './find-locator-problem.ts';
 test.each([
   { case: 'a ref', args: { ref: 'e5' } },
   { case: 'a role and a name', args: { role: 'button', name: 'Search' } },
-  { case: 'a role alone', args: { role: 'button' } },
+  { case: 'a text', args: { text: 'Place order' } },
+  { case: 'a text and a role', args: { text: 'Place order', role: 'button' } },
   { case: 'a label', args: { label: 'Email' } },
   { case: 'a label and a role', args: { label: 'Email', role: 'textbox' } },
 ])('it accepts $case', (row) => {
@@ -27,10 +28,36 @@ test.each([
     args: { label: 'Email', name: 'Email' },
     expected: 'Pass --label with --role at most, never with --name.',
   },
+  {
+    case: 'a ref and a text',
+    args: { ref: 'e5', text: 'Place order' },
+    expected: 'Pass --ref alone, with no other locator flag.',
+  },
+  {
+    case: 'a text and a name',
+    args: { text: 'Place order', name: 'Place order' },
+    expected: 'Pass --text with --role at most, never with --name or --label.',
+  },
+  {
+    case: 'a text and a label',
+    args: { text: 'Email', label: 'Email' },
+    expected: 'Pass --text with --role at most, never with --name or --label.',
+  },
+  {
+    case: 'a role alone',
+    args: { role: 'button' },
+    expected: 'Pass --role together with --name, --label or --text.',
+  },
   { case: 'a name alone', args: { name: 'Email' }, expected: 'Pass --name together with --role.' },
-  { case: 'no flag', args: {}, expected: 'Pass --ref, --role with --name, or --label.' },
+  { case: 'no flag', args: {}, expected: 'Pass --ref, --role with --name, --label, or --text.' },
 ])('it refuses $case when an element is required', (row) => {
   expect(findLocatorProblem(row.args, true)).toBe(row.expected);
+});
+
+test('it refuses a role alone when the element is optional', () => {
+  expect(findLocatorProblem({ role: 'button' }, false)).toBe(
+    'Pass --role together with --name, --label or --text.',
+  );
 });
 
 test('it accepts no flag when the element is optional', () => {

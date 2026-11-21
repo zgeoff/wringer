@@ -14,7 +14,13 @@ const labelSchema = z.strictObject({
   ...originsShape,
 });
 
-const elementSchema = z.union([guardedRefSchema, roleSchema, labelSchema]);
+const textSchema = z.strictObject({
+  text: z.string().min(1),
+  role: z.string().min(1).optional(),
+  ...originsShape,
+});
+
+const elementSchema = z.union([guardedRefSchema, roleSchema, labelSchema, textSchema]);
 
 export type ElementTarget = z.infer<typeof elementSchema>;
 
@@ -23,10 +29,12 @@ export const pageStateSchema = z.strictObject({
   title: z.string(),
 });
 
-// A click or a key press can open a tab, or close the tab it ran on, and the result says which.
+// A click or a key press can open a tab, or close the tab it ran on, or start a download, and the
+// result says which.
 export const actionStateSchema = pageStateSchema.extend({
   openedTab: z.number().int().nonnegative().optional(),
   closedTab: z.number().int().nonnegative().optional(),
+  download: z.strictObject({ url: z.string(), fileName: z.string() }).optional(),
 });
 
 export const checkStateSchema = actionStateSchema.extend({ checked: z.boolean() });

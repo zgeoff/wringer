@@ -1181,3 +1181,200 @@ test('it rejects an empty text to wait for', async () => {
 
   expect(result.envelope.error?.code).toBe('usage');
 });
+
+test.each([
+  {
+    case: 'a click in a new tab',
+    command: 'click',
+    args: { role: 'link', name: 'Download in a new tab' },
+  },
+  {
+    case: 'a click in the same tab',
+    command: 'click',
+    args: { role: 'link', name: 'Download in this tab' },
+  },
+  {
+    case: 'a key press in the same tab',
+    command: 'press',
+    args: { key: 'Enter', role: 'link', name: 'Download in this tab' },
+  },
+])('it reports the download of $case and stays on the page with one tab', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/downloads' });
+
+  const result = await ctx.run('local', ['browser', row.command], row.args);
+  const tabs = await ctx.run('local', ['browser', 'tabs']);
+
+  expect({
+    error: result.envelope.error,
+    data: result.envelope.data,
+    tabs: tabs.envelope.data,
+  }).toStrictEqual({
+    error: null,
+    data: {
+      url: expect.stringMatching(/\/downloads$/u),
+      title: 'Downloads',
+      download: { url: expect.stringMatching(/\/files\/report\.csv$/u), fileName: 'report.csv' },
+    },
+    tabs: {
+      tabs: [
+        { index: 0, url: expect.stringMatching(/\/downloads$/u), title: 'Downloads', active: true },
+      ],
+    },
+  });
+});
+
+test('it keeps no file of a download as evidence', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/downloads' });
+
+  const result = await ctx.run('local', ['browser', 'click'], {
+    role: 'link',
+    name: 'Download in a new tab',
+  });
+
+  expect(result.envelope.evidence).toStrictEqual([]);
+});
+
+test('it still switches to a normal new tab on a page that links to downloads', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/downloads' });
+
+  const result = await ctx.run('local', ['browser', 'click'], {
+    role: 'link',
+    name: 'Open orders',
+  });
+
+  expect(result.envelope.data).toStrictEqual({
+    url: expect.stringMatching(/\/orders$/u),
+    title: 'Orders',
+    openedTab: 1,
+  });
+});
+
+test.each([
+  { case: 'a whole text', args: { text: 'Add to basket' }, picked: 'plain' },
+  { case: 'a text across a line break', args: { text: 'Gift wrap now' }, picked: 'broken' },
+  { case: 'a text across two blocks', args: { text: 'Two blocks' }, picked: 'blocks' },
+  { case: 'a text with a hidden child', args: { text: 'Save' }, picked: 'hidden-child' },
+  { case: 'a text in an open shadow root', args: { text: 'Inside the shadow' }, picked: 'shadow' },
+  { case: 'a text before its text-transform', args: { text: 'Pay now' }, picked: 'transformed' },
+  {
+    case: 'a part of a text with a role',
+    args: { text: 'invoices', role: 'menuitem' },
+    picked: 'menu',
+  },
+])('it clicks the element found by $case', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('local', ['browser', 'click'], row.args);
+
+  expect({ error: result.envelope.error, data: result.envelope.data }).toStrictEqual({
+    error: null,
+    data: { url: expect.stringMatching(/\/text$/u), title: `Picked ${row.picked}` },
+  });
+});
+
+test.each([
+  { case: 'an aria-label', text: 'Remove item' },
+  { case: 'a text in the case of its text-transform', text: 'PAY NOW' },
+  { case: 'a text that a hidden child completes', text: 'Save draft' },
+  { case: 'a part of a text without a role', text: 'invoices' },
+])('it fails $case with check-failed once the action times out', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('local', ['browser', 'click'], { text: row.text });
+
+  expect(result.envelope.error?.code).toBe('check-failed');
+});
+
+test.each([
+  { case: 'two elements with the same text', args: { text: 'Twin' }, count: 2, role: '' },
+  {
+    case: 'two buttons that hold the text',
+    args: { text: 'Search', role: 'button' },
+    count: 2,
+    role: ' with the role button',
+  },
+])('it fails $case at once with check-failed and the count', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('local', ['browser', 'click'], row.args);
+
+  expect(result.envelope.error).toStrictEqual({
+    code: 'check-failed',
+    message: `${row.count} elements show the text "${row.args.text}"${row.role}.`,
+    hint: 'Add --role to narrow the match, or use --ref from `browser snapshot`.',
+  });
+});
+
+test('it hovers over the element that shows a text', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+  await ctx.run('local', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('local', ['browser', 'hover'], { text: 'Add to basket' });
+
+  expect({ error: result.envelope.error, data: result.envelope.data }).toStrictEqual({
+    error: null,
+    data: { url: expect.stringMatching(/\/text$/u), title: 'Text' },
+  });
+});
+
+test.each([
+  { case: 'a text with a name', args: { text: 'Search', name: 'Search' } },
+  { case: 'a text with a label', args: { text: 'Search', label: 'Search' } },
+  { case: 'a role alone', args: { role: 'button' } },
+])('it refuses $case as a usage error', async (row) => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+
+  const result = await ctx.run('local', ['browser', 'click'], row.args);
+
+  expect(result.exitCode).toBe(2);
+});
+
+test('it refuses a click on a text on a read-only target with exit code 3', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('prod');
+  await ctx.run('prod', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('prod', ['browser', 'click'], { text: 'Search all orders' });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 3,
+    code: 'read-only',
+  });
+});
+
+test('it clicks only the element that a read-only target grants by role and name for a text', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('prod');
+  await ctx.run('prod', ['browser', 'goto'], { path: '/text' });
+
+  const result = await ctx.run('prod', ['browser', 'click'], { text: 'Search', role: 'button' });
+
+  expect({ error: result.envelope.error, data: result.envelope.data }).toStrictEqual({
+    error: null,
+    data: { url: expect.stringMatching(/\/text$/u), title: 'Picked search' },
+  });
+});

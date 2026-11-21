@@ -111,6 +111,8 @@ test.each([
   { path: '/orders', title: '<title>Orders</title>' },
   { path: '/closing', title: '<title>Closing</title>' },
   { path: '/changing', title: '<title>Changing</title>' },
+  { path: '/downloads', title: '<title>Downloads</title>' },
+  { path: '/text', title: '<title>Text</title>' },
 ])('it serves the page at $path', async (row) => {
   const ctx = setupTest();
 
@@ -127,4 +129,18 @@ test('it serves a page that moves to the admin app', async () => {
   const body = await response.text();
 
   expect(body).toContain(`location.href = '${ctx.server.adminURL}'`);
+});
+
+test('it sends the report as a download with a file name', async () => {
+  const ctx = setupTest();
+
+  const response = await ctx.request('/files/report.csv');
+
+  expect({
+    disposition: response.headers.get('content-disposition'),
+    body: await response.text(),
+  }).toStrictEqual({
+    disposition: 'attachment; filename="report.csv"',
+    body: 'sku,count\nmug,2\n',
+  });
 });

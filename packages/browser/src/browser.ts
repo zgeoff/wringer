@@ -8,10 +8,11 @@ import { callPage } from './call-page.ts';
 import { makeChromiumLauncher } from './chromium-launch/make-chromium-launcher.ts';
 import { collectEndpointURLs } from './endpoints/collect-endpoint-urls.ts';
 import { readEndpointFailure } from './endpoints/read-endpoint-failure.ts';
-import { findLocatorProblem } from './find-locator-problem.ts';
-import type { LocatorArgs } from './find-locator-problem.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
 import { isListedOrigin } from './is-listed-origin.ts';
+import { findLocatorProblem } from './locators/find-locator-problem.ts';
+import type { LocatorArgs } from './locators/find-locator-problem.ts';
+import { pickCommandEffect } from './locators/pick-command-effect.ts';
 import {
   actionStateSchema,
   checkStateSchema,
@@ -21,7 +22,7 @@ import {
 } from './page-service-contract.ts';
 import type { ElementTarget, PageArgs } from './page-service-contract.ts';
 import { startBrowserPage } from './page-session/start-browser-page.ts';
-import { pickActionEffect, pickBrowserEffect } from './pick-browser-effect.ts';
+import { pickActionEffect } from './pick-browser-effect.ts';
 import { readSnapshot } from './snapshot-wait/read-snapshot.ts';
 
 export type PageState = z.infer<typeof pageStateSchema>;
@@ -105,6 +106,7 @@ const locatorShape = {
   role: z.string().min(1).optional(),
   name: z.string().optional(),
   label: z.string().min(1).optional(),
+  text: z.string().min(1).optional(),
 };
 
 const elementArgsSchema = z.strictObject(locatorShape).superRefine((args, ctx) => {
@@ -183,6 +185,12 @@ export const browser = defineDriver({
       // A label names the control and not its accessible name, but a grant for it names both.
       if ('label' in element) {
         return Promise.resolve({ role: element.role ?? '', name: element.label });
+      }
+
+      // Shown text can hold more than the name, so only a role with the text can match a grant,
+      // and the page then also requires the name to be the text.
+      if ('text' in element) {
+        return Promise.resolve({ role: element.role ?? '', name: element.text });
       }
 
       return Promise.resolve(element);
@@ -331,19 +339,19 @@ export const browser = defineDriver({
     command({
       path: ['browser', 'click'],
       summary:
-        'Click an element, by --ref from the last snapshot, by --role and --name, or by --label',
+        'Click an element, by --ref from the last snapshot, by --role and --name, by --label, or by --text it shows',
       args: elementArgsSchema,
       data: actionStateSchema,
-      decideEffect: (args, config) => pickCommandEffect(args, config),
+      decideEffect: (args, config) => pickCommandEffect(args, config.readOnly?.allow ?? []),
       run: (args, ctx) => ctx.client.click(pickElementTarget(args)),
     }),
     command({
       path: ['browser', 'type'],
       summary:
-        'Type --value into a field, by --ref from the last snapshot, by --role and --name, or by --label',
+        'Type --value into a field, by --ref from the last snapshot, by --role and --name, by --label, or by --text it shows',
       args: typeArgsSchema,
       data: pageStateSchema,
-      decideEffect: (args, config) => pickCommandEffect(args, config),
+      decideEffect: (args, config) => pickCommandEffect(args, config.readOnly?.allow ?? []),
       run: (args, ctx) => ctx.client.type({ ...pickElementTarget(args), value: args.value }),
     }),
     command({
@@ -351,7 +359,7 @@ export const browser = defineDriver({
       summary: 'Tick a checkbox or a radio button, found like a click finds an element',
       args: elementArgsSchema,
       data: checkStateSchema,
-      decideEffect: (args, config) => pickCommandEffect(args, config),
+      decideEffect: (args, config) => pickCommandEffect(args, config.readOnly?.allow ?? []),
       run: (args, ctx) => ctx.client.check(pickElementTarget(args)),
     }),
     command({
@@ -359,7 +367,7 @@ export const browser = defineDriver({
       summary: 'Untick a checkbox, found like a click finds an element',
       args: elementArgsSchema,
       data: checkStateSchema,
-      decideEffect: (args, config) => pickCommandEffect(args, config),
+      decideEffect: (args, config) => pickCommandEffect(args, config.readOnly?.allow ?? []),
       run: (args, ctx) => ctx.client.uncheck(pickElementTarget(args)),
     }),
     command({
@@ -369,7 +377,7 @@ export const browser = defineDriver({
       args: pressArgsSchema,
       positionals: ['key'],
       data: actionStateSchema,
-      decideEffect: (args, config) => pickCommandEffect(args, config),
+      decideEffect: (args, config) => pickCommandEffect(args, config.readOnly?.allow ?? []),
       run: (args, ctx) =>
         ctx.client.press({ key: args.key, element: pickOptionalElementTarget(args) }),
     }),
@@ -535,6 +543,10 @@ function pickElementTarget(args: ElementArgs): ElementTarget {
     return { ref: args.ref };
   }
 
+  if (args.text !== undefined) {
+    return args.role === undefined ? { text: args.text } : { text: args.text, role: args.role };
+  }
+
   if (args.label !== undefined) {
     return args.role === undefined ? { label: args.label } : { label: args.label, role: args.role };
   }
@@ -550,27 +562,10 @@ function addLocatorIssue(args: LocatorArgs, required: boolean, ctx: z.Refinement
   }
 }
 
-// The command cannot see a ref's role before it runs, so only an element named by role and name,
-// or by label and role, can match a grant here; the client call checks a ref once it knows the
-// element, and every element once it knows the tab.
-function pickCommandEffect(args: ElementArgs, config: BrowserConfig): 'read' | 'write' {
-  const grants = config.readOnly?.allow ?? [];
-
-  if (args.label !== undefined) {
-    return args.role === undefined
-      ? 'write'
-      : pickBrowserEffect({ role: args.role, name: args.label }, grants);
-  }
-
-  if (args.role === undefined) {
-    return 'write';
-  }
-
-  return pickBrowserEffect({ role: args.role, name: args.name ?? '' }, grants);
-}
-
 function pickOptionalElementTarget(args: ElementArgs): ElementTarget | undefined {
-  const hasLocator = [args.ref, args.role, args.label].some((flag) => flag !== undefined);
+  const hasLocator = [args.ref, args.role, args.label, args.text].some(
+    (flag) => flag !== undefined,
+  );
 
   return hasLocator ? pickElementTarget(args) : undefined;
 }
