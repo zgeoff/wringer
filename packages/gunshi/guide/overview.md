@@ -84,8 +84,8 @@ These locations are defaults. When you change one, change each place that refers
 In the `verify` skill's `SKILL.md`, each `<!-- repo: <part> -->` block ends at `<!-- /repo -->` and
 holds what only this repo knows. Rewrite those blocks, the frontmatter's `name` and `description`,
 and the `#` title. Keep every other line. An upgrade of the template replaces every line outside the
-blocks, so put each repo choice, such as where an agent reports a refused write, in a block or in
-the repo's code. The repo owns each `references/feature-*.md` whole. Leave unchanged each other file
+blocks. Put each repo choice, such as where an agent reports a refused write, in a block or in the
+repo's code. The repo owns each `references/feature-*.md` whole. Leave unchanged each other file
 that the template ships in `references/`. Keep `metadata.wringer-template` as the template has it.
 `lint` compares that value with the hash of the template that the installed `@wringer/gunshi` ships.
 The `maintain` topic's upgrade copies in the new value.

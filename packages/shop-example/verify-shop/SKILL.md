@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change to the shop example in the running app, run the
   journey of a feature, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:5542aeedaba1'
+  wringer-template: 'sha256:8419ac821c08'
   wringer-command: bun verify
 ---
 
@@ -73,10 +73,9 @@ Read a feature's file before you run its journey.
      you got.
 6. Finish each edit to a file that matches the feature's `paths` before you run `done`. An edit
    after `done` makes the feature's verdict `stale`. A commit alone leaves the verdict as it was.
-   Once the end state matches in step 5, run `bun verify done` to record a verdict for the feature
-   that `use --feature` set. `done` checks only that one command of the journey succeeded, and never
-   reads the end state. Expect: `ok: true`. It fails with `check-failed` until a journey command
-   succeeds after `doctor`.
+   Once the end state matches in step 5, run `bun verify done`. It records a verdict for the feature
+   that `use --feature` set. Expect: `ok: true`. `done` checks only that a journey command succeeded
+   after `doctor`, and fails with `check-failed` until one has. It never reads the end state.
 7. Repeat steps 4 to 6 for each feature with `changed: true`, and for each feature your task names,
    in the order of the table in [References](#references). When the [Targets](#targets) section says
    to run a feature's journey last, run it after every other journey.
