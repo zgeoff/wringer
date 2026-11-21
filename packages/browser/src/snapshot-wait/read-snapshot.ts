@@ -10,7 +10,7 @@ export interface SnapshotReadDependencies extends SnapshotTextWaitDependencies {
 }
 
 // Keeps the snapshot it returns as evidence once. With a text to wait for, a timeout keeps the last
-// finished snapshot and fails.
+// finished snapshot, if any, and fails.
 export async function readSnapshot(
   request: SnapshotTextConditions,
   dependencies: SnapshotReadDependencies,
@@ -29,7 +29,9 @@ export async function readSnapshot(
   );
 
   if (outcome.kind === 'timed-out') {
-    await dependencies.writeSnapshot(outcome.last.snapshot);
+    if (outcome.last !== null) {
+      await dependencies.writeSnapshot(outcome.last.snapshot);
+    }
 
     throw buildSnapshotWaitError(outcome);
   }

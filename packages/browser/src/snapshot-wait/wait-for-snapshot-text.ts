@@ -3,6 +3,7 @@ import { collectUnmetConditions } from './collect-unmet-conditions.ts';
 import type { SnapshotTextConditions } from './collect-unmet-conditions.ts';
 
 const pollEveryMs = 250;
+const noSnapshotCondition = 'never finished a snapshot';
 
 // The driver answers this long before the command's deadline, so the supervisor has not yet
 // cancelled the page call.
@@ -24,13 +25,15 @@ export type SnapshotTextWaitOutcome =
   | { readonly kind: 'matched'; readonly snapshot: PageSnapshot }
   | {
       readonly kind: 'timed-out';
-      readonly last: PageSnapshot;
+
+      // Null when not even the first snapshot finished in time.
+      readonly last: PageSnapshot | null;
       readonly waitedMs: number;
       readonly unmet: readonly string[];
     };
 
 // Takes a snapshot at once, then again every 250 ms, until one holds the first text and lacks the
-// second. A later snapshot that stalls ends the wait like the time running out does, with the last
+// second. A snapshot that stalls ends the wait like the time running out does, with the last
 // snapshot that finished.
 export async function waitForSnapshotText(
   request: SnapshotTextWait,
@@ -44,11 +47,12 @@ export async function waitForSnapshotText(
       dependencies.timeLeftMs() - deadlineReserveMs,
     );
 
-  let last = await dependencies.takeSnapshot();
+  let last = await raceSnapshot(dependencies, readBudgetMs());
 
-  let unmet = collectUnmetConditions(last.snapshot, request);
+  let unmet =
+    last === null ? [noSnapshotCondition] : collectUnmetConditions(last.snapshot, request);
 
-  while (unmet.length > 0) {
+  while (last !== null && unmet.length > 0) {
     const budgetMs = readBudgetMs();
 
     if (budgetMs <= pollEveryMs) {
@@ -66,10 +70,10 @@ export async function waitForSnapshotText(
     }
 
     last = next;
-    unmet = collectUnmetConditions(last.snapshot, request);
+    unmet = collectUnmetConditions(next.snapshot, request);
   }
 
-  if (unmet.length === 0) {
+  if (last !== null && unmet.length === 0) {
     return { kind: 'matched', snapshot: last };
   }
 
