@@ -31,7 +31,14 @@ export async function readCommandContext(
   path: readonly string[],
   sources: ContextSources,
 ): Promise<CommandContext> {
-  addEnvSecrets(sources.secrets, { declared: wringer.secrets, env: sources.session.env });
+  // With a declared source, a command that has a run reads the declared values from the run's
+  // secrets file, so only a command with no run reads them from the process env.
+  const hasSource = sources.session.declaredSecrets !== undefined;
+
+  addEnvSecrets(sources.secrets, {
+    declared: hasSource ? [] : wringer.secrets,
+    env: sources.session.env,
+  });
 
   // The upload token joins the set before any command runs, whatever its variable is named.
   for (const secret of wringer.hooks.upload?.readSecrets?.() ?? []) {
@@ -62,6 +69,10 @@ export async function readCommandContext(
   const target = getTarget(wringer, targetName);
   const runID = findOwnValue(pointers.currentRun, targetName);
   const run = runID === undefined ? undefined : await sources.state.readRun(runID);
+
+  if (hasSource && run === undefined) {
+    addEnvSecrets(sources.secrets, { declared: wringer.secrets, env: sources.session.env });
+  }
 
   if (run !== undefined) {
     await readRunSecrets(sources.state, sources.secrets, run.runID);

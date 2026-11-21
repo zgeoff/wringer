@@ -8,6 +8,12 @@ export { buildRunView } from './state/build-run-view.ts';
 export type { DoctorState, RunView, SupervisorInfo } from './state/build-run-view.ts';
 export { buildRunPaths, buildStatePaths } from './state/build-state-paths.ts';
 export type { RunPaths, StatePaths } from './state/build-state-paths.ts';
+
+export type {
+  DeclaredSecretSource,
+  DeclaredSecretValues,
+} from './secrets/declared-secret-source.ts';
+
 export { addEnvSecrets } from './secrets/add-env-secrets.ts';
 export { collectEnvSecrets } from './secrets/collect-env-secrets.ts';
 export { collectFencedRanges } from './report-document/collect-fenced-ranges.ts';

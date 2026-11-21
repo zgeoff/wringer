@@ -39,22 +39,22 @@ does on any duplicate name.
 Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
 defaults to `.claude/skills/verify`.
 
+`env` is the source of the values of the registry's declared secrets: a record, or a function that
+gets an `AbortSignal` and returns one. `up` reads it once into the run's secrets file, in place of
+the process env. [Declared secret source](../../docs/reference/declared-secret-source.md) has the
+rules.
+
 ## Guide
 
 The package ships a guide in `guide/`. It walks an agent through adding a verify CLI, a feature map
 and a verify skill to a repo, and through the checks that prove them. Its `template/` folder holds
 the example files for the repo's own verify skill, which the agent writes.
 
-The CLI prints the guide of the installed version, so no copy in the repo goes stale:
-
-```bash
-bun verify guide            # the version and the topics
-bun verify guide create     # one topic
-bunx wringer-gunshi guide   # the same, for a repo that has no verify CLI yet
-```
-
-An unknown topic fails with `usage`, and its hint lists the topics. `guide template` prints the
-absolute path of the installed template folder, to copy from. `--human` prints a topic's text alone.
+The CLI prints the guide of the installed version, so no copy in the repo goes stale.
+`bun verify guide` prints the version and the topics, and `bun verify guide create` one topic. A
+repo with no verify CLI yet runs `bunx wringer-gunshi guide`. An unknown topic fails with `usage`,
+and its hint lists the topics. `guide template` prints the absolute path of the installed template
+folder, to copy from. `--human` prints a topic's text alone.
 
 ## lint
 

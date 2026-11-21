@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { parseUploadRecord } from '../evidence/upload-record.ts';
 import type { UploadRecord } from '../evidence/upload-record.ts';
 import { parseSecretsFile } from '../secrets/parse-secrets-file.ts';
-import type { StoredSecret } from '../secrets/parse-secrets-file.ts';
+import type { StoredSecret, StoredSecretInput } from '../secrets/parse-secrets-file.ts';
 import { WringerError } from '../wringer-error.ts';
 import { appendRunEvent } from './append-run-event.ts';
 import { buildManifestWrite } from './build-manifest-write.ts';
@@ -58,7 +58,7 @@ export interface StatePort {
   // The run's secrets file, `secrets.ndjson`, created with mode 0600. An append under the run's
   // lock skips a secret the file already holds, and writes nothing for a run that has ended or
   // crashed.
-  readonly appendSecret: (runID: RunID, secret: StoredSecret) => Promise<void>;
+  readonly appendSecret: (runID: RunID, secret: StoredSecretInput) => Promise<void>;
   readonly readSecrets: (runID: RunID) => Promise<readonly StoredSecret[]>;
   readonly removeSecrets: (runID: RunID) => Promise<void>;
 
@@ -232,7 +232,14 @@ export function createFileState(options: FileStateOptions): StatePort {
 
         const known = parseSecretsFile(text ?? '');
 
-        if (known.some((item) => item.name === secret.name && item.value === secret.value)) {
+        if (
+          known.some(
+            (item) =>
+              item.name === secret.name &&
+              item.value === secret.value &&
+              item.origin === (secret.origin ?? 'collected'),
+          )
+        ) {
           return;
         }
 

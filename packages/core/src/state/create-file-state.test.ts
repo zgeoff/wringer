@@ -394,7 +394,7 @@ test('it keeps a secret in a file of mode 0600 and reads it back', async () => {
 
   expect({ mode: info.mode & 0o777, secrets }).toStrictEqual({
     mode: 0o600,
-    secrets: [{ name: 'notes.session', value: 'planted-session-value' }],
+    secrets: [{ name: 'notes.session', value: 'planted-session-value', origin: 'collected' }],
   });
 });
 
@@ -410,7 +410,9 @@ test('it appends a secret the file already holds once', async () => {
 
   const secrets = await ctx.state.readSecrets(runID);
 
-  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
+  expect(secrets).toStrictEqual([
+    { name: 'notes.session', value: 'planted-session-value', origin: 'collected' },
+  ]);
 });
 
 test('it reads no secrets for a run with no file, and after the file is removed', async () => {
@@ -466,5 +468,7 @@ test('it skips a torn line of the secrets file', async () => {
 
   const secrets = await ctx.state.readSecrets(runID);
 
-  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
+  expect(secrets).toStrictEqual([
+    { name: 'notes.session', value: 'planted-session-value', origin: 'collected' },
+  ]);
 });

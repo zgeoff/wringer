@@ -10,6 +10,6 @@ export async function readRunSecrets(
   runID: RunID,
 ): Promise<void> {
   for (const stored of await state.readSecrets(runID)) {
-    secrets.add({ ...stored, origin: 'collected' });
+    secrets.add(stored);
   }
 }

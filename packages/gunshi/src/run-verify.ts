@@ -5,7 +5,7 @@ import {
   makeProcessSupervisorPort,
   runSupervisorProcess,
 } from '@wringer/core';
-import type { Wringer } from '@wringer/core';
+import type { DeclaredSecretSource, Wringer } from '@wringer/core';
 import { getAgentProfile } from 'gunshi/agent';
 import { buildCLIWringer } from './build-cli-wringer.ts';
 import { readRepoRoot } from './read-repo-root.ts';
@@ -19,6 +19,10 @@ export interface VerifyOptions {
   // The registry's own file, relative to the repo root, which `lint` checks for cover by a shared
   // glob or a feature's `paths`. It defaults to the script that runs the CLI.
   readonly registry?: string | undefined;
+
+  // Where the values of the registry's declared secrets come from, in place of the process env.
+  // `up` and `attach` read it once, and the run's other commands read the run's secrets file.
+  readonly env?: DeclaredSecretSource | undefined;
 }
 
 const defaultSkillFolder = '.claude/skills/verify';
@@ -35,6 +39,8 @@ export async function runVerify(wringer: Wringer, options: VerifyOptions = {}): 
       options.skill ?? defaultSkillFolder,
       options.registry ?? script ?? null,
     ),
+    undefined,
+    options.env,
   );
 }
 
@@ -42,6 +48,7 @@ export async function runVerify(wringer: Wringer, options: VerifyOptions = {}): 
 export async function runWringer(
   wringer: Wringer,
   repoPorts?: Pick<CLIPorts, 'readRepoRoot' | 'openRepo'>,
+  declaredSecrets?: DeclaredSecretSource,
 ): Promise<void> {
   const [, script] = process.argv;
   const selfCommand = script === undefined ? [process.execPath] : [process.execPath, script];
@@ -52,6 +59,7 @@ export async function runWringer(
     isTTY: process.stdout.isTTY,
     isAgent: getAgentProfile().isAgent,
     env: process.env,
+    declaredSecrets,
     writeStdout: (text) => {
       process.stdout.write(text);
     },

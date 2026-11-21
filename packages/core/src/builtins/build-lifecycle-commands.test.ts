@@ -328,7 +328,9 @@ test('#up keeps the secrets file of the run it reuses', async () => {
 
   const secrets = await ctx.state.readSecrets(runID);
 
-  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-session-value' }]);
+  expect(secrets).toStrictEqual([
+    { name: 'notes.session', value: 'planted-session-value', origin: 'collected' },
+  ]);
 });
 
 test('#up --restart removes the secrets file of the run it ends', async () => {
@@ -558,7 +560,9 @@ test('#up keeps the secrets file of the run it would replace when its deadline p
 
   const secrets = await ctx.state.readSecrets('crashed-run');
 
-  expect(secrets).toStrictEqual([{ name: 'notes.session', value: 'planted-crashed-value' }]);
+  expect(secrets).toStrictEqual([
+    { name: 'notes.session', value: 'planted-crashed-value', origin: 'collected' },
+  ]);
 });
 
 test('#up marks the new run crashed when its supervisor cannot start', async () => {

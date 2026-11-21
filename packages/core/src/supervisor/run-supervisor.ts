@@ -20,7 +20,7 @@ import type { StatePort } from '../state/create-file-state.ts';
 import type { Endpoints, RunEvent } from '../state/run-event.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { LaunchPlan, ServiceInstance, TargetDefinition, Wringer } from '../types.ts';
-import type { WringerError } from '../wringer-error.ts';
+import { WringerError } from '../wringer-error.ts';
 import { buildShutDownSteps } from './build-shut-down-steps.ts';
 import { pickPendingCleanups } from './pick-pending-cleanups.ts';
 import { pickSupervisorOperation } from './pick-supervisor-operation.ts';
@@ -41,6 +41,10 @@ export interface SupervisorOptions {
   readonly now: () => Date;
   readonly reportError: (message: string) => void;
   readonly signal?: AbortSignal | undefined;
+
+  // True when the `up` command read the declared secrets from a source. The supervisor then reads
+  // their values from the run's secrets file, not from its own env.
+  readonly readsDeclaredFromRun?: boolean | undefined;
 }
 
 type Cleanup = readonly [string, () => Promise<void>];
@@ -63,7 +67,23 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   // file, which it reloads before each append so it also scrubs what a command collected.
   const secrets = createSecretSet();
 
-  addEnvSecrets(secrets, { declared: options.wringer.secrets, env: options.launchHost.env });
+  addEnvSecrets(secrets, {
+    declared: options.readsDeclaredFromRun === true ? [] : options.wringer.secrets,
+    env: options.launchHost.env,
+  });
+
+  if (options.readsDeclaredFromRun === true && options.wringer.secrets.length > 0) {
+    await readRunSecrets(options.state, secrets, options.runID).catch((error: unknown) => {
+      if (error instanceof WringerError) {
+        throw error;
+      }
+
+      throw new WringerError('environment', {
+        message: `The secrets file of run ${options.runID} could not be read.`,
+        hint: 'Run `down`, then `up` again.',
+      });
+    });
+  }
 
   for (const secret of options.wringer.hooks.upload?.readSecrets?.() ?? []) {
     secrets.add(secret);

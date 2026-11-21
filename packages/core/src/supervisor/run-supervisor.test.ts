@@ -1074,7 +1074,7 @@ test('#runSupervisor scrubs a launch env secret from the crashed event and keeps
       at: expect.any(String),
       reason: expect.stringContaining('login rejected for [redacted:SHOP_SESSION_TOKEN]'),
     },
-    secrets: [{ name: 'SHOP_SESSION_TOKEN', value: 'planted-launch-token' }],
+    secrets: [{ name: 'SHOP_SESSION_TOKEN', value: 'planted-launch-token', origin: 'collected' }],
     log: false,
   });
 });
