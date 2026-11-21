@@ -265,8 +265,8 @@ test('it fails with environment before it sends any file when the token is not s
 
 test.each([
   [
-    'not https',
-    (filename: string, host: string) => ({ url: `http://${host}/${filename}`, expiresAt: null }),
+    'not http or https',
+    (filename: string, host: string) => ({ url: `ftp://${host}/${filename}`, expiresAt: null }),
   ],
   [
     'on another host',
@@ -299,7 +299,7 @@ test('it keeps the links uploaded before a failure in the reuse record', async (
   const ctx = await setupTest({
     buildLink: (filename, host) =>
       filename.startsWith('bad')
-        ? { url: `http://${host}/${filename}`, expiresAt: null }
+        ? { url: `ftp://${host}/${filename}`, expiresAt: null }
         : { url: `https://${host}/files/${filename}`, expiresAt: null },
   });
 

@@ -12,8 +12,8 @@ export function pickLinkFailure(
 
   const url = new URL(link.url);
 
-  if (url.protocol !== 'https:') {
-    return 'The file host returned a link that is not https.';
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    return 'The file host returned a link that is not http or https.';
   }
 
   if (!uploader.linkHosts.includes(url.host)) {
