@@ -2,12 +2,11 @@
 
 ## [0.3.10](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.9...@wringer/gunshi@0.3.10) (2026-11-21)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/http bumped to 0.1.9
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/http bumped to 0.1.9
 
 ## [0.3.9](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.8...@wringer/gunshi@0.3.9) (2026-11-21)
 
