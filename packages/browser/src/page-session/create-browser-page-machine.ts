@@ -12,6 +12,10 @@ export interface PageCommand<PageHandle> {
   readonly action: (page: PageHandle) => Promise<PageActionResult>;
   readonly signal: AbortSignal;
   readonly settle: PromiseWithResolvers<unknown>;
+
+  // True once the command's click or key press has reached the page, so a cancel after it cannot
+  // say the action never ran.
+  readonly hasLanded?: (() => boolean) | undefined;
 }
 
 interface PageInput<PageHandle> {
@@ -97,7 +101,21 @@ export function createBrowserPageMachine<PageHandle>() {
         );
       },
       abandonHead: (args) => {
-        args.context.queue[0]?.settle.reject(
+        const [head] = args.context.queue;
+
+        if (head?.hasLanded?.() === true) {
+          head.settle.reject(
+            new WringerError('environment', {
+              message:
+                'The command ran past its deadline after its action landed, so the browser closed its page.',
+              hint: 'Run `browser tabs` to see what the action changed.',
+            }),
+          );
+
+          return;
+        }
+
+        head?.settle.reject(
           new WringerError('timeout', {
             message: 'The command ran past its deadline, so the browser closed its page.',
           }),

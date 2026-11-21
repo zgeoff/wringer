@@ -42,13 +42,21 @@ test('it puts the basket cookie in the basket title', async () => {
   expect(body).toBe('<!doctype html><title>Basket: mugs</title>');
 });
 
-test('it counts each load of the page', async () => {
+test('it counts each navigation to the page', async () => {
+  const ctx = setupTest();
+
+  await ctx.request('/', { headers: { 'sec-fetch-mode': 'navigate' } });
+  await ctx.request('/', { headers: { 'sec-fetch-mode': 'navigate' } });
+
+  expect(ctx.server.pageLoads()).toBe(2);
+});
+
+test('it counts no load for a request that is not a navigation', async () => {
   const ctx = setupTest();
 
   await ctx.request('/');
-  await ctx.request('/');
 
-  expect(ctx.server.pageLoads()).toBe(2);
+  expect(ctx.server.pageLoads()).toBe(0);
 });
 
 test('it answers an unknown path with 404 and counts no page load', async () => {
@@ -79,4 +87,34 @@ test('it answers that the Restock button is ready once the test reveals it', asy
   const ready: unknown = await response.json();
 
   expect(ready).toBeTrue();
+});
+
+test('it serves the admin app on another origin and records its POSTs', async () => {
+  const ctx = setupTest();
+
+  const home = await fetch(ctx.server.adminURL);
+
+  await fetch(new URL('/api/search', ctx.server.adminURL), { method: 'POST' });
+
+  expect({
+    sameOrigin: new URL(ctx.server.adminURL).origin === new URL(ctx.server.url).origin,
+    body: await home.text(),
+    posts: ctx.server.adminPosts,
+  }).toStrictEqual({
+    sameOrigin: false,
+    body: expect.stringContaining('<h1>Admin</h1>'),
+    posts: ['/api/search'],
+  });
+});
+
+test.each([
+  { path: '/orders', title: '<title>Orders</title>' },
+  { path: '/closing', title: '<title>Closing</title>' },
+])('it serves the page at $path', async (row) => {
+  const ctx = setupTest();
+
+  const response = await ctx.request(row.path);
+  const body = await response.text();
+
+  expect(body).toContain(row.title);
 });

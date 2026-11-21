@@ -2,7 +2,13 @@ import { z } from 'zod';
 
 const refSchema = z.strictObject({ ref: z.string().min(1) });
 const roleSchema = z.strictObject({ role: z.string().min(1), name: z.string() });
-const elementSchema = z.union([refSchema, roleSchema]);
+
+const labelSchema = z.strictObject({
+  label: z.string().min(1),
+  role: z.string().min(1).optional(),
+});
+
+const elementSchema = z.union([refSchema, roleSchema, labelSchema]);
 
 export type ElementTarget = z.infer<typeof elementSchema>;
 
@@ -10,6 +16,23 @@ export const pageStateSchema = z.strictObject({
   url: z.string(),
   title: z.string(),
 });
+
+// A click or a key press can open a tab, or close the tab it ran on, and the result says which.
+export const actionStateSchema = pageStateSchema.extend({
+  openedTab: z.number().int().nonnegative().optional(),
+  closedTab: z.number().int().nonnegative().optional(),
+});
+
+export const checkStateSchema = actionStateSchema.extend({ checked: z.boolean() });
+
+const tabSchema = z.strictObject({
+  index: z.number().int().nonnegative(),
+  url: z.string(),
+  title: z.string(),
+  active: z.boolean(),
+});
+
+export const tabsSchema = z.strictObject({ tabs: z.array(tabSchema) });
 
 export const snapshotSchema = z.strictObject({
   url: z.string(),
@@ -29,7 +52,18 @@ export const pageServiceContract = {
     args: refSchema,
     result: z.strictObject({ ref: z.string(), role: z.string(), name: z.string() }),
   },
-  click: { args: elementSchema, result: pageStateSchema },
+  click: { args: elementSchema, result: actionStateSchema },
+  check: { args: elementSchema, result: checkStateSchema },
+  uncheck: { args: elementSchema, result: checkStateSchema },
+  press: {
+    args: z.strictObject({ key: z.string().min(1), element: elementSchema.optional() }),
+    result: actionStateSchema,
+  },
+  hover: { args: elementSchema, result: pageStateSchema },
+  tabs: { args: z.null(), result: tabsSchema },
+  tab: { args: z.strictObject({ index: z.number().int().nonnegative() }), result: pageStateSchema },
+  closeTab: { args: z.null(), result: actionStateSchema },
+  activeURL: { args: z.null(), result: z.strictObject({ url: z.string() }) },
   type: {
     args: z.strictObject({ element: elementSchema, value: z.string() }),
     result: pageStateSchema,
