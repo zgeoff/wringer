@@ -35,7 +35,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/bun-checks.yml@5124a68465cdeeb155e71e0a804881731798e59e # main
+    uses: zgeoff/tools/.github/workflows/bun-checks.yml@6e0a3388b0dcad8a441e4529a1422ef2b005385f # main
     with:
       scripts: ${{ vars.BUN_CHECK_SCRIPTS }}
       # the pull request that landed the commits already scanned them
@@ -65,7 +65,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: zgeoff/tools/.github/workflows/release-please.yml@5124a68465cdeeb155e71e0a804881731798e59e # main
+    uses: zgeoff/tools/.github/workflows/release-please.yml@6e0a3388b0dcad8a441e4529a1422ef2b005385f # main
     with:
       app-id: ${{ vars.RELEASE_APP_ID }}
       merge: false
@@ -121,6 +121,6 @@ jobs:
     permissions:
       contents: read
       id-token: write
-    uses: zgeoff/tools/.github/workflows/npm-publish.yml@5124a68465cdeeb155e71e0a804881731798e59e # main
+    uses: zgeoff/tools/.github/workflows/npm-publish.yml@6e0a3388b0dcad8a441e4529a1422ef2b005385f # main
     with:
       paths: ${{ inputs.republish_paths }}
