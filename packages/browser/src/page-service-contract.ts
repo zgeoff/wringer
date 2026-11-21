@@ -1,14 +1,20 @@
 import { z } from 'zod';
 
 const refSchema = z.strictObject({ ref: z.string().min(1) });
-const roleSchema = z.strictObject({ role: z.string().min(1), name: z.string() });
+
+// The origins a granted write may land on, which the page checks once the element is ready to act
+// on, because the tab can navigate while the action waits for it.
+const originsShape = { origins: z.array(z.string()).optional() };
+const guardedRefSchema = refSchema.extend(originsShape);
+const roleSchema = z.strictObject({ role: z.string().min(1), name: z.string(), ...originsShape });
 
 const labelSchema = z.strictObject({
   label: z.string().min(1),
   role: z.string().min(1).optional(),
+  ...originsShape,
 });
 
-const elementSchema = z.union([refSchema, roleSchema, labelSchema]);
+const elementSchema = z.union([guardedRefSchema, roleSchema, labelSchema]);
 
 export type ElementTarget = z.infer<typeof elementSchema>;
 

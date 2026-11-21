@@ -991,3 +991,53 @@ test('it allows a granted click on the origin of a listed endpoint', async () =>
     adminPosts: ['/api/search'],
   });
 });
+
+test('it refuses a granted click that waits for a control while the tab leaves the listed origins', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('tour');
+  await ctx.run('tour', ['browser', 'goto'], { path: '/leaving' });
+
+  const result = await ctx.run('tour', ['browser', 'click'], { role: 'button', name: 'Search' });
+
+  expect({
+    exitCode: result.exitCode,
+    code: result.envelope.error?.code,
+    adminPosts: ctx.adminPosts,
+  }).toStrictEqual({ exitCode: 3, code: 'read-only', adminPosts: [] });
+});
+
+test('it fails a ref from before a tab switch as unknown when hovering', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+
+  const snapshot = await ctx.run('local', ['browser', 'snapshot']);
+
+  const printed = snapshotSchema.parse(snapshot.envelope.data).snapshot;
+  const ref = /textbox "Email" \[ref=(?<ref>e\d+)\]/u.exec(printed)?.groups?.['ref'];
+
+  await ctx.run('local', ['browser', 'click'], { role: 'link', name: 'Open orders' });
+  await ctx.run('local', ['browser', 'tab'], { target: '0' });
+
+  const result = await ctx.run('local', ['browser', 'hover'], { ref });
+
+  expect({ exitCode: result.exitCode, code: result.envelope.error?.code }).toStrictEqual({
+    exitCode: 2,
+    code: 'usage',
+  });
+});
+
+test('it ticks and unticks a checkbox that a box lies over, by its label', async () => {
+  const ctx = await setupTest();
+
+  await ctx.open('local');
+
+  const ticked = await ctx.run('local', ['browser', 'check'], { label: 'Gift wrap' });
+  const unticked = await ctx.run('local', ['browser', 'uncheck'], { label: 'Gift wrap' });
+
+  expect([ticked.envelope.data, unticked.envelope.data]).toStrictEqual([
+    expect.objectContaining({ checked: true }),
+    expect.objectContaining({ checked: false }),
+  ]);
+});

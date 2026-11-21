@@ -10,6 +10,7 @@ import { readEndpointFailure } from './endpoints/read-endpoint-failure.ts';
 import { findLocatorProblem } from './find-locator-problem.ts';
 import type { LocatorArgs } from './find-locator-problem.ts';
 import type { SnapshotElement } from './find-snapshot-element.ts';
+import { isListedOrigin } from './is-listed-origin.ts';
 import {
   actionStateSchema,
   checkStateSchema,
@@ -252,20 +253,37 @@ export const browser = defineDriver({
       }),
       snapshot: () => snapshot(null),
       describe,
-      click: async (element) => acts.click({ ...(await prepare(element)), args: element }),
+      click: async (element) =>
+        acts.click({ ...(await prepare(element)), args: guardElement(session, element) }),
       type: async (request) => {
         const element = pickElementTarget(request);
 
-        return acts.type({ ...(await prepare(element)), args: { element, value: request.value } });
+        return acts.type({
+          ...(await prepare(element)),
+          args: { element: guardElement(session, element), value: request.value },
+        });
       },
-      check: async (element) => acts.check({ ...(await prepare(element)), args: element }),
-      uncheck: async (element) => acts.uncheck({ ...(await prepare(element)), args: element }),
+      check: async (element) =>
+        acts.check({ ...(await prepare(element)), args: guardElement(session, element) }),
+      uncheck: async (element) =>
+        acts.uncheck({ ...(await prepare(element)), args: guardElement(session, element) }),
       press: async (request) =>
         acts.press({
           ...(await prepare(request.element)),
-          args: { key: request.key, element: request.element },
+          args: {
+            key: request.key,
+            element:
+              request.element === undefined ? undefined : guardElement(session, request.element),
+          },
         }),
-      hover,
+
+      // A ref the last snapshot does not hold fails here, as it does for every other action, because
+      // a tab switch clears the snapshot while the browser still resolves the ref.
+      hover: async (element) => {
+        await describeTarget(element);
+
+        return hover(element);
+      },
       tabs: () => tabs(null),
       tab,
       closeTab: () => closeTab(null),
@@ -450,11 +468,15 @@ function makeElementActions(session: BrowserSession, fence: Fence) {
 // A write grant holds only on the origins of the endpoints the driver may visit: a tab that landed
 // elsewhere shows controls that no grant was written for.
 function isAllowedOrigin(session: BrowserSession, tabURL: string): boolean {
-  const origin = URL.parse(tabURL)?.origin;
+  return isListedOrigin(tabURL, collectAllowedOrigins(session));
+}
 
-  return collectEndpointURLs(session.config, session.endpoints).some(
-    (endpoint) => endpoint.url !== undefined && URL.parse(endpoint.url)?.origin === origin,
-  );
+function collectAllowedOrigins(session: BrowserSession): string[] {
+  return collectEndpointURLs(session.config, session.endpoints).flatMap((endpoint) => {
+    const origin = endpoint.url === undefined ? undefined : URL.parse(endpoint.url)?.origin;
+
+    return origin === undefined ? [] : [origin];
+  });
 }
 
 function getEndpointURL(session: BrowserSession, endpoint: string | undefined): string {
@@ -477,6 +499,14 @@ function getEndpointURL(session: BrowserSession, endpoint: string | undefined): 
   }
 
   return found.url;
+}
+
+// A read-only target's write is granted for the app's origins only, and the page checks the tab's
+// origin again when the element is ready, which the tab can leave while the action waits.
+function guardElement(session: BrowserSession, element: ElementTarget): ElementTarget {
+  return session.config.readOnly === undefined
+    ? element
+    : { ...element, origins: collectAllowedOrigins(session) };
 }
 
 type ElementArgs = LocatorArgs;

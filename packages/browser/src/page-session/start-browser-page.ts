@@ -144,7 +144,7 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
               return;
             }
 
-            const locator = await locateElement(page, args.element);
+            const locator = await locateElement(page, args.element, 'attached');
 
             await locator.press(args.key);
           }),

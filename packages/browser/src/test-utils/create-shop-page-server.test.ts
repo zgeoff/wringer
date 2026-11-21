@@ -118,3 +118,12 @@ test.each([
 
   expect(body).toContain(row.title);
 });
+
+test('it serves a page that moves to the admin app', async () => {
+  const ctx = setupTest();
+
+  const response = await ctx.request('/leaving');
+  const body = await response.text();
+
+  expect(body).toContain(`location.href = '${ctx.server.adminURL}'`);
+});

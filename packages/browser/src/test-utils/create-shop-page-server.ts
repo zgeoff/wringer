@@ -42,6 +42,7 @@ export function createShopPageServer(): ShopPageServer {
   });
 
   const page = buildShopPage(adminServer.url.href);
+  const leavingPage = buildLeavingPage(adminServer.url.href);
   let restockReady = false;
   let pageLoads = 0;
   let basketFilled = false;
@@ -89,6 +90,9 @@ export function createShopPageServer(): ShopPageServer {
             }),
             { headers: { 'content-type': 'text/html' } },
           ),
+      },
+      '/leaving': {
+        GET: () => new Response(leavingPage, { headers: { 'content-type': 'text/html' } }),
       },
       '/closing': {
         GET: () => new Response(closingPage, { headers: { 'content-type': 'text/html' } }),
@@ -145,7 +149,7 @@ function buildShopPage(adminURL: string): string {
 <label>Search terms <input name="terms"></label>
 <button onclick="send('/api/orders', 'Ordered')">Place order</button>
 <button onclick="send('/api/search', 'Searched')">Search</button>
-<label>Gift wrap <span class="box"></span><input type="checkbox" name="gift" class="covered"></label>
+<span class="wrap"><input type="checkbox" id="gift" name="gift"><span class="cover"></span></span><label for="gift">Gift wrap</label>
 <label>Locked <input type="checkbox" name="locked" onclick="event.preventDefault()"></label>
 <label>Archived <input type="checkbox" name="archived" disabled></label>
 <label><input type="radio" name="shipping" value="post"> Post</label>
@@ -159,8 +163,9 @@ function buildShopPage(adminURL: string): string {
 <div id="menu-host" onmouseenter="document.querySelector('#menu').hidden = false">Account</div>
 <div id="menu" hidden>Account menu</div>
 <style>
-  .box { display: inline-block; width: 24px; height: 24px; border: 1px solid; }
-  .covered { position: absolute; opacity: 0; width: 20px; height: 20px; }
+  .wrap { position: relative; display: inline-block; width: 24px; height: 24px; }
+  .wrap input { position: absolute; inset: 0; margin: 0; width: 20px; height: 20px; }
+  .cover { position: absolute; inset: 0; border: 1px solid; background: white; }
 </style>
 <script>
   async function send(path, heading) {
@@ -186,4 +191,13 @@ function buildShopPage(adminURL: string): string {
 
   waitForRestock();
 </script>`;
+}
+
+// A page whose only Search button is hidden, and which moves to the admin app after a moment, so a
+// click on the button waits and then finds the admin page's button.
+function buildLeavingPage(adminURL: string): string {
+  return `<!doctype html>
+<title>Leaving</title>
+<button hidden>Search</button>
+<script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
 }

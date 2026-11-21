@@ -2,9 +2,34 @@ import { WringerError } from '@wringer/core';
 import { errors } from 'playwright-core';
 import type { Locator, Page } from 'playwright-core';
 import { z } from 'zod';
+import { isListedOrigin } from '../is-listed-origin.ts';
 import type { ElementTarget } from '../page-service-contract.ts';
 
-export function locateElement(page: Page, element: ElementTarget): Promise<Locator> {
+// An element that carries origins is a granted write. The action waits for the element before it
+// acts, and the tab can navigate meanwhile, so the origin is checked once the element is in the
+// state the action needs, and a tab that left the origins is refused.
+export async function locateElement(
+  page: Page,
+  element: ElementTarget,
+  readyState: 'visible' | 'attached' = 'visible',
+): Promise<Locator> {
+  const locator = await findLocator(page, element);
+
+  if (element.origins !== undefined) {
+    await locator.waitFor({ state: readyState });
+
+    if (!isListedOrigin(page.url(), element.origins)) {
+      throw new WringerError('read-only', {
+        message: `The active tab is on ${page.url()}, which is not an origin the target's browser config lists.`,
+        hint: 'Run `browser tabs`, then `browser tab` to return to a tab of the app.',
+      });
+    }
+  }
+
+  return locator;
+}
+
+function findLocator(page: Page, element: ElementTarget): Promise<Locator> {
   if ('ref' in element) {
     return Promise.resolve(page.getByRef(element.ref));
   }

@@ -1,6 +1,8 @@
 import { WringerError } from '@wringer/core';
-import type { Page } from 'playwright-core';
+import { errors } from 'playwright-core';
+import type { Locator, Page } from 'playwright-core';
 import type { ElementTarget, PageResult } from '../page-service-contract.ts';
+import { isPointerIntercepted } from './is-pointer-intercepted.ts';
 import { locateElement } from './locate-element.ts';
 import { pickControlRefusal } from './pick-control-refusal.ts';
 import type { ControlFacts } from './pick-control-refusal.ts';
@@ -24,9 +26,7 @@ export async function setChecked(
     });
   }
 
-  // setChecked clicks the control and checks its state afterwards, so a styled box that covers the
-  // input still works.
-  await locator.setChecked(checked);
+  await clickControl(locator, checked);
 
   markLanded();
 
@@ -52,4 +52,25 @@ function readControlFacts(element: PageElement): ControlFacts {
     kind: kind === 'checkbox' || kind === 'radio' ? kind : 'other',
     disabled: element.matches(':disabled') || element.closest('[aria-disabled="true"]') !== null,
   };
+}
+
+// setChecked clicks the control and checks its state afterwards. A styled box that covers the input
+// takes the click, so the click goes to the input itself and the state is checked again.
+async function clickControl(locator: Locator, checked: boolean): Promise<void> {
+  try {
+    await locator.setChecked(checked);
+  } catch (error) {
+    if (!(error instanceof errors.TimeoutError) || !isPointerIntercepted(error.message)) {
+      throw error;
+    }
+
+    await locator.dispatchEvent('click');
+
+    if ((await locator.isChecked()) !== checked) {
+      throw new WringerError('check-failed', {
+        message: 'The control did not change when it was clicked.',
+        hint: 'Run `browser snapshot` to see the control as it is now.',
+      });
+    }
+  }
 }
