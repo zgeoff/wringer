@@ -21,9 +21,11 @@ async function setupTest(
   wringer = createDemoWringer({ ignore: ['docs/**', '.gitignore', 'README.md'] }),
   pickRegistryFile: (root: string) => string | null = () => null,
 ) {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   const stdout: string[] = [];
 

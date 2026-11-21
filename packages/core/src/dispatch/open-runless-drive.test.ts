@@ -1,18 +1,14 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { getTarget } from '../registry/get-target.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { openRunlessDrive } from './open-runless-drive.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'runless-drive');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('runless-drive').path;
   const wringer = createShopWringer();
 
   return {
@@ -38,8 +34,7 @@ async function setupTest() {
 }
 
 test('it runs a command through the fenced exec without a run', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const drive = ctx.openDrive();
 
   const result = await drive.ctx.exec(['echo', 'shelf']);

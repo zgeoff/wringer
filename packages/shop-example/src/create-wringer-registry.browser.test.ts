@@ -13,7 +13,7 @@ import { createWringerRegistry } from './create-wringer-registry.ts';
 async function setupTest() {
   const registry = createWringerRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   const pullRequests = createFakePullRequestHost([
     {

@@ -10,7 +10,7 @@ async function setupTest() {
   const reportDataSchema = z.strictObject({ report: reportSchema, markdown: z.string() });
   const registry = createShopRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   const write = async (path: string, text: string) => {
     await mkdir(dirname(join(shop.repo.root, path)), { recursive: true });

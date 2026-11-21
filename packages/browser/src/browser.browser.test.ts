@@ -19,7 +19,6 @@ async function setupTest(shopURL?: string) {
   });
 
   const shop = await createTestSession({
-    parent: import.meta.dir,
     wringer,
     env: { SHOP_TOKEN: 'planted-shop-token' },
   });

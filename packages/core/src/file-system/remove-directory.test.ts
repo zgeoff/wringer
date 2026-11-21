@@ -1,19 +1,17 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { removeDirectory } from './remove-directory.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'remove-directory');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('remove-directory').path;
 
   return { directory };
 }
 
 test('it removes the folder and the files in it', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await mkdir(join(ctx.directory, 'shed', 'pots'), { recursive: true });
   await writeFile(join(ctx.directory, 'shed', 'pots', 'seeds.txt'), 'beans');
@@ -24,8 +22,8 @@ test('it removes the folder and the files in it', async () => {
   expect(names).toStrictEqual([]);
 });
 
-test('it accepts a folder that does not exist', async () => {
-  const ctx = await setupTest();
+test('it accepts a folder that does not exist', () => {
+  const ctx = setupTest();
 
   expect(removeDirectory(join(ctx.directory, 'shed'))).resolves.toBeUndefined();
 });

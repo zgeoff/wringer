@@ -1,20 +1,17 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { readFile, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import type { Evidence } from '../envelope/envelope.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
 import { buildStubClock } from '../test-utils/build-stub-clock.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedEvidenceFolder } from '../test-utils/seed-evidence-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
 import { pickContentType } from './pick-content-type.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'evidence-writer');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
-
+function setupTest() {
+  const root = createTempDir('evidence-writer').path;
   const clock = buildStubClock();
   const secrets = createSecretSet();
 
@@ -38,7 +35,7 @@ async function setupTest() {
 }
 
 test('it writes a file under a stamped name, relative to the root', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.clock.set('2026-03-01T09:30:00.000Z');
 
@@ -58,7 +55,7 @@ test.each([
   { name: 'snapshot.yml', scrub: 'text' },
   { name: 'session.har', scrub: 'opaque' },
 ])('it scrubs a string named $name and records it as $scrub', async (row) => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const evidence = await ctx.evidence.writer.writeFile(
     'note',
@@ -75,7 +72,7 @@ test.each([
 test.each(['data.json', 'data.yaml', 'data.yml', 'data.txt', 'data.log', 'data.md'])(
   'it scrubs bytes named %s and records them as text',
   async (name) => {
-    const ctx = await setupTest();
+    const ctx = setupTest();
 
     const evidence = await ctx.evidence.writer.writeFile(
       'note',
@@ -93,7 +90,8 @@ test.each(['data.json', 'data.yaml', 'data.yml', 'data.txt', 'data.log', 'data.m
 test.each(['snapshot.yaml', 'snapshot.yml'])(
   'it gives the file %s the text content type',
   async (name) => {
-    const ctx = await setupTest();
+    const ctx = setupTest();
+
     const evidence = await ctx.evidence.writer.writeFile('note', name, Buffer.from('key: value'));
 
     expect(pickContentType(evidence)).toBe('text/plain');
@@ -101,7 +99,7 @@ test.each(['snapshot.yaml', 'snapshot.yml'])(
 );
 
 test('it keeps bytes under another name unscrubbed and records them as opaque', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const evidence = await ctx.evidence.writer.writeFile(
     'screenshot',
@@ -116,7 +114,7 @@ test('it keeps bytes under another name unscrubbed and records them as opaque', 
 });
 
 test('it records the sha256 of the scrubbed bytes', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const evidence = await ctx.evidence.writer.writeFile(
     'note',
@@ -131,8 +129,8 @@ test('it records the sha256 of the scrubbed bytes', async () => {
 
 test.each(['page.png', 'clip.webm', 'photo.JPG'])(
   'it refuses a string named %s with an internal error',
-  async (name) => {
-    const ctx = await setupTest();
+  (name) => {
+    const ctx = setupTest();
 
     expect(ctx.evidence.writer.writeFile('screenshot', name, 'not an image')).rejects.toMatchObject(
       { code: 'internal' },
@@ -140,8 +138,8 @@ test.each(['page.png', 'clip.webm', 'photo.JPG'])(
   },
 );
 
-test('it refuses bytes that are not valid UTF-8 under a text name', async () => {
-  const ctx = await setupTest();
+test('it refuses bytes that are not valid UTF-8 under a text name', () => {
+  const ctx = setupTest();
 
   expect(
     ctx.evidence.writer.writeFile('note', 'data.json', Uint8Array.of(0xff, 0xfe, 0x00)),
@@ -149,7 +147,7 @@ test('it refuses bytes that are not valid UTF-8 under a text name', async () => 
 });
 
 test('it records a file that already exists as opaque and adds it to the collected list', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.seed.evidenceFolder();
 
@@ -174,7 +172,7 @@ test('it records a file that already exists as opaque and adds it to the collect
 });
 
 test('it refuses to add a symlink', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.seed.evidenceFolder();
 
@@ -187,7 +185,7 @@ test('it refuses to add a symlink', async () => {
 });
 
 test('it refuses to add a file outside its folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.seed.evidenceFolder();
 
@@ -199,7 +197,7 @@ test('it refuses to add a file outside its folder', async () => {
 });
 
 test('it refuses to add a file that does not exist', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.seed.evidenceFolder();
 
@@ -209,7 +207,7 @@ test('it refuses to add a file that does not exist', async () => {
 });
 
 test('it keeps both files when two writes in one millisecond share a name', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.clock.set('2026-03-01T09:30:00.000Z');
 

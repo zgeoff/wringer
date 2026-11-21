@@ -1,17 +1,13 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { writeTreeFiles } from '@zgeoff/testing/fs';
+import { createTempDir, writeTreeFiles } from '@zgeoff/testing/fs';
 import { $ } from 'bun';
 import type { StubNPMAnswer } from './test-utils/create-stub-npm.ts';
 import { createStubNPM } from './test-utils/create-stub-npm.ts';
 
 async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'first-publish');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+  const directory = createTempDir('first-publish').path;
   const repo = join(directory, 'repo');
   const bin = join(directory, 'bin');
   const npmLog = join(directory, 'npm.log');

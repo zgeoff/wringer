@@ -1,8 +1,8 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { existsSync } from 'node:fs';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 import type { ProcessLine } from './run-test-leftovers-check.ts';
 import {
@@ -12,11 +12,8 @@ import {
   runTestLeftoversCheck,
 } from './run-test-leftovers-check.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'run-test-leftovers-check');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
-
+function setupTest() {
+  const root = createTempDir('run-test-leftovers-check').path;
   const stopped: string[] = [];
 
   return {
@@ -38,23 +35,23 @@ async function setupTest() {
 
 test.each([
   {
-    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/src/.test-n4026531836-p4100-repo-a1b2c3',
+    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/repopid4100-ns4026531836-a1b2c3',
     leftover: true,
   },
   {
-    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/src/.test-n4026531836-p4200-repo-a1b2c3',
+    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/repopid4200-ns4026531836-a1b2c3',
     leftover: false,
   },
   {
-    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/src/.test-n4026532001-p4100-repo-a1b2c3',
+    args: 'bun cli.ts __wringer-supervisor run-1 prod /repo/repopid4100-ns4026532001-a1b2c3',
     leftover: false,
   },
   {
-    args: 'bun /repo/cli.ts __wringer-supervisor run-1 prod /elsewhere/.test-n4026531836-p4100-repo-a1b2c3',
+    args: 'bun /repo/cli.ts __wringer-supervisor run-1 prod /elsewhere/repopid4100-ns4026531836-a1b2c3',
     leftover: false,
   },
   {
-    args: 'bun cli.ts __wringer-supervisor run-1 prod /work/repo/.test-n4026531836-p4100-repo-a1b2c3',
+    args: 'bun cli.ts __wringer-supervisor run-1 prod /work/repo/repopid4100-ns4026531836-a1b2c3',
     leftover: false,
   },
   { args: 'bun cli.ts __wringer-supervisor run-1 prod /repo', leftover: false },
@@ -72,7 +69,7 @@ test('#pickLeftoverProcesses finds a test folder under a root whose path holds a
     [
       {
         pid: 5200,
-        args: 'bun cli.ts __wringer-supervisor run-1 prod /my repo/src/.test-n4026531836-p4100-repo-a1b2c3',
+        args: 'bun cli.ts __wringer-supervisor run-1 prod /my repo/repopid4100-ns4026531836-a1b2c3',
       },
     ],
     { root: '/my repo', owner: { namespace: '4026531836', pid: 4100 } },
@@ -82,12 +79,12 @@ test('#pickLeftoverProcesses finds a test folder under a root whose path holds a
 });
 
 test.each([
-  { name: '.test-n4026531836-p4100-repo-a1b2c3', leftover: true },
-  { name: '.test-n4026531836-p4200-repo-a1b2c3', leftover: false },
-  { name: '.test-n4026532001-p4100-repo-a1b2c3', leftover: false },
-  { name: '.test-repo-a1b2c3', leftover: false },
+  { name: 'repopid4100-ns4026531836-a1b2c3', leftover: true },
+  { name: 'repopid4200-ns4026531836-a1b2c3', leftover: false },
+  { name: 'repopid4100-ns4026532001-a1b2c3', leftover: false },
+  { name: 'repo-a1b2c3', leftover: false },
 ])('#pickLeftoverFolders reads $name as a leftover: $leftover', (row) => {
-  const picked = pickLeftoverFolders([{ name: row.name, path: `/repo/src/${row.name}` }], {
+  const picked = pickLeftoverFolders([{ name: row.name, path: `/repo/${row.name}` }], {
     owner: { namespace: '4026531836', pid: 4100 },
   });
 
@@ -104,9 +101,8 @@ test('#parseProcessLines reads the PID and the arguments of each line ps prints'
 });
 
 test('it stops a process that still names a test folder of the owner, and removes the folder', async () => {
-  const ctx = await setupTest();
-
-  const folder = join(ctx.root, 'src/.test-n4026531836-p4100-repo-a1b2c3');
+  const ctx = setupTest();
+  const folder = join(ctx.root, 'repopid4100-ns4026531836-a1b2c3');
 
   await mkdir(folder, { recursive: true });
 
@@ -127,9 +123,8 @@ test('it stops a process that still names a test folder of the owner, and remove
 });
 
 test('it kills a leftover process that still runs after the stop', async () => {
-  const ctx = await setupTest();
-
-  const folder = join(ctx.root, 'src/.test-n4026531836-p4100-repo-a1b2c3');
+  const ctx = setupTest();
+  const folder = join(ctx.root, 'repopid4100-ns4026531836-a1b2c3');
 
   await ctx.runCheck(() => [
     { pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` },
@@ -139,9 +134,8 @@ test('it kills a leftover process that still runs after the stop', async () => {
 });
 
 test('it reports no leftover for a process that exits within the wait', async () => {
-  const ctx = await setupTest();
-
-  const folder = join(ctx.root, 'src/.test-n4026531836-p4100-repo-a1b2c3');
+  const ctx = setupTest();
+  const folder = join(ctx.root, 'repopid4100-ns4026531836-a1b2c3');
 
   const reads: (readonly ProcessLine[])[] = [
     [{ pid: 5200, args: `bun cli.ts __wringer-supervisor run-1 prod ${folder}` }],

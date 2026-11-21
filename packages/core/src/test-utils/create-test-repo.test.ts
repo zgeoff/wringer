@@ -4,9 +4,11 @@ import { join } from 'node:path';
 import { createTestRepo } from './create-test-repo.ts';
 
 test('it creates a repo on main with one commit that ignores the state folder', async () => {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   const [branch, commits, ignored] = await Promise.all([
     repo.git('branch', '--show-current'),
@@ -22,11 +24,13 @@ test('it creates a repo on main with one commit that ignores the state folder', 
 });
 
 test('it removes the repo while late work keeps adding files under the state folder', async () => {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
   const started = Promise.withResolvers<void>();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   const lanes = [0, 1, 2, 3];
 
@@ -54,10 +58,9 @@ test('it removes the repo while late work keeps adding files under the state fol
 
   await started.promise;
 
-  const removal = repo.remove();
+  repo.remove();
 
   await Promise.all(writers);
 
-  await expect(removal).toResolve();
   await expect(access(repo.root)).toReject();
 });

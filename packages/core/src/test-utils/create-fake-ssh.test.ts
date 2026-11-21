@@ -1,18 +1,16 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readOptionalText } from '@zgeoff/std';
 import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { killProcessGroup } from '../host/kill-process-group.ts';
 import { probeProcess } from '../host/probe-process.ts';
 import { createFakeSSH } from './create-fake-ssh.ts';
-import { createTestFolder } from './create-test-folder.ts';
 
 async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'create-fake-ssh');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+  const directory = createTempDir('create-fake-ssh').path;
 
   return { directory, fake: await createFakeSSH(directory) };
 }

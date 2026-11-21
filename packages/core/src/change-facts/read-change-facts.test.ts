@@ -1,8 +1,8 @@
-import { expect, onTestFinished, test } from 'bun:test';
+import { expect, test } from 'bun:test';
 import { chmod, mkdir, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { removeDirectory } from '../file-system/remove-directory.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { reverseDiffFiles } from '../test-utils/reverse-diff-files.ts';
 import { seedShopRepo } from '../test-utils/seed-shop-repo.ts';
 import { emptyFingerprint } from './parse-patch-id.ts';
@@ -11,9 +11,7 @@ import type { ChangeFacts, ChangeFactsHost, ChangeFactsRequest } from './read-ch
 import { runGit, runGitBytes } from './run-git.ts';
 
 async function setupTest() {
-  const repo = await createTestFolder(import.meta.dir, 'read-change-facts');
-
-  onTestFinished(() => rm(repo, { recursive: true, force: true }));
+  const repo = createTempDir('read-change-facts').path;
 
   await runGit({ cwd: repo, args: ['init', '--quiet', '--initial-branch=main'] });
   await runGit({ cwd: repo, args: ['config', 'user.email', 'tester@example.com'] });
@@ -21,10 +19,7 @@ async function setupTest() {
   await runGit({ cwd: repo, args: ['config', 'commit.gpgsign', 'false'] });
 
   // A clone or a worktree goes in a folder of its own, so it never shows in the repo's change.
-  const elsewhere = await createTestFolder(import.meta.dir, 'read-change-facts-elsewhere');
-
-  onTestFinished(() => rm(elsewhere, { recursive: true, force: true }));
-
+  const elsewhere = createTempDir('read-change-facts-elsewhere').path;
   const git = (...args: readonly string[]) => runGit({ cwd: repo, args });
 
   return {

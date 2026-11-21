@@ -14,7 +14,7 @@ import { ordersSchema } from '../src/shop-contract.ts';
 async function setupTest() {
   const registry = createShopRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   const results: DispatchResult[] = [];
 

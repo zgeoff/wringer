@@ -1,17 +1,15 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { appendFile, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { withFileLock } from '@zgeoff/std/with-file-lock';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { buildRunPaths } from './build-state-paths.ts';
 import { createFileState } from './create-file-state.ts';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 import { lateFailureEventSchema, runEventSchema, runIDSchema } from './run-event.ts';
 
-async function setupTest() {
-  const stateDir = await createTestFolder(import.meta.dir, 'create-file-state');
-
-  onTestFinished(() => rm(stateDir, { recursive: true, force: true }));
+function setupTest() {
+  const stateDir = createTempDir('create-file-state').path;
 
   const state = createFileState({
     stateDir,
@@ -43,15 +41,15 @@ async function setupTest() {
 }
 
 test('it reads empty pointers before any command wrote state', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const pointers = await ctx.state.readPointers();
 
   expect(pointers).toStrictEqual({ currentRun: {}, cursors: {} });
 });
 
 test('it keeps both changes when two commands write the pointers at once', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await Promise.all([
@@ -72,8 +70,7 @@ test('it keeps both changes when two commands write the pointers at once', async
 });
 
 test('#withTargetLock refuses a second command on a target another command holds', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const tryLocal = () => ctx.impatientState.withTargetLock('local', () => Promise.resolve('ran'));
 
   const [second] = await ctx.state.withTargetLock('local', () => Promise.allSettled([tryLocal()]));
@@ -82,7 +79,7 @@ test('#withTargetLock refuses a second command on a target another command holds
 });
 
 test('#withTargetLock runs a command on one target while another command holds a second', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const second = await ctx.state.withTargetLock('local', () =>
     ctx.impatientState.withTargetLock('prod', () => Promise.resolve('ran')),
@@ -92,7 +89,7 @@ test('#withTargetLock runs a command on one target while another command holds a
 });
 
 test('it keeps the run that the saved cursors belong to', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.state.writePointers((current) => ({
     ...current,
@@ -110,8 +107,7 @@ test('it keeps the run that the saved cursors belong to', async () => {
 });
 
 test('it never interleaves events that many writers append at once', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
   const reason = 'x'.repeat(16 * 1024);
 
@@ -130,7 +126,7 @@ test('it never interleaves events that many writers append at once', async () =>
 });
 
 test('#appendLateFailure keeps each late failure on its own line of the state folder log', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await Promise.all([
     ctx.state.appendLateFailure({
@@ -159,8 +155,8 @@ test('#appendLateFailure keeps each late failure on its own line of the state fo
   expect(commands.toSorted()).toStrictEqual(['recount', 'tally']);
 });
 
-test('it refuses an event over the size cap with an internal error', async () => {
-  const ctx = await setupTest();
+test('it refuses an event over the size cap with an internal error', () => {
+  const ctx = setupTest();
 
   expect(
     ctx.state.appendEvent(runIDSchema.parse('mf3k2a-7q1z'), {
@@ -172,8 +168,7 @@ test('it refuses an event over the size cap with an internal error', async () =>
 });
 
 test('it reads the events before a torn last line of the log', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -200,8 +195,7 @@ test('it reads the events before a torn last line of the log', async () => {
 });
 
 test('it starts the next event on a line of its own after a torn last line', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -231,8 +225,7 @@ test('it starts the next event on a line of its own after a torn last line', asy
 });
 
 test('it leaves out a crash that arrives after the run ended', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -257,8 +250,7 @@ test('it leaves out a crash that arrives after the run ended', async () => {
 });
 
 test('it rejects a read of a log that is not a file', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await mkdir(buildRunPaths(ctx.stateDir, runID).log, { recursive: true });
@@ -267,8 +259,7 @@ test('it rejects a read of a log that is not a file', async () => {
 });
 
 test('it writes a manifest of the run from its log', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -305,8 +296,7 @@ test('it writes a manifest of the run from its log', async () => {
 });
 
 test('it reads the log for a manifest only once the run lock is free', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -336,8 +326,7 @@ test('it reads the log for a manifest only once the run lock is free', async () 
 });
 
 test('it reads each stream file size of a run as its cursor', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const streams = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z')).streams;
 
   await mkdir(streams, { recursive: true });
@@ -350,15 +339,15 @@ test('it reads each stream file size of a run as its cursor', async () => {
 });
 
 test('it reads no cursors for a run whose streams have not started', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const cursors = await ctx.state.readCursors(runIDSchema.parse('mf3k2a-7q1z'));
 
   expect(cursors).toStrictEqual({});
 });
 
 test('it rejects a cursor read when the streams path is a file', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runPaths = buildRunPaths(ctx.stateDir, runIDSchema.parse('mf3k2a-7q1z'));
 
   await mkdir(runPaths.directory, { recursive: true });
@@ -370,7 +359,7 @@ test('it rejects a cursor read when the streams path is a file', async () => {
 });
 
 test('it lists the runs that have a log folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.state.appendEvent(runIDSchema.parse('mf3k2a-7q1z'), {
     type: 'run-ended',
@@ -383,8 +372,7 @@ test('it lists the runs that have a log folder', async () => {
 });
 
 test('it tells a missing secrets file from an empty one, and a removed file from both', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   const missing = await ctx.state.readSecretsIfPresent(runID);
@@ -401,8 +389,7 @@ test('it tells a missing secrets file from an empty one, and a removed file from
 });
 
 test('it creates the secrets file with mode 0600 and keeps what it holds', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
@@ -416,8 +403,7 @@ test('it creates the secrets file with mode 0600 and keeps what it holds', async
 });
 
 test('it keeps a secret in a file of mode 0600 and reads it back', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });
@@ -432,8 +418,7 @@ test('it keeps a secret in a file of mode 0600 and reads it back', async () => {
 });
 
 test('it appends a secret the file already holds once', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await Promise.all([
@@ -449,8 +434,7 @@ test('it appends a secret the file already holds once', async () => {
 });
 
 test('it reads no secrets for a run with no file, and after the file is removed', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   const before = await ctx.state.readSecrets(runID);
@@ -470,8 +454,7 @@ test.each([
     last: { type: 'crashed', at: '2026-11-04T10:00:01.000Z', reason: 'the app exited' },
   },
 ])('it writes no secret for a run that has $status', async (row) => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendEvent(runID, {
@@ -491,8 +474,7 @@ test.each([
 });
 
 test('it skips a torn line of the secrets file', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const runID = runIDSchema.parse('mf3k2a-7q1z');
 
   await ctx.state.appendSecret(runID, { name: 'notes.session', value: 'planted-session-value' });

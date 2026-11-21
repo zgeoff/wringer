@@ -22,7 +22,7 @@ async function setupTest() {
     fingerprintGate.resolve(undefined);
   });
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   // It closes each connection once the request arrives, as a supervisor that dies mid-call does.
   const brokenSocket = join(shop.repo.root, 'broken.sock');

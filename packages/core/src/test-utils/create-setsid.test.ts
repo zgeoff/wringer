@@ -1,13 +1,11 @@
 import { expect, onTestFinished, spyOn, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createSetsid } from './create-setsid.ts';
-import { createTestFolder } from './create-test-folder.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'create-setsid');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('create-setsid').path;
 
   return {
     directory,
@@ -22,8 +20,7 @@ async function setupTest() {
 }
 
 test("it returns the host's own setsid when the host has one", async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const which = spyOn(Bun, 'which').mockReturnValue('/opt/tools/setsid');
 
   onTestFinished(() => {
@@ -36,7 +33,7 @@ test("it returns the host's own setsid when the host has one", async () => {
 });
 
 test('it returns a shim in the folder when the host has no setsid', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.withoutHostSetsid();
 
@@ -46,7 +43,7 @@ test('it returns a shim in the folder when the host has no setsid', async () => 
 });
 
 test('it starts the shim command as the leader of a new group', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.withoutHostSetsid();
 
@@ -70,7 +67,7 @@ test('it starts the shim command as the leader of a new group', async () => {
 });
 
 test('it waits for the command and exits with its status under -w', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.withoutHostSetsid();
 
@@ -82,7 +79,7 @@ test('it waits for the command and exits with its status under -w', async () => 
 });
 
 test('it forks first when it leads a group, and -w then waits for the child', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.withoutHostSetsid();
 

@@ -1,18 +1,15 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { expect, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runGit, runGitBytes } from './run-git.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'run-git');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('run-git').path;
 
   return { directory };
 }
 
 test('it fails with an environment error when git exits non-zero', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 
@@ -22,7 +19,7 @@ test('it fails with an environment error when git exits non-zero', async () => {
 });
 
 test("it carries git's exit status and stderr on a failure", async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 
@@ -32,7 +29,7 @@ test("it carries git's exit status and stderr on a failure", async () => {
 });
 
 test("#runGitBytes carries git's exit status and stderr on a failure", async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 
@@ -45,7 +42,7 @@ test("#runGitBytes carries git's exit status and stderr on a failure", async () 
 });
 
 test('#runGitBytes fails with an environment error that names the command when git exits non-zero', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 
@@ -58,7 +55,7 @@ test('#runGitBytes fails with an environment error that names the command when g
 });
 
 test('#runGitBytes returns the bytes git printed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 
@@ -76,7 +73,7 @@ test('#runGitBytes returns the bytes git printed', async () => {
 });
 
 test('it returns the output of a git command that passes', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await runGit({ cwd: ctx.directory, args: ['init', '--quiet'] });
 

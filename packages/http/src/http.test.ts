@@ -14,13 +14,12 @@ import { ADMIN_API_URL, SHOP_API_URL, shopRequests } from './test-utils/shop-han
 async function setupTest() {
   const wringer = createHttpWringer(SHOP_API_URL);
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   const transport = mock<HttpTransport>((url, init) => fetch(url, init));
   const transportWringer = createHttpWringer(SHOP_API_URL, transport);
 
   const transportShop = await createTestSession({
-    parent: import.meta.dir,
     wringer: transportWringer,
   });
 
@@ -28,7 +27,6 @@ async function setupTest() {
   const loopbackWringer = createHttpWringer(app.url);
 
   const loopbackShop = await createTestSession({
-    parent: import.meta.dir,
     wringer: loopbackWringer,
   });
 
@@ -41,7 +39,6 @@ async function setupTest() {
   const failingWringer = createHttpWringer(SHOP_API_URL, failing);
 
   const failingShop = await createTestSession({
-    parent: import.meta.dir,
     wringer: failingWringer,
   });
 
@@ -52,7 +49,6 @@ async function setupTest() {
   });
 
   const redactingShop = await createTestSession({
-    parent: import.meta.dir,
     wringer: redactingWringer,
   });
 
@@ -77,7 +73,7 @@ async function setupTest() {
 
   const routedWringer = createHttpWringer(SHOP_API_URL, routedTransport);
 
-  const routedShop = await createTestSession({ parent: import.meta.dir, wringer: routedWringer });
+  const routedShop = await createTestSession({ wringer: routedWringer });
 
   // A transport that declares two parameters, so it cannot receive the route.
   const twoParamCalls: string[] = [];
@@ -89,7 +85,6 @@ async function setupTest() {
   });
 
   const twoParamShop = await createTestSession({
-    parent: import.meta.dir,
     wringer: twoParamWringer,
   });
 

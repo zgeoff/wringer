@@ -1,20 +1,18 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { $ } from 'bun';
 import { createStubNPM } from './create-stub-npm.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'create-stub-npm');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('create-stub-npm').path;
 
   return { directory, npmPath: join(directory, 'npm'), log: join(directory, 'calls') };
 }
 
 test('it records each call with its arguments, and succeeds silently on a subcommand with no answer', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await createStubNPM(ctx.directory, ctx.log);
 
@@ -28,7 +26,7 @@ test('it records each call with its arguments, and succeeds silently on a subcom
 });
 
 test('it answers a subcommand with its given output and exit code, and leaves the others alone', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await createStubNPM(ctx.directory, ctx.log, {
     view: { output: '1.0.0\n' },
@@ -45,8 +43,7 @@ test('it answers a subcommand with its given output and exit code, and leaves th
 });
 
 test('it writes the file list of the tarball a subcommand receives when the answer names a list file', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const listPath = join(ctx.directory, 'tarball-files');
 
   await mkdir(join(ctx.directory, 'package/dist'), { recursive: true });

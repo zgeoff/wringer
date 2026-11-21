@@ -1,19 +1,17 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createDirectory } from './create-directory.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'create-directory');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('create-directory').path;
 
   return { directory };
 }
 
 test('it creates the folder and its missing parents', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await createDirectory(join(ctx.directory, 'garden/beds'));
 
@@ -23,7 +21,7 @@ test('it creates the folder and its missing parents', async () => {
 });
 
 test('it accepts a folder that exists', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await mkdir(join(ctx.directory, 'garden'));
 

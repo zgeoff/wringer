@@ -1,23 +1,20 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { open, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { open, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildRunPaths } from '@wringer/core';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
 import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { readStreamSlice } from './read-stream-slice.ts';
 import { streamSliceSchema } from './stream.ts';
 import { createStreamWringer } from './test-utils/create-stream-wringer.ts';
 
 async function setupTest() {
-  const triggers = await createTestFolder(import.meta.dir, 'stream-triggers');
-
-  onTestFinished(() => rm(triggers, { recursive: true, force: true }));
-
+  const triggers = createTempDir('stream-triggers').path;
   const wringer = createStreamWringer(triggers);
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   return {
     root: shop.repo.root,

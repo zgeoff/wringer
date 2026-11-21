@@ -2,13 +2,13 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { envelopeSchema, runProcess } from '@wringer/core';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { guideFolder, readGuide } from './read-guide.ts';
 
 // The bin runs in a git repo that has no verify CLI, as it does when an agent adds the first one.
 async function setupTest() {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
   onTestFinished(() => rm(repo.root, { recursive: true, force: true }));
 
@@ -95,9 +95,7 @@ test('it has no skill install command', async () => {
 });
 
 test('it prints the guide from a folder that is no git worktree and leaves it empty', async () => {
-  const folder = await createTestFolder(import.meta.dir, 'guide-outside-repo');
-
-  onTestFinished(() => rm(folder, { recursive: true, force: true }));
+  const folder = createTempDir('guide-outside-repo').path;
 
   const result = await runProcess({
     argv: ['bun', join(import.meta.dir, 'wringer-gunshi.ts'), 'guide', 'create', '--json'],
@@ -116,9 +114,11 @@ test('it prints the guide from a folder that is no git worktree and leaves it em
 });
 
 test('it labels the guide envelope with no commit even inside a git worktree', async () => {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   const result = await runProcess({
     argv: ['bun', join(import.meta.dir, 'wringer-gunshi.ts'), 'guide', 'create', '--json'],

@@ -1,8 +1,7 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
 import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { SQL } from 'bun';
 import invariant from 'tiny-invariant';
 import { createFakePostgres } from '../test-utils/create-fake-postgres.ts';
@@ -11,11 +10,8 @@ import { createSQLClients } from './create-sql-clients.ts';
 import { runSQLQuery } from './run-sql-query.ts';
 import type { SQLClients } from './run-sql-query.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'run-sql-query');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('run-sql-query').path;
   const file = join(directory, 'shop.db');
   const postgres = createFakePostgres();
 
@@ -187,7 +183,7 @@ async function setupTest() {
 }
 
 test('it refuses a write whose deadline passed before it started, and writes nothing', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes(['pay']);
 
@@ -207,7 +203,7 @@ test('it refuses a write whose deadline passed before it started, and writes not
 });
 
 test('it sends a Postgres read with no parameters as one extended-protocol statement in a read-only transaction', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.runPostgresQuery('COMMIT; DELETE FROM notes');
 
@@ -220,7 +216,7 @@ test('it sends a Postgres read with no parameters as one extended-protocol state
 });
 
 test('it sends a Postgres write with no parameters as one extended-protocol statement', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.runPostgresQuery('DELETE FROM notes; DROP TABLE notes', { write: true });
 
@@ -231,7 +227,7 @@ test('it sends a Postgres write with no parameters as one extended-protocol stat
 });
 
 test('it refuses a Postgres write that has no time left once its connection is up, and sends nothing', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const failure = await ctx
     .runPostgresQuery("insert into notes (text) values ('late')", {
@@ -247,8 +243,7 @@ test('it refuses a Postgres write that has no time left once its connection is u
 });
 
 test('it refuses a Postgres write whose deadline passed while its timeout was set, and sends only the timeout', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const timesLeftMs = [60_000, 0];
 
   const failure = await ctx
@@ -267,8 +262,7 @@ test('it refuses a Postgres write whose deadline passed while its timeout was se
 });
 
 test('it starts a Postgres write after a second timeout when each round trip takes 100 ms', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const timesLeftMs = [60_000, 59_900, 59_800];
 
   await ctx.runUnpreparedPostgresWrite(
@@ -287,7 +281,7 @@ test.each([
   { write: true, kind: 'write' },
   { write: false, kind: 'read' },
 ])('it cancels a running Postgres $kind in the database when its signal aborts', async (row) => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const controller = new AbortController();
 
@@ -309,7 +303,7 @@ test.each([
 });
 
 test('it reports a refused cancel once, then cancels the Postgres write on a new session', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const controller = new AbortController();
 
@@ -334,7 +328,7 @@ test('it reports a refused cancel once, then cancels the Postgres write on a new
 });
 
 test('it reads rows with bound parameters, their columns and their count', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes(['pay', 'ship']);
 
@@ -348,7 +342,7 @@ test('it reads rows with bound parameters, their columns and their count', async
 });
 
 test('it keeps the column names of a read that returns no rows', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes([]);
 
@@ -358,7 +352,7 @@ test('it keeps the column names of a read that returns no rows', async () => {
 });
 
 test('it counts the rows a write changed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes(['pay', 'ship', 'pack']);
 
@@ -369,8 +363,8 @@ test('it counts the rows a write changed', async () => {
   expect(result).toStrictEqual({ columns: [], rows: [], rowCount: 2 });
 });
 
-test('it lets SQLite refuse a write on a read', async () => {
-  const ctx = await setupTest();
+test('it lets SQLite refuse a write on a read', () => {
+  const ctx = setupTest();
 
   ctx.seed.notes([]);
 
@@ -379,9 +373,8 @@ test('it lets SQLite refuse a write on a read', async () => {
   });
 });
 
-test('it lets SQLite refuse a copy of the database to another file on a read', async () => {
-  const ctx = await setupTest();
-
+test('it lets SQLite refuse a copy of the database to another file on a read', () => {
+  const ctx = setupTest();
   const copy = join(ctx.directory, 'copy.db');
 
   ctx.seed.notes(['pay']);
@@ -389,14 +382,14 @@ test('it lets SQLite refuse a copy of the database to another file on a read', a
   expect(ctx.runQuery(`vacuum into '${copy}'`)).rejects.toMatchObject({ code: 'SQLITE_READONLY' });
 });
 
-test('it fails with the SQLite code when the database file does not exist', async () => {
-  const ctx = await setupTest();
+test('it fails with the SQLite code when the database file does not exist', () => {
+  const ctx = setupTest();
 
   expect(ctx.runQuery('select 1')).rejects.toMatchObject({ code: 'SQLITE_CANTOPEN' });
 });
 
-test('it refuses a parameter SQLite cannot bind with a usage error', async () => {
-  const ctx = await setupTest();
+test('it refuses a parameter SQLite cannot bind with a usage error', () => {
+  const ctx = setupTest();
 
   ctx.seed.notes([]);
 
@@ -406,7 +399,7 @@ test('it refuses a parameter SQLite cannot bind with a usage error', async () =>
 });
 
 test('it returns an integer beyond 2^53 as its digits and a small one as a number', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes([]);
 
@@ -420,7 +413,7 @@ test('it returns an integer beyond 2^53 as its digits and a small one as a numbe
 });
 
 test('it serialises a row with an integer beyond 2^53 as JSON', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes([]);
 
@@ -430,7 +423,7 @@ test('it serialises a row with an integer beyond 2^53 as JSON', async () => {
 });
 
 test('it still counts the rows a write changed', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.seed.notes(['pay', 'ship']);
 
@@ -440,8 +433,7 @@ test('it still counts the rows a write changed', async () => {
 });
 
 test('it ends a Postgres query against a server that never answers by its deadline', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const startedAt = performance.now();
 
   const failure = await ctx
@@ -457,7 +449,7 @@ test('it ends a Postgres query against a server that never answers by its deadli
 });
 
 test('it ends a cancel attempt against a server that never answers within its bound', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const controller = new AbortController();
 
@@ -484,7 +476,7 @@ test('it ends a cancel attempt against a server that never answers within its bo
 });
 
 test('it closes the socket of a connect that the deadline cut off', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.runOnStalledPostgres(AbortSignal.timeout(300)).catch(() => null);
 
@@ -500,7 +492,7 @@ test('it closes the socket of a connect that the deadline cut off', async () => 
 });
 
 test('it starts a second cancel attempt within the attempt and close bounds', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const controller = new AbortController();
 

@@ -1,19 +1,16 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createRepoState } from './create-repo-state.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'repo-state');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('repo-state').path;
 
   return { root, state: createRepoState(root, '.wringer') };
 }
 
 test('it keeps the state under the repo state folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.state.writePointers((current) => ({ ...current, feature: 'checkout' }));
 

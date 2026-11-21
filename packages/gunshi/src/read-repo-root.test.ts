@@ -6,9 +6,11 @@ import { createTestRepo } from '@wringer/core/test-utils/create-test-repo.ts';
 import { readRepoRoot } from './read-repo-root.ts';
 
 async function setupTest() {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
-  onTestFinished(() => repo.remove());
+  onTestFinished(() => {
+    repo.remove();
+  });
 
   return { root: repo.root, readRepoRoot };
 }

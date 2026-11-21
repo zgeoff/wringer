@@ -1,15 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { buildStubClock } from '@wringer/core/test-utils/build-stub-clock.ts';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { buildStreamSeeder } from './build-stream-seeder.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'stream-seeder');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('stream-seeder').path;
   const streams = join(directory, 'streams');
   const clock = buildStubClock();
 
@@ -21,7 +18,7 @@ async function setupTest() {
 }
 
 test('it records each line into the stream file with the time the clock reads', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   ctx.clock.set('2026-05-20T16:45:00.000Z');
 

@@ -22,7 +22,6 @@ async function setupTest() {
   });
 
   const shop = await createTestSession({
-    parent: import.meta.dir,
     wringer,
     env: { SHOP_API_TOKEN: 'planted-shop-token' },
   });
@@ -1135,7 +1134,7 @@ test('it scrubs the uploader token from a command that runs before any upload, w
     },
   };
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: uploading });
+  const shop = await createTestSession({ wringer: uploading });
 
   const result = await shop.dispatch(
     uploading,

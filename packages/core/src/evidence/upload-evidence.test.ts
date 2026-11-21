@@ -1,6 +1,7 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import type { Evidence } from '../envelope/envelope.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createSecretSet } from '../secrets/create-secret-set.ts';
@@ -8,7 +9,6 @@ import { createRepoState } from '../state/create-repo-state.ts';
 import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createFileHostStandIn } from '../test-utils/create-file-host-stand-in.ts';
 import type { FileHostStandInOptions } from '../test-utils/create-file-host-stand-in.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedEvidenceFile } from '../test-utils/seed-evidence-file.ts';
 import { createHostUploader } from './create-host-uploader.ts';
 import { uploadEvidence } from './upload-evidence.ts';
@@ -16,11 +16,7 @@ import type { UploadItem } from './upload-evidence.ts';
 
 async function setupTest(hostOptions: Partial<FileHostStandInOptions> = {}) {
   const token = 'planted-upload-token';
-
-  const root = await createTestFolder(import.meta.dir, 'upload-evidence');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
-
+  const root = createTempDir('upload-evidence').path;
   const features = join(root, '.wringer', 'runs', 'r-7c1', 'features', 'place-order');
 
   await mkdir(features, { recursive: true });

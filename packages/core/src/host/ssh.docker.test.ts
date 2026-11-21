@@ -1,8 +1,8 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { rm } from 'node:fs/promises';
 import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { createTestSSHPostgres } from '../test-utils/create-test-ssh-postgres.ts';
 import { ssh } from './ssh.ts';
 
@@ -13,7 +13,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'ssh-docker');
+  const directory = createTempDir('ssh-docker').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 

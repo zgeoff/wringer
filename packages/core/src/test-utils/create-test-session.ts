@@ -25,7 +25,6 @@ export interface TestSession {
 }
 
 export interface TestSessionOptions {
-  readonly parent: string;
   readonly wringer: Wringer;
 
   // The process environment of the commands and of the supervisors; empty when omitted.
@@ -39,7 +38,7 @@ export interface TestSessionOptions {
 // cleanup waits for each timed-out command's late work, stops each run, then removes the repo, so
 // nothing writes into a removed folder.
 export async function createTestSession(options: TestSessionOptions): Promise<TestSession> {
-  const repo = await createTestRepo(options.parent);
+  const repo = await createTestRepo();
 
   const lines: string[] = [];
   const supervisors: Promise<void>[] = [];
@@ -67,7 +66,8 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
     );
 
     await Promise.allSettled(supervisors);
-    await repo.remove();
+
+    repo.remove();
   });
 
   return {
