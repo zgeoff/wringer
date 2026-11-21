@@ -1331,7 +1331,7 @@ test.each([
     count: 2,
     role: ' with the role button',
   },
-])('it fails $case at once with check-failed and the count', async (row) => {
+])('it fails $case at once with usage and the count', async (row) => {
   const ctx = await setupTest();
 
   await ctx.open('local');
@@ -1340,7 +1340,7 @@ test.each([
   const result = await ctx.run('local', ['browser', 'click'], row.args);
 
   expect(result.envelope.error).toStrictEqual({
-    code: 'check-failed',
+    code: 'usage',
     message: `${row.count} elements show the text "${row.args.text}"${row.role}.`,
     hint: 'Add --role to narrow the match, or use --ref from `browser snapshot`.',
   });

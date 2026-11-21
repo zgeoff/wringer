@@ -129,7 +129,7 @@ async function locateText(
   const count = await locator.count();
 
   if (count > 1) {
-    throw new WringerError('check-failed', {
+    throw new WringerError('usage', {
       message: `${count} elements show the text "${text}"${role === undefined ? '' : ` with the role ${role}`}.`,
       hint: 'Add --role to narrow the match, or use --ref from `browser snapshot`.',
     });

@@ -21,12 +21,8 @@ For each way but a ref, the command waits for a match up to `actionTimeoutMs`, w
 `browser()` as the [browser README](../../packages/browser/README.md) shows. When the time runs out
 with no match, the command fails with `check-failed`.
 
-When two or more elements match, the command fails at once, with no wait:
-
-- with `usage` for a role and name, or a label;
-- with `check-failed` and the count for a shown text.
-
-To pick one element, add `--role`, give a longer text, or pass `--ref`.
+When two or more elements match, the command fails with `usage` at once, with no wait. To pick one
+element, add `--role`, give a longer text, or pass `--ref`.
 
 ## Ref
 
