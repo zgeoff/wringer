@@ -4,7 +4,10 @@ import { readChangeFacts } from '../change-facts/read-change-facts.ts';
 import { readDefaultBase } from '../change-facts/read-default-base.ts';
 import { writeLateFailure } from '../dispatch/write-late-failure.ts';
 import { findOwnValue } from '../find-own-value.ts';
+import { collectEnvSecrets } from '../secrets/collect-env-secrets.ts';
+import type { Secret } from '../secrets/create-secret-set.ts';
 import { pickScopeRefusal } from '../secrets/pick-scope-refusal.ts';
+import { readDeclaredSecrets } from '../secrets/read-declared-secrets.ts';
 import type { RunView } from '../state/build-run-view.ts';
 import { buildRunPaths } from '../state/build-state-paths.ts';
 import { describeSupervisorExit } from '../supervisor/describe-supervisor-exit.ts';
@@ -61,6 +64,15 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
 
     ctx.bindRun(runID);
 
+    const declared = await readDeclaredValues(ctx);
+
+    // A source value joins the set only now, so a feature name that holds one is refused here.
+    const declaredRefusal = pickScopeRefusal(ctx.wringer.features, ctx.secrets);
+
+    if (declaredRefusal !== null) {
+      throw declaredRefusal;
+    }
+
     const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
 
     const facts = await readChangeFacts(
@@ -99,6 +111,15 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     // scrubbed as they wrote it.
     if (current !== undefined) {
       await ctx.state.removeSecrets(current.runID);
+    }
+
+    // With a source, the file exists even when it holds no value, so a lost file is told apart.
+    if (ctx.session.declaredSecrets !== undefined && ctx.wringer.secrets.length > 0) {
+      await ctx.state.createSecrets(runID);
+    }
+
+    for (const secret of declared) {
+      await ctx.state.appendSecret(runID, secret);
     }
 
     try {
@@ -198,6 +219,28 @@ function buildRunID(date: Date): string {
     .padStart(4, '0');
 
   return `${date.getTime().toString(36)}-${random}`;
+}
+
+// The declared secrets' values, read from the session's source once and added to the command's
+// secret set. The values are kept for the run's secrets file, which every later command reads.
+async function readDeclaredValues(ctx: BuiltinContext): Promise<readonly Secret[]> {
+  const source = ctx.session.declaredSecrets;
+
+  if (source === undefined || ctx.wringer.secrets.length === 0) {
+    return [];
+  }
+
+  const values = await readDeclaredSecrets(source, ctx.signal);
+
+  const declared = collectEnvSecrets({ declared: ctx.wringer.secrets, env: values }).filter(
+    (secret) => secret.origin === 'declared',
+  );
+
+  for (const secret of declared) {
+    ctx.secrets.add(secret);
+  }
+
+  return declared;
 }
 
 const readyPollMs = 50;

@@ -3,6 +3,7 @@ import type { Wringer } from '@wringer/core';
 import { z } from 'zod';
 import { http } from '../http.ts';
 import type { HttpTransport } from '../http.ts';
+import { ADMIN_API_URL } from './shop-handlers.ts';
 
 type HttpOptions = NonNullable<Parameters<typeof http>[0]>;
 
@@ -12,9 +13,9 @@ const pathSchema = z.strictObject({ path: z.string() });
 const tokenSchema = z.strictObject({ token: z.string() });
 const sentSchema = z.strictObject({ sent: z.string(), isReal: z.boolean() });
 
-// A verify CLI against the app at `url`, through `transport` when given, timing out at 500 ms: `local` may
-// write, read-only `prod` grants POST /api/search, `broken` fails its health path, `bare` lacks the
-// endpoint, `inherited` names one every object inherits, and an action claims a read, then posts.
+// A verify CLI against the app at `url`, through `transport` when given, timing out at 500 ms.
+// `local` may write; read-only `prod` grants POST /api/search; `multi` and `multi-prod` add an admin
+// endpoint, and `target-only` names it in the target alone; `broken`, `bare`, `inherited`, `public` and `based` each break one config rule.
 export function createHttpWringer(
   url: string,
   transport?: HttpTransport,
@@ -75,6 +76,72 @@ export function createHttpWringer(
         host: local(),
         endpoints: () => ({ web: url }),
         drivers: { http: () => ({ endpoint: 'constructor' }) },
+      }),
+    )
+    .target(
+      'multi',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: url, admin: ADMIN_API_URL }),
+        drivers: {
+          http: () => ({
+            endpoints: { admin: { healthPath: '/api/health', healthAuth: false } },
+          }),
+        },
+      }),
+    )
+    .target(
+      'target-only',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: url, admin: ADMIN_API_URL }),
+        drivers: { http: () => ({}) },
+      }),
+    )
+    .target(
+      'multi-prod',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-only',
+        host: local(),
+        endpoints: () => ({ web: url, admin: ADMIN_API_URL }),
+        drivers: {
+          http: () => ({
+            endpoints: { admin: {} },
+            readOnly: {
+              allow: [
+                { method: 'POST', path: '/api/search' },
+                { method: 'POST', path: '/api/audit', endpoint: 'admin' },
+              ],
+            },
+          }),
+        },
+      }),
+    )
+    .target(
+      'public',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: url }),
+        drivers: { http: () => ({ healthAuth: false }) },
+      }),
+    )
+    .target(
+      'based',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-write',
+        host: local(),
+        endpoints: () => ({ web: 'https://unused.example', admin: ADMIN_API_URL }),
+        drivers: {
+          http: () => ({ baseURL: url, endpoints: { admin: {} } }),
+        },
       }),
     )
     .action(

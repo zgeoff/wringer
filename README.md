@@ -21,16 +21,13 @@ verdict, gate and every other term the docs use. Each repo builds its verify CLI
 
 ## A report
 
-The report sits in the PR description under `## Verification`. This one covers a shop app:
+The report sits in the PR description under `## Verification`.
 
-<table>
-<tr><th>Feature</th><th>Status</th><th>Target</th><th>Journey</th></tr>
-<tr><td>checkout</td><td>verified</td><td>local</td><td>6 commands, 4 s</td></tr>
-<tr><td>catalog</td><td>unchanged</td><td>-</td><td>-</td></tr>
-</table>
-
-Under that table, each verified feature has a collapsed journey table of its commands, results and
-evidence.
+Each changed feature gets one line. A verified feature is a collapsed section whose summary reads
+`✅ checkout · 6 commands · 4 s · local`, and that opens to a table of its commands, results and
+evidence. A stale feature or one with no verdict gets a line that says how to fix it. One paragraph
+names the unchanged features. When the report is too long for the description, it drops the step
+data first and says so.
 
 ## Packages
 

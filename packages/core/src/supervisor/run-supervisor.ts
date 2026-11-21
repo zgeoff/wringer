@@ -15,7 +15,7 @@ import { createScrubbingState } from '../secrets/create-scrubbing-state.ts';
 import { createSecretSet, minimumTokenLength } from '../secrets/create-secret-set.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
 import { pickEndpointRefusal } from '../secrets/pick-endpoint-refusal.ts';
-import { readRunSecrets } from '../secrets/read-run-secrets.ts';
+import { readRequiredRunSecrets, readRunSecrets } from '../secrets/read-run-secrets.ts';
 import type { StatePort } from '../state/create-file-state.ts';
 import type { Endpoints, RunEvent } from '../state/run-event.ts';
 import { toWringerError } from '../to-wringer-error.ts';
@@ -41,6 +41,10 @@ export interface SupervisorOptions {
   readonly now: () => Date;
   readonly reportError: (message: string) => void;
   readonly signal?: AbortSignal | undefined;
+
+  // True when the `up` command read the declared secrets from a source. The supervisor then reads
+  // their values from the run's secrets file, not from its own env.
+  readonly readsDeclaredFromRun?: boolean | undefined;
 }
 
 type Cleanup = readonly [string, () => Promise<void>];
@@ -63,7 +67,14 @@ export async function runSupervisor(options: SupervisorOptions): Promise<void> {
   // file, which it reloads before each append so it also scrubs what a command collected.
   const secrets = createSecretSet();
 
-  addEnvSecrets(secrets, { declared: options.wringer.secrets, env: options.launchHost.env });
+  addEnvSecrets(secrets, {
+    declared: options.readsDeclaredFromRun === true ? [] : options.wringer.secrets,
+    env: options.launchHost.env,
+  });
+
+  if (options.readsDeclaredFromRun === true && options.wringer.secrets.length > 0) {
+    await readRequiredRunSecrets(options.state, secrets, options.runID);
+  }
 
   for (const secret of options.wringer.hooks.upload?.readSecrets?.() ?? []) {
     secrets.add(secret);

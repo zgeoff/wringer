@@ -5,8 +5,9 @@
 A reviewer reads a PR's verification as a pasted `report --human` block today. That block is a flat
 table that escapes only `>`, and `report` uploads every evidence file each time anyone runs it.
 `bun verify publish` becomes the one command that writes the report into the PR description, through
-a PR host port and a generic evidence uploader. The report gets a summary table and one journey
-table per verified feature, planned in one pass to fit GitHub's limit on the description's length.
+a PR host port and a generic evidence uploader. The report gets one line per changed feature, and a
+journey table under each verified one, planned in one pass to fit GitHub's limit on the
+description's length.
 
 ## Shape
 
@@ -225,13 +226,23 @@ The verdict-scope doc owns the [data comment](./verdict-scope.md#data-comment) i
 the verdict record the renderer reads. The renderer owns the rest of the span, in this order:
 
 1. The opening marker.
-2. The summary table: one row per feature, with the columns Feature, Status, Target and Journey ("6
-   commands, 4 s"). Target shows the verdict's target name, and the first 7 characters of its
-   deployed revision when the verdict's pin is `deployed`.
-3. One line naming the changed paths no feature maps, when the report has any.
-4. One collapsed `<details>` section per verified feature, holding its journey table and, when
-   evidence stayed local, a note.
-5. The data comment from `renderReportComment`, then the closing marker.
+2. When the size plan dropped step data, a note that says so. It adds that the linked evidence files
+   are complete when the report links any.
+3. One line per changed feature, in registry order:
+   - A verified feature gets a collapsed `<details>` section. Its summary holds a mark, the name,
+     the command count, the duration and the target, such as
+     `✅ http-driver · 3 commands · 383 ms · local`, and the target shows the first 7 characters of
+     the deployed revision when the verdict's pin is `deployed`. The body holds the journey table
+     and, when evidence stayed local, a note.
+   - A stale feature gets a paragraph with a warning mark, the name, "stale" and the fix: run its
+     journey and `bun verify done` again, then `bun verify publish`.
+   - A feature with no verdict gets a paragraph with a cross mark, the name, "no verdict" and the
+     same fix without "again".
+   - An unpinned feature gets a paragraph that says the target reports no commit, with the fix.
+4. One paragraph that names the unchanged features: all of them when there are 3 or fewer, else the
+   first 2 and "and N more". An unchanged feature has no line of its own.
+5. One line naming the changed paths no feature maps, when the report has any.
+6. The data comment from `renderReportComment`, then the closing marker.
 
 Each journey table is an HTML table with the columns #, Command, Result and Evidence, and a Data
 column when a shown row has data:
@@ -441,13 +452,16 @@ const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, sec
   part.
 - `planReport` computes each fragment's size once, then takes cuts in this fixed order until the
   total fits:
-  1. Drop step data, the largest block first; a tie drops the later step first.
+  1. Drop the data of every step at once, and put a note above the feature lines that says step data
+     was left out to fit the size limit, and that the linked files are complete when the report
+     links any. Every Data cell shows an em dash, so the tables keep their shape. This cut is
+     skipped when no step has data, and when the note costs more than the data saves.
   2. Collapse each journey table of 12 rows or more to its first and last 5 rows, the longest table
      first.
   3. Cut each Evidence cell of 4 files or more to 3, images first, the cell with the most files
      first.
-  4. Replace a feature's journey section with one line naming its command count, the longest section
-     first.
+  4. Replace a feature's journey section with one line that keeps its summary and says the journey
+     is left out, the longest section first.
 - A collapsed table keeps a row that names how many steps it leaves out, and a cut cell ends with
   "+N more". A cut cell keeps the images first and shows its files in their own order. A file is
   sized as a link when its journey uploads, `linkChars` is above 0 and the file is present in the
@@ -462,7 +476,7 @@ const result = planReport(document, { budgetChars: 61_200, linkChars: 512 }, sec
   the smaller of the two descriptions' budgets.
 - A CRLF description grows by one character per line of the block. When the edited description is
   still over 65,536 characters, `publish` takes the overflow off the budget and plans again.
-- When the summary table, the data comment and the shorter form of each section still do not fit,
+- When the feature lines, the data comment and the shorter form of each section still do not fit,
   `publish` fails with `check-failed`: "The report needs 66,034 characters, and the PR description
   has room for 61,200 of GitHub's 65,536." `report --human` prints the uncut block and never fails
   on size.
@@ -546,7 +560,7 @@ each journey's target from its verdict and ignores `--target`.
 
 ### The journey report
 
-- **Outcome:** `report` renders the summary and journey tables by [Rendering](#rendering), and
+- **Outcome:** `report` renders the feature lines and journey tables by [Rendering](#rendering), and
   uploads nothing.
 - **Depends on:** verdict-scope's "Scope verdicts to their feature" and "Write and gate the version
   2 data comment".

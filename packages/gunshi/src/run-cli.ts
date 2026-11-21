@@ -1,5 +1,6 @@
 import { dispatch, supervisorCommandName } from '@wringer/core';
 import type {
+  DeclaredSecretSource,
   PullRequestHost,
   RepoHost,
   StatePort,
@@ -25,6 +26,11 @@ interface RepoPorts {
   readonly supervisor: SupervisorPort;
 }
 
+interface SupervisorFlags {
+  // True when `up` read the declared secrets from a source.
+  readonly readsDeclaredFromRun: boolean;
+}
+
 export interface CLIPorts {
   readonly argv: readonly string[];
   readonly cwd: string;
@@ -33,10 +39,17 @@ export interface CLIPorts {
 
   // The process environment, whose secret-looking values every command scrubs from what it writes.
   readonly env: Readonly<Record<string, string | undefined>>;
+
+  // Where `up` reads the values of the registry's declared secrets once, in place of `env`.
+  readonly declaredSecrets?: DeclaredSecretSource | undefined;
   readonly writeStdout: (text: string) => void;
   readonly readRepoRoot: (cwd: string) => Promise<string | WringerError>;
   readonly openRepo: (root: string) => RepoPorts;
-  readonly runSupervisor: (wringer: Wringer, argv: readonly string[]) => Promise<void>;
+  readonly runSupervisor: (
+    wringer: Wringer,
+    argv: readonly string[],
+    options: SupervisorFlags,
+  ) => Promise<void>;
 }
 
 // Every invocation ends in one envelope and an exit code, whatever failed: gunshi's parse, the
@@ -45,7 +58,9 @@ export async function runCLI(wringer: Wringer, ports: CLIPorts): Promise<number>
   const [first, ...rest] = ports.argv;
 
   if (first === supervisorCommandName) {
-    await ports.runSupervisor(wringer, rest);
+    await ports.runSupervisor(wringer, rest, {
+      readsDeclaredFromRun: ports.declaredSecrets !== undefined,
+    });
 
     return 0;
   }
@@ -92,6 +107,7 @@ async function dispatchInvocation(
     pullRequests: repo.pullRequests,
     supervisor: repo.supervisor,
     env: ports.env,
+    declaredSecrets: ports.declaredSecrets,
     target: invocation.globals.target,
     feature: invocation.globals.feature,
     timeoutMs: invocation.globals.timeoutMs,

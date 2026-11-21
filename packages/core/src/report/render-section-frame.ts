@@ -1,7 +1,7 @@
 import type { FeatureReport, Journey, LocalCause } from '../report-document/report-document.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
 import { escapeReportText } from './escape-report-text.ts';
-import { formatJourneySize } from './format-journey-size.ts';
+import { renderFeatureSummary } from './render-feature-summary.ts';
 
 // A journey section up to where its table starts: the opening tag, the summary and the note.
 export function renderSectionFrame(
@@ -16,7 +16,7 @@ export function renderSectionFrame(
 
   return [
     '<details>',
-    `<summary>${escapeReportText(feature.name, secrets)}: ${escapeReportText(formatJourneySize(journey), secrets)}</summary>`,
+    `<summary>${renderFeatureSummary(feature, journey, secrets)}</summary>`,
     '',
     ...note,
   ].join('\n');

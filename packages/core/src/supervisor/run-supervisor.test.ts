@@ -22,6 +22,14 @@ import { callSupervisor } from './call-supervisor.ts';
 import { runSupervisor } from './run-supervisor.ts';
 import { supervisorServiceName } from './supervisor-request.ts';
 
+interface SupervisorStart {
+  readonly runID: string;
+  readonly signal: AbortSignal;
+  readonly target: string;
+  readonly stopWaitMs: number;
+  readonly readsDeclaredFromRun: boolean;
+}
+
 async function setupTest() {
   const directory = await createTestFolder(import.meta.dir, 'run-supervisor');
   const setsid = await createSetsid(directory);
@@ -296,6 +304,28 @@ async function setupTest() {
   const removeDirectory = spyOn(launchHost, 'removeDirectory');
   const listenSocket = spyOn(launchHost, 'listenSupervisorSocket');
 
+  const startSupervisor = (input: SupervisorStart) => {
+    const supervising = runSupervisor({
+      wringer,
+      launchHost,
+      state,
+      runID: input.runID,
+      target: input.target,
+      readyTimeoutMs: 5000,
+      stopWaitMs: input.stopWaitMs,
+      now: () => new Date(),
+      reportError: (message) => {
+        reports.push(message);
+      },
+      signal: AbortSignal.any([input.signal, teardown.signal]),
+      readsDeclaredFromRun: input.readsDeclaredFromRun,
+    });
+
+    supervisors.push(supervising);
+
+    return supervising;
+  };
+
   return {
     stopCalls: services.calls,
     reports,
@@ -357,26 +387,15 @@ async function setupTest() {
       signal: AbortSignal = teardown.signal,
       target = 'box',
       stopWaitMs = 1000,
-    ) => {
-      const supervising = runSupervisor({
-        wringer,
-        launchHost,
-        state,
+    ) => startSupervisor({ runID, signal, target, stopWaitMs, readsDeclaredFromRun: false }),
+    runSupervisorFromRun: (runID: string) =>
+      startSupervisor({
         runID,
-        target,
-        readyTimeoutMs: 5000,
-        stopWaitMs,
-        now: () => new Date(),
-        reportError: (message) => {
-          reports.push(message);
-        },
-        signal: AbortSignal.any([signal, teardown.signal]),
-      });
-
-      supervisors.push(supervising);
-
-      return supervising;
-    },
+        signal: teardown.signal,
+        target: 'box',
+        stopWaitMs: 1000,
+        readsDeclaredFromRun: true,
+      }),
   };
 }
 
@@ -1054,6 +1073,16 @@ test('#runSupervisor answers a stop with an environment error when a service fai
   expect(answer).toMatchObject({ status: 'rejected', reason: { code: 'environment' } });
 });
 
+test('#runSupervisor fails with environment when it reads declared secrets from a run with no secrets file', async () => {
+  const ctx = await setupTest();
+
+  await ctx.seed.run('bare-run');
+
+  const [settled] = await Promise.allSettled([ctx.runSupervisorFromRun('bare-run')]);
+
+  expect(settled).toMatchObject({ status: 'rejected', reason: { code: 'environment' } });
+});
+
 test('#runSupervisor scrubs a launch env secret from the crashed event and keeps it for later commands', async () => {
   const ctx = await setupTest();
 
@@ -1074,7 +1103,7 @@ test('#runSupervisor scrubs a launch env secret from the crashed event and keeps
       at: expect.any(String),
       reason: expect.stringContaining('login rejected for [redacted:SHOP_SESSION_TOKEN]'),
     },
-    secrets: [{ name: 'SHOP_SESSION_TOKEN', value: 'planted-launch-token' }],
+    secrets: [{ name: 'SHOP_SESSION_TOKEN', value: 'planted-launch-token', origin: 'collected' }],
     log: false,
   });
 });

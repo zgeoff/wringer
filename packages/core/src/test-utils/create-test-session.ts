@@ -3,6 +3,7 @@ import { dispatch } from '../dispatch/dispatch.ts';
 import type { DispatchResult } from '../dispatch/dispatch.ts';
 import { readLaunchHost } from '../launch/read-launch-host.ts';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
+import type { DeclaredSecretSource } from '../secrets/declared-secret-source.ts';
 import type { StatePort } from '../state/create-file-state.ts';
 import { createRepoState } from '../state/create-repo-state.ts';
 import { callSupervisor } from '../supervisor/call-supervisor.ts';
@@ -29,6 +30,9 @@ export interface TestSessionOptions {
 
   // The process environment of the commands and of the supervisors; empty when omitted.
   readonly env?: Readonly<Record<string, string | undefined>>;
+
+  // The source of the declared secrets' values, for the commands and the supervisors.
+  readonly declaredSecrets?: DeclaredSecretSource;
 }
 
 // Supervisors run inside the test process, so a test drives the real socket without the CLI. The
@@ -85,6 +89,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
       repoHost: createNodeRepoHost(),
       pullRequests: createFakePullRequestHost([]),
       env: options.env ?? {},
+      declaredSecrets: options.declaredSecrets,
       output: {
         writeLine: (line) => {
           lines.push(line);
@@ -105,6 +110,7 @@ export async function createTestSession(options: TestSessionOptions): Promise<Te
               readyTimeoutMs: 5000,
               stopWaitMs: 5000,
               now: () => new Date(),
+              readsDeclaredFromRun: options.declaredSecrets !== undefined,
               reportError: (message) => {
                 lines.push(message);
               },
