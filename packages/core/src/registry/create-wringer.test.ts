@@ -1,5 +1,4 @@
 import { expect, expectTypeOf, test } from 'bun:test';
-import { match } from 'ts-pattern';
 import { z } from 'zod';
 import { local } from '../host/local.ts';
 import { notes } from '../test-utils/notes.ts';
@@ -265,22 +264,35 @@ test('it accepts a feature name of 64 characters', () => {
 });
 
 test.each([
-  { place: 'ignore', glob: '!docs/**' },
-  { place: 'shared', glob: '!verify/**' },
-  { place: 'feature `pay` paths', glob: '!src/legacy/**' },
+  {
+    place: 'ignore',
+    glob: '!docs/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .ignore('!docs/**')
+        .build(),
+  },
+  {
+    place: 'shared',
+    glob: '!verify/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .shared('!verify/**')
+        .build(),
+  },
+  {
+    place: 'feature `pay` paths',
+    glob: '!src/legacy/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .feature({ name: 'pay', summary: 'Pay', paths: ['!src/legacy/**'] })
+        .build(),
+  },
 ])('it refuses a negated glob in $place', (row) => {
-  const base = createWringer({ name: 'shop' }).target('local', {
-    mode: 'attach',
-    access: 'read-write',
-    host: local(),
-  });
-
-  const builder = match(row.place)
-    .with('ignore', () => base.ignore(row.glob))
-    .with('shared', () => base.shared(row.glob))
-    .otherwise(() => base.feature({ name: 'pay', summary: 'Pay', paths: [row.glob] }));
-
-  expect(() => builder.build()).toThrowWithMessage(
+  expect(row.createRegistry).toThrowWithMessage(
     WringerError,
     `The ${row.place} glob \`${row.glob}\` starts with \`!\`, which matches every path outside it.`,
   );
