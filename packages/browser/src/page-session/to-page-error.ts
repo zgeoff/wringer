@@ -18,5 +18,27 @@ export function toPageError(error: unknown): unknown {
     });
   }
 
+  // Playwright words these as plain errors, so the message is the only thing to tell them apart.
+  if (message?.includes('strict mode violation') === true) {
+    return new WringerError('usage', {
+      message: `More than one element matches: ${message}`,
+      hint: 'Run `browser snapshot` and pass one element by --ref.',
+    });
+  }
+
+  if (message?.includes('did not change its state') === true) {
+    return new WringerError('check-failed', {
+      message: `The control did not change: ${message}`,
+      hint: 'Run `browser snapshot` to see the control as it is now.',
+    });
+  }
+
+  if (message?.includes('Unknown key') === true) {
+    return new WringerError('usage', {
+      message: `The browser does not know that key: ${message}`,
+      hint: 'Pass a key in Playwright syntax, such as Enter, Tab or Control+A.',
+    });
+  }
+
   return new WringerError('environment', { message: `The browser failed: ${message}` });
 }

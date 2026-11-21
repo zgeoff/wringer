@@ -26,10 +26,14 @@ function setupTest() {
       });
 
       return {
-        run: (action: (page: StubPage) => Promise<PageActionResult>, signal: AbortSignal) => {
+        run: (
+          action: (page: StubPage) => Promise<PageActionResult>,
+          signal: AbortSignal,
+          hasLanded?: () => boolean,
+        ) => {
           const settle = Promise.withResolvers<unknown>();
 
-          actor.send({ type: 'run', command: { action, signal, settle } });
+          actor.send({ type: 'run', command: { action, signal, settle, hasLanded } });
 
           return settle.promise;
         },
@@ -69,6 +73,30 @@ test('it fails a cancelled command with a timeout once its page closed, and runs
     },
     { status: 'fulfilled', value: 'second' },
   ]);
+});
+
+test('it fails a command cancelled after its action landed with an environment error that points at the tabs', () => {
+  const ctx = setupTest();
+
+  const page = ctx.startPage({
+    closePage: () => Promise.resolve(),
+    reopen: () => Promise.resolve({ name: 'second' }),
+  });
+
+  const cancel = new AbortController();
+
+  const cancelled = page.run(
+    () => Promise.withResolvers<never>().promise,
+    cancel.signal,
+    () => true,
+  );
+
+  cancel.abort();
+
+  expect(cancelled).rejects.toMatchObject({
+    code: 'environment',
+    hint: 'Run `browser tabs` to see what the action changed.',
+  });
 });
 
 test.each([

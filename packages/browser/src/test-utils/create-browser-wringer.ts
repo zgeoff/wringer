@@ -7,11 +7,20 @@ const emptySchema = z.strictObject({});
 const titleSchema = z.strictObject({ title: z.string() });
 const buttonSchema = z.strictObject({ button: z.string() });
 
-// A verify CLI against the shop page at `url`: `local` may write, read-only `prod` grants Search,
-// `inherited` names an endpoint every object inherits, and actions claim a read, then click Place
-// order, a button by its snapshot ref, or type an email.
-export function createBrowserWringer(url: string): Wringer {
-  const shop = bindDrivers([browser({})] as const);
+export interface BrowserWringerOptions {
+  readonly adminURL?: string;
+  readonly actionTimeoutMs?: number;
+}
+
+// A verify CLI against the shop page at `url` and the admin page at `adminURL`. Read-only `tour` and
+// `wide` grant the Open admin link, and only `wide` lists `admin`; `inherited` names an endpoint
+// every object inherits. Actions claim a read, then click, or type.
+export function createBrowserWringer(url: string, options: BrowserWringerOptions = {}): Wringer {
+  const adminURL = options.adminURL ?? url;
+
+  const shop = bindDrivers([
+    browser({ actionTimeoutMs: options.actionTimeoutMs ?? 10_000 }),
+  ] as const);
 
   return createWringer({ name: 'shop' })
     .use(...shop.drivers)
@@ -21,8 +30,8 @@ export function createBrowserWringer(url: string): Wringer {
         mode: 'attach',
         access: 'read-write',
         host: local(),
-        endpoints: () => ({ web: url }),
-        drivers: { browser: () => ({}) },
+        endpoints: () => ({ web: url, admin: adminURL }),
+        drivers: { browser: () => ({ endpoints: ['admin'] }) },
       }),
     )
     .target(
@@ -39,6 +48,48 @@ export function createBrowserWringer(url: string): Wringer {
               allow: [
                 { role: 'button', name: 'Search' },
                 { role: 'textbox', name: 'Search terms' },
+              ],
+            },
+          }),
+        },
+      }),
+    )
+    .target(
+      'tour',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-only',
+        refusalHint: 'tour is read-only: place the order on local.',
+        host: local(),
+        endpoints: () => ({ web: url, admin: adminURL }),
+        drivers: {
+          browser: () => ({
+            readOnly: {
+              allow: [
+                { role: 'button', name: 'Search' },
+                { role: 'link', name: 'Open admin' },
+                { role: 'textbox', name: 'Email' },
+              ],
+            },
+          }),
+        },
+      }),
+    )
+    .target(
+      'wide',
+      shop.defineTarget({
+        mode: 'attach',
+        access: 'read-only',
+        refusalHint: 'wide is read-only: place the order on local.',
+        host: local(),
+        endpoints: () => ({ web: url, admin: adminURL }),
+        drivers: {
+          browser: () => ({
+            endpoints: ['admin'],
+            readOnly: {
+              allow: [
+                { role: 'button', name: 'Search' },
+                { role: 'link', name: 'Open admin' },
               ],
             },
           }),

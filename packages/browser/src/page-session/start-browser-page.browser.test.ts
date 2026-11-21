@@ -273,11 +273,13 @@ test('it reports a failed reload of the replacement page and keeps the page for 
     AbortSignal.timeout(300),
   )?.catch(() => null);
 
-  const status = await service.methods['snapshot']?.(null, AbortSignal.timeout(5000));
+  const tabs = await service.methods['tabs']?.(null, AbortSignal.timeout(5000));
 
-  expect({ reported: ctx.reported, status }).toStrictEqual({
+  expect({ reported: ctx.reported, tabs }).toStrictEqual({
     reported: [expect.stringContaining(`The replacement page could not reload ${ctx.url}: `)],
-    status: { url: expect.any(String), title: expect.any(String), snapshot: expect.any(String) },
+    tabs: {
+      tabs: [{ index: 0, url: expect.any(String), title: expect.any(String), active: true }],
+    },
   });
 });
 
