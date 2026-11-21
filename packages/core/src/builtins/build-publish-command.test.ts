@@ -120,6 +120,8 @@ async function setupTest() {
       options?: Parameters<typeof dispatchOn>[3],
     ) => dispatchOn(wringer, ['publish'], args, options),
     readPublished: (data: unknown) => publishedSchema.parse(data),
+    readReportBase: (markdown: string | undefined) =>
+      markdown?.match(/"base":"(?<base>[^"]*)"/u)?.groups?.['base'],
     readBody: (host: FakePullRequestHost = pullRequests) => host.readStoredBody(7) ?? '',
     token,
     prURL,
@@ -439,6 +441,10 @@ test('#publish with --dry-run builds the report against the default base when th
 
   await ctx.verifyCheckout(['photo']);
   await ctx.git('checkout', '--quiet', '-b', 'feature-without-pr');
+  await ctx.git('add', '--all');
+  await ctx.git('commit', '--quiet', '-m', 'feat: add checkout');
+  await ctx.git('update-ref', 'refs/remotes/origin/trunk', 'HEAD');
+  await ctx.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
 
   const result = await ctx.publishWith(ctx.uploading, { dryRun: true });
 
@@ -449,14 +455,14 @@ test('#publish with --dry-run builds the report against the default base when th
     pr: data.pr,
     action: data.action,
     dryRun: data.dryRun,
-    hasReport: data.markdown !== undefined && data.markdown.length > 0,
+    reportBase: ctx.readReportBase(data.markdown),
     body: ctx.readBody(),
   }).toStrictEqual({
     ok: true,
     pr: null,
     action: 'created',
     dryRun: true,
-    hasReport: true,
+    reportBase: 'origin/trunk',
     body: ctx.intro,
   });
 });
@@ -466,15 +472,20 @@ test('#publish with --dry-run and --base builds the report against that base whe
 
   await ctx.verifyCheckout(['photo']);
   await ctx.git('checkout', '--quiet', '-b', 'feature-without-pr');
+  await ctx.git('update-ref', 'refs/remotes/origin/trunk', 'HEAD');
+  await ctx.git('symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/trunk');
 
   const result = await ctx.publishWith(ctx.uploading, { dryRun: true, base: 'main' });
   const bad = await ctx.publishWith(ctx.uploading, { dryRun: true, base: 'no-such-base' });
 
+  const data = ctx.readPublished(result.envelope.data);
+
   expect({
     ok: result.envelope.ok,
-    pr: ctx.readPublished(result.envelope.data).pr,
+    pr: data.pr,
+    reportBase: ctx.readReportBase(data.markdown),
     badOk: bad.envelope.ok,
-  }).toStrictEqual({ ok: true, pr: null, badOk: false });
+  }).toStrictEqual({ ok: true, pr: null, reportBase: 'main', badOk: false });
 });
 
 test('#publish with --dry-run still fails when the PR lookup fails for another reason', async () => {
