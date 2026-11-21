@@ -268,7 +268,8 @@ async function waitForReady(
 const logTailBytes = 16_384;
 
 // The end of a log, empty when the file is missing or unreadable. A tail that starts inside a line
-// loses that line, as its start may cut a URL's scheme off from the credentials after it.
+// loses that line, as its start may cut a URL's scheme off from the credentials after it. A tail
+// that holds no line break is one cut line, so it reads as empty.
 async function readLogTail(path: string): Promise<string> {
   try {
     const file = Bun.file(path);
@@ -280,7 +281,9 @@ async function readLogTail(path: string): Promise<string> {
       return text;
     }
 
-    return text.slice(text.indexOf('\n') + 1);
+    const lineBreak = text.indexOf('\n');
+
+    return lineBreak === -1 ? '' : text.slice(lineBreak + 1);
   } catch {
     return '';
   }
