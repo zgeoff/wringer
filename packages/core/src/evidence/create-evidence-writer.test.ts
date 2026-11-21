@@ -8,6 +8,7 @@ import { buildStubClock } from '../test-utils/build-stub-clock.ts';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedEvidenceFolder } from '../test-utils/seed-evidence-folder.ts';
 import { createEvidenceWriter } from './create-evidence-writer.ts';
+import { pickContentType } from './pick-content-type.ts';
 
 async function setupTest() {
   const root = await createTestFolder(import.meta.dir, 'evidence-writer');
@@ -54,6 +55,7 @@ test('it writes a file under a stamped name, relative to the root', async () => 
 test.each([
   { name: 'note.txt', scrub: 'text' },
   { name: 'snapshot.yaml', scrub: 'text' },
+  { name: 'snapshot.yml', scrub: 'text' },
   { name: 'session.har', scrub: 'opaque' },
 ])('it scrubs a string named $name and records it as $scrub', async (row) => {
   const ctx = await setupTest();
@@ -70,7 +72,7 @@ test.each([
   });
 });
 
-test.each(['data.json', 'data.yaml', 'data.txt', 'data.log', 'data.md'])(
+test.each(['data.json', 'data.yaml', 'data.yml', 'data.txt', 'data.log', 'data.md'])(
   'it scrubs bytes named %s and records them as text',
   async (name) => {
     const ctx = await setupTest();
@@ -85,6 +87,16 @@ test.each(['data.json', 'data.yaml', 'data.txt', 'data.log', 'data.md'])(
       scrub: 'text',
       text: 'token [redacted:SHOP_API_TOKEN]',
     });
+  },
+);
+
+test.each(['snapshot.yaml', 'snapshot.yml'])(
+  'it gives the file %s the text content type',
+  async (name) => {
+    const ctx = await setupTest();
+    const evidence = await ctx.evidence.writer.writeFile('note', name, Buffer.from('key: value'));
+
+    expect(pickContentType(evidence)).toBe('text/plain');
   },
 );
 

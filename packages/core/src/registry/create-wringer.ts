@@ -134,6 +134,21 @@ function buildWringer(parts: Parts): Wringer {
     });
   }
 
+  const negated = [
+    ...parts.ignore.map((glob) => ['ignore', glob] as const),
+    ...parts.shared.map((glob) => ['shared', glob] as const),
+    ...parts.features.flatMap((feature) =>
+      feature.paths.map((glob) => [`feature \`${feature.name}\` paths`, glob] as const),
+    ),
+  ].find(([, glob]) => glob.startsWith('!'));
+
+  if (negated !== undefined) {
+    throw new WringerError('usage', {
+      message: `The ${negated[0]} glob \`${negated[1]}\` starts with \`!\`, which matches every path outside it.`,
+      hint: 'Remove the glob, or narrow the glob it meant to exclude from.',
+    });
+  }
+
   const driverNames = parts.drivers.map((driver) => driver.name);
 
   // A run keys each driver's services by its name, so a second driver of one name would replace

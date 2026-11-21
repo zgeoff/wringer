@@ -262,3 +262,49 @@ test('it accepts a feature name of 64 characters', () => {
 
   expect(wringer.features.map((feature) => feature.name)).toStrictEqual(['a'.repeat(64)]);
 });
+
+test.each([
+  {
+    place: 'ignore',
+    glob: '!docs/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .ignore('!docs/**')
+        .build(),
+  },
+  {
+    place: 'shared',
+    glob: '!verify/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .shared('!verify/**')
+        .build(),
+  },
+  {
+    place: 'feature `pay` paths',
+    glob: '!src/legacy/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .feature({ name: 'pay', summary: 'Pay', paths: ['!src/legacy/**'] })
+        .build(),
+  },
+])('it refuses a negated glob in $place', (row) => {
+  expect(row.createRegistry).toThrowWithMessage(
+    WringerError,
+    `The ${row.place} glob \`${row.glob}\` starts with \`!\`, which matches every path outside it.`,
+  );
+});
+
+test('it accepts a glob with a `!` that is not its first character', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .ignore('docs/a!b/**')
+    .shared('verify/**')
+    .feature({ name: 'pay', summary: 'Pay', paths: ['src/**'] })
+    .build();
+
+  expect(wringer.ignore).toStrictEqual(['docs/a!b/**']);
+});

@@ -35,7 +35,7 @@ const mediaExtensions = new Set([
   '.ogv',
 ]);
 
-const textExtensions = new Set(['.json', '.yaml', '.txt', '.log', '.md']);
+const textExtensions = new Set(['.json', '.yaml', '.yml', '.txt', '.log', '.md']);
 
 // A string is text unless its name says image or video. Bytes are text only under a text name.
 // A `.har` file is scrubbed but recorded as opaque: it holds every cookie and header of a browser
