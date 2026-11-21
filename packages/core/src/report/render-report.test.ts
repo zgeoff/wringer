@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { parseReportComment } from '../report-document/parse-report-comment.ts';
 import type {
+  FeatureReport,
   JourneyFile,
   JourneyStep,
   LocalCause,
@@ -16,6 +17,7 @@ interface DocumentOptions {
   readonly verdict?: Verdict;
   readonly linkHosts?: readonly string[];
   readonly unmapped?: readonly string[];
+  readonly others?: readonly FeatureReport[];
 }
 
 function setupTest() {
@@ -69,7 +71,9 @@ function setupTest() {
         complete: true,
         features: [
           { name: verdict.feature, changed: true, status: 'verified', verdict },
-          { name: 'search', changed: false, status: 'unchanged', verdict: null },
+          ...(options.others ?? [
+            { name: 'search', changed: false, status: 'unchanged' as const, verdict: null },
+          ]),
         ],
         unmapped: [...(options.unmapped ?? [])],
       },
@@ -117,7 +121,7 @@ function setupTest() {
   };
 }
 
-test('it renders the markers, the summary table, one journey section and the data comment in order', () => {
+test('it renders the markers, one journey section and the data comment in order', () => {
   const ctx = setupTest();
   const text = ctx.render([ctx.buildStep(), ctx.buildStep({ command: 'http get' })]);
 
@@ -127,7 +131,6 @@ test('it renders the markers, the summary table, one journey section and the dat
 
   expect(lines.map((line) => line.slice(0, 12))).toStrictEqual([
     '<!-- wringer',
-    '<table>',
     '<details>',
     '<table>',
     '</details>',
@@ -136,11 +139,11 @@ test('it renders the markers, the summary table, one journey section and the dat
   ]);
 
   expect(lines[0]).toBe('<!-- wringer:report -->');
-  expect(lines[5]?.startsWith('<!-- wringer-data v2 ')).toBe(true);
-  expect(lines[6]).toBe('<!-- /wringer:report -->');
+  expect(lines[4]?.startsWith('<!-- wringer-data v2 ')).toBe(true);
+  expect(lines[5]).toBe('<!-- /wringer:report -->');
 });
 
-test('it gives the summary table a row per feature with its status, target and journey', () => {
+test('it gives a verified feature a summary with its mark, count, duration and target', () => {
   const ctx = setupTest();
 
   const text = ctx.render([
@@ -148,9 +151,85 @@ test('it gives the summary table a row per feature with its status, target and j
     ctx.buildStep({ durationMs: 2300 }),
   ]);
 
-  expect(text).toContain(
-    '<tr><td>checkout</td><td>verified</td><td>local</td><td>2 commands, 4 s</td></tr>\n<tr><td>search</td><td>unchanged</td><td>-</td><td>-</td></tr>',
+  expect(text).toContain('<summary>✅ <code>checkout</code> · 2 commands · 4 s · local</summary>');
+});
+
+test('it shows a duration under a second in milliseconds', () => {
+  const ctx = setupTest();
+
+  expect(ctx.render([ctx.buildStep({ durationMs: 383 })])).toContain(
+    '<summary>✅ <code>checkout</code> · 1 command · 383 ms · local</summary>',
   );
+});
+
+test('it gives no table of every feature', () => {
+  const ctx = setupTest();
+
+  expect(ctx.render([ctx.buildStep()])).not.toContain('<th>Feature</th>');
+});
+
+test.each([
+  {
+    status: 'stale',
+    line: '<p>⚠️ <code>cart</code> · stale · Fix it: run its journey and <code>bun verify done</code> again, then <code>bun verify publish</code>.</p>',
+  },
+  {
+    status: 'missing',
+    line: '<p>❌ <code>cart</code> · no verdict · Fix it: run its journey and <code>bun verify done</code>, then <code>bun verify publish</code>.</p>',
+  },
+  {
+    status: 'unpinned',
+    line: '<p>⚠️ <code>cart</code> · unpinned · The target reports no commit, and the registry refuses an unpinned verdict. Fix it: point the feature at a target that reports its commit, run its journey and <code>bun verify done</code> again, then <code>bun verify publish</code>.</p>',
+  },
+] as const)('it gives a $status feature one paragraph with its fix', (row) => {
+  const ctx = setupTest();
+
+  const others: FeatureReport[] = [
+    { name: 'cart', changed: true, status: row.status, verdict: null },
+  ];
+
+  expect(ctx.render([ctx.buildStep()], { others })).toContain(row.line);
+});
+
+test('it lists the changed features in registry order and the unchanged ones after them', () => {
+  const ctx = setupTest();
+
+  const others: FeatureReport[] = [
+    { name: 'cart', changed: true, status: 'missing', verdict: null },
+    { name: 'search', changed: false, status: 'unchanged', verdict: null },
+  ];
+
+  const text = ctx.render([ctx.buildStep()], { others });
+  const positions = ['<code>checkout</code>', '<code>cart</code> · no verdict', 'Unchanged:'];
+
+  expect(positions.map((mark) => text.indexOf(mark))).toBeArrayOfSize(3);
+
+  expect(positions.map((mark) => text.indexOf(mark))).toStrictEqual(
+    positions.map((mark) => text.indexOf(mark)).toSorted((left, right) => left - right),
+  );
+
+  expect(text).not.toContain('<code>search</code> ·');
+});
+
+test.each([
+  { count: 0, line: null },
+  { count: 1, line: '<p>Unchanged: <code>u1</code>.</p>' },
+  { count: 3, line: '<p>Unchanged: <code>u1</code>, <code>u2</code> and <code>u3</code>.</p>' },
+  { count: 4, line: '<p>Unchanged: <code>u1</code>, <code>u2</code> and 2 more.</p>' },
+])('it names $count unchanged features in one paragraph', (row) => {
+  const ctx = setupTest();
+
+  const others: FeatureReport[] = Array.from({ length: row.count }, (_unused, index) => ({
+    name: `u${index + 1}`,
+    changed: false,
+    status: 'unchanged',
+    verdict: null,
+  }));
+
+  const text = ctx.render([ctx.buildStep()], { others });
+  const found = text.split('\n').find((line) => line.startsWith('<p>Unchanged:')) ?? null;
+
+  expect(found).toBe(row.line);
 });
 
 test('it shows the first 7 characters of a deployed revision beside the target', () => {
@@ -161,7 +240,7 @@ test('it shows the first 7 characters of a deployed revision beside the target',
     pin: { kind: 'deployed', revision: '5e1d0a7'.padEnd(40, '0') },
   });
 
-  expect(ctx.render([ctx.buildStep()], { verdict })).toContain('<td>preview (5e1d0a7)</td>');
+  expect(ctx.render([ctx.buildStep()], { verdict })).toContain('· preview (5e1d0a7)</summary>');
 });
 
 test('it renders values holding a closing cell tag, a comment end, three backticks and the closing marker as text', () => {
@@ -290,7 +369,7 @@ test('it renders no journey table for a journey with no rows', () => {
   const ctx = setupTest();
   const text = ctx.renderDocument({ evidence: 'run-log-missing' });
 
-  expect(text.split('<table>').length - 1).toBe(1);
+  expect(text.split('<table>').length - 1).toBe(0);
 });
 
 test('it shows an uploaded raster image as an image and another file as a link named by its kind', () => {

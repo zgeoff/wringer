@@ -3,11 +3,14 @@ import type { FeatureReport, Journey, ReportDocument } from '../report-document/
 import { reportMarkers } from '../report-document/report-markers.ts';
 import { collectStepData } from '../report/collect-step-data.ts';
 import { formatDataBlock } from '../report/format-data-block.ts';
+import { hasLinkedFile } from '../report/has-linked-file.ts';
 import { renderDataComment } from '../report/render-data-comment.ts';
+import { renderDataNote } from '../report/render-data-note.ts';
 import { renderJourneyRow } from '../report/render-journey-row.ts';
 import { renderOmittedSection } from '../report/render-omitted-section.ts';
 import { renderSectionFrame } from '../report/render-section-frame.ts';
-import { renderSummaryTable } from '../report/render-summary-table.ts';
+import { renderStatusLine } from '../report/render-status-line.ts';
+import { renderUnchangedLine } from '../report/render-unchanged-line.ts';
 import { renderUnmappedLine } from '../report/render-unmapped-line.ts';
 import type { SecretSet } from '../secrets/create-secret-set.ts';
 import { isSizedAsLink } from './is-sized-as-link.ts';
@@ -30,6 +33,8 @@ export type PlanResult =
   | { readonly ok: true; readonly plan: ReportPlan; readonly chars: number }
   | { readonly ok: false; readonly minimumChars: number };
 
+const separatorChars = 2;
+
 // Fits the report into the budget in one pass: it sizes each fragment once, then takes the cuts in
 // a fixed order, until the total fits. Links are sized at `linkChars`, so the rendered length equals
 // the planned length when every link has that length, and is shorter otherwise.
@@ -43,6 +48,16 @@ export function planReport(
   const fixedChars = measureFixedParts(document, models.length, secrets);
   const total = { chars: fixedChars + models.reduce((sum, model) => sum + measureModel(model), 0) };
   const counts = { droppedData: 0, collapsed: 0, shortCells: 0, omitted: 0 };
+
+  if (total.chars > options.budgetChars) {
+    const noteChars = renderDataNote(hasLinkedFile(sized, secrets)).length + separatorChars;
+    const saving = dropAllData(models, noteChars);
+
+    if (saving !== null) {
+      counts.droppedData = saving.steps;
+      total.chars -= saving.chars;
+    }
+  }
 
   for (const candidate of collectCandidates(models)) {
     if (total.chars <= options.budgetChars) {
@@ -127,7 +142,9 @@ function buildModels(document: ReportDocument, context: SizingContext): readonly
   return document.report.features.flatMap((feature, position) => {
     const journey = document.journeys.get(feature.name);
 
-    return journey === undefined ? [] : [buildModel(feature, journey, position, context)];
+    return journey === undefined || feature.status !== 'verified'
+      ? []
+      : [buildModel(feature, journey, position, context)];
   });
 }
 
@@ -171,15 +188,27 @@ function measureFixedParts(
   sectionCount: number,
   secrets: SecretSet,
 ): number {
+  const unchanged = document.report.features.filter((feature) => feature.status === 'unchanged');
+
+  // A verified feature with a journey is a section, which the models size.
+  const lines = document.report.features
+    .filter(
+      (feature) =>
+        feature.status !== 'unchanged' &&
+        !(feature.status === 'verified' && document.journeys.has(feature.name)),
+    )
+    .map((feature) => renderStatusLine(feature, secrets));
+
   const parts = [
     reportMarkers.open,
-    renderSummaryTable(document, secrets),
+    ...lines,
+    ...renderUnchangedLine(unchanged, secrets),
     ...renderUnmappedLine(document.report.unmapped, secrets),
     renderDataComment(document, secrets),
   ];
 
   const partCount = parts.length + sectionCount;
-  const separators = 2 * (partCount - 1);
+  const separators = separatorChars * (partCount - 1);
 
   return (
     parts.reduce((sum, part) => sum + part.length, 0) + separators + 1 + reportMarkers.close.length
@@ -196,8 +225,45 @@ function measureModel(model: FeatureModel): number {
     : model.frameChars + 1 + measureJourneyTable(model.rows, model.state);
 }
 
+// The first cut: drops the data of every step at once, and shows a note above the feature lines.
+// Takes nothing, and returns null, when no step has data or the cut makes the report longer.
+function dropAllData(
+  models: readonly FeatureModel[],
+  noteChars: number,
+): { readonly steps: number; readonly chars: number } | null {
+  const withData = models.filter((model) => model.rows.some((row) => row.dataChars !== null));
+
+  if (withData.length === 0) {
+    return null;
+  }
+
+  const before = withData.reduce((sum, model) => sum + measureModel(model), 0);
+
+  for (const model of withData) {
+    model.rows.forEach((row, index) => {
+      if (row.dataChars !== null) {
+        model.state.droppedData.add(index);
+      }
+    });
+  }
+
+  const after = withData.reduce((sum, model) => sum + measureModel(model), 0) + noteChars;
+
+  if (after > before) {
+    for (const model of withData) {
+      model.state.droppedData.clear();
+    }
+
+    return null;
+  }
+
+  return {
+    steps: withData.reduce((sum, model) => sum + model.state.droppedData.size, 0),
+    chars: before - after,
+  };
+}
+
 type Candidate =
-  | { readonly kind: 'data'; readonly model: FeatureModel; readonly index: number }
   | { readonly kind: 'collapse'; readonly model: FeatureModel }
   | { readonly kind: 'cell'; readonly model: FeatureModel; readonly index: number }
   | { readonly kind: 'omit'; readonly model: FeatureModel };
@@ -205,14 +271,6 @@ type Candidate =
 // The cuts in their fixed order. Within a kind, a tie goes to the later feature, then the later
 // step. The order does not depend on the budget.
 function collectCandidates(models: readonly FeatureModel[]): readonly Candidate[] {
-  const data = models
-    .flatMap((model) =>
-      model.rows.flatMap((row, index) =>
-        row.dataChars === null ? [] : [{ model, index, size: row.dataChars }],
-      ),
-    )
-    .toSorted((left, right) => right.size - left.size || compareLater(left, right));
-
   const collapse = models
     .filter((model) => model.rows.length >= reportCutLimits.collapseFromRows)
     .map((model) => ({
@@ -235,7 +293,6 @@ function collectCandidates(models: readonly FeatureModel[]): readonly Candidate[
     .toSorted((left, right) => right.size - left.size || compareLater(left, right));
 
   return [
-    ...data.map((entry): Candidate => ({ kind: 'data', model: entry.model, index: entry.index })),
     ...collapse.map((entry): Candidate => ({ kind: 'collapse', model: entry.model })),
     ...cells.map((entry): Candidate => ({ kind: 'cell', model: entry.model, index: entry.index })),
     ...omit.map((entry): Candidate => ({ kind: 'omit', model: entry.model })),
@@ -256,12 +313,6 @@ function compareLater(left: Ranked, right: Ranked): number {
 // collapse already hid.
 function applyCandidate(candidate: Candidate): keyof ReportPlan['cuts'] | null {
   const state = candidate.model.state;
-
-  if (candidate.kind === 'data') {
-    state.droppedData.add(candidate.index);
-
-    return 'droppedData';
-  }
 
   if (candidate.kind === 'collapse') {
     state.collapsed = true;
@@ -292,7 +343,6 @@ function revertCandidate(candidate: Candidate): void {
   const state = candidate.model.state;
 
   match(candidate)
-    .with({ kind: 'data' }, (data) => state.droppedData.delete(data.index))
     .with({ kind: 'collapse' }, () => {
       state.collapsed = false;
     })

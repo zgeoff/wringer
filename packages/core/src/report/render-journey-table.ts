@@ -18,12 +18,9 @@ export function renderJourneyTable(
   cuts: FeaturePlan | undefined,
 ): string {
   const shown = pickJourneyRows(journey.steps.length, cuts?.collapsed ?? false);
-
-  const data = collectStepData(journey, secrets).map((text, index) =>
-    cuts?.droppedData.has(index) === true ? null : text,
-  );
-
-  const hasData = shown.indexes.some((index) => (data[index] ?? null) !== null);
+  const data = collectStepData(journey, secrets);
+  const isDropped = (cuts?.droppedData.size ?? 0) > 0;
+  const hasData = isDropped || shown.indexes.some((index) => (data[index] ?? null) !== null);
 
   const rows = shown.indexes.map((index) => {
     const step = requireStep(journey, index);
@@ -34,7 +31,7 @@ export function renderJourneyTable(
         number: index + 1,
         step,
         evidenceCell: renderEvidenceCell(step.files, linkHosts, secrets, isShort),
-        dataCell: hasData ? formatDataBlock(data[index] ?? null) : null,
+        dataCell: formatDataCell(hasData, isDropped, data[index] ?? null),
       },
       secrets,
     );
@@ -62,4 +59,13 @@ function requireStep(journey: Journey, index: number): JourneyStep {
   }
 
   return step;
+}
+
+// A dropped step data shows as an em dash in every cell, so the table keeps its shape.
+function formatDataCell(hasData: boolean, isDropped: boolean, text: string | null): string | null {
+  if (!hasData) {
+    return null;
+  }
+
+  return isDropped ? '—' : formatDataBlock(text);
 }
