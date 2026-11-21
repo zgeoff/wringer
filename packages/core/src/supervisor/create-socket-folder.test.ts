@@ -1,6 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
 import { mkdir, rm, stat } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join, relative } from 'node:path';
 import { updateEnv } from '@zgeoff/testing/helpers';
 import { createTestFolder } from '../test-utils/create-test-folder.ts';
@@ -31,6 +30,9 @@ test('it makes the folder of a short socket path owner-only, even when it exists
 
 test('it moves a socket path too long for a socket to an owner-only folder in the temp folder', async () => {
   const ctx = await setupTest();
+
+  updateEnv('TMPDIR', '/var/tmp');
+
   const socket = await createSocketFolder(join(ctx.directory, 'run'.repeat(40), 'sock'));
 
   onTestFinished(() => rm(dirname(socket), { recursive: true, force: true }));
@@ -38,7 +40,28 @@ test('it moves a socket path too long for a socket to an owner-only folder in th
   const info = await stat(dirname(socket));
 
   expect({ parent: dirname(dirname(socket)), mode: info.mode & 0o777 }).toStrictEqual({
-    parent: tmpdir(),
+    parent: '/var/tmp',
+    mode: 0o700,
+  });
+});
+
+test('it moves to a socket under /tmp, in an owner-only folder, when the temp folder is long', async () => {
+  const ctx = await setupTest();
+
+  const longTemp = join(ctx.directory, 'long-temp'.repeat(25));
+
+  await mkdir(longTemp, { recursive: true });
+
+  updateEnv('TMPDIR', longTemp);
+
+  const socket = await createSocketFolder(join(ctx.directory, 'run'.repeat(40), 'sock'));
+
+  onTestFinished(() => rm(dirname(socket), { recursive: true, force: true }));
+
+  const info = await stat(dirname(socket));
+
+  expect({ parent: dirname(dirname(socket)), mode: info.mode & 0o777 }).toStrictEqual({
+    parent: '/tmp',
     mode: 0o700,
   });
 });
@@ -54,7 +77,7 @@ test('it moves to a socket the supervisor listens on and answers when the temp f
 
   const socket = await createSocketFolder(join(ctx.directory, 'run'.repeat(40), 'sock'));
 
-  expect(Buffer.byteLength(socket)).toBeGreaterThan(104);
+  onTestFinished(() => rm(dirname(socket), { recursive: true, force: true }));
 
   const server = await listenSupervisorSocket({
     path: socket,

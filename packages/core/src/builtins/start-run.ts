@@ -6,6 +6,9 @@ import { writeLateFailure } from '../dispatch/write-late-failure.ts';
 import { findOwnValue } from '../find-own-value.ts';
 import { pickScopeRefusal } from '../secrets/pick-scope-refusal.ts';
 import type { RunView } from '../state/build-run-view.ts';
+import { buildRunPaths } from '../state/build-state-paths.ts';
+import { describeSupervisorExit } from '../supervisor/describe-supervisor-exit.ts';
+import { formatSupervisorExit } from '../supervisor/format-supervisor-exit.ts';
 import { supervisorServiceName } from '../supervisor/supervisor-request.ts';
 import { toWringerError } from '../to-wringer-error.ts';
 import type { BuiltinContext, SupervisorExit } from '../types.ts';
@@ -237,7 +240,7 @@ async function waitForReady(
     }
 
     if (exit !== null) {
-      const reason = `the supervisor exited with ${describeExit(exit)} before the run was ready`;
+      const reason = `the supervisor exited with ${describeSupervisorExit(exit)} before the run was ready`;
 
       await ctx.state.appendEvent(runID, {
         type: 'crashed',
@@ -245,8 +248,10 @@ async function waitForReady(
         reason,
       });
 
+      const logText = await readLogTail(buildRunPaths(ctx.stateDir, runID).supervisorLog);
+
       throw new WringerError('environment', {
-        message: `Run ${runID} stopped while it started: ${reason}.`,
+        message: `Run ${runID} stopped while it started: ${formatSupervisorExit(exit, logText)}`,
         hint: `Read .wringer/runs/${runID}/supervisor.log.`,
       });
     }
@@ -260,8 +265,28 @@ async function waitForReady(
   });
 }
 
-function describeExit(exit: SupervisorExit): string {
-  return exit.signal === null ? `code ${exit.code}` : `signal ${exit.signal}`;
+const logTailBytes = 16_384;
+
+// The end of a log, empty when the file is missing or unreadable. A tail that starts inside a line
+// loses that line, as its start may cut a URL's scheme off from the credentials after it. A tail
+// that holds no line break is one cut line, so it reads as empty.
+async function readLogTail(path: string): Promise<string> {
+  try {
+    const file = Bun.file(path);
+    const start = Math.max(0, file.size - logTailBytes);
+
+    const text = await file.slice(start).text();
+
+    if (start === 0) {
+      return text;
+    }
+
+    const lineBreak = text.indexOf('\n');
+
+    return lineBreak === -1 ? '' : text.slice(lineBreak + 1);
+  } catch {
+    return '';
+  }
 }
 
 // Remembers how the run's supervisor process exited, once it has, for the readiness loop to read

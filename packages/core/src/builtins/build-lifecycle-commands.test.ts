@@ -600,6 +600,49 @@ test.each([
   },
 );
 
+test('#up puts the end of the supervisor log in the error when the supervisor exits early', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.runWithExitingSupervisor(
+    'local',
+    'echo "cannot open postgres://app:hunter2@db/x"; exit 1',
+  );
+
+  expect({
+    code: result.envelope.error?.code,
+    message: result.envelope.error?.message,
+    hint: result.envelope.error?.hint,
+  }).toStrictEqual({
+    code: 'environment',
+    message: expect.stringContaining(
+      'the supervisor exited with code 1 before the run was ready; the end of its log:\ncannot open postgres://[redacted]@db/x',
+    ),
+    hint: expect.stringContaining('supervisor.log'),
+  });
+});
+
+test('#up keeps the password out of the error when the log tail starts inside the credentials', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.runWithExitingSupervisor(
+    'local',
+    String.raw`echo "cannot open postgres://app:sample-password@db/x"; head -c 16370 /dev/zero | tr "\0" x; echo; exit 1`,
+  );
+
+  expect(result.envelope.error?.message).not.toContain('sample-password');
+});
+
+test('#up keeps the password out of the error when the whole log tail is one cut line', async () => {
+  const ctx = await setupTest();
+
+  const result = await ctx.runWithExitingSupervisor(
+    'local',
+    String.raw`printf "cannot open postgres://app:sample-password@db/x"; head -c 16360 /dev/zero | tr "\0" x; exit 1`,
+  );
+
+  expect(result.envelope.error?.message).not.toContain('sample-password');
+});
+
 test('#up refuses an attach target with a usage error naming attach', async () => {
   const ctx = await setupTest();
   const result = await ctx.run('prod', ['up']);

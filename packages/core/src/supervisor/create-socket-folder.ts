@@ -1,13 +1,11 @@
 import { chmod, mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-
-// Unix socket paths are capped near 108 bytes.
-const maxSocketPathBytes = 100;
+import { maxSocketPathBytes, pickFallbackSocketFolder } from './pick-fallback-socket-folder.ts';
 
 // Only the owner may reach the socket: its folder is owner-only before the socket exists, whatever
-// the umask. A path too long for a socket moves to a fresh owner-only folder in the temp folder,
-// which `mkdtemp` names at random so no other user can claim it first. Returns the socket's path.
+// the umask. A path too long for a socket moves to a fresh folder that `mkdtemp` names at random,
+// in the temp folder or in `/tmp` when that is long. Returns the socket's path.
 export async function createSocketFolder(preferredSocket: string): Promise<string> {
   if (Buffer.byteLength(preferredSocket) <= maxSocketPathBytes) {
     const folder = dirname(preferredSocket);
@@ -18,7 +16,9 @@ export async function createSocketFolder(preferredSocket: string): Promise<strin
     return preferredSocket;
   }
 
-  const folder = await mkdtemp(join(tmpdir(), 'wringer-'));
+  const parent = pickFallbackSocketFolder(tmpdir(), process.platform);
+
+  const folder = await mkdtemp(join(parent, 'wringer-'));
 
   return join(folder, 'sock');
 }
