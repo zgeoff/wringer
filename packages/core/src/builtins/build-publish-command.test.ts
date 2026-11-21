@@ -26,6 +26,7 @@ async function setupTest() {
     local: z.number(),
     dryRun: z.boolean(),
     markdown: z.string().optional(),
+    warning: z.string().optional(),
     cuts: z.strictObject({
       droppedData: z.number(),
       collapsed: z.number(),
@@ -35,7 +36,7 @@ async function setupTest() {
   });
 
   const fileHost = createFileHostStandIn({ token });
-  const env = { VERIFY_UPLOAD_URL: fileHost.url, VERIFY_UPLOAD_TOKEN: token };
+  const env = { WRINGER_UPLOAD_URL: fileHost.url, WRINGER_UPLOAD_TOKEN: token };
   const base = createShopWringer();
 
   const shop = await createTestSession({ parent: import.meta.dir, wringer: base, env });
@@ -52,7 +53,7 @@ async function setupTest() {
   });
 
   const defaultUploader = createHostUploader(
-    { urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' },
+    { urlEnv: 'WRINGER_UPLOAD_URL', tokenEnv: 'WRINGER_UPLOAD_TOKEN' },
     { env, fetch },
   );
 
@@ -100,6 +101,7 @@ async function setupTest() {
     uploading,
     uploader: defaultUploader,
     buildWringer,
+    base,
     shop,
 
     // Drives the checkout feature on the uploading `local` target and records its verdict.
@@ -211,8 +213,8 @@ test('#publish leaves the description as it was when an upload fails', async () 
   const failing = createFileHostStandIn({ token: ctx.token, forceStatus: 500 });
 
   const uploader = createHostUploader(
-    { urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' },
-    { env: { VERIFY_UPLOAD_URL: failing.url, VERIFY_UPLOAD_TOKEN: ctx.token }, fetch },
+    { urlEnv: 'WRINGER_UPLOAD_URL', tokenEnv: 'WRINGER_UPLOAD_TOKEN' },
+    { env: { WRINGER_UPLOAD_URL: failing.url, WRINGER_UPLOAD_TOKEN: ctx.token }, fetch },
   );
 
   const result = await ctx.publishWith(ctx.buildWringer(uploader));
@@ -346,7 +348,7 @@ test('#publish with --dry-run needs no upload variable', async () => {
   await ctx.verifyCheckout(['photo']);
 
   const bare = createHostUploader(
-    { urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' },
+    { urlEnv: 'WRINGER_UPLOAD_URL', tokenEnv: 'WRINGER_UPLOAD_TOKEN' },
     { env: {}, fetch },
   );
 
@@ -371,6 +373,40 @@ test('#publish with --no-upload keeps every journey local and uploads nothing', 
     note: true,
     uploads: 0,
   });
+});
+
+test('#publish warns that evidence stayed local when no target of the registry uploads', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout(['photo']);
+
+  const result = await ctx.publishWith(ctx.base, {});
+
+  expect({
+    data: ctx.readPublished(result.envelope.data),
+    uploads: ctx.fileHost.uploads.length,
+  }).toStrictEqual({
+    data: expect.objectContaining({
+      uploaded: 0,
+      local: 2,
+      warning: expect.stringContaining('Evidence stayed local'),
+    }),
+    uploads: 0,
+  });
+});
+
+test('#publish with --no-upload gives no local-evidence warning', async () => {
+  const ctx = await setupTest();
+
+  await ctx.verifyCheckout(['photo']);
+
+  const uploading = await ctx.publish({ upload: false });
+  const localOnly = await ctx.publishWith(ctx.base, { upload: false });
+
+  expect({
+    uploading: ctx.readPublished(uploading.envelope.data).warning,
+    localOnly: ctx.readPublished(localOnly.envelope.data).warning,
+  }).toStrictEqual({ uploading: undefined, localOnly: undefined });
 });
 
 test('#publish fails with usage before it reads the PR when a target uploads and the registry has no hook', async () => {
@@ -399,15 +435,15 @@ test('#publish fails with environment, naming the variable, before any upload wh
   await ctx.verifyCheckout(['photo']);
 
   const unset = createHostUploader(
-    { urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' },
-    { env: { VERIFY_UPLOAD_TOKEN: ctx.token }, fetch },
+    { urlEnv: 'WRINGER_UPLOAD_URL', tokenEnv: 'WRINGER_UPLOAD_TOKEN' },
+    { env: { WRINGER_UPLOAD_TOKEN: ctx.token }, fetch },
   );
 
   const result = await ctx.publishWith(ctx.buildWringer(unset));
 
   expect({
     code: result.envelope.error?.code,
-    names: result.envelope.error?.message.includes('VERIFY_UPLOAD_URL'),
+    names: result.envelope.error?.message.includes('WRINGER_UPLOAD_URL'),
     leaksToken: JSON.stringify(result.envelope).includes(ctx.token),
     uploads: ctx.fileHost.uploads.length,
     body: ctx.readBody(),

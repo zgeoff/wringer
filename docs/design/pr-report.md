@@ -188,22 +188,20 @@ passes the names of the environment variables, never their values:
 ```ts
 const wringer = createWringer({ name: 'shop' })
   .target('preview', { mode: 'attach', access: 'read-only', evidence: 'upload', host: local() })
-  .hook(
-    'upload',
-    createHostUploader({ urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' }),
-  )
+  .hook('upload', createHostUploader({ urlEnv: 'FILES_URL', tokenEnv: 'FILES_TOKEN' }))
   .build();
 
 // core
 interface HostUploaderOptions {
-  readonly urlEnv: string; // the upload endpoint, an https URL
-  readonly tokenEnv: string;
+  readonly urlEnv?: string | undefined; // the https upload endpoint; default 'WRINGER_UPLOAD_URL'
+  readonly tokenEnv?: string | undefined; // default 'WRINGER_UPLOAD_TOKEN'
   readonly expires?: string | undefined; // the host's `expires` field; default '30d'
   readonly maxURLLength?: number | undefined; // default 512
 }
 // POST <url> with fields `file`, `label`, `expires`; `Authorization: Bearer <token>`.
 // The host returns 201 with JSON `{ url, expiresAt }`. linkHosts is the upload URL's host.
 // The uploader reads both variables when it is used, so a command that never uploads needs neither.
+// A publish whose files stay local because no target uploads says so in `data.warning`.
 // `readSecrets` returns the token, named for its variable, and core adds it to the command's secret
 // set after `assertReady`, so the scrubber and the upload guard know it whatever the variable is
 // named.

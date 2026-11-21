@@ -177,8 +177,8 @@ test('it keeps the evidence of every shop registry target local and registers no
 test('it needs neither upload variable for a command that never uploads', async () => {
   const ctx = await setupTest();
 
-  updateEnv('VERIFY_UPLOAD_URL', undefined);
-  updateEnv('VERIFY_UPLOAD_TOKEN', undefined);
+  updateEnv('CLOUD_FILES_URL', undefined);
+  updateEnv('CLOUD_FILES_TOKEN', undefined);
 
   const result = await ctx.dispatch(
     ctx.registry,

@@ -64,8 +64,8 @@ test('#publish links the evidence of a verdict on local to the file host, with t
 
   const ctx = await setupTest();
 
-  updateEnv('VERIFY_UPLOAD_URL', host.url);
-  updateEnv('VERIFY_UPLOAD_TOKEN', token);
+  updateEnv('CLOUD_FILES_URL', host.url);
+  updateEnv('CLOUD_FILES_TOKEN', token);
 
   await ctx.writeFiles(['packages/http/src/send-request.ts']);
   await ctx.verify(ctx.registry, 'http-driver');
@@ -93,8 +93,8 @@ test('#publish keeps the evidence of a shop registry verdict local and uploads n
 
   const registry = createShopRegistry();
 
-  updateEnv('VERIFY_UPLOAD_URL', host.url);
-  updateEnv('VERIFY_UPLOAD_TOKEN', token);
+  updateEnv('CLOUD_FILES_URL', host.url);
+  updateEnv('CLOUD_FILES_TOKEN', token);
 
   await ctx.writeFiles(['packages/shop-example/src/shop-app.ts']);
   await ctx.verify(registry, 'list-orders');
