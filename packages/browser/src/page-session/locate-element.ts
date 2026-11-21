@@ -5,9 +5,8 @@ import { z } from 'zod';
 import { isListedOrigin } from '../is-listed-origin.ts';
 import type { ElementTarget } from '../page-service-contract.ts';
 
-// An element that carries origins is a granted write. The tab can navigate while the action waits,
-// so the origin is checked once the element is shown (or attached) and enabled, with nothing left
-// to wait for, and a tab that left the origins is refused.
+// An element that carries origins is a granted write. The wait for it to be shown (or attached) and
+// enabled happens here; the caller then runs its own waits and `refuseUnlistedOrigin` before it acts.
 export async function locateElement(
   page: Page,
   element: ElementTarget,
@@ -17,16 +16,20 @@ export async function locateElement(
 
   if (element.origins !== undefined) {
     await locator.and(page.locator(':not(:disabled)')).waitFor({ state: readyState });
-
-    if (!isListedOrigin(page.url(), element.origins)) {
-      throw new WringerError('read-only', {
-        message: `The active tab is on ${page.url()}, which is not an origin the target's browser config lists.`,
-        hint: 'Run `browser tabs`, then `browser tab` to return to a tab of the app.',
-      });
-    }
   }
 
   return locator;
+}
+
+// The tab can navigate while an action waits, so a granted write checks the tab's origin after
+// every wait and right before it acts.
+export function refuseUnlistedOrigin(page: Page, origins: readonly string[]): void {
+  if (!isListedOrigin(page.url(), origins)) {
+    throw new WringerError('read-only', {
+      message: `The active tab is on ${page.url()}, which is not an origin the target's browser config lists.`,
+      hint: 'Run `browser tabs`, then `browser tab` to return to a tab of the app.',
+    });
+  }
 }
 
 function findLocator(page: Page, element: ElementTarget): Promise<Locator> {

@@ -7,11 +7,11 @@ import { createBrowserPageMachine } from './create-browser-page-machine.ts';
 import type { PageActionResult } from './create-browser-page-machine.ts';
 import { createTabSet } from './create-tab-set.ts';
 import type { TabSet } from './create-tab-set.ts';
-import { locateElement } from './locate-element.ts';
+import { locateElement, refuseUnlistedOrigin } from './locate-element.ts';
 import { pickReopenURL } from './pick-reopen-url.ts';
 import { readPageState } from './read-page-state.ts';
 import { runTracked } from './run-tracked.ts';
-import { setChecked } from './set-checked.ts';
+import { FORCED_ACTION_TIMEOUT_MS, setChecked } from './set-checked.ts';
 import { toPageServiceMethods } from './to-page-service-methods.ts';
 
 export interface BrowserPageOptions {
@@ -112,7 +112,19 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
           runTracked(tabSet, markLanded, async (page) => {
             const locator = await locateElement(page, args);
 
-            await locator.click();
+            if (args.origins === undefined) {
+              await locator.click();
+
+              return;
+            }
+
+            // Every wait of the click runs in the trial, so nothing waits between the origin check
+            // and the forced click.
+            await locator.click({ trial: true });
+
+            refuseUnlistedOrigin(page, args.origins);
+
+            await locator.click({ force: true, timeout: FORCED_ACTION_TIMEOUT_MS });
           }),
         ),
       type: (args, signal) =>
@@ -121,7 +133,13 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
           const locator = await locateElement(page, args.element);
 
-          await locator.fill(args.value);
+          if (args.element.origins === undefined) {
+            await locator.fill(args.value);
+          } else {
+            refuseUnlistedOrigin(page, args.element.origins);
+
+            await locator.fill(args.value, { force: true, timeout: FORCED_ACTION_TIMEOUT_MS });
+          }
 
           markLanded();
 
@@ -146,7 +164,15 @@ export async function startBrowserPage(options: BrowserPageOptions): Promise<Ser
 
             const locator = await locateElement(page, args.element, 'attached');
 
-            await locator.press(args.key);
+            if (args.element.origins === undefined) {
+              await locator.press(args.key);
+
+              return;
+            }
+
+            refuseUnlistedOrigin(page, args.element.origins);
+
+            await locator.press(args.key, { timeout: FORCED_ACTION_TIMEOUT_MS });
           }),
         ),
       hover: (args, signal) =>

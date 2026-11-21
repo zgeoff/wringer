@@ -44,6 +44,7 @@ export function createShopPageServer(): ShopPageServer {
   const page = buildShopPage(adminServer.url.href);
   const leavingPage = buildLeavingPage(adminServer.url.href);
   const armingPage = buildArmingPage(adminServer.url.href);
+  const coveredPage = buildCoveredPage(adminServer.url.href);
   let restockReady = false;
   let pageLoads = 0;
   let basketFilled = false;
@@ -94,6 +95,9 @@ export function createShopPageServer(): ShopPageServer {
       },
       '/arming': {
         GET: () => new Response(armingPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/covered': {
+        GET: () => new Response(coveredPage, { headers: { 'content-type': 'text/html' } }),
       },
       '/leaving': {
         GET: () => new Response(leavingPage, { headers: { 'content-type': 'text/html' } }),
@@ -212,5 +216,16 @@ function buildArmingPage(adminURL: string): string {
   return `<!doctype html>
 <title>Arming</title>
 <button disabled>Search</button>
+<script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
+}
+
+// A page whose Search button is shown and enabled but covered by an overlay that nothing removes,
+// and which moves to the admin app after a moment, so a click on the button waits for the overlay
+// and then finds the admin page's uncovered button.
+function buildCoveredPage(adminURL: string): string {
+  return `<!doctype html>
+<title>Covered</title>
+<button>Search</button>
+<div style="position: fixed; inset: 0; background: white;"></div>
 <script>setTimeout(() => { location.href = '${adminURL}'; }, 600);</script>`;
 }
