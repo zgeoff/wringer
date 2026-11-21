@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.8](https://github.com/zgeoff/wringer/compare/@wringer/stream@0.1.7...@wringer/stream@0.1.8) (2026-11-21)
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.1
+  - peerDependencies
+    - @wringer/core bumped to 0.4.1
+
 ## [0.1.7](https://github.com/zgeoff/wringer/compare/@wringer/stream@0.1.6...@wringer/stream@0.1.7) (2026-11-21)
 
 ### Dependencies

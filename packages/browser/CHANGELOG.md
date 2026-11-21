@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.1](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.2.0...@wringer/browser@0.2.1) (2026-11-21)
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.1
+  - peerDependencies
+    - @wringer/core bumped to 0.4.1
+
 ## [0.2.0](https://github.com/zgeoff/wringer/compare/@wringer/browser@0.1.7...@wringer/browser@0.2.0) (2026-11-21)
 
 ### ⚠ BREAKING CHANGES
