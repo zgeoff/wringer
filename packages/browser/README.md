@@ -52,7 +52,9 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 | `tabs()`, `tab({ index })` | `browser tabs`, `browser tab 1`, `browser tab close` | read   |
 | `screenshot()`             | `browser screenshot`                                 | read   |
 
-`check`, `uncheck`, `hover` (a read) and `press` take the element flags of `click`. `press` takes a
+`click` names an element by `--ref`, by `--role` with `--name`, by `--label`, or by the `--text` it
+shows, as [Browser locators](../../docs/reference/browser-locators.md) says. `check`, `uncheck`,
+`hover` (a read) and `press` take the same flags. `press` takes a
 [Playwright key](https://playwright.dev/docs/api/class-keyboard#keyboard-press) such as `Control+A`,
 and with no element flag presses it on the focused element. `check` answers with the new `checked`
 state, and a disabled control or a non-checkbox fails with a usage error. `goto --endpoint admin`
@@ -77,12 +79,6 @@ page changes. `screenshot` keeps a PNG. Both need a `goto` first.
 has the first text and lacks the second (case-sensitive). When `actionTimeoutMs` runs out, or 2 s
 before the command's deadline, it fails with `check-failed` and keeps the last snapshot as evidence.
 
-## Finding a control by its label
-
-`--label <text>` finds a control through Playwright's `getByLabel`, and `--role` narrows the match.
-It cannot go with `--name`. No match fails with `check-failed` after the action timeout, and several
-matches fail at once with a usage error: add `--role` or use `--ref`.
-
 ## Tabs
 
 `tabs` lists each tab's index, URL and title, and marks the active one. `tab <index>` switches to a
@@ -91,10 +87,14 @@ click or key press that opens a tab switches to it, and its result carries `open
 closes itself returns the driver to its opener, and the result carries `closedTab`. A switch forgets
 the last snapshot's refs.
 
+A click or key press that starts a download adds its `download` URL and file name to the result. The
+driver closes the blank tab that the download opened, stays on the page, and keeps no file. Fetch
+the file another way, such as with the http driver.
+
 ## Read-only targets
 
 A read-only target refuses each click, type, check, uncheck and key press with exit code 3 and the
 target's hint, unless its `readOnly.allow` lists the element's role and exact name. Name a granted
-element by `--role` and `--name`, or by `--label` with `--role`, because the CLI cannot see a ref's
-role. A `press` with no element is always a write. A grant holds only while the active tab is on the
-origin of the default endpoint or a listed one.
+element by `--role` and `--name`, by `--label` with `--role`, or by `--text` with `--role`, because
+the CLI cannot see a ref's role. A `press` with no element is always a write. A grant holds only
+while the active tab is on the origin of the default endpoint or a listed one.

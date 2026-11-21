@@ -10,6 +10,7 @@ import type { TabSet } from './create-tab-set.ts';
 import { locateElement, refuseUnlistedOrigin, waitForEnabledControl } from './locate-element.ts';
 import { pickReopenURL } from './pick-reopen-url.ts';
 import { readPageState } from './read-page-state.ts';
+import { registerTextEngine } from './register-text-engine.ts';
 import { runTracked } from './run-tracked.ts';
 import { FORCED_ACTION_TIMEOUT_MS, setChecked } from './set-checked.ts';
 import { toPageServiceMethods } from './to-page-service-methods.ts';
@@ -256,6 +257,8 @@ async function openRunTabs(browser: Browser, actionTimeoutMs: number): Promise<T
     // `browser.newPage` gives each page a context of its own, which dies with the page; one
     // context per run keeps the cookies and storage of a page that a timeout replaced, and lets
     // a tab that a page opens share them.
+    await registerTextEngine();
+
     const context = await browser.newContext();
 
     return await createTabSet(context, actionTimeoutMs);

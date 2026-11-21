@@ -31,9 +31,48 @@ const closingPage = `<!doctype html>
 <title>Closing</title>
 <button onclick="window.close()">Close this tab</button>`;
 
+// A page of links to a file that the server sends as an attachment, one in a new tab and one in
+// the same tab, and a link to an ordinary page in a new tab.
+const downloadsPage = `<!doctype html>
+<title>Downloads</title>
+<a href="/files/report.csv" target="_blank" rel="opener">Download in a new tab</a>
+<a href="/files/report.csv">Download in this tab</a>
+<a href="/files/slow-report.csv" download>Download after a delay</a>
+<a href="/orders" target="_blank" rel="opener">Open orders</a>`;
+
+// A page whose elements record the one that was clicked in the title, to show how a text is found:
+// by its whole text, through a line break, between blocks, past a hidden child, in a shadow root,
+// and not through a label or a text-transform.
+const textPage = `<!doctype html>
+<title>Text</title>
+<style>.upper { text-transform: uppercase; }</style>
+<div onclick="pick('plain')">Add to basket</div>
+<div onclick="pick('broken')">Gift<br>wrap now</div>
+<div onclick="pick('blocks')"><div>Two</div><div>blocks</div></div>
+<button onclick="pick('hidden-child')">Save<span hidden> draft</span></button>
+<button class="upper" onclick="pick('transformed')">Pay now</button>
+<button aria-label="Remove item" onclick="pick('labelled')">X</button>
+<button onclick="pick('inline-flex')">Save<span style="display:inline-flex">draft</span></button>
+<div onclick="pick('closed-details')">Keep<details><summary>Options</summary><span>secret</span></details></div>
+<div onclick="pick('twin-one')">Twin</div>
+<div onclick="pick('twin-two')">Twin</div>
+<a role="menuitem" tabindex="0" onclick="pick('menu')">Billing and invoices</a>
+<p>Billing and invoices overview</p>
+<button onclick="pick('search')">Search</button>
+<button onclick="pick('search-all')">Search all orders</button>
+<div id="host"></div>
+<script>
+  function pick(name) { document.title = 'Picked ' + name; }
+  const shadowButton = document.createElement('button');
+
+  shadowButton.textContent = 'Inside the shadow';
+  shadowButton.onclick = () => pick('shadow');
+  document.querySelector('#host').attachShadow({ mode: 'open' }).append(shadowButton);
+</script>`;
+
 // A shop app for browser tests on a free port, with a second app on another origin: `/` holds
-// fields, checkboxes, radios and links that open tabs, and `/closing` closes its own tab. Each
-// `/api` POST and each browser navigation to `/` is counted.
+// fields, checkboxes, radios and links that open tabs, `/closing` closes its own tab, and `/text`
+// has elements to find by their shown text. Each `/api` POST and each navigation to `/` is counted.
 export function createShopPageServer(): ShopPageServer {
   const posts: string[] = [];
   const adminPosts: string[] = [];
@@ -123,6 +162,33 @@ export function createShopPageServer(): ShopPageServer {
       },
       '/changing': {
         GET: () => new Response(changingPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/downloads': {
+        GET: () => new Response(downloadsPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/text': {
+        GET: () => new Response(textPage, { headers: { 'content-type': 'text/html' } }),
+      },
+      '/files/report.csv': {
+        GET: () =>
+          new Response('sku,count\nmug,2\n', {
+            headers: {
+              'content-type': 'text/csv',
+              'content-disposition': 'attachment; filename="report.csv"',
+            },
+          }),
+      },
+      '/files/slow-report.csv': {
+        GET: async () => {
+          await Bun.sleep(600);
+
+          return new Response('sku,count\nmug,2\n', {
+            headers: {
+              'content-type': 'text/csv',
+              'content-disposition': 'attachment; filename="slow-report.csv"',
+            },
+          });
+        },
       },
       '/closing': {
         GET: () => new Response(closingPage, { headers: { 'content-type': 'text/html' } }),
