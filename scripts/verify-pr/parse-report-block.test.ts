@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { createSecretSet, noCuts, parseReportComment, renderReport } from '@wringer/core';
 import { parseReportBlock } from './parse-report-block.ts';
 
 test('it returns the block under the Verification heading', () => {
@@ -66,4 +67,53 @@ test('it reports a block in a description without a Verification heading', () =>
     ok: false,
     detail: 'the report block is not under the ## Verification heading',
   });
+});
+
+test('it reads back a block that the report renderer wrote', () => {
+  const verdict = {
+    feature: 'checkout',
+    fingerprint: 'b'.repeat(40),
+    featureFingerprint: 'a'.repeat(40),
+    run: 'r1',
+    at: '2026-11-04T10:00:00.000Z',
+    target: { name: 'local', evidence: 'upload' as const },
+    pin: { kind: 'local' as const },
+    evidence: [],
+  };
+
+  const text = renderReport(
+    {
+      registry: 'shop',
+      report: {
+        base: 'origin/main',
+        fingerprint: 'b'.repeat(40),
+        complete: true,
+        features: [
+          { name: 'checkout', changed: true, status: 'verified', verdict },
+          {
+            name: 'cart',
+            changed: true,
+            status: 'stale',
+            verdict: { ...verdict, feature: 'cart' },
+          },
+          { name: 'search', changed: false, status: 'unchanged', verdict: null },
+        ],
+        unmapped: [],
+      },
+      journeys: new Map([['checkout', { steps: [], evidence: 'upload' }]]),
+      linkHosts: [],
+    },
+    noCuts,
+    createSecretSet(),
+  );
+
+  const read = parseReportBlock(`## Verification\n\n${text}\n`);
+  const comment = parseReportComment(text);
+
+  expect(read).toStrictEqual({ ok: true, block: text });
+
+  expect(comment.ok && comment.comment.claims.map((claim) => claim.feature)).toStrictEqual([
+    'checkout',
+    'cart',
+  ]);
 });

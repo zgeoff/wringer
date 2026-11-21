@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import fc from 'fast-check';
+import invariant from 'tiny-invariant';
 import type {
   JourneyFile,
   JourneyStep,
@@ -159,7 +160,7 @@ test('it takes no cut when the uncut report fits', () => {
   });
 });
 
-test('it drops the largest step data first, and the later step on a tie', () => {
+test('it drops the data of every step at once, whatever the amount it must save', () => {
   const ctx = setupTest();
 
   const document = ctx.buildDocument([
@@ -167,13 +168,124 @@ test('it drops the largest step data first, and the later step on a tie', () => 
       name: 'checkout',
       steps: [{ data: ctx.dataOf(300) }, { data: ctx.dataOf(100) }, { data: ctx.dataOf(300) }],
     },
+    { name: 'cart', steps: [{ data: ctx.dataOf(200) }, {}] },
   ]);
 
   const result = ctx.plan(document, ctx.uncutChars(document) - 1);
 
-  expect(result.ok && [...(result.plan.features.get('checkout')?.droppedData ?? [])]).toStrictEqual(
-    [2],
+  expect(
+    result.ok && [
+      result.plan.cuts.droppedData,
+      [...(result.plan.features.get('checkout')?.droppedData ?? [])],
+      [...(result.plan.features.get('cart')?.droppedData ?? [])],
+    ],
+  ).toStrictEqual([4, [0, 1, 2], [0]]);
+});
+
+test('it keeps the Data column with an em dash in each cell and notes the cut', () => {
+  const ctx = setupTest();
+
+  const document = ctx.buildDocument([
+    { name: 'checkout', steps: [{ data: ctx.dataOf(300) }, {}] },
+  ]);
+
+  const result = ctx.plan(document, ctx.uncutChars(document) - 1);
+  const text = result.ok ? ctx.render(document, result.plan) : '';
+
+  expect({
+    header: text.includes('<th>Data</th>'),
+    dashes: text.split('<td>—</td>').length - 1,
+    json: text.includes('```json'),
+  }).toStrictEqual({ header: true, dashes: 2, json: false });
+});
+
+test('it says step data was left out and that the linked files are complete when the report links one', () => {
+  const ctx = setupTest();
+
+  const document = ctx.withLinks(
+    ctx.buildDocument([{ name: 'checkout', steps: [{ files: ['png'], data: ctx.dataOf(600) }] }]),
+    80,
   );
+
+  const result = ctx.plan(document, ctx.uncutChars(document) - 1);
+
+  expect(result.ok && ctx.render(document, result.plan)).toContain(
+    "<p>Step data was left out to fit the PR description's size limit. The linked evidence files are complete.</p>",
+  );
+});
+
+test('it says only that step data was left out when the report links no file', () => {
+  const ctx = setupTest();
+
+  const document = ctx.buildDocument([
+    { name: 'checkout', steps: [{ files: ['png'], data: ctx.dataOf(600) }] },
+  ]);
+
+  const result = ctx.plan(document, ctx.uncutChars(document) - 1);
+
+  expect(result.ok && ctx.render(document, result.plan)).toContain(
+    "<p>Step data was left out to fit the PR description's size limit.</p>",
+  );
+});
+
+test('it skips the data cut and its note when no step has data', () => {
+  const ctx = setupTest();
+
+  const document = ctx.buildDocument([
+    { name: 'checkout', steps: Array.from({ length: 12 }, () => ({})) },
+  ]);
+
+  const result = ctx.plan(document, ctx.uncutChars(document) - 1);
+
+  expect(result.ok && ctx.render(document, result.plan)).not.toContain('Step data was left out');
+  expect(result.ok && result.plan.cuts.droppedData).toBe(0);
+});
+
+test('it drops a small data block before it collapses a table, though the note costs more than it saves', () => {
+  const ctx = setupTest();
+
+  const document = ctx.buildDocument([
+    {
+      name: 'checkout',
+      steps: Array.from({ length: 12 }, (_unused, index) =>
+        index === 0 ? { data: { ok: 1 } } : {},
+      ),
+    },
+  ]);
+
+  const result = ctx.plan(document, ctx.uncutChars(document) - 1);
+
+  expect(result.ok && result.plan.cuts).toStrictEqual({
+    droppedData: 1,
+    collapsed: 1,
+    shortCells: 0,
+    omitted: 0,
+  });
+
+  expect(result.ok && result.plan.features.get('checkout')?.droppedData).toStrictEqual(
+    new Set([0]),
+  );
+});
+
+test('it sizes the note without the links sentence when the cuts leave no link', () => {
+  const ctx = setupTest();
+
+  const document = ctx.withLinks(
+    ctx.buildDocument([{ name: 'checkout', steps: [{ files: ['png'], data: ctx.dataOf(600) }] }]),
+    80,
+  );
+
+  const failed = ctx.plan(document, 0);
+
+  invariant(!failed.ok);
+
+  const result = ctx.plan(document, failed.minimumChars);
+
+  invariant(result.ok);
+
+  expect(result.chars).toBe(failed.minimumChars);
+  expect(ctx.render(document, result.plan).length).toBe(failed.minimumChars);
+  expect(ctx.render(document, result.plan)).not.toContain('linked evidence files');
 });
 
 test('it drops step data before it collapses a table', () => {
@@ -189,7 +301,7 @@ test('it drops step data before it collapses a table', () => {
   const result = ctx.plan(document, ctx.uncutChars(document) - 200);
 
   expect(result.ok && result.plan.cuts).toStrictEqual({
-    droppedData: expect.toBeWithin(1, 14),
+    droppedData: 14,
     collapsed: 0,
     shortCells: 0,
     omitted: 0,
@@ -264,7 +376,7 @@ test('it replaces a journey section with one line when every other cut is taken'
   });
 
   expect(result.ok && ctx.render(document, result.plan)).toContain(
-    '<p>checkout: 3 commands, 360 ms. The journey is left out to fit the PR description.</p>',
+    '<p>✅ <code>checkout</code> · 3 commands · 360 ms · local. The journey is left out to fit the PR description.</p>',
   );
 });
 
