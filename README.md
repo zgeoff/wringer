@@ -85,10 +85,10 @@ gets a dry run of the npm publish of each package.
 
 ## Layout
 
-- `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes.
-  It holds an example shop app with its verify CLI, which `bun run verify:shop` runs, and wringer's
-  own verify CLI, which `bun verify` runs. The browser tests drive the shop app through the shop
-  CLI's registry with every driver package.
+- `packages/`: one folder for each `@wringer/*` package, and `packages/shop-example`, which never
+  publishes. It holds an example shop app with its verify CLI, which `bun run verify:shop` runs, and
+  wringer's own verify CLI, which `bun verify` runs. The browser tests drive the shop app through
+  the shop CLI's registry with every driver package.
 - `packages/gunshi/guide/`: the guide that adds a verify CLI to a repo, with the template files it
   copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the terms, the design docs and the runbooks.

@@ -42,9 +42,9 @@ copy of the repo's own index, then runs `git add --all`, so every file on disk c
 repo's `.gitignore` hides it. wringer never reads the clone's `info/exclude`, the user's global
 excludes, or their attributes and filters, so two clones of the same change get the same
 fingerprint. So do a sparse checkout, a linked worktree, a shallow clone and a detached `HEAD`. A
-file that only `info/exclude` hides therefore counts as changed. The one exception is a clone whose
-git config rewrites files as git adds them, such as with `core.autocrlf`. In that clone, the
-fingerprint can change once the change is committed, and the verdict then reads as stale.
+file that only `info/exclude` hides therefore counts as changed. An exception is a clone whose git
+config rewrites files as git adds them, such as with `core.autocrlf`. In that clone, the fingerprint
+can change once the change is committed, and the verdict then reads as stale.
 
 Before the diff, wringer resets each changed path that the ignore list matches, and that no
 feature's `paths` or shared glob matches, to its content at the merge base. A doc that only the

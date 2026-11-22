@@ -46,10 +46,10 @@ When you write or edit a skill, including a file in its `references/`, such as a
 wringer is one Bun workspace, and the README's [Layout](README.md#layout) gives each top-level
 folder's role.
 
-repo-sync delivers the shared skills, the skill-gate hook and the pull-request workflow from
-zgeoff/tools, and overwrites a local edit. The pre-push baseline comes from `@zgeoff/chex`, and
-`@zgeoff/diet` caps each hook job's memory. `review.json` lists those paths. Change one of them in
-zgeoff/tools.
+repo-sync delivers the shared skills, the skill-gate hook, the PR template and the pull-request
+workflows from zgeoff/tools, and overwrites a local edit. Change one of them in zgeoff/tools. The
+sync bot makes every commit to a synced file, so `git log` on a file shows whether repo-sync owns
+it. The pre-push baseline comes from `@zgeoff/chex`, and `@zgeoff/diet` caps each hook job's memory.
 
 ## Packages
 
@@ -80,8 +80,8 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
 - Bun is pinned in `.bun-version`. `bun run format` fixes formatting, and `bun run check` runs each
   script that CI runs from the `BUN_CHECK_SCRIPTS` list below.
 - When a check, a hook or a CI job fails, fix the cause on your branch, run the check again, and
-  push the fix. Never skip a hook with `--no-verify`: CI runs the same checks, so the PR fails
-  anyway.
+  push the fix. Never skip a hook with `--no-verify`: CI runs the same format, lint, prose, test and
+  gitleaks checks, so the PR fails anyway.
 - CI runs the shared Bun pull-request workflow from zgeoff/tools on each pull request. The
   `BUN_CHECK_SCRIPTS` repo variable holds its script list:
   `audit deadcode format:check lint:full typecheck prose test test:browser test:docker`. A change to
@@ -90,8 +90,7 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
   emits its declarations with `tsrs`.
 - `lint:full` adds the type-aware rules and fails on an unused disable directive. It runs with
   `TSRS_FAST=1`, and oxlint runs the type-aware rules through `tsrs-lint`, which `tsrs` ships. It
-  runs in CI and in `bun run check`, never in a git hook, because type-checking the whole tree is
-  too slow for a hook.
+  runs in CI and in `bun run check`, never in a git hook.
 - release-please and the `main` workflow release and publish each package.
   [Releasing](docs/runbooks/releasing.md) holds the steps they do not do.
 - lefthook runs oxlint, oxfmt, format-codemod and gitleaks before a commit, and commitlint on the

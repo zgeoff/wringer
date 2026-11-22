@@ -93,7 +93,7 @@ grant.
 
 `http request --endpoint <name>` picks a named endpoint, and `--no-auth` sends the request without
 the session. A transport that declares three parameters, `(url, init, route)`, learns each request's
-`route.endpoint` and `route.auth`. The driver refuses a transport of fewer parameters for a request
-that leaves the session off, and counts parameters with `Function.length`, so rest parameters and a
-default on the third parameter count short. [HTTP endpoints](../../docs/reference/http-endpoints.md)
-holds the details.
+`route.endpoint` and `route.auth`. The default `fetch` transport sends either kind. The driver
+refuses a repo's transport of fewer parameters for a request that leaves the session off, and counts
+parameters with `Function.length`, so rest parameters and a default on the third parameter count
+short. [HTTP endpoints](../../docs/reference/http-endpoints.md) holds the details.

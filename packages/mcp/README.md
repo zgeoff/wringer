@@ -38,6 +38,7 @@ export const registry = createWringer({ name: 'shop' })
               clientCredentials: {
                 clientID: 'service:wringer-ro',
                 secretEnv: 'ORDERS_MCP_SECRET',
+                scope: 'read',
                 issuer: 'https://auth.shop.example',
               },
             },
@@ -63,9 +64,8 @@ The target names each server, so an agent never passes a URL or a command line.
 | `command`, `env`, `cwd`         | A `stdio` server's argv, its added environment and its working folder.                                                                                                                         |
 | `readTools`                     | The only tools a read-only target may call.                                                                                                                                                    |
 
-A `stdio` child gets a minimal environment plus `env`, not the supervisor's. Its `cwd` starts at the
-folder where the run's supervisor runs. The driver reads `secretEnv` and `bearerEnv` from the
-environment of the supervisor, which is the shell that ran `up` or `attach`.
+A `stdio` child gets a minimal environment plus `env`, and starts in the supervisor's folder. The
+driver reads `secretEnv` and `bearerEnv` from the shell that ran `up` or `attach`.
 
 ## Commands
 

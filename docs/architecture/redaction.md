@@ -113,8 +113,9 @@ no link in the report, when the file:
 - changed since the evidence writer hashed it;
 - is a screenshot or a video from a target without `evidence: 'upload'`.
 
-`publish` already uploads nothing from a target without `evidence: 'upload'`. The guard's own check
-on screenshots and videos is a second line, because wringer can't scrub them.
+`publish` uploads only the evidence of journeys whose target sets `evidence: 'upload'`, so text
+evidence from any other target stays local too. The guard checks screenshots and videos for that
+case again, because wringer can't scrub them.
 
 The guard scrubs with a secret set that also loads the secrets file of every run the report's
 verdicts name, so it can know a secret that the evidence writer didn't know yet. When it finds a
