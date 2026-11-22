@@ -120,8 +120,8 @@ that command alone. A command with neither runs on the registry's first target, 
 | `local` | `bun verify use --target local`, then `bun verify up`                                          | read-write | An empty database in the run's folder.  |
 | `demo`  | `bun verify use --target demo`, then `SHOP_DEMO_URL=http://127.0.0.1:<port> bun verify attach` | read-only  | An app that `bun verify` did not start. |
 
-To try `demo`, run `bun packages/shop-example/src/shop-app.ts` in the background; its first output
-line holds the port. After `bun verify detach`, stop only an app you started.
+To try `demo`, run `bun packages/shop-example/src/shop-app.ts` in the background, and read the port
+from its first output line. After `bun verify detach`, stop only an app you started.
 
 Run `order-failure` last. It drops the `orders` table, so every later order fails until
 `bun verify up --restart` and `bun verify doctor`.
@@ -153,8 +153,8 @@ for its commands.
 
 <!-- repo: registry -->
 
-The registry, [`create-shop-registry.ts`](../src/create-shop-registry.ts), declares each feature's
-`paths` and the ignore list.
+Set each feature's `paths` and the ignore list in the registry,
+[`create-shop-registry.ts`](../src/create-shop-registry.ts).
 
 The shop example is the exception to leaving `gate` to CI. This repo's CI runs the shop's `lint`
 through a test and never runs the shop's `gate`, so list each feature you skip in your reply. Before
