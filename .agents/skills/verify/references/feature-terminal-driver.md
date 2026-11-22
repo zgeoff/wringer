@@ -20,7 +20,7 @@ bun verify terminal screen
 bun verify terminal stop
 ```
 
-- `tui` names a program in the `local` target of the shop's wringer registry.
+- `tui` is a program in the `local` target of the shop's wringer registry.
 - The shop's screen puts two spaces between the order ID and `mug`, so write two in the regex.
 
 ## End state
