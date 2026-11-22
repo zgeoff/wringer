@@ -36,7 +36,7 @@ A registry can't declare a command named `lint`: `runVerify` throws `Two command
 as `build()` does on any duplicate name.
 
 `skill` is the path, from the repo root, of the folder that holds the repo's verify skill: the
-Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
+Markdown that teaches the repo's agents how to use each feature. `lint` reads that folder. The path
 defaults to `.claude/skills/verify`.
 
 `env` is the source of the values of the registry's declared secrets: a record, or a function that
@@ -46,9 +46,9 @@ rules.
 
 ## Guide
 
-The package ships a guide in `guide/`. It walks an agent through adding a verify CLI, a feature map
-and a verify skill to a repo, and through the checks that prove them. Its `template/` folder holds
-the example files for the repo's own verify skill, which the agent writes.
+The package ships a guide in `guide/`. Follow it to add a verify CLI, a feature map and a verify
+skill to a repo, and to run the checks that prove them. Its `template/` folder holds the example
+files for the repo's own verify skill, which the agent writes.
 
 The CLI prints the guide of the installed version, so no copy in the repo goes stale.
 `bun verify guide` prints the version and the topics, and `bun verify guide create` one topic. A

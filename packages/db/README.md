@@ -72,7 +72,7 @@ A query returns `{ columns, rows, rowCount }`.
   through sqlite3, and for a psql write whose command tag holds no count, such as `CREATE TABLE`.
 - `columns` holds a read's columns in order, also with no rows: from the statement on SQLite
   `via: 'sql'`, else from a wrapper, or the first row of a Postgres `show` or `explain`.
-- On SQLite, an integer outside JavaScript's safe range is a string of its digits, not a number.
+- On SQLite, an integer outside JavaScript's safe range is a string of its digits.
 
 ## Reads and writes
 
@@ -93,7 +93,7 @@ A query returns `{ columns, rows, rowCount }`.
   such as `count`. Any other call counts as a write: a read-only transaction still runs
   `set_config`, `pg_sleep` or `pg_terminate_backend`. So do a schema other than `pg_catalog` before
   a function name, and a column list after a name, such as `with totals(day, amount)`.
-- The driver catches only these statements, so give a read-only target a role with no file rights.
+- Give a read-only target a role with no file rights: the driver catches only these statements.
 - A read-only target refuses each write with `read-only` and exit code 3, unless `readOnly.allow`
   lists it verbatim.
 - A database that the driver cannot reach or open, or that refuses a declared write, such as a
