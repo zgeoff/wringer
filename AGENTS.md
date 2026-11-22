@@ -35,7 +35,7 @@ When you write or edit a skill, including a file in its `references/`, such as a
 
 - Every change reaches `main` through a pull request, and the pull request merges only once CI
   passes. Work on a branch, push the branch, and open a pull request with the repo's template.
-  You're done when CI passes on the pull request's last push.
+  You're done when CI passes on the pull request's last push, after a skill change too.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages, with a
   lowercase header of at most 72 characters.
 - Commit subjects use the imperative mood ("add X", never "added X" or a bare noun phrase).

@@ -7,7 +7,8 @@ feature, journey, run, verdict, evidence, report and gate.
 The report holds these parts:
 
 - one line for each changed feature. A verified feature's line opens to its journey table, with one
-  row per command and links to its evidence. A stale or unverified feature's line gives the fix.
+  row per command and its evidence: a link for each uploaded file, or the name and size of each file
+  that stayed local. A stale or unverified feature's line gives the fix.
 - one line that names the unchanged features, the first 2 and a count when there are more than 3;
 - the data comment, which `bun verify gate` reads in CI. [Verdicts and the gate](./verdicts.md)
   covers it.
