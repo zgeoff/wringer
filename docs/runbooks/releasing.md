@@ -7,9 +7,9 @@ its merge input off. release-please opens one release pull request after a relea
 on `main`, with a version bump and a changelog for each package the commit changed. The run of that
 pull request's merge tags each release, then dispatches a run of `main` at the tag, which publishes
 each released package with npm provenance once its checks pass, through the shared `npm-publish.yml`
-workflow of `zgeoff/tools`. This runbook holds only the steps the tooling does not do: the one-time
+workflow of `zgeoff/tools`. Use this runbook for the steps the tooling does not do: the one-time
 setup, the first publish of each new package, merging each release pull request, and the recoveries
-a failed release needs. For what the shared workflows do, read them in zgeoff/tools.
+a failed release needs. To see what the shared workflows do, read them in zgeoff/tools.
 
 ## One-time setup
 
@@ -97,7 +97,7 @@ Nothing merges a release pull request on its own, so each release waits for a ma
 
 The release App's token has no Workflows permission, so GitHub refuses it a tag on a merge commit
 that a change to `.github/workflows/` has left behind the head of `main`. The shared job then fails
-before release-please runs, and its error names the release pull request and its merge commit. It
+before release-please runs, and the error shows the release pull request and its merge commit. It
 fails on every later run until you tag each release with your own token, which holds the workflow
 scope:
 
