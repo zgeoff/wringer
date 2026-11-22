@@ -17,4 +17,5 @@ bun verify orders count --human
 - `features --markdown` returns `ok: true` and a `data.markdown` table with one row for each feature
   in the feature table of [SKILL.md](../SKILL.md).
 - `orders count --help` prints the command's flags and exits 0.
-- `orders count --human` prints text, not JSON.
+- `orders count --human` prints the line `orders.count passed`, then the data, in place of the JSON
+  envelope.
