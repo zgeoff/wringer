@@ -49,8 +49,8 @@ Read a feature's file before you run its journey.
 
 1. Run `bun verify report`. A feature in `data.report.features` shows `changed: true` when a file
    that matches its `paths` or a `.shared` glob differs from the default branch. The
-   [registry](#edit-the-skill-and-the-registry) gives each feature its `paths`, the file globs it
-   owns, and lists the `.shared` globs, which mark every feature changed.
+   [registry](#edit-the-skill-and-the-registry) holds each feature's `paths`, the file globs it
+   owns, and the `.shared` globs, which mark every feature changed.
 2. Run `bun verify use --target local`, `bun verify up` and `bun verify doctor`. Expect: `doctor`
    returns `data.passed: true`. `up` starts a run, which lasts until `down`. Run every journey on
    `local`: most journeys write, and the read-only `demo` target refuses writes. `use` saves the
@@ -123,13 +123,12 @@ Run `bun verify --help` for the list, and `bun verify <group> --help` for a grou
 
 <!-- repo: registry -->
 
-The registry,
-[`create-wringer-registry.ts`](../../../packages/shop-example/src/create-wringer-registry.ts),
-declares each feature's `paths`, the `.shared` globs and the `.ignore` globs. `done` records a
-verdict only after a journey command passes that touches the app or that the feature names in its
-`commands` field. So when a feature's journey never touches the app, name the journey's commands in
-that field. CI runs `bun verify lint` and the gate, but no journey, so run each journey yourself.
-When you edit this skill or a feature file, follow the skill steps in
+Each feature's `paths`, the `.shared` globs and the `.ignore` globs live in the registry,
+[`create-wringer-registry.ts`](../../../packages/shop-example/src/create-wringer-registry.ts).
+`done` records a verdict only after a journey command passes that touches the app or that the
+feature names in its `commands` field. So when a feature's journey never touches the app, name the
+journey's commands in that field. CI runs `bun verify lint` and the gate, but no journey, so run
+each journey yourself. When you edit this skill or a feature file, follow the skill steps in
 [AGENTS.md](../../../AGENTS.md), and give their proof in the PR.
 
 <!-- /repo -->
