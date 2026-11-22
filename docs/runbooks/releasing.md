@@ -16,8 +16,9 @@ a failed release needs. For what the shared workflows do, read them in zgeoff/to
 The release and publish jobs in `.github/workflows/main.yml` run only once the `RELEASE_ENABLED`
 repo variable is `true`. Before that, publish each package once by hand, as
 [Publish a new package](#publish-a-new-package) describes, because npm sets up trusted publishing
-only for a package that exists on the registry. Finish these steps within 2 days of that first
-publish: step 6 of Publish a new package releases the package from CI, which needs the release job.
+only for a package that exists on the registry. Finish these steps within 2 days of adding the
+trusted publisher in step 4 of Publish a new package: its step 6 releases the package from CI, which
+needs the release job.
 
 1. Set the release App's client ID as the `RELEASE_APP_ID` repo variable and its private key as the
    `RELEASE_APP_PRIVATE_KEY` secret, so the release pull request runs its checks.
