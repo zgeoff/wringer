@@ -125,8 +125,8 @@ verdicts name, so it can know a secret that the evidence writer didn't know yet.
 secret in a text file, it fails the whole command before any file is sent, because the same secret
 may sit in step data too.
 
-wringer can't scrub a screenshot or a video. A repo sets `evidence: 'upload'` on a target only when
-the target's pages hold no real secrets, such as seeded data and test accounts with no real access.
+wringer can't scrub a screenshot or a video. Set `evidence: 'upload'` on a target only when the
+target's pages hold no real secrets, such as seeded data and test accounts with no real access.
 
 Before `publish` writes the description, it searches the rendered report for each secret's
 spellings, and fails when it finds one.
