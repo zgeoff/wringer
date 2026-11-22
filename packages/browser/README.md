@@ -52,17 +52,17 @@ An action calls `ctx.drivers.browser`, and the CLI adds the matching commands:
 | `tabs()`, `tab({ index })` | `browser tabs`, `browser tab 1`, `browser tab close` | read   |
 | `screenshot()`             | `browser screenshot`                                 | read   |
 
-`click` names an element by `--ref`, by `--role` with `--name`, by `--label`, or by the `--text` it
-shows, as [Browser locators](../../docs/reference/browser-locators.md) says. `check`, `uncheck`,
-`hover` (a read) and `press` take the same flags. `press` takes a
+Name the element for `click` with `--ref`, `--role` with `--name`, `--label`, or the `--text` it
+shows; [Browser locators](../../docs/reference/browser-locators.md) has the details. `check`,
+`uncheck`, `hover` (a read) and `press` take the same flags. `press` takes a
 [Playwright key](https://playwright.dev/docs/api/class-keyboard#keyboard-press) such as `Control+A`,
 and with no element flag presses it on the focused element. `check` answers with the new `checked`
 state, and a disabled control or a non-checkbox fails with a usage error. `goto --endpoint admin`
 opens a path on an endpoint listed in `endpoints`, and an unlisted name is a usage error.
 
 The doctor check `browser.launched` fails when the browser has closed. `browser.reachable` sends
-HEAD to each endpoint, and GET after a 404, 405 or 501. It names the endpoint that cannot connect or
-answers 5xx, and passes a redirect.
+HEAD to each endpoint, and GET after a 404, 405 or 501. A failure reports the endpoint that cannot
+connect or answers 5xx, and a redirect passes.
 
 One second before a command's deadline, the driver closes the page under a running action, fails the
 command, and opens a new page at the old URL. The command fails with a timeout, or, when its action

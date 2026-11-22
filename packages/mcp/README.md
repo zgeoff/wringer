@@ -52,7 +52,7 @@ export const registry = createWringer({ name: 'shop' })
   .build();
 ```
 
-The target names each server, so an agent never passes a URL or a command line.
+Name each server in the target, so an agent never passes a URL or a command line.
 
 | Key                             | Meaning                                                                                                                                                                                        |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -88,7 +88,7 @@ several. `--args` is a JSON object, and a malformed one is a `usage` error.
 
 ## Read-only targets
 
-A tool is a read only when `readTools` lists it. The driver ignores the server's own `readOnlyHint`,
+Only the tools in `readTools` count as reads. The driver ignores the server's own `readOnlyHint`,
 which `mcp tools` shows for reference. A read-only target refuses `mcp call` of any other tool with
 exit code 3 before any request leaves. `mcp tools` still runs.
 

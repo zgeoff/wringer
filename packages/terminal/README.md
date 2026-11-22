@@ -45,7 +45,7 @@ export const registry = createWringer({ name: 'shop' })
   .build();
 ```
 
-`cols` and `rows` default to 120 and 40. The target names each program an agent may start, so an
+`cols` and `rows` default to 120 and 40. List each program an agent may start in the target: an
 agent never passes a command line. A program's `cwd` starts at the folder where the run's supervisor
 runs, which is the repo root, and its `env` adds to the supervisor's environment. The programs run
 on the machine where the run lives, so use the driver with a `local()` host.
@@ -68,7 +68,7 @@ runs, and required while more than one runs. Sessions are named `<program>-<n>`,
 
 - Rows and columns count from 0. `col` counts characters of the line. A `match` counts the screen's
   rows, and `screen.text` joins the rows a program wrapped into one line, so a secret that wrapped
-  is still redacted. Its line numbers differ from the rows after a wrap.
+  is still redacted. After a wrap, line numbers in `screen.text` differ from the rows.
 - A key is a name such as `enter`, `esc`, `tab`, `up`, `f5`, `ctrl+c` or `alt+x`. The driver turns
   it into the bytes that the program's current modes expect, so `ctrl+c` is `\x03` for a plain
   program and `\x1b[99;5u` after the program turns on the kitty keyboard protocol. `press` refuses
@@ -92,8 +92,8 @@ hint. `screen`, `wait` and `list` still run.
 ## Screen engine
 
 The screen comes from [libghostty-vt](https://github.com/ghostty-org/ghostty) 1.0, compiled to WASM
-and committed as `ghostty/ghostty-vt.wasm`. `ghostty/ghostty-vt.json` records the tag, the commit,
-the Zig version and the sha256 of the file. `bun run build:ghostty` rebuilds both, and needs `zig`
+and committed as `ghostty/ghostty-vt.wasm`. Find the tag, the commit, the Zig version and the sha256
+of the file in `ghostty/ghostty-vt.json`. `bun run build:ghostty` rebuilds both, and needs `zig`
 0.17.0 on the path.
 
 The WASM has no imports, so the engine cannot answer a program's queries to the terminal, such as a
