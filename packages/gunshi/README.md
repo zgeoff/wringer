@@ -94,7 +94,7 @@ only code block lines that start with them, after an optional `$ ` prompt and as
 - Every command takes `--target`, `--feature` and `--timeout-ms`, unless it declares an argument of
   the same name. `use --target` sets the target for later commands, where `status --target` reads
   one target once.
-- `--help` marks each command `[read]` or `[write]`, so a reader sees which commands a read-only
-  target refuses. A command whose arguments decide, such as `db query`, shows `[read or write]`.
+- `--help` marks each command `[read]`, `[write]`, or `[read or write]` when its arguments decide,
+  as for `db query`. A reader then sees which commands a read-only target refuses.
 - The script starts itself again, detached, as the run's supervisor, so `up` and `attach` need no
   separate daemon.
