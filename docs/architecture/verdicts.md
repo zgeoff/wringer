@@ -58,10 +58,10 @@ with `--verbatim`.
 
 ## Staleness
 
-A verdict goes stale only when a file in its feature's `paths` or a shared glob changes. An edit to
-one feature's files leaves every other feature's verdict standing. A change to a shared glob changes
-every feature's fingerprint, so a registry lists as shared globs only the files that affect every
-feature's behaviour, such as the lock file.
+Apart from the clone that rewrites files, a verdict goes stale only when a file in its feature's
+`paths` or a shared glob changes. An edit to one feature's files leaves every other feature's
+verdict standing. A change to a shared glob changes every feature's fingerprint, so a registry lists
+as shared globs only the files that affect every feature's behaviour, such as the lock file.
 
 wringer never makes the registry's own file a shared glob by itself. Each shared glob sits in the
 registry, where a reader can see it and see why every verdict went stale. To keep the registry's
@@ -122,8 +122,8 @@ feature one status:
 | `stale`    | the claim's fingerprint differs from the computed one                                                      | fails  |
 | `missing`  | the feature changed and has no claim                                                                       | fails  |
 
-A feature whose fingerprint is `empty` didn't change, so `gate` passes it. `gate` fails a version 1
-comment whole, because it holds no fingerprint per feature.
+A feature whose computed fingerprint is `empty` didn't change, so `gate` passes it, whatever its
+claim holds. `gate` fails a version 1 comment whole, because it holds no fingerprint per feature.
 
 `gate` trusts every claim that parses. Anyone who can edit the PR description can write a claim, and
 anyone can compute a fingerprint from the branch alone. `gate` therefore shows that an agent

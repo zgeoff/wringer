@@ -11,10 +11,10 @@ and screenshots. Some of it leaves the machine:
   `evidence: 'upload'`.
 
 To keep secrets out of both, `@wringer/core` replaces each secret value it knows in the text wringer
-writes. The few run log events that keep their values are the exception, as
-[Events that keep their values](#events-that-keep-their-values) says. Each driver also redacts by
-structure, for a credential that core doesn't know yet: the http driver, for example, redacts every
-cookie's value whatever it holds.
+writes. It skips some values, as [The secret set](#the-secret-set) lists, and a few run log events
+keep their values, as [Events that keep their values](#events-that-keep-their-values) says. Each
+driver also redacts by structure, for a credential that core doesn't know yet: the http driver, for
+example, redacts every cookie's value whatever it holds.
 
 ```mermaid
 flowchart LR
@@ -62,13 +62,16 @@ The scrubber replaces each secret wherever it appears in a text, in each of thes
 - base64 and base64url, of the secret's leading bytes in whole groups of 3, so a secret inside a
   larger base64 text matches when it starts on a group boundary.
 
-`@wringer/core` scrubs at four places, so a command that the repo adds needs no redaction code:
+`@wringer/core` scrubs as wringer writes, at four places, so a command that the repo adds needs no
+redaction code:
 
 - the evidence writer, which scrubs a file's whole content in one pass, so a secret never splits
   across two chunks;
 - each command's JSON result, as a whole;
 - each event that a streaming command prints, before it reaches stdout;
 - each event appended to the run log.
+
+The upload guard and `publish` check again before anything leaves the machine.
 
 A run's commands are separate processes, so a secret that one command learns has to reach the next.
 Each process appends the secrets it adds to the run's `secrets.ndjson`, which wringer creates with

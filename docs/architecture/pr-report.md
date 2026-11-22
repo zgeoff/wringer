@@ -46,7 +46,7 @@ writer with reads:
 1. It reads the description and plans the report.
 2. It uploads the files that the plan includes.
 3. It reads the description again, and plans the report again against that read.
-4. It writes the description.
+4. It writes the description, unless it already holds the same report.
 5. It reads the description once more. When the report there differs from the one it wrote, another
    writer replaced it, and `publish` fails and tells the agent to run it again.
 
