@@ -156,9 +156,10 @@ for its commands.
 The registry, [`create-shop-registry.ts`](../src/create-shop-registry.ts), declares each feature's
 `paths` and the ignore list.
 
-CI here runs `lint` through a test and never `gate`: list each feature you skip in your reply.
-Before you edit this skill or a feature file, follow the skill steps in
-[AGENTS.md](../../../AGENTS.md).
+The shop example is the exception to leaving `gate` to CI. This repo's CI runs the shop's `lint`
+through a test and never runs the shop's `gate`, so list each feature you skip in your reply. Before
+you edit this skill or a feature file, read [Edit the skill](references/edit-the-skill.md), and also
+follow the skill steps in [AGENTS.md](../../../AGENTS.md).
 
 <!-- /repo -->
 

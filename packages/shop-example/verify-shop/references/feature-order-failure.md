@@ -5,7 +5,8 @@ journey drops the `orders` table from the database of the app that `up` started.
 Place order.
 
 Run this journey after every other one: the table stays dropped until `bun verify up --restart`
-starts the app on a new, empty database.
+starts the app on a new, empty database. Run `bun verify doctor` after the restart, before any other
+journey.
 
 ## Journey
 
