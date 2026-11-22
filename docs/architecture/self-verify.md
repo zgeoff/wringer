@@ -49,9 +49,9 @@ default for a repo's first registry.
 
 ## The skill and the guide
 
-wringer's verify skill, in `.agents/skills/verify/`, tells an agent how to verify each feature. It
-has one `references/feature-<name>.md` file per feature, which holds that feature's journey. `lint`
-also reads the skill folder, and starts no run. It fails in each of these cases:
+An agent verifies each feature from wringer's verify skill, in `.agents/skills/verify/`. The skill
+has one `references/feature-<name>.md` file per feature, with that feature's journey. `lint` also
+reads the skill folder, and starts no run. It fails in each of these cases:
 
 - a feature has no feature file;
 - a feature file matches no feature;
@@ -59,8 +59,9 @@ also reads the skill folder, and starts no run. It fails in each of these cases:
 - a journey's first command isn't `bun verify use --feature <name>`, which sets the feature that
   later commands, such as `done`, act on when they get no `--feature`.
 
-The skill's `SKILL.md` lists the features between two markers. `bun verify features --markdown`
-prints the list that belongs there, and `lint` fails when the skill's list differs from it.
+Keep the feature list in the skill's `SKILL.md` between two markers.
+`bun verify features --markdown` prints the list that belongs there, and `lint` fails when the
+skill's list differs from it.
 
 The guide is the text that teaches a repo how to build its verify CLI and its verify skill, and it
 ships in `@wringer/gunshi`. `bun verify guide` prints it from the installed package, so the text an
