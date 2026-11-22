@@ -21,7 +21,8 @@ bun verify mcp call place_order
 bun verify mcp call list_orders
 ```
 
-Each command names no server. On a target with more than one server, add `--server <name>`.
+The commands above pass no server name. On a target with more than one server, add
+`--server <name>`.
 
 ## End state
 
