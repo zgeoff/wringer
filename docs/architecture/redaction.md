@@ -7,12 +7,14 @@ A run writes what it sees into `.wringer/`: request headers, cookies, URLs, log 
 and screenshots. Some of it leaves the machine:
 
 - Each command's step data, the data it returned, can reach the report in the PR description.
-- Evidence files reach the repo's file host behind public links, when the target sets
+- Evidence files reach the repo's file host behind public links, only when the target sets
   `evidence: 'upload'`.
 
-To keep secrets out of both, `@wringer/core` replaces each secret value it knows in all the text
-wringer writes. Each driver also redacts by structure, for a credential that core doesn't know yet:
-the http driver, for example, redacts every cookie's value whatever it holds.
+To keep secrets out of both, `@wringer/core` replaces each secret value it knows in the text wringer
+writes. The few run log events that keep their values are the exception, as
+[Events that keep their values](#events-that-keep-their-values) says. Each driver also redacts by
+structure, for a credential that core doesn't know yet: the http driver, for example, redacts every
+cookie's value whatever it holds.
 
 ```mermaid
 flowchart LR
@@ -110,6 +112,9 @@ no link in the report, when the file:
 - isn't a regular file;
 - changed since the evidence writer hashed it;
 - is a screenshot or a video from a target without `evidence: 'upload'`.
+
+`publish` already uploads nothing from a target without `evidence: 'upload'`. The guard's own check
+on screenshots and videos is a second line, because wringer can't scrub them.
 
 The guard scrubs with a secret set that also loads the secrets file of every run the report's
 verdicts name, so it can know a secret that the evidence writer didn't know yet. When it finds a

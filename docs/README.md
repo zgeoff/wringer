@@ -22,3 +22,9 @@
   package, merging a release pull request, and the recoveries a failed release needs.
 - [Terms](./reference/terms.md): what registry, target, driver, action, command, feature, journey,
   run, doctor, verdict, fingerprint, evidence, report, gate, shared glob and ignore list mean.
+- [Browser locators](./reference/browser-locators.md): the flags that pick one element for a
+  `@wringer/browser` command.
+- [Declared secret source](./reference/declared-secret-source.md): where `runVerify` reads the
+  values of the registry's declared secrets.
+- [HTTP endpoints](./reference/http-endpoints.md): the named endpoints of an `@wringer/http` target,
+  and requests sent without the session.

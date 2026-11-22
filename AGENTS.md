@@ -5,21 +5,22 @@ This repo is wringer, a verification framework that each repo wraps in its own C
 
 ## Required reading
 
-The rules a task needs are not repeated here. Load the skill for the work before starting it. The
-skills are in `.agents/skills/`, and `.claude/skills` links to that folder.
+The rules a task needs are not repeated here. Load the skill for the work before starting it. Load
+each skill in this table from `.agents/skills/`, which `.claude/skills` links to.
 
 | Skill           | Load before                                                                        |
 | --------------- | ---------------------------------------------------------------------------------- |
 | `docs-writing`  | writing or editing any committed prose: READMEs, this file                         |
 | `code-style`    | writing, reviewing, or renaming any TypeScript — the shared function-verb taxonomy |
 | `testing`       | designing, writing, or reviewing tests                                             |
-| `skill-writing` | writing or editing a skill under `.agents/skills/`                                 |
+| `skill-writing` | writing or editing any skill in the repo, `verify-shop` included                   |
 | `cold-read`     | checking a skill you wrote or changed, before its PR                               |
 | `deslop`        | editing the prose of a skill you wrote or changed, before its PR                   |
 | `ci-design`     | adding, changing, or reviewing a workflow, a job, or a trigger                     |
 
 To check a change to a package, load the [`verify` skill](.agents/skills/verify/SKILL.md). It runs
-the package's feature through `bun verify`.
+the package's feature through `bun verify`. The `verify` skill belongs to this repo, so edit it
+here. repo-sync delivers each other skill in `.agents/skills/`.
 
 When you write or edit a skill, including a file in its `references/`, such as a feature file of the
 `verify` skill or of the `verify-shop` skill in `packages/shop-example/verify-shop/`:
@@ -34,6 +35,7 @@ When you write or edit a skill, including a file in its `references/`, such as a
 
 - Every change reaches `main` through a pull request, and the pull request merges only once CI
   passes. Work on a branch, push the branch, and open a pull request with the repo's template.
+  You're done when CI passes on the pull request's last push.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages, with a
   lowercase header of at most 72 characters.
 - Commit subjects use the imperative mood ("add X", never "added X" or a bare noun phrase).
@@ -75,8 +77,11 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
 
 ## Toolchain
 
-- Bun is pinned in `.bun-version`. `bun run format` fixes formatting, and `bun run check` runs every
-  check that CI runs.
+- Bun is pinned in `.bun-version`. `bun run format` fixes formatting, and `bun run check` runs each
+  script that CI runs from the `BUN_CHECK_SCRIPTS` list below.
+- When a check, a hook or a CI job fails, fix the cause on your branch, run the check again, and
+  push the fix. Never skip a hook with `--no-verify`: CI runs the same checks, so the PR fails
+  anyway.
 - CI runs the shared Bun pull-request workflow from zgeoff/tools on each pull request. The
   `BUN_CHECK_SCRIPTS` repo variable holds its script list:
   `audit deadcode format:check lint:full typecheck prose test test:browser test:docker`. A change to
@@ -85,7 +90,8 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
   emits its declarations with `tsrs`.
 - `lint:full` adds the type-aware rules and fails on an unused disable directive. It runs with
   `TSRS_FAST=1`, and oxlint runs the type-aware rules through `tsrs-lint`, which `tsrs` ships. It
-  runs in CI and in `bun run check`, never in a git hook.
+  runs in CI and in `bun run check`, never in a git hook, because type-checking the whole tree is
+  too slow for a hook.
 - release-please and the `main` workflow release and publish each package.
   [Releasing](docs/runbooks/releasing.md) holds the steps they do not do.
 - lefthook runs oxlint, oxfmt, format-codemod and gitleaks before a commit, and commitlint on the

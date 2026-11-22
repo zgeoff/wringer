@@ -75,18 +75,20 @@ bun install
 bun run check
 ```
 
-`bun run check` runs every check that CI runs, the browser tests included. `bun run test` leaves out
-the `*.browser.test.ts` files, which `bun run test:browser` runs in a real headless Chromium.
+`bun run check` runs each script that the `BUN_CHECK_SCRIPTS` repo variable lists, the browser tests
+included. `bun run test` leaves out the `*.browser.test.ts` files, which `bun run test:browser` runs
+in a real headless Chromium.
 
-On each pull request, CI runs the checks that the `BUN_CHECK_SCRIPTS` repo variable lists, and scans
-the pull request's commits for secrets. A pull request that changes a package, the release scripts
-or the release workflows also gets a dry run of the npm publish of each package.
+On each pull request, CI runs the same scripts, and also scans the pull request's commits for
+secrets. A pull request that changes a package, the release scripts or the release workflows also
+gets a dry run of the npm publish of each package.
 
 ## Layout
 
-- `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
-  it holds an example shop app and the verify CLI for it. The browser tests drive the app through
-  that CLI's registry with every driver package, and `bun verify` runs the CLI.
+- `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes.
+  It holds an example shop app with its verify CLI, which `bun run verify:shop` runs, and wringer's
+  own verify CLI, which `bun verify` runs. The browser tests drive the shop app through the shop
+  CLI's registry with every driver package.
 - `packages/gunshi/guide/`: the guide that adds a verify CLI to a repo, with the template files it
   copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the terms, the design docs and the runbooks.

@@ -53,7 +53,8 @@ write.
   recorded.
 - On an `attach` target, the run owns no app, so the recorder stops without waiting for one. A line
   the app writes after the recorder's final read stays out of the stream.
-- A target with no `sources` records `app`: the log of the app that the run launched.
+- A `launch` target with no `sources` records `app`: the log of the app that the run launched. An
+  `attach` target launches no app, so give it its own `sources`.
 
 The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one
 `{ at, line }` record per line. A record keeps at most 4096 characters of its line. When a source

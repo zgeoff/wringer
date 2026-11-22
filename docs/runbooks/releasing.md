@@ -1,14 +1,15 @@
 # Releasing
 
-release-please and the `main` workflow release each `@wringer/*` package to npm on its own version.
-The workflow's release job calls the shared release-please workflow of `zgeoff/tools` at the repo's
-sync tag, with its merge input off. release-please opens one release pull request after a releasable
-commit lands on `main`, with a version bump and a changelog for each package the commit changed. The
-run of that pull request's merge tags each release, then dispatches a run of `main` at the tag,
-which publishes each released package with npm provenance once its checks pass, through the shared
-`npm-publish.yml` workflow of `zgeoff/tools`. This runbook holds only the steps the tooling does not
-do: the one-time setup, the first publish of each new package, merging each release pull request,
-and the recoveries a failed release needs.
+release-please and the [`main` workflow](../../.github/workflows/main.yml) release each `@wringer/*`
+package to npm on its own version. The workflow's release job calls the shared release-please
+workflow of [zgeoff/tools](https://github.com/zgeoff/tools) at the commit the workflow pins, with
+its merge input off. release-please opens one release pull request after a releasable commit lands
+on `main`, with a version bump and a changelog for each package the commit changed. The run of that
+pull request's merge tags each release, then dispatches a run of `main` at the tag, which publishes
+each released package with npm provenance once its checks pass, through the shared `npm-publish.yml`
+workflow of `zgeoff/tools`. This runbook holds only the steps the tooling does not do: the one-time
+setup, the first publish of each new package, merging each release pull request, and the recoveries
+a failed release needs. For what the shared workflows do, read them in zgeoff/tools.
 
 ## One-time setup
 
@@ -35,9 +36,9 @@ only for a package that exists on the registry.
 
 A package's first version goes out from a maintainer's machine, and CI publishes every later one.
 
-1. In `release-please-config.json`, copy the `packages/core` entry for `packages/<folder>`, with
-   `@wringer/<folder>` as its `component`, and merge that change to `main`. release-please opens a
-   release pull request only for a package that the config lists.
+1. In [`release-please-config.json`](../../release-please-config.json), copy the `packages/core`
+   entry for `packages/<folder>`, with `@wringer/<folder>` as its `component`, and merge that change
+   to `main`. release-please opens a release pull request only for a package that the config lists.
 2. Sign in to npm as an account that can publish under the `@wringer` scope:
 
    ```bash

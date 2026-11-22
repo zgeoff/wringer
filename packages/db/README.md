@@ -76,9 +76,9 @@ A query returns `{ columns, rows, rowCount }`.
 
 ## Reads and writes
 
-- A query is a read unless it passes `write: true`, and a read runs read-only in the database. On
-  SQLite, `via: 'sql'` opens the file read-only with `query_only` on, and `via: 'exec'` runs sqlite3
-  with `-readonly`. Postgres runs a read in a read-only transaction.
+- A query without `write: true` is a read, and fails with a usage error when the rules below count
+  it as a write. A read runs read-only: SQLite `via: 'sql'` opens the file read-only with
+  `query_only`, `via: 'exec'` runs sqlite3 `-readonly`, and Postgres uses a read-only transaction.
 - A query through `via: 'sql'` holds one statement, so a read cannot end its transaction.
 - On SQLite, a read starts with `select`, `with`, `values`, `explain` or `pragma`, and one that runs
   `attach`, `vacuum` or `query_only` counts as a write. A read-only handle still runs `VACUUM INTO`,
@@ -94,7 +94,7 @@ A query returns `{ columns, rows, rowCount }`.
   `set_config`, `pg_sleep` or `pg_terminate_backend`. So do a schema other than `pg_catalog` before
   a function name, and a column list after a name, such as `with totals(day, amount)`.
 - The driver catches only these statements, so give a read-only target a role with no file rights.
-- A statement that writes without asking fails with a usage error. A read-only target refuses each
-  write with `read-only` and exit code 3, unless `readOnly.allow` lists it verbatim.
+- A read-only target refuses each write with `read-only` and exit code 3, unless `readOnly.allow`
+  lists it verbatim.
 - A database that the driver cannot reach or open, or that refuses a declared write, such as a
   replica, fails with exit code 4 (`environment`). A statement stopped at the deadline exits 5.

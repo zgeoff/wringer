@@ -8,7 +8,7 @@
 </div>
 
 The http driver for wringer: it sends requests to a target's app and keeps each response as
-evidence.
+evidence, unless the request opts out.
 
 ## Install
 

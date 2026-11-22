@@ -31,9 +31,10 @@ describes.
 ## The report in the description
 
 The report sits between two HTML comments, `<!-- wringer:report -->` and `<!-- /wringer:report -->`.
-`publish` never changes a byte outside them, so the author's own text survives every publish.
-`publish` puts the report where it already sits. With no report yet, it puts it at the end of the
-`## Verification` section, or under a new `## Verification` heading at the end of the description.
+`publish` puts the report where it already sits, and then changes only the bytes between the
+markers, so the author's own text survives every publish. With no report yet, it inserts the report
+at the end of the `## Verification` section, or appends a new `## Verification` heading and the
+report to the end of the description. It deletes no byte of the author's text in either case.
 `publish` skips a marker or a heading inside a fenced code block, because that is the author's text.
 It fails, and writes nothing, when the description holds two reports or a marker without its
 partner, because then it can't tell which report is its own. The report takes the description's line
@@ -77,13 +78,17 @@ until the report fits its budget:
 so a smaller budget only adds cuts.
 
 The planner counts each evidence link at the uploader's `maxURLLength`, so it can plan before any
-link exists. `publish` uploads only the files in its first plan, so it never uploads a file that a
-cut then drops. The second plan, after the second read, uses the smaller of the two budgets, so it
-never includes a file that the first plan left out. The renderer builds the report from the planned
-parts, so the report it writes is never longer than the plan. When the feature lines, the data
-comment and the one-line journeys still don't fit, `publish` fails, and gives the length the report
-needs and the length the description has room for. `bun verify report --human` prints the whole
-report, with no cut, to the terminal, and never fails on size.
+link exists. `publish` uploads only the files in its first plan, so it uploads no file that the
+first plan's cuts drop. The second plan, after the second read, uses the smaller of the two budgets,
+so it never links a file that the first plan left out and that never uploaded. When the second
+budget is smaller, its extra cuts can drop a file that already uploaded, and that file stays on the
+host with no link in the report.
+
+The renderer builds the report from the planned parts, so the report it writes is never longer than
+the plan. When the feature lines, the data comment and the one-line journeys still don't fit,
+`publish` fails, and gives the length the report needs and the length the description has room for.
+`bun verify report --human` prints the whole report, with no cut, to the terminal, and never fails
+on size.
 
 ## Rendering
 

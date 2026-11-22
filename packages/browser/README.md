@@ -65,9 +65,9 @@ HEAD to each endpoint, and GET after a 404, 405 or 501. It names the endpoint th
 answers 5xx, and passes a redirect.
 
 One second before a command's deadline, the driver closes the page under a running action, fails the
-command with a timeout, and opens a new page at the old URL. An action that had landed fails with an
-environment error that points at `browser tabs`. A page that does not close in half a second fails
-every later command until `up --restart`.
+command, and opens a new page at the old URL. The command fails with a timeout, or, when its action
+had already landed, with an environment error that points at `browser tabs`. A page that does not
+close in half a second fails every later command until `up --restart`.
 
 ## Snapshots and refs
 

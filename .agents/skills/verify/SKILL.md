@@ -53,8 +53,8 @@ Read a feature's file before you run its journey.
    owns, and lists the `.shared` globs, which mark every feature changed.
 2. Run `bun verify use --target local`, `bun verify up` and `bun verify doctor`. Expect: `doctor`
    returns `data.passed: true`. `up` starts a run, which lasts until `down`. Run every journey on
-   `local`: each one writes, and the read-only `demo` target refuses writes. `use` saves the target
-   in this worktree's `.wringer/` folder, so it holds in a new shell or session.
+   `local`: most journeys write, and the read-only `demo` target refuses writes. `use` saves the
+   target in this worktree's `.wringer/` folder, so it holds in a new shell or session.
 3. Run the journey from the feature's file. Expect: each command exits 0, unless the file says one
    fails.
 4. Compare the app with the feature's end state:
@@ -65,8 +65,9 @@ Read a feature's file before you run its journey.
      again.
    - In any other case, such as a bug your change did not cause, skip `done`. List the feature in
      your reply with the end state you expected and the `data` you got.
-5. Once the end state matches in step 4, run `bun verify done`. `done` checks only that a journey
-   command succeeded, and never reads the end state. Expect: `ok: true`.
+5. Once the end state matches in step 4, run `bun verify done`. `done` never reads the end state. It
+   checks only that a journey command succeeded and counts for the feature, as
+   [Edit the skill and the registry](#edit-the-skill-and-the-registry) says. Expect: `ok: true`.
 6. Repeat steps 3 to 5 for each changed feature. An edit to a file that matches a feature's `paths`
    after `done` makes its verdict `stale`: run `bun verify up --restart` and `bun verify doctor`,
    then repeat steps 3 to 5 for it.
@@ -94,7 +95,8 @@ Read a feature's file before you run its journey.
 ## Read the envelope
 
 Each command prints one JSON envelope as its last line, or text with `--human`. Read `ok`, then
-`data` on success, or `error.code` and `error.hint` on failure.
+`data` on success, or `error.code` and `error.hint` on failure. When the feature's file expects a
+command to fail, check its envelope against the end state, and skip the list below.
 
 - `check-failed`: read the files the envelope lists in `evidence`. When `done` failed, run the
   journey again.

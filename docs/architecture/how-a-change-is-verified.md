@@ -20,8 +20,8 @@ flowchart LR
 
 ## The path of a change
 
-1. The agent starts a run on a target with `up`, which launches the app or attaches to one that runs
-   elsewhere.
+1. The agent starts a run on a target. On a launch target, `up` launches the app. On an attach
+   target, `attach` reaches an app that already runs elsewhere.
 2. The agent runs `doctor`, whose checks show that the app and each driver are ready.
 3. The agent drives each changed feature's journey with the driver commands, such as a browser click
    or an http request. Each command writes its evidence.
