@@ -10,8 +10,8 @@
 The core of wringer, a verification framework that each repo wraps in its own CLI.
 
 Every wringer command writes one JSON envelope, and a streaming command writes NDJSON events before
-it. The envelope carries `wringer: 1`, so a consumer checks the version before it reads the rest.
-Core exports the envelope's zod schema, and its JSON Schema as `@wringer/core/envelope.schema.json`.
+it. The envelope carries `wringer: 1`, so check the version before you read the rest. Core exports
+the envelope's zod schema, and its JSON Schema as `@wringer/core/envelope.schema.json`.
 
 ## Install
 
@@ -53,7 +53,7 @@ repo can define each one in its own file.
 - The typed builder. Each action and command takes `effect: 'read' | 'write'`, which defaults to
   `write`.
 - Read-only targets: each driver client and exec refuses a write there with `read-only` and the
-  target's hint. A target's driver config lists the writes it grants.
+  target's hint. Grant a write in the target's driver config.
 - One supervisor process per run, which owns the app and every driver service.
 - The built-in commands, such as `up`, `doctor`, `done`, `report` and `gate`. `done` records a
   [verdict](../../docs/reference/terms.md#verdict) at the feature's
