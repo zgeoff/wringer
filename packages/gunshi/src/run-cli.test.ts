@@ -348,7 +348,10 @@ test('it leaves the doctor events out with --brief', async () => {
 
   const result = await ctx.run(['doctor', '--target', 'prod', '--brief']);
 
-  expect(result.stdout.split('\n')).toHaveLength(2);
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: expect.stringMatching(/^doctor ok=true data=[^\n]* evidence=\d+\n$/u),
+  });
 });
 
 test('it prints a doctor check outside its targets as skipped for a person with --human', async () => {
