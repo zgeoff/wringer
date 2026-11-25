@@ -132,3 +132,24 @@ test('it keeps one line and clips a long error message and a newline in a name',
     `first second ok=false error.code=usage error.message=bad ${'y'.repeat(196)}…[truncated] evidence=0\n`,
   );
 });
+
+test('it keeps a joined emoji whole at the cut and escapes a line separator', () => {
+  const text = renderBriefEnvelope({
+    wringer: 1,
+    ok: true,
+    command: 'action.export',
+    target: 'local',
+    instance: null,
+    feature: null,
+    sha: null,
+    durationMs: 9,
+    data: { note: `x\u2028${'y'.repeat(180)}👩‍💻${'z'.repeat(20)}` },
+    evidence: [],
+    cursors: {},
+    error: null,
+  });
+
+  expect(text).toStrictEqual(
+    `action.export ok=true data={"note":"x\\u2028${'y'.repeat(180)}👩‍💻${'z'.repeat(3)}…[truncated] evidence=0\n`,
+  );
+});

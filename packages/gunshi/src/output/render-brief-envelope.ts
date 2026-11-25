@@ -6,7 +6,9 @@ export function renderBriefEnvelope(envelope: Envelope): string {
   const parts = [foldWhitespace(envelope.command), `ok=${String(envelope.ok)}`];
 
   if (envelope.error === null) {
-    parts.push(`data=${clip(JSON.stringify(envelope.data ?? null))}`);
+    const json = JSON.stringify(envelope.data ?? null);
+
+    parts.push(`data=${clip(escapeLineSeparators(json))}`);
   } else {
     parts.push(
       `error.code=${envelope.error.code}`,
@@ -30,11 +32,21 @@ function foldWhitespace(text: string): string {
 export const briefFieldLimit = 200;
 const truncationMarker = '…[truncated]';
 
-// Counts code points, so a cut never splits a surrogate pair.
+const graphemes = new Intl.Segmenter();
+
+// Counts characters as a reader sees them, so a cut never splits an emoji.
 function clip(text: string): string {
-  const characters = [...text];
+  const characters = [...graphemes.segment(text)].map((part) => part.segment);
 
   return characters.length <= briefFieldLimit
     ? text
     : `${characters.slice(0, briefFieldLimit).join('')}${truncationMarker}`;
+}
+
+// JSON leaves these two separators raw, and a terminal can show each as a line break.
+function escapeLineSeparators(text: string): string {
+  return text.replaceAll(
+    /[\u2028\u2029]/gu,
+    (separator) => `\\u${separator.codePointAt(0)?.toString(16) ?? ''}`,
+  );
 }
