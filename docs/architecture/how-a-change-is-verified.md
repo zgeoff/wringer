@@ -1,7 +1,7 @@
 # How a change is verified
 
-This doc uses the words the [terms](../reference/terms.md) page defines: registry, target, driver,
-command, feature, journey, run, doctor, verdict, fingerprint, evidence, report and gate.
+Look up these words on the [terms](../reference/terms.md) page: registry, target, driver, command,
+feature, journey, run, doctor, verdict, fingerprint, evidence, report and gate.
 
 Each repo builds its own verify CLI, run as `bun verify`, from the `@wringer/*` packages and a
 registry of its own. A coding agent uses that CLI to drive the repo's real app, records a verdict
@@ -20,9 +20,9 @@ flowchart LR
 
 ## The path of a change
 
-1. The agent starts a run on a target with `up`, which launches the app or attaches to one that runs
-   elsewhere.
-2. The agent runs `doctor`, whose checks show that the app and each driver are ready.
+1. The agent starts a run on a target. On a launch target, `up` launches the app. On an attach
+   target, `attach` reaches an app that already runs elsewhere.
+2. The agent runs `doctor` to check that the app and each driver are ready.
 3. The agent drives each changed feature's journey with the driver commands, such as a browser click
    or an http request. Each command writes its evidence.
 4. The agent runs `done`, which records the feature's verdict together with the feature's
@@ -66,4 +66,4 @@ all the text it writes. It also checks each file before the file leaves the mach
 
 wringer verifies its own changes with its own CLI and a registry of its own, against a small shop
 app in `packages/shop-example/`. [Self-verify](./self-verify.md) covers that registry, the verify
-skill that tells an agent how to verify each feature, and the CI jobs.
+skill an agent follows to verify each feature, and the CI jobs.

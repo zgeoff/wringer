@@ -1,6 +1,6 @@
 # Verdicts and the gate
 
-This doc uses the words the [terms](../reference/terms.md) page defines: registry, target, command,
+Read the [terms](../reference/terms.md) page for the words this doc uses: registry, target, command,
 feature, journey, run, doctor, verdict, fingerprint, evidence, report, gate, shared glob and ignore
 list.
 
@@ -21,8 +21,8 @@ flowchart LR
   facts -->|"gate computes the fingerprints again"| gate
 ```
 
-[PR report](./pr-report.md) covers how the verdicts reach the PR description, and
-[Redaction](./redaction.md) covers the secrets that evidence must never hold.
+For how the verdicts reach the PR description, see [PR report](./pr-report.md). For the secrets that
+evidence must never hold, see [Redaction](./redaction.md).
 
 ## Change facts
 
@@ -41,10 +41,11 @@ wringer builds that index in a git folder of its own, under git's default config
 copy of the repo's own index, then runs `git add --all`, so every file on disk counts unless the
 repo's `.gitignore` hides it. wringer never reads the clone's `info/exclude`, the user's global
 excludes, or their attributes and filters, so two clones of the same change get the same
-fingerprint. So do a sparse checkout, a linked worktree, a shallow clone and a detached `HEAD`. A
-file that only `info/exclude` hides therefore counts as changed. In a clone whose git config
-rewrites files as git adds them, such as with `core.autocrlf`, the fingerprint can change once the
-change is committed, and the verdict then reads as stale.
+fingerprint. A sparse checkout, a linked worktree, a shallow clone and a detached `HEAD` give the
+same fingerprint too. A file that only `info/exclude` hides therefore counts as changed. An
+exception is a clone whose git config rewrites files as git adds them, such as with `core.autocrlf`.
+The copy of that clone's index holds the rewritten bytes of each file the clone has added, so the
+fingerprint can change once the change is committed, and the verdict then reads as stale.
 
 Before the diff, wringer resets each changed path that the ignore list matches, and that no
 feature's `paths` or shared glob matches, to its content at the merge base. A doc that only the
@@ -58,10 +59,10 @@ with `--verbatim`.
 
 ## Staleness
 
-A verdict goes stale only when a file in its feature's `paths` or a shared glob changes. An edit to
-one feature's files leaves every other feature's verdict standing. A change to a shared glob changes
-every feature's fingerprint, so a registry lists as shared globs only the files that affect every
-feature's behaviour, such as the lock file.
+Apart from the clone that rewrites files, a verdict goes stale only when a file in its feature's
+`paths` or a shared glob changes. An edit to one feature's files leaves every other feature's
+verdict standing. A change to a shared glob changes every feature's fingerprint, so list as shared
+globs only the files that affect every feature's behaviour, such as the lock file.
 
 wringer never makes the registry's own file a shared glob by itself. Each shared glob sits in the
 registry, where a reader can see it and see why every verdict went stale. To keep the registry's
@@ -79,7 +80,7 @@ command counts for the feature when all of these hold:
 - it succeeded;
 - it touched the app, as a driver command does, or the feature's `commands` list names it.
 
-A feature whose journey never touches the app lists the commands that check it in `commands`.
+When a feature's journey never touches the app, list the commands that check it in `commands`.
 wringer's own `guide` feature, which checks the guide text the CLI prints, is one. A command that
 another feature's `commands` list names never counts for this feature.
 
@@ -122,8 +123,8 @@ feature one status:
 | `stale`    | the claim's fingerprint differs from the computed one                                                      | fails  |
 | `missing`  | the feature changed and has no claim                                                                       | fails  |
 
-A feature whose fingerprint is `empty` didn't change, so `gate` passes it. `gate` fails a version 1
-comment whole, because it holds no fingerprint per feature.
+A feature whose computed fingerprint is `empty` didn't change, so `gate` passes it, whatever its
+claim holds. `gate` fails a version 1 comment whole, because it holds no fingerprint per feature.
 
 `gate` trusts every claim that parses. Anyone who can edit the PR description can write a claim, and
 anyone can compute a fingerprint from the branch alone. `gate` therefore shows that an agent

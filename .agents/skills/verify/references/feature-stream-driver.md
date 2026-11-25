@@ -15,9 +15,10 @@ bun verify stream read app
 - The log holds the line `order <id> placed` once, where `<id>` is the `data.id` of
   `action place-order`.
 
-The line can reach the log after `stream read` returns. When the line is missing:
+The journey's `stream read app` returns the lines logged since `use` ran. The line can reach the log
+after that read returns. When the line is missing:
 
 1. Wait one second.
 2. Run `bun verify stream read app --from 0`, which reads the whole log.
-3. Repeat steps 1 and 2 until the line shows, at most four times. When the line still has not shown,
-   report the feature as not verified.
+3. Repeat steps 1 and 2 until the line shows, for at most four rereads. When the fourth reread still
+   lacks the line, report the feature as not verified.

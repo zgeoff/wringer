@@ -29,14 +29,14 @@ import { registry } from './registry.ts';
 await runVerify(registry, { skill: '.claude/skills/verify' });
 ```
 
-Run it as `bun verify.ts <command>`, for example `bun verify.ts up` or
-`bun verify.ts action seed --count 3`. The CLI lists the built-in commands, such as `up`, `doctor`
-and `lint`, beside the commands that the registry declares and that its drivers add. A registry
-can't declare a command named `lint`: `runVerify` throws `Two commands share the name`, as `build()`
-does on any duplicate name.
+Add a `verify` script that runs the file to `package.json`, then run `bun verify <command>`, such as
+`bun verify up` or `bun verify action seed --count 3`. The CLI lists the built-in commands, such as
+`up`, `doctor` and `lint`, beside the commands that the registry declares and that its drivers add.
+A registry can't declare a command named `lint`: `runVerify` throws `Two commands share the name`,
+as `build()` does on any duplicate name.
 
 `skill` is the path, from the repo root, of the folder that holds the repo's verify skill: the
-Markdown that tells the repo's agents how to use each feature. `lint` reads that folder. The path
+Markdown that teaches the repo's agents how to use each feature. `lint` reads that folder. The path
 defaults to `.claude/skills/verify`.
 
 `env` is the source of the values of the registry's declared secrets: a record, or a function that
@@ -46,9 +46,9 @@ rules.
 
 ## Guide
 
-The package ships a guide in `guide/`. It walks an agent through adding a verify CLI, a feature map
-and a verify skill to a repo, and through the checks that prove them. Its `template/` folder holds
-the example files for the repo's own verify skill, which the agent writes.
+The package ships a guide in `guide/`. Follow it to add a verify CLI, a feature map and a verify
+skill to a repo, and to run the checks that prove them. Its `template/` folder holds the example
+files for the repo's own verify skill, which the agent writes.
 
 The CLI prints the guide of the installed version, so no copy in the repo goes stale.
 `bun verify guide` prints the version and the topics, and `bun verify guide create` one topic. A
@@ -58,8 +58,8 @@ folder, to copy from. `--human` prints a topic's text alone.
 
 ## lint
 
-`bun verify.ts lint` checks the features and the verify skill with no running app, so CI can run it
-on a fresh checkout. It exits with code 1 and `check-failed` on any of these:
+`bun verify lint` checks the features and the verify skill with no running app, so CI can run it on
+a fresh checkout. It exits with code 1 and `check-failed` on any of these:
 
 - a feature, `.shared()` or `.ignore()` glob that matches no file, or a file that no such glob
   matches;
@@ -78,8 +78,8 @@ only code block lines that start with them, after an optional `$ ` prompt and as
 
 ## Behaviour
 
-- Each command prints one JSON envelope. A streaming command, such as `doctor`, prints its NDJSON
-  events first.
+- In JSON output, each command prints one JSON envelope. A streaming command, such as `doctor`,
+  prints its NDJSON events first.
 - The CLI prints text in place of JSON when stdout is a terminal and no coding agent runs it.
   `--human` and `--json` choose the format.
 - An unknown flag, a flag of the wrong type or arguments that fail the command's schema end in a
@@ -94,7 +94,7 @@ only code block lines that start with them, after an optional `$ ` prompt and as
 - Every command takes `--target`, `--feature` and `--timeout-ms`, unless it declares an argument of
   the same name. `use --target` sets the target for later commands, where `status --target` reads
   one target once.
-- `--help` marks each command `[read]` or `[write]`, so a reader sees which commands a read-only
-  target refuses. A command whose arguments decide, such as `db query`, shows `[read or write]`.
+- `--help` marks each command `[read]`, `[write]`, or `[read or write]` when its arguments decide,
+  as for `db query`. A reader then sees which commands a read-only target refuses.
 - The script starts itself again, detached, as the run's supervisor, so `up` and `attach` need no
   separate daemon.

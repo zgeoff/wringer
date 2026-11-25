@@ -31,17 +31,18 @@ export const registry = createWringer({ name: 'shop' })
     drivers: {
       mcp: ({ endpoints }) => ({
         servers: {
-          atc: {
+          orders: {
             transport: 'http',
             url: `${endpoints['mcp']}/mcp`,
             auth: {
               clientCredentials: {
                 clientID: 'service:wringer-ro',
-                secretEnv: 'ATC_MCP_SECRET',
+                secretEnv: 'ORDERS_MCP_SECRET',
                 scope: 'read',
+                issuer: 'https://auth.shop.example',
               },
             },
-            readTools: ['atc_sessions_list', 'atc_session_get'],
+            readTools: ['orders_list', 'order_get'],
           },
           local: { transport: 'stdio', command: ['bun', 'src/mcp.ts'], readTools: [] },
         },
@@ -51,21 +52,20 @@ export const registry = createWringer({ name: 'shop' })
   .build();
 ```
 
-The target names each server, so an agent never passes a URL or a command line.
+Name each server in the target, so an agent never passes a URL or a command line.
 
 | Key                             | Meaning                                                                                                                                                                                        |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `transport`                     | `http` for Streamable HTTP, or `stdio` for a child process.                                                                                                                                    |
 | `url`                           | The MCP endpoint of an `http` server.                                                                                                                                                          |
 | `auth.clientCredentials`        | OAuth client_credentials with client_secret_basic. `secretEnv` names the variable with the secret. The token request asks for `scope` alone, or, without it, for every scope the server lists. |
-| `auth.clientCredentials.issuer` | The authorization server the credentials are for. They go to no other. Set it.                                                                                                                 |
+| `auth.clientCredentials.issuer` | The authorization server the credentials are for. They go to no other. Without it, they go to whichever server the MCP server names.                                                           |
 | `auth.bearerEnv`                | The variable that holds a bearer token. Leave `auth` out for a server with no sign-in.                                                                                                         |
 | `command`, `env`, `cwd`         | A `stdio` server's argv, its added environment and its working folder.                                                                                                                         |
 | `readTools`                     | The only tools a read-only target may call.                                                                                                                                                    |
 
-A `stdio` child gets a minimal environment plus `env`, not the supervisor's. Its `cwd` starts at the
-folder where the run's supervisor runs. The driver reads `secretEnv` and `bearerEnv` from the
-environment of the supervisor, which is the shell that ran `up` or `attach`.
+A `stdio` child gets a minimal environment plus `env`, and starts in the supervisor's folder. The
+driver reads `secretEnv` and `bearerEnv` from the shell that ran `up` or `attach`.
 
 ## Commands
 
@@ -88,7 +88,7 @@ several. `--args` is a JSON object, and a malformed one is a `usage` error.
 
 ## Read-only targets
 
-A tool is a read only when `readTools` lists it. The driver ignores the server's own `readOnlyHint`,
+Only the tools in `readTools` count as reads. The driver ignores the server's own `readOnlyHint`,
 which `mcp tools` shows for reference. A read-only target refuses `mcp call` of any other tool with
 exit code 3 before any request leaves. `mcp tools` still runs.
 

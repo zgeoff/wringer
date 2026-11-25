@@ -1,21 +1,24 @@
 # Releasing
 
-release-please and the `main` workflow release each `@wringer/*` package to npm on its own version.
-The workflow's release job calls the shared release-please workflow of `zgeoff/tools` at the repo's
-sync tag, with its merge input off. release-please opens one release pull request after a releasable
-commit lands on `main`, with a version bump and a changelog for each package the commit changed. The
-run of that pull request's merge tags each release, then dispatches a run of `main` at the tag,
-which publishes each released package with npm provenance once its checks pass, through the shared
-`npm-publish.yml` workflow of `zgeoff/tools`. This runbook holds only the steps the tooling does not
-do: the one-time setup, the first publish of each new package, merging each release pull request,
-and the recoveries a failed release needs.
+release-please and the [`main` workflow](../../.github/workflows/main.yml) release each `@wringer/*`
+package to npm on its own version. The workflow's release job calls the shared release-please
+workflow of [zgeoff/tools](https://github.com/zgeoff/tools) at the commit the workflow pins, with
+its merge input off. release-please opens one release pull request after a releasable commit lands
+on `main`, with a version bump and a changelog for each package the commit changed. The run of that
+pull request's merge tags each release, then dispatches a run of `main` at the tag, which publishes
+each released package with npm provenance once its checks pass, through the shared `npm-publish.yml`
+workflow of `zgeoff/tools`. Use this runbook for the steps the tooling does not do: the one-time
+setup, the first publish of each new package, merging each release pull request, and the recoveries
+a failed release needs. To see what the shared workflows do, read them in zgeoff/tools.
 
 ## One-time setup
 
 The release and publish jobs in `.github/workflows/main.yml` run only once the `RELEASE_ENABLED`
 repo variable is `true`. Before that, publish each package once by hand, as
 [Publish a new package](#publish-a-new-package) describes, because npm sets up trusted publishing
-only for a package that exists on the registry.
+only for a package that exists on the registry. Finish these steps within 2 days of adding the
+trusted publisher in step 4 of Publish a new package: its step 6 releases the package from CI, which
+needs the release job.
 
 1. Set the release App's client ID as the `RELEASE_APP_ID` repo variable and its private key as the
    `RELEASE_APP_PRIVATE_KEY` secret, so the release pull request runs its checks.
@@ -35,9 +38,9 @@ only for a package that exists on the registry.
 
 A package's first version goes out from a maintainer's machine, and CI publishes every later one.
 
-1. In `release-please-config.json`, copy the `packages/core` entry for `packages/<folder>`, with
-   `@wringer/<folder>` as its `component`, and merge that change to `main`. release-please opens a
-   release pull request only for a package that the config lists.
+1. In [`release-please-config.json`](../../release-please-config.json), copy the `packages/core`
+   entry for `packages/<folder>`, with `@wringer/<folder>` as its `component`, and merge that change
+   to `main`. release-please opens a release pull request only for a package that the config lists.
 2. Sign in to npm as an account that can publish under the `@wringer` scope:
 
    ```bash
@@ -94,7 +97,7 @@ Nothing merges a release pull request on its own, so each release waits for a ma
 
 The release App's token has no Workflows permission, so GitHub refuses it a tag on a merge commit
 that a change to `.github/workflows/` has left behind the head of `main`. The shared job then fails
-before release-please runs, and its error names the release pull request and its merge commit. It
+before release-please runs, and the error shows the release pull request and its merge commit. It
 fails on every later run until you tag each release with your own token, which holds the workflow
 scope:
 

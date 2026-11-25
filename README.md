@@ -15,8 +15,8 @@ A verification framework that each repo wraps in its own CLI.
 wringer gives a coding agent one way to drive a repo's real app and keep the evidence of what it
 checked. The agent runs each changed feature's journey through the repo's verify CLI, records a
 verdict, and publishes a report into the PR description. CI runs the gate, which fails a PR whose
-changed feature has no current verdict. The [terms](./docs/reference/terms.md) page defines journey,
-verdict, gate and every other term the docs use. Each repo builds its verify CLI from the
+changed feature has no current verdict. Look up journey, verdict, gate and every other term the docs
+use in the [terms](./docs/reference/terms.md) page. Each repo builds its verify CLI from the
 `@wringer/*` packages, which this Bun workspace publishes to npm.
 
 ## A report
@@ -25,9 +25,9 @@ The report sits in the PR description under `## Verification`.
 
 Each changed feature gets one line. A verified feature is a collapsed section whose summary reads
 `✅ checkout · 6 commands · 4 s · local`, and that opens to a table of its commands, results and
-evidence. A stale feature or one with no verdict gets a line that says how to fix it. One paragraph
-names the unchanged features. When the report is too long for the description, it drops the step
-data first and says so.
+evidence. A stale feature or one with no verdict gets a line that says how to fix it. The unchanged
+features share one paragraph. When the report is too long for the description, wringer drops the
+step data first, and the report says so.
 
 ## Packages
 
@@ -51,8 +51,8 @@ data first and says so.
    bun add --dev --exact @wringer/core @wringer/gunshi zod
    ```
 
-2. Ask your coding agent to add a verify CLI to the repo by the guide that this command prints. The
-   guide ships in `@wringer/gunshi`, so it matches the version you installed:
+2. Ask your coding agent to add a verify CLI to the repo, following the guide that this command
+   prints. The guide ships in `@wringer/gunshi`, so it matches the version you installed:
 
    ```bash
    bunx wringer-gunshi guide
@@ -75,23 +75,25 @@ bun install
 bun run check
 ```
 
-`bun run check` runs every check that CI runs, the browser tests included. `bun run test` leaves out
-the `*.browser.test.ts` files, which `bun run test:browser` runs in a real headless Chromium.
+`bun run check` runs each script that the `BUN_CHECK_SCRIPTS` repo variable lists, the browser tests
+included. `bun run test` leaves out the `*.browser.test.ts` files, which `bun run test:browser` runs
+in a real headless Chromium.
 
-On each pull request, CI runs the checks that the `BUN_CHECK_SCRIPTS` repo variable lists, and scans
-the pull request's commits for secrets. A pull request that changes a package, the release scripts
-or the release workflows also gets a dry run of the npm publish of each package.
+On each pull request, CI runs the same scripts, and also scans the pull request's commits for
+secrets. A pull request that changes a package, the release scripts or the release workflows also
+gets a dry run of the npm publish of each package.
 
 ## Layout
 
-- `packages/`: the `@wringer/*` packages, one folder each. `packages/shop-example` never publishes:
-  it holds an example shop app and the verify CLI for it. The browser tests drive the app through
-  that CLI's registry with every driver package, and `bun verify` runs the CLI.
+- `packages/`: one folder for each `@wringer/*` package, and `packages/shop-example`, which never
+  publishes. It holds an example shop app with its verify CLI, which `bun run verify:shop` runs, and
+  wringer's own verify CLI, which `bun verify` runs. The browser tests drive the shop app through
+  the shop CLI's registry with every driver package.
 - `packages/gunshi/guide/`: the guide that adds a verify CLI to a repo, with the template files it
   copies. It ships in `@wringer/gunshi`, and the CLI prints it with `guide`.
 - `docs/`: the terms, the design docs and the runbooks.
 - `scripts/`: the scripts the git hooks, CI and the release run.
-- `packages/shop-example/verify-shop/`: the `verify-shop` skill that tells an agent how to drive the
-  shop example with `bun run verify:shop`, with a feature file for each shop feature.
+- `packages/shop-example/verify-shop/`: the `verify-shop` skill for driving the shop example with
+  `bun run verify:shop`, with a feature file for each shop feature.
 - `.agents/skills/`: the skills that [zgeoff/tools](https://github.com/zgeoff/tools) syncs, linked
   from `.claude/skills`. `.claude/hooks/` blocks an agent's edit until it loads the file's skill.

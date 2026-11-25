@@ -4,10 +4,11 @@ This doc uses the words the [terms](../reference/terms.md) page defines: registr
 command, doctor, feature, journey, verdict, evidence, report, gate, shared glob and ignore list.
 
 wringer verifies its own changes with its own verify CLI. The root `bun verify` runs wringer's own
-registry, whose features are wringer's packages: one per driver, `core`, `cli` and `guide`. To
-verify a change, an agent follows the feature's journey: it runs wringer's commands against the shop
+registry, whose features cover wringer's packages: one per driver package, `core`, `cli` for the
+source of `@wringer/gunshi`, and `guide` for the guide text that `@wringer/gunshi` ships. To verify
+a change, an agent follows the feature's journey: it runs wringer's commands against the shop
 example, a small app in `packages/shop-example/`, and checks the end state. Every PR carries a
-report, and the `gate` job in CI fails the PR unless each changed package has a verdict on its
+report, and the `gate` job in CI fails the PR unless each changed feature has a verdict on its
 current code.
 
 ```mermaid
@@ -48,9 +49,9 @@ default for a repo's first registry.
 
 ## The skill and the guide
 
-wringer's verify skill, in `.agents/skills/verify/`, tells an agent how to verify each feature. It
-has one `references/feature-<name>.md` file per feature, which holds that feature's journey. `lint`
-also reads the skill folder, and starts no run. It fails in each of these cases:
+An agent verifies each feature from wringer's verify skill, in `.agents/skills/verify/`. The skill
+has one `references/feature-<name>.md` file per feature, with that feature's journey. `lint` also
+reads the skill folder, and starts no run. It fails in each of these cases:
 
 - a feature has no feature file;
 - a feature file matches no feature;
@@ -58,17 +59,19 @@ also reads the skill folder, and starts no run. It fails in each of these cases:
 - a journey's first command isn't `bun verify use --feature <name>`, which sets the feature that
   later commands, such as `done`, act on when they get no `--feature`.
 
-The skill's `SKILL.md` lists the features between two markers. `bun verify features --markdown`
-prints the list that belongs there, and `lint` fails when the skill's list differs from it.
+Keep the feature list in the skill's `SKILL.md` between two markers.
+`bun verify features --markdown` prints the list that belongs there, and `lint` fails when the
+skill's list differs from it.
 
 The guide is the text that teaches a repo how to build its verify CLI and its verify skill, and it
 ships in `@wringer/gunshi`. `bun verify guide` prints it from the installed package, so the text an
 agent reads always matches the installed version. The guide holds a template for a repo's verify
-skill. A repo's skill records the template it came from as a content hash in its `wringer-template`
-line. When that hash differs from the installed template's hash, `lint` fails with a hint to run
-`bun verify guide template`, which prints the new template and its hash. An edit to the template
-changes the hash, so after a release that edits the template, `lint` fails in every repo that uses
-wringer until its skill is upgraded.
+skill. A repo's skill records the template it came from as a content hash in the
+`metadata.wringer-template` line of its frontmatter. When that hash differs from the installed
+template's hash, `lint` fails, gives the installed hash, and tells the agent to run
+`bun verify guide template`, which prints the path of the installed template folder. An edit to the
+template changes the hash, so after a release that edits the template, `lint` fails in every repo
+that uses wringer until its skill is upgraded.
 
 The shop's verify skill sits in `packages/shop-example/verify-shop/`. It's the worked example of the
 template, and `verify-shop.test.ts` runs the shop's `lint` over it. Agents in this repo load only

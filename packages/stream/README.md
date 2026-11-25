@@ -53,7 +53,8 @@ write.
   recorded.
 - On an `attach` target, the run owns no app, so the recorder stops without waiting for one. A line
   the app writes after the recorder's final read stays out of the stream.
-- A target with no `sources` records `app`: the log of the app that the run launched.
+- A `launch` target with no `sources` records `app`: the log of the app that the run launched. An
+  `attach` target launches no app, so its `app` stream stays empty: give it its own `sources`.
 
 The run's supervisor writes each source to `streams/<name>.ndjson` in the run folder, one
 `{ at, line }` record per line. A record keeps at most 4096 characters of its line. When a source
@@ -61,8 +62,9 @@ logs faster than the disk takes it, the supervisor holds at most 10,000 pending 
 plus the batch it is writing. It drops the rest, and then writes a record that counts the dropped
 lines. A batch that fails to write stays queued for the next write, and the source reads as failed
 until a write succeeds. When the run stops with records still unwritten, or with a source it could
-not read, the run ends as crashed, and its crash reason names the stream and the error. The `down`
-or `detach` that stopped the run then fails with an `environment` error that names them too.
+not read, the run ends as crashed, and its crash reason includes the stream and the error. The
+`down` or `detach` that stopped the run then fails with an `environment` error that includes them
+too.
 
 ## Cursors
 

@@ -7,12 +7,14 @@ A run writes what it sees into `.wringer/`: request headers, cookies, URLs, log 
 and screenshots. Some of it leaves the machine:
 
 - Each command's step data, the data it returned, can reach the report in the PR description.
-- Evidence files reach the repo's file host behind public links, when the target sets
+- Evidence files reach the repo's file host behind public links, only when the target sets
   `evidence: 'upload'`.
 
-To keep secrets out of both, `@wringer/core` replaces each secret value it knows in all the text
-wringer writes. Each driver also redacts by structure, for a credential that core doesn't know yet:
-the http driver, for example, redacts every cookie's value whatever it holds.
+To keep secrets out of both, `@wringer/core` replaces each secret value it knows in the text wringer
+writes. It skips some values, as [The secret set](#the-secret-set) lists, and a few run log events
+keep their values, as [Events that keep their values](#events-that-keep-their-values) says. Each
+driver also redacts by structure, for a credential that core doesn't know yet: the http driver, for
+example, redacts every cookie's value whatever it holds.
 
 ```mermaid
 flowchart LR
@@ -60,13 +62,16 @@ The scrubber replaces each secret wherever it appears in a text, in each of thes
 - base64 and base64url, of the secret's leading bytes in whole groups of 3, so a secret inside a
   larger base64 text matches when it starts on a group boundary.
 
-`@wringer/core` scrubs at four places, so a command that the repo adds needs no redaction code:
+`@wringer/core` scrubs as wringer writes, at four places, so a command that the repo adds needs no
+redaction code:
 
 - the evidence writer, which scrubs a file's whole content in one pass, so a secret never splits
   across two chunks;
 - each command's JSON result, as a whole;
 - each event that a streaming command prints, before it reaches stdout;
 - each event appended to the run log.
+
+The upload guard and `publish` check again before anything leaves the machine.
 
 A run's commands are separate processes, so a secret that one command learns has to reach the next.
 Each process appends the secrets it adds to the run's `secrets.ndjson`, which wringer creates with
@@ -111,13 +116,17 @@ no link in the report, when the file:
 - changed since the evidence writer hashed it;
 - is a screenshot or a video from a target without `evidence: 'upload'`.
 
+`publish` uploads only the evidence of journeys whose target sets `evidence: 'upload'`, so text
+evidence from any other target stays local too. The guard checks screenshots and videos for that
+case again, because wringer can't scrub them.
+
 The guard scrubs with a secret set that also loads the secrets file of every run the report's
 verdicts name, so it can know a secret that the evidence writer didn't know yet. When it finds a
 secret in a text file, it fails the whole command before any file is sent, because the same secret
 may sit in step data too.
 
-wringer can't scrub a screenshot or a video. A repo sets `evidence: 'upload'` on a target only when
-the target's pages hold no real secrets, such as seeded data and test accounts with no real access.
+wringer can't scrub a screenshot or a video. Set `evidence: 'upload'` on a target only when the
+target's pages hold no real secrets, such as seeded data and test accounts with no real access.
 
 Before `publish` writes the description, it searches the rendered report for each secret's
 spellings, and fails when it finds one.
