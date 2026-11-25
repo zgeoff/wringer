@@ -12,7 +12,7 @@ bun verify stream read app
 
 ## End state
 
-- The log holds the line `order <id> placed` exactly once, where `<id>` is the `data.id` of
+- The log holds the line `order <id> placed` once, where `<id>` is the `data.id` of
   `action place-order`.
 
 The journey's `stream read app` returns the lines logged since `use` ran. The line can reach the log

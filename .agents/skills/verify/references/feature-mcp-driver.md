@@ -1,8 +1,8 @@
 # mcp-driver
 
 The mcp driver, `@wringer/mcp`, calls the tools of the shop's MCP server. `bun verify up` starts the
-shop app and the MCP server, so you never start the server yourself. The server has two tools, and
-neither takes arguments:
+shop app and the MCP server, so you start nothing yourself. The server has two tools, and neither
+takes arguments:
 
 - `list_orders` lists the shop's orders.
 - `place_order` places one order for a `mug`.
@@ -29,8 +29,7 @@ The commands above pass no server name. On a target with more than one server, a
 Read each result in the command's JSON envelope, as
 [Read the envelope](../SKILL.md#read-the-envelope) says. Each field below sits under `data`, except
 `evidence`, which sits at the top level. A tool that fails still returns `ok: true`, so check
-`isError` on each call. A call with `isError: true` misses the end state: handle it as step 4 of
-[Check a change](../SKILL.md#check-a-change) says.
+`isError` on each call.
 
 - `mcp tools` returns `server: "shop"` and exactly two entries in `tools`. `list_orders` has
   `inReadTools: true` and `place_order` has `inReadTools: false`. `inReadTools` is true when the

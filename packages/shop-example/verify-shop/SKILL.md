@@ -158,8 +158,7 @@ Set each feature's `paths` and the ignore list in the registry,
 
 The shop example is the exception to leaving `gate` to CI. This repo's CI runs the shop's `lint`
 through a test and never runs the shop's `gate`, so list each feature you skip in your reply. Before
-you edit this skill or a feature file, read [Edit the skill](references/edit-the-skill.md), and also
-follow the skill steps in [AGENTS.md](../../../AGENTS.md).
+you edit this skill or a feature file, follow the skill steps in [AGENTS.md](../../../AGENTS.md).
 
 <!-- /repo -->
 

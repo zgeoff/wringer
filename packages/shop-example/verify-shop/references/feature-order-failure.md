@@ -4,8 +4,7 @@ When an order fails, the shop page at `/` shows the shopper an error. To make ev
 the `orders` table from the database of the app that `up` started, then press Place order.
 
 Run this journey after every other one: the table stays dropped until `bun verify up --restart`
-starts the app on a new, empty database. Run `bun verify doctor` after the restart, before any other
-journey.
+starts the app on a new, empty database.
 
 ## Journey
 

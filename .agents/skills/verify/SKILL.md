@@ -95,8 +95,7 @@ Read a feature's file before you run its journey.
 ## Read the envelope
 
 Each command prints one JSON envelope as its last line, or text with `--human`. Read `ok`, then
-`data` on success, or `error.code` and `error.hint` on failure. When the feature's file expects a
-command to fail, check its envelope against the end state, and skip the list below.
+`data` on success, or `error.code` and `error.hint` on failure.
 
 - `check-failed`: read the files the envelope lists in `evidence`. When `done` failed, run the
   journey again.

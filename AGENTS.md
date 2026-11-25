@@ -13,7 +13,7 @@ each skill in this table from `.agents/skills/`, which `.claude/skills` links to
 | `docs-writing`  | writing or editing any committed prose: READMEs, this file                         |
 | `code-style`    | writing, reviewing, or renaming any TypeScript — the shared function-verb taxonomy |
 | `testing`       | designing, writing, or reviewing tests                                             |
-| `skill-writing` | writing or editing any skill in the repo, `verify-shop` included                   |
+| `skill-writing` | writing or editing a skill under `.agents/skills/`                                 |
 | `cold-read`     | checking a skill you wrote or changed, before its PR                               |
 | `deslop`        | editing the prose of a skill you wrote or changed, before its PR                   |
 | `ci-design`     | adding, changing, or reviewing a workflow, a job, or a trigger                     |
@@ -35,7 +35,6 @@ When you write or edit a skill, including a file in its `references/`, such as a
 
 - Every change reaches `main` through a pull request, and the pull request merges only once CI
   passes. Work on a branch, push the branch, and open a pull request with the repo's template.
-  You're done when CI passes on the pull request's last push, after a skill change too.
 - Use [Conventional Commits](https://www.conventionalcommits.org/) for all commit messages, with a
   lowercase header of at most 72 characters.
 - Commit subjects use the imperative mood ("add X", never "added X" or a bare noun phrase).
@@ -78,9 +77,6 @@ Before you commit, grep the diff for `sk-ant`, `GOCSPX`, `AGE-SECRET-KEY`, `ops_
 
 - Bun is pinned in `.bun-version`. `bun run format` fixes formatting, and `bun run check` runs each
   script that CI runs from the `BUN_CHECK_SCRIPTS` list below.
-- When a check, a hook or a CI job fails, fix the cause on your branch, run the check again, and
-  push the fix. Never skip a hook with `--no-verify`: CI runs the same format, lint, prose, test and
-  gitleaks checks, so the PR fails anyway.
 - CI runs the shared Bun pull-request workflow from zgeoff/tools on each pull request. The
   `BUN_CHECK_SCRIPTS` repo variable holds its script list:
   `audit deadcode format:check lint:full typecheck prose test test:browser test:docker`. A change to
