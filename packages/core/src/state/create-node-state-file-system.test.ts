@@ -1,26 +1,25 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createNodeStateFileSystem } from './create-node-state-file-system.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'node-state-file-system');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
+function setupTest() {
+  const directory = createTempDir('node-state-file-system').path;
 
   return { directory, fs: createNodeStateFileSystem() };
 }
 
 test('#readText reads a missing file as null', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const text = await ctx.fs.readText(join(ctx.directory, 'notes.txt'));
 
   expect(text).toBeNull();
 });
 
 test('#readText rejects a path that is a folder', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await mkdir(join(ctx.directory, 'notes.txt'));
 
@@ -30,14 +29,15 @@ test('#readText rejects a path that is a folder', async () => {
 });
 
 test('#listNames lists a missing folder as empty', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const names = await ctx.fs.listNames(join(ctx.directory, 'beds'));
 
   expect(names).toStrictEqual([]);
 });
 
 test('#listNames rejects a path that is a file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(join(ctx.directory, 'beds'), 'kale\n');
 
@@ -47,7 +47,7 @@ test('#listNames rejects a path that is a file', async () => {
 });
 
 test('#appendText adds the text after what the file holds', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(join(ctx.directory, 'notes.txt'), 'kale\n');
 
@@ -59,8 +59,7 @@ test('#appendText adds the text after what the file holds', async () => {
 });
 
 test('#appendText writes every byte of a long text with multi-byte letters', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const long = 'Grüße an die Beete\n'.repeat(400_000);
 
   await ctx.fs.appendText(join(ctx.directory, 'notes.txt'), long);
@@ -71,7 +70,7 @@ test('#appendText writes every byte of a long text with multi-byte letters', asy
 });
 
 test('#readFileSize reads the size of a file in bytes', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(join(ctx.directory, 'notes.txt'), 'kale\n');
 
@@ -81,7 +80,7 @@ test('#readFileSize reads the size of a file in bytes', async () => {
 });
 
 test('#truncateFile keeps the first bytes of the file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(join(ctx.directory, 'notes.txt'), 'kale\nlee');
 
@@ -93,7 +92,7 @@ test('#truncateFile keeps the first bytes of the file', async () => {
 });
 
 test('#writeTextAtomic replaces the file and leaves no temp file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await writeFile(join(ctx.directory, 'notes.txt'), 'kale\n');
 
@@ -106,8 +105,7 @@ test('#writeTextAtomic replaces the file and leaves no temp file', async () => {
 });
 
 test('#writeTextAtomic completes every write when many run at once', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const texts = Array.from({ length: 20 }, (_, index) => `note ${index}\n`);
 
   await Promise.all(
@@ -124,7 +122,7 @@ test('#writeTextAtomic completes every write when many run at once', async () =>
 });
 
 test('#createDirectory creates the folder and its parents', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.fs.createDirectory(join(ctx.directory, 'garden/beds'));
 

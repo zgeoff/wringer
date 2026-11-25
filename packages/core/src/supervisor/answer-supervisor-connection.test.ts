@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises';
 import { createConnection, createServer } from 'node:net';
 import type { Socket } from 'node:net';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { answerSupervisorConnection } from './answer-supervisor-connection.ts';
 
 // The stack closes both ends of the socket and the listener before it removes their folder.
@@ -13,7 +13,7 @@ async function setupTest() {
 
   onTestFinished(() => stack.disposeAsync());
 
-  const directory = await createTestFolder(import.meta.dir, 'answer-supervisor-connection');
+  const directory = createTempDir('answer-supervisor-connection').path;
 
   stack.defer(() => rm(directory, { recursive: true, force: true }));
 

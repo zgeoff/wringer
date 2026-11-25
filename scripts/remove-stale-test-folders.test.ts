@@ -1,14 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { nodeFileSystem } from './ci/node-file-system.ts';
 import { pickStaleTestFolders, removeStaleTestFolders } from './remove-stale-test-folders.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'remove-stale-test-folders');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('remove-stale-test-folders').path;
 
   return {
     root,
@@ -19,22 +17,22 @@ async function setupTest() {
         fileSystem: nodeFileSystem,
         probeProcess: (pid) => livePIDs.includes(pid),
       }),
-    readNames: (folder: string) => readdir(join(root, folder)),
+    readNames: () => readdir(root),
   };
 }
 
 test.each([
   {
-    name: '.test-n4026531836-p4100-beds-a1b2c3',
+    name: 'bedspid4100-ns4026531836-a1b2c3',
     livePIDs: [],
-    stale: ['/repo/src/.test-n4026531836-p4100-beds-a1b2c3'],
+    stale: ['/tmp/bedspid4100-ns4026531836-a1b2c3'],
   },
-  { name: '.test-n4026531836-p4100-beds-a1b2c3', livePIDs: [4100], stale: [] },
-  { name: '.test-n4026532001-p4100-beds-a1b2c3', livePIDs: [], stale: [] },
-  { name: '.test-p4100-beds-a1b2c3', livePIDs: [], stale: [] },
-  { name: '.test-beds-a1b2c3', livePIDs: [], stale: [] },
+  { name: 'bedspid4100-ns4026531836-a1b2c3', livePIDs: [4100], stale: [] },
+  { name: 'bedspid4100-ns4026532001-a1b2c3', livePIDs: [], stale: [] },
+  { name: 'bedspid4100-a1b2c3', livePIDs: [], stale: [] },
+  { name: 'beds-a1b2c3', livePIDs: [], stale: [] },
 ])('#pickStaleTestFolders reads $name with live PIDs $livePIDs as stale: $stale', (row) => {
-  const stale = pickStaleTestFolders([{ name: row.name, path: `/repo/src/${row.name}` }], {
+  const stale = pickStaleTestFolders([{ name: row.name, path: `/tmp/${row.name}` }], {
     namespace: '4026531836',
     livePIDs: new Set(row.livePIDs),
   });
@@ -42,54 +40,48 @@ test.each([
   expect(stale).toStrictEqual(row.stale);
 });
 
-test('it removes a nested test folder whose process no longer runs', async () => {
-  const ctx = await setupTest();
+test('it removes a test folder whose process no longer runs', async () => {
+  const ctx = setupTest();
 
-  await mkdir(join(ctx.root, 'packages/garden/src/.test-n4026531836-p4100-beds-a1b2c3'), {
-    recursive: true,
-  });
+  await mkdir(join(ctx.root, 'bedspid4100-ns4026531836-a1b2c3'));
 
   const removed = await ctx.removeStale([]);
 
-  expect(removed).toStrictEqual([
-    join(ctx.root, 'packages/garden/src/.test-n4026531836-p4100-beds-a1b2c3'),
-  ]);
+  expect(removed).toStrictEqual([join(ctx.root, 'bedspid4100-ns4026531836-a1b2c3')]);
 });
 
 test('it keeps a test folder whose process still runs on disk', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  await mkdir(join(ctx.root, 'src/.test-n4026531836-p4100-beds-a1b2c3'), { recursive: true });
+  await mkdir(join(ctx.root, 'bedspid4100-ns4026531836-a1b2c3'));
 
   await ctx.removeStale([4100]);
 
-  const names = await ctx.readNames('src');
+  const names = await ctx.readNames();
 
-  expect(names).toStrictEqual(['.test-n4026531836-p4100-beds-a1b2c3']);
+  expect(names).toStrictEqual(['bedspid4100-ns4026531836-a1b2c3']);
 });
 
 test('it keeps a test folder from another PID namespace, whatever its PID', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
-  await mkdir(join(ctx.root, 'src/.test-n4026532001-p4100-beds-a1b2c3'), { recursive: true });
+  await mkdir(join(ctx.root, 'bedspid4100-ns4026532001-a1b2c3'));
 
   await ctx.removeStale([]);
 
-  const names = await ctx.readNames('src');
+  const names = await ctx.readNames();
 
-  expect(names).toStrictEqual(['.test-n4026532001-p4100-beds-a1b2c3']);
+  expect(names).toStrictEqual(['bedspid4100-ns4026532001-a1b2c3']);
 });
 
-test('it leaves the dependency folders unread', async () => {
-  const ctx = await setupTest();
+test('it keeps a folder that the kit did not name', async () => {
+  const ctx = setupTest();
 
-  await mkdir(join(ctx.root, 'node_modules/.test-n4026531836-p4100-beds-a1b2c3'), {
-    recursive: true,
-  });
+  await mkdir(join(ctx.root, 'node_modules'));
 
   await ctx.removeStale([]);
 
-  const names = await ctx.readNames('node_modules');
+  const names = await ctx.readNames();
 
-  expect(names).toStrictEqual(['.test-n4026531836-p4100-beds-a1b2c3']);
+  expect(names).toStrictEqual(['node_modules']);
 });

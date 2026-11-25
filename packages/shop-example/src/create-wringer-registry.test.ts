@@ -3,7 +3,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { reportSchema } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { updateEnv } from '@zgeoff/testing/helpers';
+import { updateEnv } from '@zgeoff/testing';
 import { z } from 'zod';
 import { createShopRegistry } from './create-shop-registry.ts';
 import { createWringerRegistry } from './create-wringer-registry.ts';
@@ -11,7 +11,7 @@ import { createWringerRegistry } from './create-wringer-registry.ts';
 async function setupTest() {
   const registry = createWringerRegistry();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer: registry });
+  const shop = await createTestSession({ wringer: registry });
 
   return {
     registry,
@@ -177,8 +177,8 @@ test('it keeps the evidence of every shop registry target local and registers no
 test('it needs neither upload variable for a command that never uploads', async () => {
   const ctx = await setupTest();
 
-  updateEnv('VERIFY_UPLOAD_URL', undefined);
-  updateEnv('VERIFY_UPLOAD_TOKEN', undefined);
+  updateEnv('CLOUD_FILES_URL', undefined);
+  updateEnv('CLOUD_FILES_TOKEN', undefined);
 
   const result = await ctx.dispatch(
     ctx.registry,

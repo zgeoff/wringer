@@ -1,6 +1,5 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { expect, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { nodeFileSystem } from '../ci/node-file-system.ts';
 import type { CommandResult, RunCommand } from '../ci/run-command.ts';
 import { checkVerifyPR } from './check-verify-pr.ts';
@@ -11,11 +10,8 @@ interface Answers {
   readonly baseFetched?: boolean;
 }
 
-async function setupTest(answers: Answers) {
-  const directory = await createTestFolder(import.meta.dir, 'check-verify-pr');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest(answers: Answers) {
+  const directory = createTempDir('check-verify-pr').path;
   const calls: string[][] = [];
 
   const runFake: RunCommand = (argv) => {
@@ -53,7 +49,7 @@ async function setupTest(answers: Answers) {
 }
 
 test('it prints pr null and exits 2 when the branch has no PR', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: { exitCode: 1, stdout: '', stderr: 'no pull requests found for branch "x"' },
   });
 
@@ -76,7 +72,8 @@ test('it prints pr null and exits 2 when the branch has no PR', async () => {
 });
 
 test('it exits 2 when gh is missing', async () => {
-  const ctx = await setupTest({ gh: 'missing' });
+  const ctx = setupTest({ gh: 'missing' });
+
   const result = await ctx.runCheck();
 
   expect(result).toStrictEqual({
@@ -87,7 +84,7 @@ test('it exits 2 when gh is missing', async () => {
 });
 
 test('it exits 2 when the base ref is not fetched', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body: '' }),
@@ -106,7 +103,7 @@ test('it exits 2 when the base ref is not fetched', async () => {
 });
 
 test('it fails report-block and skips the rest for a description with no report block', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body: null }),
@@ -141,7 +138,7 @@ test('it fails report-block and skips the rest for a description with no report 
 test('it fails registry for a report from the shop registry and skips the gate', async () => {
   const body = `## Verification\n\n<!-- wringer:report -->\nrows\n<!-- wringer-data v2 {"version":2,"registry":"shop","claims":[]} -->\n<!-- /wringer:report -->\n`;
 
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body }),
@@ -169,7 +166,7 @@ test('it fails registry for a report from the shop registry and skips the gate',
 });
 
 test('it passes a release pull request with no report block and runs no gate', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({
@@ -215,7 +212,7 @@ test('it passes a release pull request with no report block and runs no gate', a
 });
 
 test('it passes a renovate pull request from the renovate bot with no report block and runs no gate', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({
@@ -262,7 +259,7 @@ test('it passes a renovate pull request from the renovate bot with no report blo
 });
 
 test('it passes a repo-sync pull request from the sync bot with no report block and runs no gate', async () => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({
@@ -351,7 +348,7 @@ test.each([
   },
   { who: 'an unknown author', headRefName: 'renovate/left-pad-2.x', author: null },
 ])('it gates a pull request from $who on $headRefName', async (row) => {
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({
@@ -382,7 +379,7 @@ test.each([
 test('it prints the failing features of a gate that fails', async () => {
   const body = `## Verification\n\n<!-- wringer:report -->\n<!-- wringer-data v2 {"version":2,"registry":"wringer","claims":[]} -->\n<!-- /wringer:report -->\n`;
 
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body }),
@@ -413,7 +410,7 @@ test('it prints the failing features of a gate that fails', async () => {
 test('it exits 0 when every check passes', async () => {
   const body = `## Verification\n\n<!-- wringer:report -->\n<!-- wringer-data v2 {"version":2,"registry":"wringer","claims":[]} -->\n<!-- /wringer:report -->\n`;
 
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body }),
@@ -435,7 +432,7 @@ test('it exits 0 when every check passes', async () => {
 test('it exits 2 when the gate reports an environment error', async () => {
   const body = `## Verification\n\n<!-- wringer:report -->\n<!-- wringer-data v2 {"version":2,"registry":"wringer","claims":[]} -->\n<!-- /wringer:report -->\n`;
 
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body }),
@@ -464,7 +461,7 @@ test('it exits 2 when the gate reports an environment error', async () => {
 test('it exits 2 when the gate prints no envelope', async () => {
   const body = `## Verification\n\n<!-- wringer:report -->\n<!-- wringer-data v2 {"version":2,"registry":"wringer","claims":[]} -->\n<!-- /wringer:report -->\n`;
 
-  const ctx = await setupTest({
+  const ctx = setupTest({
     gh: {
       exitCode: 0,
       stdout: JSON.stringify({ number: 142, baseRefName: 'main', body }),

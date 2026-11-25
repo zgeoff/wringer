@@ -5,12 +5,12 @@ import type { ShopRegistryOptions } from './build-shop-base.ts';
 
 // wringer's own verify registry: the shop base, driven through each package's real CLI, with one
 // feature for each package, the shared globs and the paths with no runtime effect. Its `local`
-// target uploads evidence to the host in `VERIFY_UPLOAD_URL`, with `VERIFY_UPLOAD_TOKEN`.
+// target uploads evidence to the host in `CLOUD_FILES_URL`, with `CLOUD_FILES_TOKEN`.
 export function createWringerRegistry(options: ShopRegistryOptions = {}): Wringer {
   return buildShopBase('wringer', { ...options, evidence: 'upload' })
     .hook(
       'upload',
-      createHostUploader({ urlEnv: 'VERIFY_UPLOAD_URL', tokenEnv: 'VERIFY_UPLOAD_TOKEN' }),
+      createHostUploader({ urlEnv: 'CLOUD_FILES_URL', tokenEnv: 'CLOUD_FILES_TOKEN' }),
     )
     .feature(
       {

@@ -84,7 +84,7 @@ export function createHttpWringer(
         mode: 'attach',
         access: 'read-write',
         host: local(),
-        endpoints: () => ({ web: url, admin: ADMIN_API_URL }),
+        endpoints: () => ({ web: url, admin: ADMIN_API_URL, db: 'data/shop.sqlite' }),
         drivers: {
           http: () => ({
             endpoints: { admin: { healthPath: '/api/health', healthAuth: false } },

@@ -15,7 +15,6 @@ async function setupTest(options: SetupOptions) {
   const wringer = createShopWringer();
 
   const shop = await createTestSession({
-    parent: import.meta.dir,
     wringer,
     ...options,
   });

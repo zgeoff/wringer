@@ -1,13 +1,11 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm, stat } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from './create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { seedEvidenceFolder } from './seed-evidence-folder.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'seed-evidence-folder');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('seed-evidence-folder').path;
 
   return {
     root,
@@ -20,7 +18,7 @@ async function setupTest() {
 }
 
 test('it creates the evidence folder under the state folder of the root', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await seedEvidenceFolder(ctx.root);
 
@@ -30,7 +28,7 @@ test('it creates the evidence folder under the state folder of the root', async 
 });
 
 test('it leaves an evidence folder that already exists in place', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await seedEvidenceFolder(ctx.root);
   await seedEvidenceFolder(ctx.root);

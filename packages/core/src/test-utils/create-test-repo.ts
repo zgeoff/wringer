@@ -1,19 +1,19 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runGit } from '../change-facts/run-git.ts';
-import { createTestFolder } from './create-test-folder.ts';
-import { removeTestFolder } from './remove-test-folder.ts';
 
 export interface TestRepo {
   readonly root: string;
   readonly git: (...args: readonly string[]) => Promise<string>;
-  readonly remove: () => Promise<void>;
+  readonly remove: () => void;
 }
 
 // A git repo on `main` with one commit and `.wringer/` ignored. The caller removes it, after it has
 // stopped whatever still writes into it.
-export async function createTestRepo(parent: string): Promise<TestRepo> {
-  const root = await createTestFolder(parent, 'repo');
+export async function createTestRepo(): Promise<TestRepo> {
+  const folder = createTempDir('repo', { cleanup: 'manual' });
+  const root = folder.path;
 
   const git = async (...args: readonly string[]): Promise<string> => {
     const result = await runGit({ cwd: root, args });
@@ -21,8 +21,9 @@ export async function createTestRepo(parent: string): Promise<TestRepo> {
     return result.stdout;
   };
 
-  // Late work from a timed-out command can add or remove files while the removal walks the tree.
-  const remove = () => removeTestFolder(root);
+  // Late work from a timed-out command can add or remove files while the removal walks the tree, so
+  // the kit's removal repeats until the folder is gone.
+  const remove = folder.remove;
 
   // The caller gets `remove` only once this returns, so a failed step removes the folder here.
   try {
@@ -35,8 +36,7 @@ export async function createTestRepo(parent: string): Promise<TestRepo> {
     await git('add', '.');
     await git('commit', '--quiet', '-m', 'start');
   } catch (error) {
-    await remove();
-
+    remove();
     throw error;
   }
 

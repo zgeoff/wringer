@@ -2,10 +2,17 @@ import { z } from 'zod';
 import { WringerError } from '../wringer-error.ts';
 import type { EvidenceUploader, UploadFile, UploadedLink } from './evidence-uploader.ts';
 
+// The variables an uploader reads when its options name none.
+const defaultUploadURLEnv = 'WRINGER_UPLOAD_URL';
+const defaultUploadTokenEnv = 'WRINGER_UPLOAD_TOKEN';
+
 export interface HostUploaderOptions {
-  // The name of the variable that holds the upload endpoint, an https URL.
-  readonly urlEnv: string;
-  readonly tokenEnv: string;
+  // The name of the variable that holds the upload endpoint, an https URL. Default
+  // `WRINGER_UPLOAD_URL`.
+  readonly urlEnv?: string | undefined;
+
+  // Default `WRINGER_UPLOAD_TOKEN`.
+  readonly tokenEnv?: string | undefined;
 
   // The host's `expires` field. Default '30d'.
   readonly expires?: string | undefined;
@@ -23,33 +30,35 @@ export interface HostUploaderDependencies {
 // `{ url, expiresAt }`. The options name environment variables, read when the uploader is used.
 // No error carries the token, a request header or a response body.
 export function createHostUploader(
-  options: HostUploaderOptions,
+  options: HostUploaderOptions = {},
   dependencies?: HostUploaderDependencies,
 ): EvidenceUploader {
   const env = dependencies?.env ?? process.env;
   const fetchRequest = dependencies?.fetch ?? fetch;
+  const urlEnv = options.urlEnv ?? defaultUploadURLEnv;
+  const tokenEnv = options.tokenEnv ?? defaultUploadTokenEnv;
 
   return {
     maxURLLength: options.maxURLLength ?? 512,
     get linkHosts() {
-      return [readUploadEndpoint(options.urlEnv, env).host];
+      return [readUploadEndpoint(urlEnv, env).host];
     },
     assertReady: () => {
-      readUploadEndpoint(options.urlEnv, env);
-      readUploadToken(options.tokenEnv, env);
+      readUploadEndpoint(urlEnv, env);
+      readUploadToken(tokenEnv, env);
     },
 
     // Runs before any command, so an unset or malformed token yields none: `assertReady` reports it.
     readSecrets: () => {
-      const token = env[options.tokenEnv]?.trim() ?? '';
+      const token = env[tokenEnv]?.trim() ?? '';
 
-      return token === '' ? [] : [{ name: options.tokenEnv, value: token, origin: 'collected' }];
+      return token === '' ? [] : [{ name: tokenEnv, value: token, origin: 'collected' }];
     },
     upload: (file, signal) =>
       sendUpload(
         {
-          endpoint: readUploadEndpoint(options.urlEnv, env),
-          token: readUploadToken(options.tokenEnv, env),
+          endpoint: readUploadEndpoint(urlEnv, env),
+          token: readUploadToken(tokenEnv, env),
           expires: options.expires ?? '30d',
         },
         file,

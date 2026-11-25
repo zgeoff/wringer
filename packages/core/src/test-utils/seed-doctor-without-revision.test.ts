@@ -1,19 +1,16 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createRepoState } from '../state/create-repo-state.ts';
-import { createTestFolder } from './create-test-folder.ts';
 import { seedDoctorWithoutRevision } from './seed-doctor-without-revision.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'seed-doctor-without-revision');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('seed-doctor-without-revision').path;
 
   return { state: createRepoState(root, '.wringer') };
 }
 
 test('it appends a passed doctor with no results to the run', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.state.appendEvent('pantry-run', {
     type: 'run-started',

@@ -1,13 +1,12 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
-import { readPIDNamespace } from '../../packages/core/src/host/read-pid-namespace.ts';
+import { createTempDir, readRunFolderPrefix } from '@zgeoff/testing/fs';
 import type { CommandResult } from '../ci/run-command.ts';
 import { runCommand } from '../ci/run-command.ts';
 import { createCommandStarter } from './create-command-starter.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'create-command-starter');
+function setupTest() {
+  const folder = createTempDir('create-command-starter', { cleanup: 'manual' });
+  const directory = folder.path;
 
   const starter = createCommandStarter(runCommand, {
     cwd: directory,
@@ -17,20 +16,18 @@ async function setupTest() {
   onTestFinished(async () => {
     await starter.stopCommands();
 
-    await rm(directory, { recursive: true, force: true });
+    folder.remove();
   });
 
   return { starter };
 }
 
 test('it runs a command in the given folder and returns its result', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const result = await ctx.starter.startCommand(['sh', '-c', 'basename "$PWD"; exit 3']);
 
-  const folderPattern = new RegExp(
-    `^\\.test-n${readPIDNamespace()}-p${process.pid}-create-command-starter-`,
-    'v',
-  );
+  const folderPattern = new RegExp(`^${readRunFolderPrefix('create-command-starter')}`, 'v');
 
   expect({ exitCode: result.exitCode, stdout: result.stdout }).toStrictEqual({
     exitCode: 3,
@@ -39,8 +36,7 @@ test('it runs a command in the given folder and returns its result', async () =>
 });
 
 test('it stops every started command and settles once each has exited', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const first = ctx.starter.startCommand(['sh', '-c', 'exec sleep 30']);
   const second = ctx.starter.startCommand(['sh', '-c', 'exec sleep 30']);
 
@@ -53,7 +49,7 @@ test('it stops every started command and settles once each has exited', async ()
 });
 
 test('it stops only the command whose own signal aborts', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const stopping = new AbortController();
 

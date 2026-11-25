@@ -1,15 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { readUploadCandidate } from './read-upload-candidate.ts';
 
 async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'upload-candidate');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
-
+  const root = createTempDir('upload-candidate').path;
   const features = join(root, '.wringer', 'runs', 'r-7c1', 'features', 'place-order');
 
   await mkdir(features, { recursive: true });

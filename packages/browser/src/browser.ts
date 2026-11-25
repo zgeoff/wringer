@@ -1,6 +1,6 @@
-import { setTimeout as sleep } from 'node:timers/promises';
 import { WringerError, defineDriver, evidenceSchema } from '@wringer/core';
 import type { DriverSession, Evidence, Fence } from '@wringer/core';
+import { systemClock } from '@zgeoff/std';
 import { chromium } from 'playwright-core';
 import { z } from 'zod';
 import { buildAppURL } from './build-app-url.ts';
@@ -204,7 +204,7 @@ export const browser = defineDriver({
       run: (request: SnapshotRequest) =>
         readSnapshot(request, {
           takeSnapshot: () => callPage(page, 'snapshot', null),
-          wait: (delayMs, signal) => sleep(delayMs, undefined, { signal }),
+          clock: systemClock,
           timeLeftMs: session.timeLeftMs,
           actionTimeoutMs: session.options.actionTimeoutMs,
           writeSnapshot: async (text) => {

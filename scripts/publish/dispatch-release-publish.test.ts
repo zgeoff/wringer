@@ -1,17 +1,14 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
-import { createTestFolder } from '@wringer/core/test-utils/create-test-folder.ts';
+import { expect, test } from 'bun:test';
+import { createStubBin } from '@zgeoff/testing/bin';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runCommand } from '../ci/run-command.ts';
-import { createStubGH } from '../test-utils/create-stub-gh.ts';
 import { dispatchReleasePublish } from './dispatch-release-publish.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'dispatch-release-publish');
+function setupTest() {
+  const directory = createTempDir('dispatch-release-publish').path;
 
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
-  const gh = await createStubGH(directory);
-
+  // A call to anything but a workflow dispatch fails, which names the call.
+  const gh = createStubBin(directory, 'gh', { answers: [{ args: ['workflow', 'run'] }] });
   const errors: string[] = [];
 
   const runDispatch = (
@@ -33,7 +30,7 @@ async function setupTest() {
 }
 
 test('it dispatches the publish at the first tag, with every released path', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   const exitCode = await ctx.runDispatch({
     releases_created: 'true',
@@ -44,17 +41,27 @@ test('it dispatches the publish at the first tag, with every released path', asy
     'packages/tsconfig--tag_name': '@zgeoff/tsconfig@1.2.0',
   });
 
-  const calls = await ctx.gh.readCalls();
+  const calls = ctx.gh.readCalls().map((call) => call.argv);
 
   expect(exitCode).toBe(0);
 
   expect(calls).toStrictEqual([
-    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std","packages/tsconfig"]',
+    [
+      'workflow',
+      'run',
+      'main.yml',
+      '--repo',
+      'zgeoff/tools',
+      '--ref',
+      '@zgeoff/std@0.4.0',
+      '-f',
+      'republish_paths=["packages/std","packages/tsconfig"]',
+    ],
   ]);
 });
 
 test('it dispatches a release that tagged the commit of the run itself, like any other', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   // The run's own commit is the one the release tagged.
   const exitCode = await ctx.runDispatch(
@@ -67,12 +74,22 @@ test('it dispatches a release that tagged the commit of the run itself, like any
     { GITHUB_SHA: 'old111' },
   );
 
-  const calls = await ctx.gh.readCalls();
+  const calls = ctx.gh.readCalls().map((call) => call.argv);
 
   expect(exitCode).toBe(0);
 
   expect(calls).toStrictEqual([
-    'workflow run main.yml --repo zgeoff/tools --ref @zgeoff/std@0.4.0 -f republish_paths=["packages/std"]',
+    [
+      'workflow',
+      'run',
+      'main.yml',
+      '--repo',
+      'zgeoff/tools',
+      '--ref',
+      '@zgeoff/std@0.4.0',
+      '-f',
+      'republish_paths=["packages/std"]',
+    ],
   ]);
 });
 
@@ -100,9 +117,11 @@ test.each([
     '::error::the release outputs hold no tag for packages/std\n',
   ],
 ])('it dispatches nothing and fails for a release with %s', async (_label, outputs, error) => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const exitCode = await ctx.runDispatch({ releases_created: 'true', ...outputs });
-  const calls = await ctx.gh.readCalls();
+
+  const calls = ctx.gh.readCalls().map((call) => call.argv);
 
   expect(exitCode).toBe(1);
   expect(ctx.errors).toStrictEqual([error]);

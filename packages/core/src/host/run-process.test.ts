@@ -1,7 +1,7 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { rm, writeFile } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { runProcess } from './run-process.ts';
 
 test('it returns the exit code and output of a command, with stdin passed in', async () => {
@@ -14,9 +14,7 @@ test('it returns the exit code and output of a command, with stdin passed in', a
 });
 
 test('it finds a relative command in the folder it runs in', async () => {
-  const folder = await createTestFolder(import.meta.dir, 'run-process');
-
-  onTestFinished(() => rm(folder, { recursive: true, force: true }));
+  const folder = createTempDir('run-process').path;
 
   await writeFile(join(folder, 'greet'), '#!/bin/sh\necho hello\n', { mode: 0o755 });
 

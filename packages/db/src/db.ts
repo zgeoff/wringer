@@ -88,7 +88,7 @@ async function runQuery(
   clients: SQLClients,
   query: ParsedQuery,
 ): Promise<DbResult> {
-  const plan = pickQueryPlan(session.config, query, clients.now() + session.timeLeftMs());
+  const plan = pickQueryPlan(session.config, query, clients.clock.now() + session.timeLeftMs());
 
   if (plan.kind === 'undeclared-write') {
     return rejectUndeclaredWrite(fence, query.sql);

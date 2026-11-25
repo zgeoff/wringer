@@ -1,14 +1,10 @@
-import { expect, mock, onTestFinished, test } from 'bun:test';
-import { rm } from 'node:fs/promises';
+import { expect, mock, test } from 'bun:test';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { buildRunHandle } from '../dispatch/build-run-handle.ts';
 import { buildStandInServices } from './build-stand-in-services.ts';
-import { createTestFolder } from './create-test-folder.ts';
 
-async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'stand-in-services');
-
-  onTestFinished(() => rm(directory, { recursive: true, force: true }));
-
+function setupTest() {
+  const directory = createTempDir('stand-in-services').path;
   const stop = Promise.withResolvers<undefined>();
   const start = Promise.withResolvers<undefined>();
   const hold = Promise.withResolvers<undefined>();
@@ -45,7 +41,8 @@ async function setupTest() {
 }
 
 test('it fails the store stop once the stop gate opens, and records the stop', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const store = await ctx.services.store.start(ctx.context);
 
   ctx.openStopGate();
@@ -59,8 +56,7 @@ test('it fails the store stop once the stop gate opens, and records the stop', a
 });
 
 test('it starts the queue only once the start gate opens, and records its stop', async () => {
-  const ctx = await setupTest();
-
+  const ctx = setupTest();
   const starting = ctx.services.queue.start(ctx.context);
 
   ctx.openStartGate();
@@ -73,7 +69,8 @@ test('it starts the queue only once the start gate opens, and records its stop',
 });
 
 test('it records the exit code of the command the shelf stop runs', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const shelf = await ctx.services.shelf.start(ctx.context);
 
   await shelf.stop();
@@ -82,14 +79,16 @@ test('it records the exit code of the command the shelf stop runs', async () => 
 });
 
 test('it throws from the till stop before it returns a promise', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const till = await ctx.services.till.start(ctx.context);
 
   expect(() => till.stop()).toThrow(expect.objectContaining({ code: 'environment' }));
 });
 
 test('it records each line of the app log, read through its log reader, when the ledger stops', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const ledger = await ctx.services.ledger.start(ctx.context);
 
   ctx.readLog.mockResolvedValue('started\nclosing\n');
@@ -103,7 +102,8 @@ test('it records each line of the app log, read through its log reader, when the
 });
 
 test('it settles the counter hold once the hold gate opens, and records the call', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const counter = await ctx.services.counter.start(ctx.context);
 
   const holding = counter.methods['hold']?.(null, new AbortController().signal);
@@ -116,7 +116,8 @@ test('it settles the counter hold once the hold gate opens, and records the call
 });
 
 test('it answers the counter watch with the time its signal aborted', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
+
   const counter = await ctx.services.counter.start(ctx.context);
 
   const cancel = new AbortController();
@@ -134,7 +135,7 @@ test('it answers the counter watch with the time its signal aborted', async () =
 });
 
 test('it starts the press once its command finishes, and records that it finished', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.services.press.start(ctx.context);
 
@@ -142,7 +143,7 @@ test('it starts the press once its command finishes, and records that it finishe
 });
 
 test('it starts the press after its command is stopped, and records the stop', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await ctx.services.press.start(ctx.stoppedContext);
 

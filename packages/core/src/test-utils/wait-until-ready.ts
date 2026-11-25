@@ -1,4 +1,4 @@
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 
 // The docker lane gives each test 15 s, setup included. A setup that starts a container keeps to

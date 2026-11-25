@@ -3,7 +3,7 @@ import { once } from 'node:events';
 import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { runGit } from '../change-facts/run-git.ts';
 import { local } from '../host/local.ts';
@@ -22,7 +22,7 @@ async function setupTest() {
     fingerprintGate.resolve(undefined);
   });
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   // It closes each connection once the request arrives, as a supervisor that dies mid-call does.
   const brokenSocket = join(shop.repo.root, 'broken.sock');

@@ -3,7 +3,8 @@ import { once } from 'node:events';
 import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import { dirname, join } from 'node:path';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
+import { createTempDir } from '@zgeoff/testing/fs';
 import invariant from 'tiny-invariant';
 import { z } from 'zod';
 import { local } from '../host/local.ts';
@@ -14,7 +15,6 @@ import { buildRunPaths } from '../state/build-state-paths.ts';
 import { createRepoState } from '../state/create-repo-state.ts';
 import { buildStandInServices } from '../test-utils/build-stand-in-services.ts';
 import { createSetsid } from '../test-utils/create-setsid.ts';
-import { createTestFolder } from '../test-utils/create-test-folder.ts';
 import { seedRun } from '../test-utils/seed-run.ts';
 import type { CollectedSecret } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
@@ -31,7 +31,8 @@ interface SupervisorStart {
 }
 
 async function setupTest() {
-  const directory = await createTestFolder(import.meta.dir, 'run-supervisor');
+  const directory = createTempDir('run-supervisor').path;
+
   const setsid = await createSetsid(directory);
 
   const stopGate = Promise.withResolvers<undefined>();

@@ -8,7 +8,7 @@ import { createTestSession } from '../test-utils/create-test-session.ts';
 async function setupTest() {
   const wringer = createShopWringer();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   return {
     readPointers: () => shop.state.readPointers(),

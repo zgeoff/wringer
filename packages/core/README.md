@@ -59,9 +59,9 @@ repo can define each one in its own file.
   [verdict](../../docs/reference/terms.md#verdict) at the feature's
   [fingerprint](../../docs/reference/terms.md#fingerprint), so an edit to another feature's files
   leaves the verdict standing. For the git version a fingerprint needs, and when it changes or
-  fails, see the [Verdict scope constraints](../../docs/design/verdict-scope.md#constraints).
-  `report` lists each path changed since the merge base with the base branch that no feature, shared
-  glob or ignore glob matches.
+  fails, see the [change facts](../../docs/architecture/verdicts.md#change-facts) in the verdicts
+  doc. `report` lists each path changed since the merge base with the base branch that no feature,
+  shared glob or ignore glob matches.
 - The [gate](../../docs/reference/terms.md#gate), and its policy:
   `.gate({ unpinned: 'allow' | 'refuse' })` sets whether `gate` accepts a verdict on an
   [attach target](../../docs/reference/terms.md#target) that reports no commit. The default is
@@ -73,9 +73,7 @@ repo can define each one in its own file.
   path one matches changes every feature's fingerprint.
 - Secret scrubbing: `.secret(...envNames)` names the environment variables that hold the repo's
   secrets. Core replaces every known secret with `[redacted:<name>]` in evidence, the envelope and
-  the run log, and checks each file again before `report` uploads it. The values come from the
-  process environment, or from the `env` source that `runVerify` takes, which `up` reads once into
-  the run's secrets file (see the [gunshi README](../gunshi/README.md)).
+  the run log, and checks each file again before `report` uploads it.
 - Run state on disk: `state.json` holds pointers, and each run's `log.ndjson` holds its events.
 - Two hosts for exec: `local()`, and `ssh()` with an argv prefix in layers, quoted once per shell
   layer. Each host also follows a long-running command, such as `tail -F`, line by line.

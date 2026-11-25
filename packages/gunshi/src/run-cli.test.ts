@@ -16,7 +16,7 @@ import { runCLI } from './run-cli.ts';
 import { createDemoWringer } from './test-utils/create-demo-wringer.ts';
 
 async function setupTest() {
-  const repo = await createTestRepo(import.meta.dir);
+  const repo = await createTestRepo();
 
   const wringer = createDemoWringer();
   const written: string[] = [];
@@ -58,7 +58,7 @@ async function setupTest() {
   onTestFinished(async () => {
     await run(['detach', '--target', 'prod']);
 
-    await repo.remove();
+    repo.remove();
   });
 
   return {

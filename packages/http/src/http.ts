@@ -324,9 +324,22 @@ function listEndpointNames(session: DriverSession<HttpOptions, HttpConfig>): str
     ...new Set([
       session.config.endpoint,
       ...Object.keys(session.config.endpoints),
-      ...Object.keys(session.endpoints),
+      ...Object.keys(session.endpoints).filter((name) =>
+        isHttpURL(findOwnValue(session.endpoints, name)),
+      ),
     ]),
   ];
+}
+
+// A target's endpoints can hold a file path or a database URL, which no http request can reach.
+function isHttpURL(value: unknown): boolean {
+  if (typeof value !== 'string' || !URL.canParse(value)) {
+    return false;
+  }
+
+  const url = new URL(value);
+
+  return url.protocol === 'http:' || url.protocol === 'https:';
 }
 
 // A transport that declares fewer than three parameters cannot receive the auth choice.

@@ -2,12 +2,11 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { createShopWringer } from './create-shop-wringer.ts';
 import { createTestSession } from './create-test-session.ts';
-import { removeTestFolder } from './remove-test-folder.ts';
 
 test('it starts a run whose supervisor runs in the test process', async () => {
   const wringer = createShopWringer();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
   const result = await shop.dispatch(wringer, ['up'], {}, { ...shop.session, target: 'local' });
 
   expect({ exitCode: result.exitCode, ok: result.envelope.ok }).toStrictEqual({
@@ -21,7 +20,7 @@ test('it starts a run whose supervisor runs in the test process', async () => {
 test('it removes the repo only after the late work of a command that timed out has ended', async () => {
   const wringer = createShopWringer();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
   const result = await shop.dispatch(wringer, ['echo-late'], { text: 'a receipt' }, shop.session);
 
   // Registered after the session's cleanup, so it runs once that cleanup has ended.
@@ -30,7 +29,7 @@ test('it removes the repo only after the late work of a command that timed out h
 
     const kept = existsSync(shop.repo.root);
 
-    await removeTestFolder(shop.repo.root);
+    shop.repo.remove();
 
     expect(kept).toBe(false);
   });

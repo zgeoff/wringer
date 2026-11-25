@@ -2,7 +2,7 @@ import { expect, onTestFinished, test } from 'bun:test';
 import { join } from 'node:path';
 import { readText } from '@wringer/core';
 import { createTestSession } from '@wringer/core/test-utils/create-test-session.ts';
-import { waitFor } from '@zgeoff/testing/helpers';
+import { waitFor } from '@zgeoff/testing';
 import invariant from 'tiny-invariant';
 import { snapshotSchema } from './page-service-contract.ts';
 import { createBrowserWringer } from './test-utils/create-browser-wringer.ts';
@@ -19,7 +19,6 @@ async function setupTest(shopURL?: string) {
   });
 
   const shop = await createTestSession({
-    parent: import.meta.dir,
     wringer,
     env: { SHOP_TOKEN: 'planted-shop-token' },
   });

@@ -61,7 +61,7 @@ async function setupTest() {
     )
     .build();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   return {
     run: (path: readonly string[], timeoutMs?: number) =>

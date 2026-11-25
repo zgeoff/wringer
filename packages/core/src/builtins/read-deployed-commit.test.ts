@@ -52,7 +52,7 @@ async function setupTest() {
     .ignore('**/*.md')
     .build();
 
-  const shop = await createTestSession({ parent: import.meta.dir, wringer });
+  const shop = await createTestSession({ wringer });
 
   const write = async (path: string, text: string) => {
     await mkdir(join(shop.repo.root, path, '..'), { recursive: true });

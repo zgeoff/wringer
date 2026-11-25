@@ -1,14 +1,12 @@
-import { expect, onTestFinished, test } from 'bun:test';
-import { readFile, rm } from 'node:fs/promises';
+import { expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { createTempDir } from '@zgeoff/testing/fs';
 import { createRepoState } from '../state/create-repo-state.ts';
-import { createTestFolder } from './create-test-folder.ts';
 import { seedOverCapDone } from './seed-over-cap-done.ts';
 
-async function setupTest() {
-  const root = await createTestFolder(import.meta.dir, 'seed-over-cap-done');
-
-  onTestFinished(() => rm(root, { recursive: true, force: true }));
+function setupTest() {
+  const root = createTempDir('seed-over-cap-done').path;
 
   return {
     root,
@@ -22,7 +20,7 @@ async function setupTest() {
 }
 
 test('it writes the verdict to the payload file', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await seedOverCapDone(ctx.root, ctx.state, { feature: 'pantry' });
 
@@ -32,7 +30,7 @@ test('it writes the verdict to the payload file', async () => {
 });
 
 test('it records a started run and a truncated done envelope that points at the payload', async () => {
-  const ctx = await setupTest();
+  const ctx = setupTest();
 
   await seedOverCapDone(ctx.root, ctx.state, { feature: 'pantry' });
 
