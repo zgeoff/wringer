@@ -33,6 +33,7 @@ test('it gives every command the global flags and a hidden home for extra words'
     'timeoutMs',
     'human',
     'json',
+    'brief',
     extraWordsArg,
   ]);
 });
@@ -51,6 +52,7 @@ test('it declares a command’s positionals to gunshi in order', () => {
     ['timeoutMs', 'number'],
     ['human', 'boolean'],
     ['json', 'boolean'],
+    ['brief', 'boolean'],
     ['label', 'string'],
     ['finish', 'enum'],
     ['shelf', 'positional'],

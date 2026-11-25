@@ -81,7 +81,7 @@ only code block lines that start with them, after an optional `$ ` prompt and as
 - Each command prints one JSON envelope. A streaming command, such as `doctor`, prints its NDJSON
   events first.
 - The CLI prints text in place of JSON when stdout is a terminal and no coding agent runs it.
-  `--human` and `--json` choose the format.
+  `--human`, `--json` and `--brief` choose the format. `--brief` prints one line and no events.
 - An unknown flag, a flag of the wrong type or arguments that fail the command's schema end in a
   `usage` envelope and exit code 2. So does a flag with no value after it; write `--label ''` to
   pass an empty one.

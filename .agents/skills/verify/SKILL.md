@@ -5,7 +5,7 @@ description:
   the shop example app with `bun verify`, and records the verdict. Load it before you check a change
   to a `@wringer/*` package, run a feature journey, or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:c276ebe8d896'
+  wringer-template: 'sha256:838bc1254bd2'
   wringer-command: bun verify
 ---
 
@@ -93,8 +93,10 @@ Read a feature's file before you run its journey.
 
 ## Read the envelope
 
-Each command prints one JSON envelope as its last line, or text with `--human`. Read `ok`, then
-`data` on success, or `error.code` and `error.hint` on failure.
+Each command prints one JSON envelope as its last line, or text with `--human`. Add `--brief` to
+print one short line instead: `ok`, `error.code` and `error.message` on failure or `data` cut to 200
+characters on success, `truncatedPath` when the data was too large, and the evidence count. Read
+`ok`, then `data` on success, or `error.code` and `error.hint` on failure.
 
 - `check-failed`: read the files the envelope lists in `evidence`. When `done` failed, run the
   journey again.
