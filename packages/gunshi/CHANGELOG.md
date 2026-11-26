@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.11](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.10...@wringer/gunshi@0.3.11) (2026-11-26)
+
+### Features
+
+- **gunshi:** add a --brief flag that prints one short line
+  ([#275](https://github.com/zgeoff/wringer/issues/275))
+  ([0912a86](https://github.com/zgeoff/wringer/commit/0912a86867f238e8c8806fa24e400ce45fae048a))
+
 ## [0.3.10](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.9...@wringer/gunshi@0.3.10) (2026-11-21)
 
 ### Dependencies
