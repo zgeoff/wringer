@@ -84,7 +84,7 @@
     },
     "packages/gunshi": {
       "name": "@wringer/gunshi",
-      "version": "0.3.10",
+      "version": "0.3.11",
       "bin": {
         "wringer-gunshi": "./src/wringer-gunshi.ts",
       },
