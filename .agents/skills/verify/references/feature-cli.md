@@ -1,7 +1,7 @@
 # cli
 
-The CLI parses the command line and prints each command's result: a JSON envelope, or text with
-`--human`.
+The CLI parses the command line and prints each command's result: a JSON envelope, text with
+`--human`, or one short line with `--brief`.
 
 ## Journey
 
@@ -10,6 +10,7 @@ bun verify use --feature cli
 bun verify features --markdown
 bun verify orders count --help
 bun verify orders count --human
+bun verify orders count --brief
 ```
 
 ## End state
@@ -18,3 +19,4 @@ bun verify orders count --human
   in the feature table of [SKILL.md](../SKILL.md).
 - `orders count --help` prints the command's flags and exits 0.
 - `orders count --human` prints text, not JSON.
+- `orders count --brief` prints one line that starts `orders.count ok=true`.

@@ -87,6 +87,7 @@ const globalArgs: GunshiArgs = {
   timeoutMs: { type: 'number', description: 'The deadline of the command, in milliseconds' },
   human: { type: 'boolean', description: 'Print text for a person' },
   json: { type: 'boolean', description: 'Print the JSON envelope' },
+  brief: { type: 'boolean', description: 'Print one short line for an agent' },
 };
 
 function toGunshiCommand(

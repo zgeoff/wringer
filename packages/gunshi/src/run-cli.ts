@@ -9,6 +9,7 @@ import type {
   WringerError,
 } from '@wringer/core';
 import { parseArgs } from 'gunshi';
+import { match } from 'ts-pattern';
 import type { Invocation } from './gunshi-commands/build-gunshi-commands.ts';
 import { pickCLIOutcome } from './invocation/pick-cli-outcome.ts';
 import { pickDispatchPlan } from './invocation/pick-dispatch-plan.ts';
@@ -113,9 +114,7 @@ async function dispatchInvocation(
     timeoutMs: invocation.globals.timeoutMs,
     output: {
       writeLine: (line) => {
-        const text = mode === 'json' ? `${line}\n` : renderHumanEvent(line);
-
-        ports.writeStdout(text);
+        ports.writeStdout(renderEvent(line, mode));
       },
     },
   });
@@ -123,4 +122,13 @@ async function dispatchInvocation(
   ports.writeStdout(renderEnvelope(result.envelope, mode));
 
   return result.exitCode;
+}
+
+// `--brief` prints one line, so the progress events before the envelope are left out.
+function renderEvent(line: string, mode: OutputMode): string {
+  return match(mode)
+    .with('json', () => `${line}\n`)
+    .with('human', () => renderHumanEvent(line))
+    .with('brief', () => '')
+    .exhaustive();
 }

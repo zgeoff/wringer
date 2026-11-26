@@ -5,6 +5,7 @@ import {
   createNodeRepoHost,
   createRepoState,
   envelopeSchema,
+  exitCodeFor,
   makeProcessSupervisorPort,
   supervisorCommandName,
 } from '@wringer/core';
@@ -317,6 +318,40 @@ test('it prints text for a person with --human', async () => {
   const result = await ctx.run(['use', '--feature', 'greeting', '--human']);
 
   expect(result.stdout).toStartWith('use passed\n{\n  "target": null,\n  "feature": "greeting",');
+});
+
+test('it prints one short line with --brief', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['use', '--feature', 'greeting', '--brief']);
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: expect.stringMatching(/^use ok=true data=\{.*"feature":"greeting".*\} evidence=0\n$/u),
+  });
+});
+
+test('it prints the error code and message with --brief, and keeps the exit code', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.run(['action', 'greet', '--name', 'Ines', '--brief']);
+
+  expect(result).toStrictEqual({
+    exitCode: exitCodeFor['not-running'],
+    stdout:
+      'action.greet ok=false error.code=not-running error.message=Target local has no running run. evidence=0\n',
+  });
+});
+
+test('it leaves the doctor events out with --brief', async () => {
+  const ctx = await setupTest();
+
+  await ctx.run(['attach', '--target', 'prod']);
+
+  const result = await ctx.run(['doctor', '--target', 'prod', '--brief']);
+
+  expect(result).toStrictEqual({
+    exitCode: 0,
+    stdout: expect.stringMatching(/^doctor ok=true data=[^\n]* evidence=\d+\n$/u),
+  });
 });
 
 test('it prints a doctor check outside its targets as skipped for a person with --human', async () => {
