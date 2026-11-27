@@ -76,10 +76,10 @@
     "@zgeoff/format-codemod": "0.3.6",
     "@zgeoff/oxlint-config": "catalog:",
     "@zgeoff/testing": "catalog:",
-    "knip": "6.44.1",
+    "knip": "6.47.0",
     "lefthook": "2.2.2",
-    "oxfmt": "0.77.0",
-    "oxlint": "1.92.0",
+    "oxfmt": "0.79.0",
+    "oxlint": "1.94.0",
     "tsrs": "0.25.0-ts7.1.0-beta",
     "typescript": "7.0.2"
   },
