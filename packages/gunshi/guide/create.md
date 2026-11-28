@@ -69,7 +69,8 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
       glob matches. Put a file that every feature depends on in `.shared`, and never repeat one path
       list across features: a copied list makes every change flag every journey.
 
-    Expect: each file that `git ls-files` prints matches a feature's `paths` or an ignore glob.
+    Expect: each file that `git ls-files` prints matches a feature's `paths`, a shared glob or an
+    ignore glob.
 
 12. Copy `verify/` from the template to `.claude/skills/verify/`. Rewrite the frontmatter's `name`
     and `description` and the `#` title for the app. Set `metadata.wringer-command` to the command
