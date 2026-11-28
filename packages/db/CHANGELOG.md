@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.9](https://github.com/zgeoff/wringer/compare/@wringer/db@0.1.8...@wringer/db@0.1.9) (2026-11-28)
+
+
+### Dependencies
+
+* The following workspace dependencies were updated
+  * devDependencies
+    * @wringer/core bumped to 0.4.2
+  * peerDependencies
+    * @wringer/core bumped to 0.4.2
+
 ## [0.1.8](https://github.com/zgeoff/wringer/compare/@wringer/db@0.1.7...@wringer/db@0.1.8) (2026-11-21)
 
 ### Dependencies
