@@ -291,6 +291,24 @@ test.each([
         .feature({ name: 'pay', summary: 'Pay', paths: ['!src/legacy/**'] })
         .build(),
   },
+  {
+    place: 'feature `pay` entries',
+    glob: '!src/legacy/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .feature({ name: 'pay', summary: 'Pay', entries: ['!src/legacy/**'] })
+        .build(),
+  },
+  {
+    place: 'feature `pay` extra',
+    glob: '!journeys/**',
+    createRegistry: () =>
+      createWringer({ name: 'shop' })
+        .target('local', { mode: 'attach', access: 'read-write', host: local() })
+        .feature({ name: 'pay', summary: 'Pay', entries: ['src/pay.ts'], extra: ['!journeys/**'] })
+        .build(),
+  },
 ])('it refuses a negated glob in $place', (row) => {
   expect(row.createRegistry).toThrowWithMessage(
     WringerError,
@@ -307,4 +325,26 @@ test('it accepts a glob with a `!` that is not its first character', () => {
     .build();
 
   expect(wringer.ignore).toStrictEqual(['docs/a!b/**']);
+});
+
+test('it refuses a feature with no entries and no paths', () => {
+  const builder = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .feature({ name: 'pay', summary: 'Pay', extra: ['journeys/**'] });
+
+  expect(() => builder.build()).toThrowWithMessage(
+    WringerError,
+    'The feature `pay` has no `entries` and no `paths`, so it owns no file.',
+  );
+});
+
+test('it registers a feature with entries and extra, and empty lists for what it leaves out', () => {
+  const wringer = createWringer({ name: 'shop' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .feature({ name: 'pay', summary: 'Pay', entries: ['src/pay.ts'], extra: ['journeys/**'] })
+    .build();
+
+  expect(wringer.features).toStrictEqual([
+    { name: 'pay', summary: 'Pay', entries: ['src/pay.ts'], extra: ['journeys/**'], paths: [] },
+  ]);
 });

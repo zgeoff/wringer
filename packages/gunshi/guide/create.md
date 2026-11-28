@@ -54,23 +54,29 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
    such as an API that answers. When a check holds only on some targets, list them in its `targets`;
    the doctor reports it as `skipped` on the rest. Then run `bun verify up`, then
    `bun verify doctor`. Expect: `data.passed: true`. Run `bun verify down`.
-10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `paths`. Pick the
-    journeys users take most, from the app's routes and its README, and give each feature the globs
-    of the files that change its behaviour. Write each glob relative to the repo root, as
-    `git ls-files` prints paths. In a monorepo, do the same for a package's files.
-11. Map every file the repo tracks. In CI, `bun verify gate` fails a PR that changes a file matched
-    by none of a feature's `paths`, the shared globs and the ignore globs.
+10. Write 3 to 5 features with `.feature`, each with `name`, `summary` and `entries`. Pick the
+    journeys users take most, from the app's routes and its README, and give each feature the files
+    or folders where its code starts, such as a route's page. wringer follows the imports from each
+    entry, so the feature owns every file the entry reaches, through workspace packages too. Write
+    each glob relative to the repo root, as `git ls-files` prints paths. Add `extra` globs for the
+    files no import reaches, such as a journey file or an asset that code loads by name. Then run
+    `bun verify features`, and read how many files each feature reaches.
+11. Map every file the repo tracks. In CI, `bun verify gate` fails a PR that changes a file that no
+    feature reaches or lists in `extra`, and that no shared glob or ignore glob matches.
     - Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
       `**/*.md`, `**/*.test.ts`, `.github/**` and `.claude/**`. Never ignore a file that changes
-      behaviour: the gate skips an ignored file even when a feature's `paths` match it.
-    - Add each other file to the `paths` of each feature whose behaviour it changes.
+      behaviour: the gate skips an ignored file even when a feature owns it.
+    - Add each other file to the `extra` of each feature whose behaviour it changes.
     - Call `.shared` with the globs of the files that change every feature, such as `package.json`
-      and the registry's own folder. Never copy one such list into each feature's `paths`: a change
+      and the registry's own folder. Never copy one such list into each feature's `extra`: a change
       to a copied file flags every feature that holds the copy. `lint` fails a registry file that no
-      shared glob or `paths` glob matches.
+      shared glob and no feature's files cover.
+    - Read each warning that `bun verify features` prints. It names a file and line with an
+      `import()` whose path is not a literal, which wringer cannot follow. Add the files that import
+      loads to `extra`.
 
-    Expect: each file that `git ls-files` prints matches a feature's `paths`, a shared glob or an
-    ignore glob.
+    Expect: each file that `git ls-files` prints is in a feature's files, or matches a shared glob
+    or an ignore glob.
 
 12. Copy `verify/` from the template to `.claude/skills/verify/`. Rewrite the frontmatter's `name`
     and `description` and the `#` title for the app. Set `metadata.wringer-command` to the command

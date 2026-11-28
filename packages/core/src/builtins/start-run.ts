@@ -4,6 +4,7 @@ import { readChangeFacts } from '../change-facts/read-change-facts.ts';
 import { readDefaultBase } from '../change-facts/read-default-base.ts';
 import { writeLateFailure } from '../dispatch/write-late-failure.ts';
 import { findOwnValue } from '../find-own-value.ts';
+import { resolveFeatures } from '../import-walk/resolve-features.ts';
 import { collectEnvSecrets } from '../secrets/collect-env-secrets.ts';
 import type { Secret } from '../secrets/create-secret-set.ts';
 import { pickScopeRefusal } from '../secrets/pick-scope-refusal.ts';
@@ -74,10 +75,11 @@ export function startRun(ctx: BuiltinContext, request: StartRunRequest): Promise
     }
 
     const base = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
+    const resolved = await resolveFeatures(ctx.session.repoHost, ctx.wringer, ctx.session.root);
 
     const facts = await readChangeFacts(
       ctx.session.repoHost,
-      buildChangeFactsRequest(ctx.wringer, ctx.session.root, base),
+      buildChangeFactsRequest(resolved.wringer, ctx.session.root, base),
     );
 
     // The caller has its timeout already once the deadline passes, so no run starts after it.

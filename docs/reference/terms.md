@@ -38,8 +38,10 @@ or the repo adds declares its effect, `read` or `write`. A command that declares
 
 ## Feature
 
-A named part of the repo that has its own verdict. It has a summary and `paths`, the globs of the
-files whose change can alter its behaviour.
+A named part of the repo that has its own verdict. It has a summary and the files whose change can
+alter its behaviour. Name them with `entries`, the files or folders whose imports wringer follows,
+and `extra`, the globs of files no import reaches. A feature that has not moved to `entries` still
+lists `paths`, the globs of its files.
 
 ## Journey
 
@@ -70,9 +72,9 @@ code as the worktree in the feature's files. A verdict on any other target is un
 
 ## Fingerprint
 
-A hash of the diff against the merge base with the PR's base branch, limited to one feature's
-`paths` and the shared globs, with the ignore list left out. The same change gives the same
-fingerprint in any clone, and an edit to another feature's files leaves it as it was.
+A hash of the diff against the merge base with the PR's base branch, limited to one feature's files
+and the shared globs, with the ignore list left out. The same change gives the same fingerprint in
+any clone, and an edit to another feature's files leaves it as it was.
 
 ## Evidence
 
@@ -95,7 +97,7 @@ that comment.
 The check that CI runs on each PR. `bun verify gate` fails a PR in each of these cases:
 
 - A changed feature has no verdict in the report at its current fingerprint.
-- A changed path matches no feature's `paths`, no shared glob and nothing in the ignore list.
+- A changed path is in no feature's files, matches no shared glob and nothing in the ignore list.
 - The registry's gate policy, `.gate({ unpinned: 'refuse' })`, refuses unpinned verdicts, and a
   changed feature has only an unpinned verdict.
 

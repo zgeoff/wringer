@@ -2,6 +2,7 @@ import { join, relative } from 'node:path';
 import { z } from 'zod';
 import { unassignedFeature } from '../dispatch/open-drive.ts';
 import { findOwnValue } from '../find-own-value.ts';
+import { resolveFeatures } from '../import-walk/resolve-features.ts';
 import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
 import { buildFeatureFile, renderFeatureTable } from '../report/render-feature-table.ts';
 import { buildRunPaths } from '../state/build-state-paths.ts';
@@ -43,7 +44,15 @@ type UseData = z.infer<typeof useDataSchema>;
 const featureEntrySchema = z.strictObject({
   name: z.string(),
   summary: z.string(),
+  entries: z.array(z.string()),
+  extra: z.array(z.string()),
   paths: z.array(z.string()),
+
+  // How many files the feature's entries reach.
+  reached: z.number().int().nonnegative(),
+
+  // The reached files, only for the feature that `--feature` names.
+  files: z.array(z.string()).optional(),
   file: z.string(),
 });
 
@@ -140,29 +149,43 @@ export function buildStateCommands(): readonly RegisteredCommand[] {
   const features: BuiltinCommandSpec<z.infer<typeof featuresArgsSchema>, FeaturesData> = {
     path: ['features'],
     summary:
-      "List the repo's feature map, with each feature's paths, and the paths that map to none",
+      "List the repo's feature map, with each feature's entries, paths and reached file count; --feature <name> lists the files",
     args: featuresArgsSchema,
     data: featuresDataSchema,
     effect: 'read',
     needsRun: false,
     needsDoctor: false,
-    run: (args, ctx) => {
+    run: async (args, ctx) => {
       const registered = ctx.wringer.features;
 
+      const resolved = await resolveFeatures(ctx.session.repoHost, ctx.wringer, ctx.session.root);
+
+      const reach = resolved.reach;
+
+      for (const warning of reach.values().flatMap((each) => each.warnings)) {
+        ctx.emit('warning', { message: warning });
+      }
+
       const data = {
-        features: registered.map((feature) => ({
-          name: feature.name,
-          summary: feature.summary,
-          paths: [...feature.paths],
-          file: buildFeatureFile(feature.name),
-        })),
+        features: registered.map((feature) => {
+          const reached = reach.get(feature.name)?.reached ?? [];
+
+          return {
+            name: feature.name,
+            summary: feature.summary,
+            entries: [...feature.entries],
+            extra: [...feature.extra],
+            paths: [...feature.paths],
+            reached: reached.length,
+            ...(ctx.session.feature === feature.name ? { files: [...reached] } : {}),
+            file: buildFeatureFile(feature.name),
+          };
+        }),
         shared: [...ctx.wringer.shared],
         ignore: [...ctx.wringer.ignore],
       };
 
-      const result = args.markdown ? { ...data, markdown: renderFeatureTable(registered) } : data;
-
-      return Promise.resolve(result);
+      return args.markdown ? { ...data, markdown: renderFeatureTable(registered) } : data;
     },
   };
 

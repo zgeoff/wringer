@@ -67,7 +67,7 @@ on a fresh checkout. It exits with code 1 and `check-failed` on any of these:
   `## End state` or whose first `bash` line is not `<cli> use --feature <name>`;
 - a `SKILL.md` feature table, between the `wringer:features` markers, that differs from
   `features --markdown`;
-- a registry file that no `.shared()` or feature `paths` glob matches;
+- a registry file that no `.shared()` glob and no feature's files cover;
 - a line in a fenced code block of the skill's Markdown files that calls the CLI and fails to parse,
   fails the command's schema, or names a feature or target the registry lacks;
 - a missing `SKILL.md`, a frontmatter without `metadata.wringer-template` or

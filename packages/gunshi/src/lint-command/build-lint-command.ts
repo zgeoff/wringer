@@ -1,6 +1,6 @@
 import { realpath } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
-import { WringerError, buildBuiltinCommand } from '@wringer/core';
+import { WringerError, buildBuiltinCommand, resolveFeatures } from '@wringer/core';
 import type { BuiltinContext, RegisteredCommand } from '@wringer/core';
 import { z } from 'zod';
 import { lintFailureSchema, resolveLintFailures } from '../resolve-lint-failures.ts';
@@ -66,8 +66,11 @@ async function runLint(
 
   const skillPath = `${lintFiles.skillFolder}/SKILL.md`;
 
+  const resolved = await resolveFeatures(ctx.session.repoHost, ctx.wringer, root);
+
   const result = await resolveLintFailures({
-    wringer: ctx.wringer,
+    wringer: resolved.wringer,
+    declared: ctx.wringer,
     files: lintFiles.files,
     skillPath,
     registryFile: await resolveRegistryFile(root, registryFile),

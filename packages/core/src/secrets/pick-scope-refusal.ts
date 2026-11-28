@@ -1,4 +1,4 @@
-import type { FeatureDefinition } from '../types.ts';
+import type { FeatureDefinition } from '../feature-definition.ts';
 import { WringerError } from '../wringer-error.ts';
 import type { SecretSet } from './create-secret-set.ts';
 

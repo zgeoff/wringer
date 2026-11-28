@@ -36,6 +36,8 @@
   },
   "dependencies": {
     "@zgeoff/std": "catalog:",
+    "oxc-parser": "catalog:",
+    "oxc-resolver": "catalog:",
     "ts-pattern": "catalog:",
     "xstate": "catalog:"
   },

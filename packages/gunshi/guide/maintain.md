@@ -12,10 +12,10 @@ run in any job that has the repo's dependencies. The gate reads the last report 
 and works out the code's fingerprint itself. It fails with exit code 1 in two cases:
 
 - A changed feature has no verdict, or a verdict for other code in its own files or a shared path.
-- A changed file matches neither a feature's `paths` nor a glob in the ignore list, which the
-  registry sets with `.ignore`. `bun verify gate` lists each such file in `data.unmapped`. When the
-  running app never reads the file, add it to the ignore list. Otherwise add it to a feature's
-  `paths`.
+- A changed file is in no feature's files and matches no glob in the ignore list, which the registry
+  sets with `.ignore`. `bun verify gate` lists each such file in `data.unmapped`. When the running
+  app never reads the file, add it to the ignore list. Otherwise add it to a feature's `extra`, or
+  import it from a file the feature's `entries` reach.
 
 Add a workflow like this one. When the repo's other workflows pin each action to a commit SHA, pin
 these the same way.

@@ -1,12 +1,13 @@
 import { isGlobMatch } from '../change-facts/is-glob-match.ts';
-import type { FeatureDefinition, GatePolicy } from '../types.ts';
+import type { ScopedFeature } from '../feature-definition.ts';
+import type { GatePolicy } from '../types.ts';
 import { WringerError } from '../wringer-error.ts';
 import type { FeatureStatus, Report, Verdict } from './report-schema.ts';
 
 export interface ReportInput {
   readonly base: string;
   readonly fingerprint: string;
-  readonly features: readonly FeatureDefinition[];
+  readonly features: readonly ScopedFeature[];
   readonly featureFingerprints: ReadonlyMap<string, string>;
   readonly changedPaths: readonly string[];
   readonly renamedFrom: readonly string[];
