@@ -65,10 +65,9 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
       behaviour: the gate skips an ignored file even when a feature's `paths` match it.
     - Add each other file to the `paths` of each feature whose behaviour it changes.
     - Call `.shared` with the globs of the files that change every feature, such as `package.json`
-      and the registry's own folder. `lint` fails a registry file that no shared glob or `paths`
-      glob matches. List a file that every feature depends on once, in `.shared`, and never copy one
-      path list into several features' `paths`: each change to a copied file flags every feature
-      that holds the copy.
+      and the registry's own folder. Never copy one such list into each feature's `paths`: a change
+      to a copied file flags every feature that holds the copy. `lint` fails a registry file that no
+      shared glob or `paths` glob matches.
 
     Expect: each file that `git ls-files` prints matches a feature's `paths`, a shared glob or an
     ignore glob.
