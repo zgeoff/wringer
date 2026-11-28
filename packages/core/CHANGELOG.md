@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/zgeoff/wringer/compare/@wringer/core@0.4.1...@wringer/core@0.4.2) (2026-11-28)
+
+### Features
+
+- **core:** flag a feature from the files its entries import
+  ([#283](https://github.com/zgeoff/wringer/issues/283))
+  ([7483c54](https://github.com/zgeoff/wringer/commit/7483c541b2b71904894d17721c5ad34a1cb3d292))
+
 ## [0.4.1](https://github.com/zgeoff/wringer/compare/@wringer/core@0.4.0...@wringer/core@0.4.1) (2026-11-21)
 
 ### Features

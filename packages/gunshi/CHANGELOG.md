@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.3.12](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.11...@wringer/gunshi@0.3.12) (2026-11-28)
+
+### Features
+
+- **core:** flag a feature from the files its entries import
+  ([#283](https://github.com/zgeoff/wringer/issues/283))
+  ([7483c54](https://github.com/zgeoff/wringer/commit/7483c541b2b71904894d17721c5ad34a1cb3d292))
+
+### Dependencies
+
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.2
+    - @wringer/http bumped to 0.1.10
+  - peerDependencies
+    - @wringer/core bumped to 0.4.2
+
 ## [0.3.11](https://github.com/zgeoff/wringer/compare/@wringer/gunshi@0.3.10...@wringer/gunshi@0.3.11) (2026-11-26)
 
 ### Features
