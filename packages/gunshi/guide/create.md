@@ -66,7 +66,8 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
     - Add each other file to the `paths` of each feature whose behaviour it changes.
     - Call `.shared` with the globs of the files that change every feature, such as `package.json`
       and the registry's own folder. `lint` fails a registry file that no shared glob or `paths`
-      glob matches.
+      glob matches. Put a file that every feature depends on in `.shared`, and never repeat one path
+      list across features: a copied list makes every change flag every journey.
 
     Expect: each file that `git ls-files` prints matches a feature's `paths` or an ignore glob.
 
