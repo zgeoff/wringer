@@ -59,16 +59,18 @@ repo command, doctor check and feature, on the builder that `createWringer` retu
     of the files that change its behaviour. Write each glob relative to the repo root, as
     `git ls-files` prints paths. In a monorepo, do the same for a package's files.
 11. Map every file the repo tracks. In CI, `bun verify gate` fails a PR that changes a file matched
-    by neither a feature's `paths` nor an ignore glob.
+    by none of a feature's `paths`, the shared globs and the ignore globs.
     - Call `.ignore` with the globs of the files the running app never reads, such as `docs/**`,
       `**/*.md`, `**/*.test.ts`, `.github/**` and `.claude/**`. Never ignore a file that changes
       behaviour: the gate skips an ignored file even when a feature's `paths` match it.
     - Add each other file to the `paths` of each feature whose behaviour it changes.
     - Call `.shared` with the globs of the files that change every feature, such as `package.json`
-      and the registry's own folder. `lint` fails a registry file that no shared glob or `paths`
-      glob matches.
+      and the registry's own folder. Never copy one such list into each feature's `paths`: a change
+      to a copied file flags every feature that holds the copy. `lint` fails a registry file that no
+      shared glob or `paths` glob matches.
 
-    Expect: each file that `git ls-files` prints matches a feature's `paths` or an ignore glob.
+    Expect: each file that `git ls-files` prints matches a feature's `paths`, a shared glob or an
+    ignore glob.
 
 12. Copy `verify/` from the template to `.claude/skills/verify/`. Rewrite the frontmatter's `name`
     and `description` and the `#` title for the app. Set `metadata.wringer-command` to the command
