@@ -2,6 +2,9 @@ import { createHash } from 'node:crypto';
 
 export interface WalkKeyInput {
   readonly head: string;
+
+  // The sha-256 of `git status`, so staging a deletion changes the key as the deletion itself does.
+  readonly status: string;
   readonly entries: readonly (readonly [string, readonly string[]])[];
 
   // The sha-256 of each file that differs from HEAD, or null for one that is gone, by path.
@@ -15,7 +18,7 @@ const walkVersion = 1;
 // not committed yet changes the key.
 export function buildWalkKey(input: WalkKeyInput): string {
   return createHash('sha256')
-    .update(JSON.stringify([walkVersion, input.head, input.entries, input.changed]))
+    .update(JSON.stringify([walkVersion, input.head, input.status, input.entries, input.changed]))
     .digest('hex')
     .slice(0, 32);
 }

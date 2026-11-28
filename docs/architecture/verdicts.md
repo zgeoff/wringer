@@ -62,8 +62,10 @@ A feature owns the files that its `paths` and `extra` globs match, and the files
 reach. wringer reaches a file by following imports from each entry file: static imports,
 `export ... from`, `import()` with a literal path, and `require`. It resolves each specifier with
 Bun's conditions, so a workspace package's `exports` map and a tsconfig `paths` alias both work. The
-walk stops at a `node_modules` folder and at a path outside the repo. A specifier that no file
-answers, such as a built-in module, ends there too.
+walk resolves a workspace package through its link in `node_modules`, so a checkout needs its
+dependencies installed, as CI's `bun install` does before `lint` and `gate`. The walk stops at a
+`node_modules` folder and at a path outside the repo. A specifier that no file answers, such as a
+built-in module, ends there too.
 
 Every path an `entries` glob matches starts the walk, and a glob that names a folder starts it from
 each file under the folder. A file that no import reaches belongs to no feature, so `gate` lists it
@@ -73,8 +75,8 @@ An `import()` with a computed path cannot be followed. `features` prints a `warn
 file and line of each one. A file that only such an import loads belongs in `extra`.
 
 A deleted file is never reached, so `gate` skips it in the unmapped list. A change to the file that
-imported it flags the feature. A registry with no `entries` keeps listing a deleted file as
-unmapped.
+imported it flags the feature, and an importer that still names the deleted file fails the type
+check. A registry with no `entries` keeps listing a deleted file as unmapped.
 
 wringer saves each walk in `import-walk/` of the state folder, under a key of the commit and of the
 content of each file that differs from it, so `report` and `gate` parse each file once per state of

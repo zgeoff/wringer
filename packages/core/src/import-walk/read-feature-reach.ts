@@ -5,6 +5,7 @@ import { isErrorCode } from '../is-error-code.ts';
 import type { RepoHost } from '../types.ts';
 import { buildWalkKey } from './build-walk-key.ts';
 import { collectEntryFiles } from './collect-entry-files.ts';
+import { isMissingFile } from './is-missing-file.ts';
 import { parseStatusPaths } from './parse-status-paths.ts';
 import { parseWalkCache } from './parse-walk-cache.ts';
 import type { FeatureReach, WalkCache } from './parse-walk-cache.ts';
@@ -40,27 +41,26 @@ export async function readFeatureReach(
 
   const cached = await readCache(host, cachePath);
 
-  if (cached !== null && walked.every((feature) => cached[feature.name] !== undefined)) {
-    return new Map(walked.map((feature) => [feature.name, cached[feature.name] ?? emptyReach]));
+  if (cached !== null && walked.every((feature) => cached.has(feature.name))) {
+    return new Map(walked.map((feature) => [feature.name, cached.get(feature.name) ?? emptyReach]));
   }
 
   const files = await readTrackedFiles(host, request.root);
 
-  const reach: Record<string, FeatureReach> = {};
+  const reach = new Map<string, FeatureReach>();
 
   for (const feature of walked) {
-    reach[feature.name] = await readReachedFiles(host, {
+    const reached = await readReachedFiles(host, {
       root: request.root,
       entryFiles: collectEntryFiles(files, feature.entries),
     });
+
+    reach.set(feature.name, reached);
   }
 
-  // Only the newest walk stays, so the folder never grows past one file.
-  await host.removeDirectory(folder);
-  await host.createDirectory(folder);
-  await host.writeNewFile(cachePath, Buffer.from(JSON.stringify(reach), 'utf8'));
+  await writeCache(host, { folder, cachePath, reach });
 
-  return new Map(Object.entries(reach));
+  return reach;
 }
 
 async function readKey(
@@ -83,6 +83,7 @@ async function readKey(
 
   return buildWalkKey({
     head: head.stdout.trim(),
+    status: createHash('sha256').update(status).digest('hex'),
     entries: walked.map((feature) => [feature.name, feature.entries] as const),
     changed,
   });
@@ -94,7 +95,7 @@ async function readDigest(host: RepoHost, path: string): Promise<string | null> 
 
     return createHash('sha256').update(bytes).digest('hex');
   } catch (error) {
-    if (isErrorCode(error, 'ENOENT') || isErrorCode(error, 'EISDIR')) {
+    if (isMissingFile(error)) {
       return null;
     }
 
@@ -129,4 +130,24 @@ async function readTrackedFiles(host: RepoHost, root: string): Promise<readonly 
     .split('\0')
     .filter((path) => path.length > 0)
     .toSorted();
+}
+
+interface CacheWrite {
+  readonly folder: string;
+  readonly cachePath: string;
+  readonly reach: ReadonlyMap<string, FeatureReach>;
+}
+
+// Only the newest walk stays. Two commands that walk at once can remove each other's folder, and a
+// walk that loses the race goes without its cache file, with the right result.
+async function writeCache(host: RepoHost, request: CacheWrite): Promise<void> {
+  try {
+    await host.removeDirectory(request.folder);
+    await host.createDirectory(request.folder);
+    await host.writeNewFile(request.cachePath, Buffer.from(JSON.stringify([...request.reach])));
+  } catch (error) {
+    if (!isErrorCode(error, 'ENOENT')) {
+      throw error;
+    }
+  }
 }

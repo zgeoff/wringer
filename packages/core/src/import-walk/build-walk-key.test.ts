@@ -5,6 +5,7 @@ import type { WalkKeyInput } from './build-walk-key.ts';
 function setupTest() {
   const same: WalkKeyInput = {
     head: 'abc',
+    status: 's1',
     entries: [['core', ['a.ts']]],
     changed: [['a.ts', 'h1']],
   };
@@ -20,6 +21,7 @@ test('it gives one key to the same commit, entries and changed files', () => {
 
 test.each([
   { name: 'commit', other: { head: 'def' } },
+  { name: 'status', other: { status: 's2' } },
   { name: 'entries', other: { entries: [['core', ['b.ts']]] } },
   { name: 'changed file content', other: { changed: [['a.ts', 'h2']] } },
   { name: 'changed file removed', other: { changed: [['a.ts', null]] } },

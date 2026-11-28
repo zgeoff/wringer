@@ -70,6 +70,7 @@ async function runLint(
 
   const result = await resolveLintFailures({
     wringer: resolved.wringer,
+    declared: ctx.wringer,
     files: lintFiles.files,
     skillPath,
     registryFile: await resolveRegistryFile(root, registryFile),

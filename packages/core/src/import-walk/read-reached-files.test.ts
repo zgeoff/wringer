@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createTestRepo } from '../test-utils/create-test-repo.ts';
@@ -20,6 +20,10 @@ async function setupTest() {
     write: async (path: string, text: string) => {
       await mkdir(dirname(join(repo.root, path)), { recursive: true });
       await writeFile(join(repo.root, path), text);
+    },
+    link: async (name: string, target: string) => {
+      await mkdir(join(repo.root, 'node_modules', '@fx'), { recursive: true });
+      await symlink(join('..', '..', target), join(repo.root, 'node_modules', '@fx', name));
     },
     read: (entryFiles: readonly string[]) =>
       readReachedFiles(createNodeRepoHost(), { root: repo.root, entryFiles }),
@@ -111,4 +115,69 @@ test('it keeps an entry that is gone, and reaches nothing from it', async () => 
   const result = await ctx.read(['packages/app/src/gone.ts']);
 
   expect(result).toStrictEqual({ reached: ['packages/app/src/gone.ts'], warnings: [] });
+});
+
+test('it follows the require condition of a package for require() and the import condition for import', async () => {
+  const ctx = await setupTest();
+
+  await ctx.write(
+    'packages/dual/package.json',
+    JSON.stringify({
+      name: '@fx/dual',
+      exports: { '.': { require: './src/common.cjs', import: './src/module.ts' } },
+    }),
+  );
+
+  await ctx.write('packages/dual/src/common.cjs', 'module.exports = 1;\n');
+  await ctx.write('packages/dual/src/module.ts', 'export const dual = 1;\n');
+  await ctx.write('packages/app/src/only-import.ts', "import '@fx/dual';\n");
+  await ctx.write('packages/app/src/only-require.ts', "require('@fx/dual');\n");
+  await ctx.link('dual', 'packages/dual');
+
+  const imported = await ctx.read(['packages/app/src/only-import.ts']);
+  const required = await ctx.read(['packages/app/src/only-require.ts']);
+
+  expect({ imported: imported.reached, required: required.reached }).toStrictEqual({
+    imported: ['packages/app/src/only-import.ts', 'packages/dual/src/module.ts'],
+    required: ['packages/app/src/only-require.ts', 'packages/dual/src/common.cjs'],
+  });
+});
+
+test('it tries .tsx before .ts, as Bun does', async () => {
+  const ctx = await setupTest();
+
+  await ctx.write('packages/app/src/route.ts', '');
+  await ctx.write('packages/app/src/route.tsx', '');
+  await ctx.write('packages/app/src/entry.ts', "import './route';\n");
+
+  const result = await ctx.read(['packages/app/src/entry.ts']);
+
+  expect(result.reached).toStrictEqual(['packages/app/src/entry.ts', 'packages/app/src/route.tsx']);
+});
+
+test.each([
+  {
+    kind: 'import',
+    files: ['route.ts', 'route.jsx'],
+    expected: 'route.jsx',
+    code: "import './route';\n",
+  },
+  {
+    kind: 'require',
+    files: ['route.mts', 'route.cts'],
+    expected: 'route.cts',
+    code: "require('./route');\n",
+  },
+])('it picks $expected over $files for an extensionless $kind, as Bun does', async (row) => {
+  const ctx = await setupTest();
+
+  await Promise.all(row.files.map((file) => ctx.write(`packages/app/src/${file}`, '')));
+  await ctx.write('packages/app/src/entry.ts', row.code);
+
+  const result = await ctx.read(['packages/app/src/entry.ts']);
+
+  expect(result.reached).toStrictEqual([
+    'packages/app/src/entry.ts',
+    `packages/app/src/${row.expected}`,
+  ]);
 });

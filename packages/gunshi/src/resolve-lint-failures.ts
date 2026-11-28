@@ -33,7 +33,12 @@ export const lintFailureSchema = z.strictObject({
 type LintFailure = z.infer<typeof lintFailureSchema>;
 
 export interface LintInput {
+  // The registry with each feature's `paths` widened to every file it owns.
   readonly wringer: Wringer;
+
+  // The registry as the repo wrote it, whose globs the dead-glob check reads. A file the walk
+  // reaches that git ignores, such as a generated one, is no glob to fix. Defaults to `wringer`.
+  readonly declared?: Wringer | undefined;
 
   // Every file of the repo that git tracks or does not ignore, relative to its root.
   readonly files: readonly string[];
@@ -67,11 +72,13 @@ export async function resolveLintFailures(input: LintInput): Promise<LintResult>
     journeys.map((journey) => resolveJourneyFailure(input.wringer, journey)),
   );
 
-  const pathFailures = collectDeadGlobs(input.wringer, input.files).map((dead): LintFailure => ({
-    check: 'paths',
-    where: dead.where,
-    problem: `The glob \`${dead.glob}\` matches no file. Write it relative to the repo root, as \`git ls-files\` prints paths, or remove it.`,
-  }));
+  const pathFailures = collectDeadGlobs(input.declared ?? input.wringer, input.files).map(
+    (dead): LintFailure => ({
+      check: 'paths',
+      where: dead.where,
+      problem: `The glob \`${dead.glob}\` matches no file. Write it relative to the repo root, as \`git ls-files\` prints paths, or remove it.`,
+    }),
+  );
 
   const unclaimedFailures = collectUnclaimedFiles(input.wringer, input.files).map(
     (file): LintFailure => ({

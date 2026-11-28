@@ -1,8 +1,8 @@
-// Bun's own conditions. `types` is left out, because it points at declarations that a clean
-// checkout has not built.
+// Bun's own conditions, and the order it tries extensions in, which differs for `require()`. `types` is left out, because it
+// points at declarations that a clean checkout has not built.
 export const resolveOptions = {
-  conditionNames: ['bun', 'node', 'import', 'require', 'default'],
-  extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs', '.json'],
+  conditionNames: ['bun', 'node', 'import', 'default'],
+  extensions: ['.tsx', '.jsx', '.mts', '.ts', '.mjs', '.js', '.cts', '.cjs', '.json'],
   extensionAlias: {
     '.js': ['.ts', '.tsx', '.js'],
     '.jsx': ['.tsx', '.jsx'],
@@ -11,4 +11,10 @@ export const resolveOptions = {
   },
   mainFields: ['module', 'main'],
   symlinks: true,
+};
+
+export const requireOptions = {
+  ...resolveOptions,
+  conditionNames: ['bun', 'node', 'require', 'default'],
+  extensions: ['.tsx', '.ts', '.jsx', '.cts', '.cjs', '.js', '.mjs', '.mts', '.json'],
 };

@@ -1,12 +1,13 @@
 import { dirname, join, relative, sep } from 'node:path';
 import type { ResolverFactory } from 'oxc-resolver';
-import { isErrorCode } from '../is-error-code.ts';
 import type { RepoHost } from '../types.ts';
 import { collectImportSpecifiers } from './collect-import-specifiers.ts';
+import type { LiteralImport } from './collect-import-specifiers.ts';
+import { isMissingFile } from './is-missing-file.ts';
 import { isParsedFile } from './is-parsed-file.ts';
 import type { OxcParserModule } from './oxc-parser-module.ts';
 import { readOxcParser } from './read-oxc-parser.ts';
-import { resolveOptions } from './resolve-options.ts';
+import { requireOptions, resolveOptions } from './resolve-options.ts';
 import { toLineNumber } from './to-line-number.ts';
 
 export interface ReachedFiles {
@@ -37,6 +38,9 @@ export async function readReachedFiles(
   const realRoot = rootFacts?.realPath ?? request.root;
 
   const baseResolver = new resolverModule.ResolverFactory(resolveOptions);
+
+  const requireResolver = baseResolver.cloneWithOptions(requireOptions);
+
   const tsconfigs = new Map<string, string | null>();
   const resolvers = new Map<string, ResolverFactory>();
   const reached = new Set<string>(request.entryFiles);
@@ -49,15 +53,19 @@ export async function readReachedFiles(
 
     warnings.push(...found.warnings);
 
-    for (const specifier of found.specifiers) {
+    for (const literal of found.specifiers) {
       const tsconfig = await readTsconfig(host, {
         realRoot,
         folder: dirname(next),
         known: tsconfigs,
       });
 
-      const resolver = readResolver(baseResolver, resolvers, tsconfig);
-      const target = pickTarget(resolver, { realRoot, file: next, specifier });
+      const resolver = readResolver({ import: baseResolver, require: requireResolver }, resolvers, {
+        kind: literal.kind,
+        tsconfig,
+      });
+
+      const target = pickTarget(resolver, { realRoot, file: next, specifier: literal.specifier });
 
       if (target !== null && !reached.has(target)) {
         reached.add(target);
@@ -78,7 +86,7 @@ interface ImportsRequest {
 async function readImports(
   host: ReachHost,
   request: ImportsRequest,
-): Promise<{ specifiers: readonly string[]; warnings: readonly string[] }> {
+): Promise<{ specifiers: readonly LiteralImport[]; warnings: readonly string[] }> {
   if (!isParsedFile(request.file)) {
     return { specifiers: [], warnings: [] };
   }
@@ -106,7 +114,7 @@ async function readSource(host: ReachHost, path: string): Promise<string | null>
   try {
     return await host.readText(path);
   } catch (error) {
-    if (isErrorCode(error, 'ENOENT') || isErrorCode(error, 'EISDIR')) {
+    if (isMissingFile(error)) {
       return null;
     }
 
@@ -148,21 +156,33 @@ async function readTsconfig(host: ReachHost, request: TsconfigRequest): Promise<
   return found;
 }
 
-// A resolver for each tsconfig, sharing the base resolver's cache.
+interface ResolverRequest {
+  readonly kind: LiteralImport['kind'];
+  readonly tsconfig: string | null;
+}
+
+// A resolver for each kind of import and each tsconfig, sharing the base resolver's cache.
 function readResolver(
-  base: ResolverFactory,
+  bases: Readonly<Record<LiteralImport['kind'], ResolverFactory>>,
   resolvers: Map<string, ResolverFactory>,
-  tsconfig: string | null,
+  request: ResolverRequest,
 ): ResolverFactory {
-  if (tsconfig === null) {
+  const base = bases[request.kind];
+
+  if (request.tsconfig === null) {
     return base;
   }
 
-  const known =
-    resolvers.get(tsconfig) ??
-    base.cloneWithOptions({ ...resolveOptions, tsconfig: { configFile: tsconfig } });
+  const key = `${request.kind}\0${request.tsconfig}`;
 
-  resolvers.set(tsconfig, known);
+  const known =
+    resolvers.get(key) ??
+    base.cloneWithOptions({
+      ...(request.kind === 'require' ? requireOptions : resolveOptions),
+      tsconfig: { configFile: request.tsconfig },
+    });
+
+  resolvers.set(key, known);
 
   return known;
 }

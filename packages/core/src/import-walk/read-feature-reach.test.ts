@@ -1,5 +1,5 @@
 import { expect, onTestFinished, test } from 'bun:test';
-import { appendFile } from 'node:fs/promises';
+import { appendFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { createNodeRepoHost } from '../repo-host/create-node-repo-host.ts';
 import { createTestRepo } from '../test-utils/create-test-repo.ts';
@@ -30,6 +30,22 @@ async function setupTest() {
   const features = [{ name: 'app', entries: ['packages/app/src/main.ts'] }];
 
   return {
+    readNamed: (name: string) =>
+      readFeatureReach(host, {
+        root: repo.root,
+        stateDir: '.wringer',
+        features: [{ name, entries: ['packages/app/src/main.ts'] }],
+      }),
+    readWithoutCacheFolder: () =>
+      readFeatureReach(
+        {
+          ...host,
+          createDirectory: () =>
+            Promise.reject(Object.assign(new Error('gone'), { code: 'ENOENT' })),
+        },
+        { root: repo.root, stateDir: '.wringer', features },
+      ),
+    removeFile: (path: string) => rm(join(repo.root, path)),
     root: repo.root,
     git: repo.git,
     sourcesRead,
@@ -105,4 +121,33 @@ test('it walks again after a commit', async () => {
     reached: reach.get('app')?.reached.includes('packages/app/src/unused.ts'),
     walked: ctx.sourcesRead.length > readsBefore,
   }).toStrictEqual({ reached: true, walked: true });
+});
+
+test('it walks again when a deletion is staged, which changes the entry files git lists', async () => {
+  const ctx = await setupTest();
+
+  await ctx.removeFile('packages/app/src/main.ts');
+  await ctx.read();
+  await ctx.git('rm', '--quiet', '--cached', 'packages/app/src/main.ts');
+
+  const reach = await ctx.read();
+
+  expect(reach.get('app')?.reached).toStrictEqual([]);
+});
+
+test('it keeps the reach of a feature named __proto__', async () => {
+  const ctx = await setupTest();
+
+  await ctx.readNamed('__proto__');
+
+  const reach = await ctx.readNamed('__proto__');
+
+  expect(reach.get('__proto__')?.reached.length).toBeGreaterThan(0);
+});
+
+test('it returns the walk when another command removed the cache folder first', async () => {
+  const ctx = await setupTest();
+  const reach = await ctx.readWithoutCacheFolder();
+
+  expect(reach.get('app')?.reached.length).toBeGreaterThan(0);
 });

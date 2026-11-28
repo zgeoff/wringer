@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { z } from 'zod';
 import { local } from '../host/local.ts';
@@ -40,6 +40,20 @@ async function setupTest() {
     edit: async (path: string) => {
       await mkdir(dirname(join(imports.repo.root, path)), { recursive: true });
       await writeFile(join(imports.repo.root, path), 'export const edited = 1;\n');
+    },
+    stageRemoval: async (path: string) => {
+      await rm(join(imports.repo.root, path));
+
+      await imports.repo.git('rm', '--quiet', '--cached', path);
+    },
+    excludeLocally: async (path: string) => {
+      await appendFile(join(imports.repo.root, '.git', 'info', 'exclude'), `${path}\n`);
+      await writeFile(join(imports.repo.root, path), 'export const local = 1;\n');
+    },
+    linkDangling: (path: string) => symlink('nowhere', join(imports.repo.root, path)),
+    replaceFolderWithFile: async (path: string) => {
+      await rm(join(imports.repo.root, path), { recursive: true });
+      await writeFile(join(imports.repo.root, path), 'now a file\n');
     },
     remove: (path: string) => rm(join(imports.repo.root, path)),
     readReport: async () => {
@@ -144,4 +158,44 @@ test('it does not call a deleted file unmapped', async () => {
   const report = await ctx.readReport();
 
   expect(report).toStrictEqual({ changed: [], unmapped: [] });
+});
+
+test('it does not call a staged deletion unmapped', async () => {
+  const ctx = await setupTest();
+
+  await ctx.stageRemoval('packages/lib/src/deep.ts');
+
+  const report = await ctx.readReport();
+
+  expect(report).toStrictEqual({ changed: [], unmapped: [] });
+});
+
+test('it still calls a dangling symlink unmapped', async () => {
+  const ctx = await setupTest();
+
+  await ctx.linkDangling('packages/lib/src/link.ts');
+
+  const report = await ctx.readReport();
+
+  expect(report).toStrictEqual({ changed: [], unmapped: ['packages/lib/src/link.ts'] });
+});
+
+test('it reads a folder replaced by a file without failing on the paths under it', async () => {
+  const ctx = await setupTest();
+
+  await ctx.replaceFolderWithFile('packages/app/journeys');
+
+  const report = await ctx.readReport();
+
+  expect(report).toStrictEqual({ changed: ['app'], unmapped: ['packages/app/journeys'] });
+});
+
+test('it still calls a new file unmapped when .git/info/exclude hides it from git', async () => {
+  const ctx = await setupTest();
+
+  await ctx.excludeLocally('packages/lib/src/local-only.ts');
+
+  const report = await ctx.readReport();
+
+  expect(report).toStrictEqual({ changed: [], unmapped: ['packages/lib/src/local-only.ts'] });
 });

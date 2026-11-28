@@ -1,23 +1,33 @@
 import type { Expression, Program, StringLiteral } from 'oxc-parser';
 import type { OxcParserModule } from './oxc-parser-module.ts';
 
+export interface LiteralImport {
+  readonly specifier: string;
+
+  // Which conditions of a package's `exports` apply: `require()` reads `require`, the rest `import`.
+  readonly kind: 'import' | 'require';
+}
+
 export interface ImportSpecifiers {
   // Each literal path a file imports: static imports, `export ... from`, `import()` and `require`.
-  readonly literals: readonly string[];
+  readonly literals: readonly LiteralImport[];
 
   // The offset in the source of each `import()` whose path is not a literal.
   readonly dynamicOffsets: readonly number[];
 }
 
 export function collectImportSpecifiers(oxc: OxcParserModule, program: Program): ImportSpecifiers {
-  const literals: string[] = [];
+  const literals: LiteralImport[] = [];
   const dynamicOffsets: number[] = [];
 
-  const addLiteral = (node: Expression | StringLiteral | null | undefined): void => {
+  const addLiteral = (
+    node: Expression | StringLiteral | null | undefined,
+    kind: LiteralImport['kind'] = 'import',
+  ): void => {
     const found = findLiteral(node);
 
     if (found !== null) {
-      literals.push(found);
+      literals.push({ specifier: found, kind });
     }
   };
 
@@ -37,7 +47,7 @@ export function collectImportSpecifiers(oxc: OxcParserModule, program: Program):
       if (literal === null) {
         dynamicOffsets.push(node.start);
       } else {
-        literals.push(literal);
+        literals.push({ specifier: literal, kind: 'import' });
       }
     },
     CallExpression: (node) => {
@@ -48,7 +58,7 @@ export function collectImportSpecifiers(oxc: OxcParserModule, program: Program):
         node.callee.name === 'require' &&
         first?.type !== 'SpreadElement'
       ) {
-        addLiteral(first);
+        addLiteral(first, 'require');
       }
     },
   });

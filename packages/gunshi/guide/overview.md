@@ -7,7 +7,7 @@ these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its [registry](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md#registry), with
-  each feature's `entries`, the files its import walk starts from, and the ignore list set with
+  each feature's `entries`, the files whose imports wringer follows, and the ignore list set with
   `.ignore`;
 - a `verify` skill, with a feature file for each feature, `references/feature-<name>.md`, that gives
   its journey and end state.

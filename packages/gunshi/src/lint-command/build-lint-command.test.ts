@@ -369,3 +369,25 @@ test('it counts a file that a feature entry imports as claimed, and fails a file
     failures: [{ check: 'unclaimed', where: 'src/stray.ts' }],
   });
 });
+
+test('it asks for no glob to fix when an entry imports a file that git ignores', async () => {
+  const wringer = createWringer({ name: 'cover' })
+    .target('local', { mode: 'attach', access: 'read-only', host: local() })
+    .feature({ name: 'greeting', summary: 'Greet', entries: ['src/main.ts'] })
+    .ignore('docs/**', '.gitignore', 'README.md')
+    .build();
+
+  const ctx = await setupTest(wringer);
+
+  await Bun.write(join(ctx.root, '.gitignore'), '.wringer/\nsrc/generated.ts\n');
+  await Bun.write(join(ctx.root, 'src/main.ts'), "import './generated.ts';\n");
+  await Bun.write(join(ctx.root, 'src/generated.ts'), 'export const generated = 1;\n');
+
+  await ctx.writeSkill(
+    `---\nmetadata:\n  wringer-template: ${await readTemplateHash()}\n  wringer-command: bun verify\n---\n`,
+  );
+
+  const exitCode = await ctx.lint('docs/verify', '--json');
+
+  expect(exitCode).toBe(0);
+});
