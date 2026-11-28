@@ -28,7 +28,7 @@
     },
     "packages/browser": {
       "name": "@wringer/browser",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "dependencies": {
         "@zgeoff/std": "catalog:",
         "playwright-core": "catalog:",
@@ -47,7 +47,7 @@
     },
     "packages/core": {
       "name": "@wringer/core",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "dependencies": {
         "@zgeoff/std": "catalog:",
         "oxc-parser": "catalog:",
@@ -68,7 +68,7 @@
     },
     "packages/db": {
       "name": "@wringer/db",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "dependencies": {
         "@zgeoff/std": "catalog:",
         "ts-pattern": "catalog:",
@@ -86,7 +86,7 @@
     },
     "packages/gunshi": {
       "name": "@wringer/gunshi",
-      "version": "0.3.11",
+      "version": "0.3.12",
       "bin": {
         "wringer-gunshi": "./src/wringer-gunshi.ts",
       },
@@ -108,7 +108,7 @@
     },
     "packages/http": {
       "name": "@wringer/http",
-      "version": "0.1.9",
+      "version": "0.1.10",
       "devDependencies": {
         "@mswjs/interceptors": "catalog:",
         "@wringer/core": "workspace:*",
@@ -123,7 +123,7 @@
     },
     "packages/mcp": {
       "name": "@wringer/mcp",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@modelcontextprotocol/client": "catalog:",
       },
@@ -164,7 +164,7 @@
     },
     "packages/stream": {
       "name": "@wringer/stream",
-      "version": "0.1.8",
+      "version": "0.1.9",
       "dependencies": {
         "xstate": "catalog:",
       },
@@ -182,7 +182,7 @@
     },
     "packages/terminal": {
       "name": "@wringer/terminal",
-      "version": "0.1.5",
+      "version": "0.1.6",
       "devDependencies": {
         "@wringer/core": "workspace:*",
         "@zgeoff/testing": "catalog:",

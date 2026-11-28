@@ -2,14 +2,13 @@
 
 ## [0.1.10](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.9...@wringer/http@0.1.10) (2026-11-28)
 
-
 ### Dependencies
 
-* The following workspace dependencies were updated
-  * devDependencies
-    * @wringer/core bumped to 0.4.2
-  * peerDependencies
-    * @wringer/core bumped to 0.4.2
+- The following workspace dependencies were updated
+  - devDependencies
+    - @wringer/core bumped to 0.4.2
+  - peerDependencies
+    - @wringer/core bumped to 0.4.2
 
 ## [0.1.9](https://github.com/zgeoff/wringer/compare/@wringer/http@0.1.8...@wringer/http@0.1.9) (2026-11-21)
 
