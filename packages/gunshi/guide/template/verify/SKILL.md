@@ -5,7 +5,7 @@ description:
   feature works. Load it before you check a change in the running app, run the journey of a feature,
   or put the verdicts in a PR.'
 metadata:
-  wringer-template: 'sha256:f81627bb86b8'
+  wringer-template: 'sha256:a64b90fdf665'
   wringer-command: bun verify
 ---
 
@@ -47,8 +47,8 @@ Read a feature's file before you run its journey.
 ## Check a change
 
 1. Run `bun verify report`. In `data.report.features`, a feature shows `changed: true` when a file
-   that matches its `paths` in the [registry](#edit-the-skill-and-the-registry) differs from the
-   default branch, committed or not.
+   that its `entries` import, or that matches its `extra` or `paths`, in the
+   [registry](#edit-the-skill-and-the-registry) differs from the default branch, committed or not.
 2. Pick the target your task names. When it names none, take the first launch target in the
    [Targets](#targets) table. Run the commands in its row. `up` or `attach` starts a run, which
    lasts until `down` or `detach`. Expect from `up` or `attach`: `ok: true`, and the app's endpoints
@@ -69,8 +69,8 @@ Read a feature's file before you run its journey.
      `done` for this feature. List it in your reply with the end state you expected and the `data`
      you got.
 6. Record the verdict:
-   - Finish each edit to a file that matches the feature's `paths` first. An edit after `done` makes
-     the verdict `stale`. A commit alone leaves the verdict as it was.
+   - Finish each edit to a file the feature owns first. An edit after `done` makes the verdict
+     `stale`. A commit alone leaves the verdict as it was.
    - Once the end state matches in step 5, run `bun verify done`. Expect: `ok: true`. `done` records
      a verdict for the feature that `use --feature` set.
    - `done` checks only that a journey command succeeded after `doctor`, and never reads the end
@@ -154,15 +154,16 @@ for its commands.
 <!-- repo: registry -->
 
 The registry, `scripts/verify/create-verify-registry.ts`, declares the targets, actions, commands,
-doctor checks and features, with each feature's `paths`. CI runs `bun verify lint` and
+doctor checks and features, with each feature's `entries`. CI runs `bun verify lint` and
 `bun verify gate` on each PR.
 
 <!-- /repo -->
 
-In the registry, map each file your change adds: add a glob that matches it to a feature's `paths`,
-to `.shared()` or to `.ignore()`. The gate fails on a changed file that no glob matches. Add a file
-that the running app never reads, such as a test, to `.ignore()`. `bun verify features` lists the
-globs.
+In the registry, map each file your change adds. A file that a feature's entry imports needs no
+edit. Add any other file to a feature's `extra`, to `.shared()` or to `.ignore()`. The gate fails on
+a changed file that no feature owns and no glob matches. Add a file that the running app never
+reads, such as a test, to `.ignore()`. `bun verify features` lists each feature's entries and how
+many files they reach, and `bun verify features --feature <name>` lists those files.
 
 When a change to a feature breaks its journey, fix the journey in the same PR. Before you edit this
 skill or a feature file, read [Edit the skill](references/edit-the-skill.md). After you change this

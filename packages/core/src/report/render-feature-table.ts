@@ -1,8 +1,8 @@
-import type { FeatureDefinition } from '@wringer/core';
+import type { ScopedFeature } from '@wringer/core';
 
 // The feature table that the verify skill's SKILL.md holds. Each row links to the feature's file,
 // relative to the skill folder.
-export function renderFeatureTable(features: readonly FeatureDefinition[]): string {
+export function renderFeatureTable(features: readonly ScopedFeature[]): string {
   const rows = features.map((feature) => {
     const file = buildFeatureFile(feature.name);
 

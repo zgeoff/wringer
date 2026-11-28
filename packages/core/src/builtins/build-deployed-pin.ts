@@ -1,5 +1,6 @@
 import { collectFeatureScopes } from '../change-facts/collect-feature-scopes.ts';
 import { isGlobMatch } from '../change-facts/is-glob-match.ts';
+import type { ScopedFeature } from '../feature-definition.ts';
 import type { Wringer } from '../types.ts';
 import type { Pin } from '../verdict/report-schema.ts';
 import { WringerError } from '../wringer-error.ts';
@@ -17,7 +18,7 @@ export interface DeployedPinRequest {
 // A verdict pins to the deployed commit when that commit holds the same content as the worktree in
 // the feature's scope.
 export function buildDeployedPin(
-  wringer: Pick<Wringer, 'features' | 'shared'>,
+  wringer: Pick<Wringer, 'shared'> & { readonly features: readonly ScopedFeature[] },
   request: DeployedPinRequest,
 ): Pin {
   if (request.deployed === null) {

@@ -13,11 +13,18 @@ test('it pairs with a verify skill whose journeys parse and whose template hash 
     Bun.file(join(import.meta.dir, 'verify', 'references', 'feature-add-item.md')).text(),
   ]);
 
+  const registry = createVerifyRegistry();
+  const owned = [];
+
+  for (const each of registry.features) {
+    owned.push({ ...each, paths: [...each.paths, ...each.entries, ...each.extra] });
+  }
+
   const result = await resolveLintFailures({
-    wringer: createVerifyRegistry(),
+    wringer: { ...registry, features: owned },
     files: [
-      'src/items/add-item.ts',
-      'src/pages/pantry/pantry.tsx',
+      'src/pages/pantry/index.tsx',
+      'verify/journeys/add-item/checkout.md',
       'scripts/verify/verify.ts',
       'docs/overview.md',
       'src/items/add-item.test.ts',

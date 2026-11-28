@@ -7,7 +7,8 @@ these in the repo:
 
 - a verify CLI on the `@wringer/*` packages, which an agent runs as `bun verify <command>`;
 - its [registry](https://github.com/zgeoff/wringer/blob/main/docs/reference/terms.md#registry), with
-  each feature's `paths` globs and the ignore list set with `.ignore`;
+  each feature's `entries`, the files its import walk starts from, and the ignore list set with
+  `.ignore`;
 - a `verify` skill, with a feature file for each feature, `references/feature-<name>.md`, that gives
   its journey and end state.
 
@@ -103,7 +104,7 @@ The work is done only when each of these holds. The `prove` topic gives the comm
 1. `bun verify doctor` passes on `local`.
 2. A fresh subagent that loads only the new `verify` skill reaches `done` on every feature. Each new
    feature file needs one pass by an agent who did not write it, and this run is that pass.
-3. After an edit to a file that a feature's `paths` match, a command that touches the app fails with
+3. After an edit to a file that a feature owns, a command that touches the app fails with
    `doctor-required`. On a read-only target, if the repo has one, try one write: the CLI refuses it
    with `read-only`.
 4. `bun verify publish` has written the report into the description of the PR that adds the CLI. The
@@ -113,9 +114,10 @@ The work is done only when each of these holds. The `prove` topic gives the comm
 
 Keep these in place, as the `maintain` topic shows:
 
-- **The gate on each PR.** A PR that touches a feature's `paths` needs a verdict that the agent
+- **The gate on each PR.** A PR that touches a file a feature owns needs a verdict that the agent
   recorded with `bun verify done` on the PR's latest code. A PR that touches a file outside every
-  feature's `paths` and the ignore list fails until you add the file to one of them.
+  feature's files and the ignore list fails until you add the file to a feature's `extra`, or to the
+  ignore list.
 - **`lint` in CI.** It needs no running app. When it reports another template hash, upgrade the
   template as the `maintain` topic says.
 - **A journey fixed with its feature.** A PR that changes a feature updates the feature's journey.

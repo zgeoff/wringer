@@ -1,16 +1,42 @@
 import { expect, test } from 'bun:test';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { z } from 'zod';
+import { local } from '../host/local.ts';
+import { createWringer } from '../registry/create-wringer.ts';
 import { buildRunPaths } from '../state/build-state-paths.ts';
 import { createShopWringer } from '../test-utils/create-shop-wringer.ts';
 import { createTestSession } from '../test-utils/create-test-session.ts';
+import { seedImportWorkspace } from '../test-utils/seed-import-workspace.ts';
 
 async function setupTest() {
   const wringer = createShopWringer();
 
   const shop = await createTestSession({ wringer });
 
+  const importing = createWringer({ name: 'imports' })
+    .target('local', { mode: 'attach', access: 'read-write', host: local() })
+    .feature(
+      {
+        name: 'app',
+        summary: 'The app',
+        entries: ['packages/app/src/main.ts'],
+        extra: ['packages/app/journeys/**'],
+      },
+      { name: 'docs', summary: 'The docs', paths: ['docs/**'] },
+    )
+    .build();
+
   return {
+    lines: shop.lines,
+
+    // Commits the two-package workspace and runs a command of a registry whose `app` feature starts
+    // at the app's entry file, with `feature` as the `--feature` flag.
+    runImports: async (path: readonly string[], feature?: string) => {
+      await seedImportWorkspace(shop.repo.root);
+
+      return shop.dispatch(importing, path, {}, { ...shop.session, target: 'local', feature });
+    },
     readPointers: () => shop.state.readPointers(),
     streamsOf: (runID: string) =>
       buildRunPaths(join(shop.repo.root, wringer.stateDir), runID).streams,
@@ -131,13 +157,19 @@ test('#features lists each feature with its paths and file, the shared globs and
       {
         name: 'checkout',
         summary: 'Pay for the cart',
+        entries: [],
+        extra: [],
         paths: ['src/checkout/**'],
+        reached: 0,
         file: 'references/feature-checkout.md',
       },
       {
         name: 'search',
         summary: 'Find a product',
+        entries: [],
+        extra: [],
         paths: ['src/search/**'],
+        reached: 0,
         file: 'references/feature-search.md',
       },
     ],
@@ -155,13 +187,19 @@ test('#features --markdown adds the feature table, one row per feature in regist
       {
         name: 'checkout',
         summary: 'Pay for the cart',
+        entries: [],
+        extra: [],
         paths: ['src/checkout/**'],
+        reached: 0,
         file: 'references/feature-checkout.md',
       },
       {
         name: 'search',
         summary: 'Find a product',
+        entries: [],
+        extra: [],
         paths: ['src/search/**'],
+        reached: 0,
         file: 'references/feature-search.md',
       },
     ],
@@ -174,4 +212,57 @@ test('#features --markdown adds the feature table, one row per feature in regist
       '| search | Find a product | [references/feature-search.md](references/feature-search.md) |',
     ].join('\n'),
   });
+});
+
+test('#features prints the count of files each feature reaches, and no file list', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runImports(['features']);
+
+  expect(result.envelope.data).toMatchObject({
+    features: [
+      { name: 'app', entries: ['packages/app/src/main.ts'], reached: 5 },
+      { name: 'docs', entries: [], reached: 0 },
+    ],
+  });
+});
+
+test('#features --feature lists the files the feature reaches, and only for that feature', async () => {
+  const ctx = await setupTest();
+  const result = await ctx.runImports(['features'], 'app');
+
+  const featureSchema = z.looseObject({ name: z.string(), files: z.array(z.string()).optional() });
+  const listed = z.looseObject({ features: z.array(featureSchema) }).parse(result.envelope.data);
+
+  expect(listed.features.map((feature) => [feature.name, feature.files])).toStrictEqual([
+    [
+      'app',
+      [
+        'packages/app/src/aliased.ts',
+        'packages/app/src/helper.ts',
+        'packages/app/src/main.ts',
+        'packages/lib/src/area.ts',
+        'packages/lib/src/deep.ts',
+      ],
+    ],
+    ['docs', undefined],
+  ]);
+});
+
+test('#features warns with the file and line of an import() whose path is not a literal', async () => {
+  const ctx = await setupTest();
+
+  await ctx.runImports(['features']);
+
+  const lineSchema = z.looseObject({ wringer: z.number(), event: z.string(), data: z.unknown() });
+
+  expect(ctx.lines.map((line) => lineSchema.parse(JSON.parse(line)))).toStrictEqual([
+    {
+      wringer: expect.any(Number),
+      event: 'warning',
+      data: {
+        message:
+          'packages/app/src/main.ts:6: an import() with a path that is not a literal, so the walk cannot follow it',
+      },
+    },
+  ]);
 });

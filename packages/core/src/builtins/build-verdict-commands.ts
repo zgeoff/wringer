@@ -5,6 +5,8 @@ import { buildChangeFactsRequest } from '../change-facts/build-change-request.ts
 import { readChangeFacts } from '../change-facts/read-change-facts.ts';
 import type { ChangeFacts } from '../change-facts/read-change-facts.ts';
 import { readDefaultBase } from '../change-facts/read-default-base.ts';
+import { readDeletedPaths } from '../import-walk/read-deleted-paths.ts';
+import { resolveFeatures } from '../import-walk/resolve-features.ts';
 import { buildBuiltinCommand } from '../registry/build-builtin-command.ts';
 import { parseReportComment } from '../report-document/parse-report-comment.ts';
 import type { CommentRead } from '../report-document/parse-report-comment.ts';
@@ -167,9 +169,12 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
   // the verdict takes the base the PR's gate will use.
   const defaultBase = await readDefaultBase(ctx.session.repoHost, ctx.session.root);
   const deployed = await readDeployedCommit(ctx, ctx.run);
+  const resolved = await resolveFeatures(ctx.session.repoHost, ctx.wringer, ctx.session.root);
+
+  const wringer = resolved.wringer;
 
   const treeFacts = await readChangeFacts(ctx.session.repoHost, {
-    ...buildChangeFactsRequest(ctx.wringer, ctx.session.root, defaultBase),
+    ...buildChangeFactsRequest(wringer, ctx.session.root, defaultBase),
     deployed,
   });
 
@@ -187,7 +192,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
   const pin: Pin =
     ctx.target.mode === 'launch'
       ? { kind: 'local' }
-      : buildDeployedPin(ctx.wringer, {
+      : buildDeployedPin(wringer, {
           feature,
           deployed,
           deployedPaths: treeFacts.deployedPaths ?? [],
@@ -196,7 +201,7 @@ async function recordVerdict(args: DoneArgs, ctx: BuiltinContext): Promise<Verdi
   const scopeFacts =
     args.base === undefined || args.base === defaultBase
       ? treeFacts
-      : await readCurrentFacts(ctx, args.base);
+      : await readCurrentFacts(ctx, wringer, args.base);
 
   return {
     feature,
@@ -230,17 +235,27 @@ async function checkGate(args: GateArgs, ctx: BuiltinContext): Promise<GateData>
 
   const read = checkCommentRegistry(parseReportComment(body), ctx.wringer.name);
 
-  const facts = await readCurrentFacts(ctx, args.base);
+  const resolved = await resolveFeatures(ctx.session.repoHost, ctx.wringer, ctx.session.root);
+
+  const wringer = resolved.wringer;
+
+  const facts = await readCurrentFacts(ctx, wringer, args.base);
+
+  const deleted = await readDeletedPaths(ctx.session.repoHost, {
+    wringer,
+    root: ctx.session.root,
+    changedPaths: facts.changedPaths,
+  });
 
   const claims = read.ok ? read.comment.claims : [];
 
   const computed = buildReport({
     base: args.base,
     fingerprint: facts.fingerprint,
-    features: ctx.wringer.features,
+    features: wringer.features,
     featureFingerprints: facts.featureFingerprints,
     changedPaths: facts.changedPaths,
-    renamedFrom: facts.renamedFrom,
+    renamedFrom: [...facts.renamedFrom, ...deleted],
     shared: ctx.wringer.shared,
     ignore: ctx.wringer.ignore,
     verdicts: new Map(claims.map((claim) => [claim.feature, toVerdict(claim)] as const)),

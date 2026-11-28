@@ -46,29 +46,54 @@ file that only `info/exclude` hides therefore counts as changed. In a clone whos
 rewrites files as git adds them, such as with `core.autocrlf`, the fingerprint can change once the
 change is committed, and the verdict then reads as stale.
 
-Before the diff, wringer resets each changed path that the ignore list matches, and that no
-feature's `paths` or shared glob matches, to its content at the merge base. A doc that only the
-ignore list matches therefore drops out of the changed paths and out of every fingerprint. wringer
-then splits the diff into one part per path. A feature's fingerprint is `git patch-id --verbatim`
-over the parts whose path matches the feature's `paths` or a shared glob, or `empty` when no part
-matches. `patch-id` hashes the changed lines together with the lines around them. A commit of the
-same change keeps the fingerprint, and so does a rebase that leaves the surrounding lines alone. A
-rebase that changes them changes the fingerprint. wringer needs git 2.39 or later, the first release
-with `--verbatim`.
+Before the diff, wringer resets each changed path that the ignore list matches, and that no feature
+owns or shared glob matches, to its content at the merge base. A doc that only the ignore list
+matches therefore drops out of the changed paths and out of every fingerprint. wringer then splits
+the diff into one part per path. A feature's fingerprint is `git patch-id --verbatim` over the parts
+whose path is one of the feature's files or matches a shared glob, or `empty` when no part matches.
+`patch-id` hashes the changed lines together with the lines around them. A commit of the same change
+keeps the fingerprint, and so does a rebase that leaves the surrounding lines alone. A rebase that
+changes them changes the fingerprint. wringer needs git 2.39 or later, the first release with
+`--verbatim`.
+
+## A feature's files
+
+A feature owns the files that its `paths` and `extra` globs match, and the files that its `entries`
+reach. wringer reaches a file by following imports from each entry file: static imports,
+`export ... from`, `import()` with a literal path, and `require`. It resolves each specifier with
+Bun's conditions, so a workspace package's `exports` map and a tsconfig `paths` alias both work. The
+walk stops at a `node_modules` folder and at a path outside the repo. A specifier that no file
+answers, such as a built-in module, ends there too.
+
+Every path an `entries` glob matches starts the walk, and a glob that names a folder starts it from
+each file under the folder. A file that no import reaches belongs to no feature, so `gate` lists it
+as unmapped until the registry names it in `extra`, `.shared()` or `.ignore()`.
+
+An `import()` with a computed path cannot be followed. `features` prints a `warning` event with the
+file and line of each one. A file that only such an import loads belongs in `extra`.
+
+A deleted file is never reached, so `gate` skips it in the unmapped list. A change to the file that
+imported it flags the feature. A registry with no `entries` keeps listing a deleted file as
+unmapped.
+
+wringer saves each walk in `import-walk/` of the state folder, under a key of the commit and of the
+content of each file that differs from it, so `report` and `gate` parse each file once per state of
+the tree. `bun verify features` prints how many files each feature reaches, and
+`bun verify features --feature <name>` lists them.
 
 ## Staleness
 
-A verdict goes stale only when a file in its feature's `paths` or a shared glob changes. An edit to
-one feature's files leaves every other feature's verdict standing. A change to a shared glob changes
+A verdict goes stale only when a file the feature owns or a shared glob changes. An edit to one
+feature's files leaves every other feature's verdict standing. A change to a shared glob changes
 every feature's fingerprint, so a registry lists as shared globs only the files that affect every
 feature's behaviour, such as the lock file.
 
 wringer never makes the registry's own file a shared glob by itself. Each shared glob sits in the
 registry, where a reader can see it and see why every verdict went stale. To keep the registry's
-file covered, `lint` fails when that file matches no feature's `paths` and no shared glob.
+file covered, `lint` fails when that file is in no feature's files and matches no shared glob.
 
-`gate` fails each changed path that matches no feature's `paths`, no shared glob and nothing in the
-ignore list.
+`gate` fails each changed path that is in no feature's files, matches no shared glob and nothing in
+the ignore list.
 
 ## Recording a verdict
 

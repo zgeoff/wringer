@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import type { ChangeFactsHost } from './change-facts/read-change-facts.ts';
 import type { Evidence } from './envelope/envelope.ts';
 import type { EvidenceUploader } from './evidence/evidence-uploader.ts';
+import type { RegisteredFeature } from './feature-definition.ts';
 import type { Access, Host } from './host/host.ts';
 import type { ProcessResult } from './host/run-process.ts';
 import type { LaunchLine } from './launch/launch-line-schema.ts';
@@ -320,16 +321,6 @@ export interface CheckDefinition<Input, Data, Ds extends AnyDrivers = AnyDrivers
   readonly run: (input: Input, ctx: DriveContext<Ds>) => Promise<Data>;
 }
 
-export interface FeatureDefinition {
-  readonly name: string;
-  readonly summary: string;
-  readonly paths: readonly string[];
-
-  // Commands that check this feature without touching the app, such as `guide`: a passing one
-  // counts as a drive for `done` while this feature is current.
-  readonly commands?: readonly string[] | undefined;
-}
-
 export interface HookHandlers {
   readonly upload: EvidenceUploader;
 }
@@ -477,7 +468,7 @@ export interface Wringer {
   readonly targets: ReadonlyMap<string, TargetDefinition>;
   readonly commands: ReadonlyMap<string, RegisteredCommand>;
   readonly checks: readonly RunnableRepoCheck[];
-  readonly features: readonly FeatureDefinition[];
+  readonly features: readonly RegisteredFeature[];
 
   // Globs of paths that change every feature's behaviour: only what `.shared()` lists.
   readonly shared: readonly string[];

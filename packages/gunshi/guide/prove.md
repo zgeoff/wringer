@@ -23,7 +23,7 @@ of the PR that adds them.
    code, `ok` and `data.fingerprint`.
 3. Check that the CLI refuses to run against a changed tree:
    1. Run `bun verify up`, then `bun verify doctor`. Expect: `data.passed: true`.
-   2. Add a blank line to a file that a feature's `paths` globs match.
+   2. Add a blank line to a file that the feature owns, such as its entry file.
    3. From that feature's journey in the `verify` skill's feature file, run one command that touches
       the app, such as an `action` or a `browser` command. Expect: exit code 3 and `error.code`
       `doctor-required`.
@@ -36,10 +36,10 @@ of the PR that adds them.
    3. Run one command that `--help` marks `[write]`, such as a write action. Expect: exit code 3 and
       `error.code` `read-only`.
    4. Run `bun verify detach`, then `bun verify use --target local`.
-5. Run `bun verify report --human` to read the report locally. Expect: each feature whose `paths`
-   match a file the branch changes shows `verified`, every other feature shows `unchanged`, and the
-   report lists no changed path under "Changed paths that no feature maps". When it lists one, add
-   the path to a feature's `paths`, or to the registry's `.ignore` list when the running app never
-   reads it. Then start again at step 1. Otherwise push the branch and open its PR. Then run
-   `bun verify publish`. Expect: `ok: true`. It writes the report into the PR description, and the
-   gate reads the report from the HTML comment at the report's end.
+5. Run `bun verify report --human` to read the report locally. Expect: each feature that owns a file
+   the branch changes shows `verified`, every other feature shows `unchanged`, and the report lists
+   no changed path under "Changed paths that no feature maps". When it lists one, add the path to a
+   feature's `extra`, or to the registry's `.ignore` list when the running app never reads it. Then
+   start again at step 1. Otherwise push the branch and open its PR. Then run `bun verify publish`.
+   Expect: `ok: true`. It writes the report into the PR description, and the gate reads the report
+   from the HTML comment at the report's end.

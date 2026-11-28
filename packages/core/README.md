@@ -39,7 +39,7 @@ export const registry = createWringer({ name: 'shop' })
       ready: (line) => (line['event'] === 'listening' ? { web: 'http://127.0.0.1:3000' } : null),
     }),
   })
-  .feature({ name: 'checkout', summary: 'Pay for the cart', paths: ['src/checkout/**'] })
+  .feature({ name: 'checkout', summary: 'Pay for the cart', entries: ['src/checkout/index.ts'] })
   .ignore('docs/**', '**/*.md', '**/*.test.ts')
   .build();
 ```
@@ -66,9 +66,12 @@ repo can define each one in its own file.
   `.gate({ unpinned: 'allow' | 'refuse' })` sets whether `gate` accepts a verdict on an
   [attach target](../../docs/reference/terms.md#target) that reports no commit. The default is
   `allow`; `refuse` fails the gate on such a verdict.
+- A feature's files: `entries` name the files or folders whose imports wringer follows, and `extra`
+  the globs of files no import reaches. `paths` still works beside them. See
+  [a feature's files](../../docs/architecture/verdicts.md#a-features-files).
 - The [ignore list](../../docs/reference/terms.md#ignore-list): `.ignore(...globs)`. Any path an
-  ignore glob matches counts as no change, even when a feature's `paths` match it too. Feature
-  `paths` and ignore globs both match with `Bun.Glob`.
+  ignore glob matches counts as no change, even when a feature owns it too. `extra`, `paths` and
+  ignore globs all match with `Bun.Glob`.
 - The [shared globs](../../docs/reference/terms.md#shared-glob): `.shared(...globs)`. A change to a
   path one matches changes every feature's fingerprint.
 - Secret scrubbing: `.secret(...envNames)` names the environment variables that hold the repo's

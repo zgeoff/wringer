@@ -76,7 +76,8 @@ export function createVerifyRegistry(): Wringer {
     .feature({
       name: 'add-item',
       summary: 'Add an item from the pantry page',
-      paths: ['src/items/**', 'src/pages/pantry/**'],
+      entries: ['src/pages/pantry/index.tsx'],
+      extra: ['verify/journeys/add-item/**'],
     })
     .shared('scripts/verify/**')
     .ignore('docs/**', '**/*.md', '**/*.test.ts', '.github/**', '.claude/**')

@@ -3,13 +3,13 @@ import { buildExecCommand } from '../builtins/build-exec-command.ts';
 import { buildLifecycleCommands } from '../builtins/build-lifecycle-commands.ts';
 import { buildStateCommands } from '../builtins/build-state-commands.ts';
 import { buildVerdictCommands } from '../builtins/build-verdict-commands.ts';
+import type { FeatureDefinition, RegisteredFeature } from '../feature-definition.ts';
 import type {
   ActionDefinition,
   AnyDriver,
   AnyDrivers,
   CheckDefinition,
   CommandSpec,
-  FeatureDefinition,
   GatePolicy,
   HookHandlers,
   RegisteredCommand,
@@ -72,7 +72,7 @@ interface Parts {
   readonly targets: readonly (readonly [string, TargetDefinition])[];
   readonly commands: readonly ((driverNames: readonly string[]) => RegisteredCommand)[];
   readonly checks: readonly ((driverNames: readonly string[]) => RunnableRepoCheck)[];
-  readonly features: readonly FeatureDefinition[];
+  readonly features: readonly RegisteredFeature[];
   readonly shared: readonly string[];
   readonly ignore: readonly string[];
   readonly gatePolicy: GatePolicy;
@@ -98,13 +98,26 @@ function makeBuilder<Ds extends AnyDrivers>(parts: Parts): WringerBuilder<Ds> {
       }),
     check: (check) =>
       makeBuilder({ ...parts, checks: [...parts.checks, (names) => buildRepoCheck(check, names)] }),
-    feature: (...features) => makeBuilder({ ...parts, features: [...parts.features, ...features] }),
+    feature: (...features) =>
+      makeBuilder({
+        ...parts,
+        features: [...parts.features, ...features.map((feature) => toRegisteredFeature(feature))],
+      }),
     shared: (...globs) => makeBuilder({ ...parts, shared: [...parts.shared, ...globs] }),
     secret: (...envNames) => makeBuilder({ ...parts, secrets: [...parts.secrets, ...envNames] }),
     ignore: (...globs) => makeBuilder({ ...parts, ignore: [...parts.ignore, ...globs] }),
     gate: (policy) => makeBuilder({ ...parts, gatePolicy: policy }),
     hook: (name, handler) => makeBuilder({ ...parts, hooks: { ...parts.hooks, [name]: handler } }),
     build: () => buildWringer(parts),
+  };
+}
+
+function toRegisteredFeature(feature: FeatureDefinition): RegisteredFeature {
+  return {
+    ...feature,
+    entries: feature.entries ?? [],
+    extra: feature.extra ?? [],
+    paths: feature.paths ?? [],
   };
 }
 
@@ -137,15 +150,28 @@ function buildWringer(parts: Parts): Wringer {
   const negated = [
     ...parts.ignore.map((glob) => ['ignore', glob] as const),
     ...parts.shared.map((glob) => ['shared', glob] as const),
-    ...parts.features.flatMap((feature) =>
-      feature.paths.map((glob) => [`feature \`${feature.name}\` paths`, glob] as const),
-    ),
+    ...parts.features.flatMap((feature) => [
+      ...feature.paths.map((glob) => [`feature \`${feature.name}\` paths`, glob] as const),
+      ...feature.entries.map((glob) => [`feature \`${feature.name}\` entries`, glob] as const),
+      ...feature.extra.map((glob) => [`feature \`${feature.name}\` extra`, glob] as const),
+    ]),
   ].find(([, glob]) => glob.startsWith('!'));
 
   if (negated !== undefined) {
     throw new WringerError('usage', {
       message: `The ${negated[0]} glob \`${negated[1]}\` starts with \`!\`, which matches every path outside it.`,
       hint: 'Remove the glob, or narrow the glob it meant to exclude from.',
+    });
+  }
+
+  const unowned = parts.features.find(
+    (feature) => feature.entries.length === 0 && feature.paths.length === 0,
+  );
+
+  if (unowned !== undefined) {
+    throw new WringerError('usage', {
+      message: `The feature \`${unowned.name}\` has no \`entries\` and no \`paths\`, so it owns no file.`,
+      hint: 'Give the feature `entries`, the files its import walk starts from.',
     });
   }
 
